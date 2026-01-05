@@ -40,6 +40,100 @@ const DEFAULT_VITALS = {
 const SEX_OPTIONS = ["Male", "Female", "Other"];
 const MODE_OPTIONS = ["Walk-in", "Ambulance", "Referred", "Police"];
 
+type TriageCategory = "red" | "orange" | "yellow" | "green" | "blue";
+
+interface ComplaintOption {
+  label: string;
+  color: TriageCategory;
+  priority: number;
+}
+
+const TRIAGE_COMPLAINTS: Record<TriageCategory, { title: string; complaints: string[] }> = {
+  red: {
+    title: "Critical (Immediate)",
+    complaints: [
+      "Cardiac Arrest",
+      "Respiratory Arrest",
+      "Major Trauma",
+      "Severe Burns",
+      "Active Seizure",
+      "Unconscious",
+      "Anaphylaxis",
+      "Massive Hemorrhage",
+      "Drowning",
+      "Hanging/Strangulation",
+    ],
+  },
+  orange: {
+    title: "Urgent (< 10 min)",
+    complaints: [
+      "Chest Pain",
+      "Stroke Symptoms",
+      "Severe Breathing Difficulty",
+      "High-Risk Pregnancy",
+      "Severe Abdominal Pain",
+      "Head Injury with LOC",
+      "Acute Psychosis",
+      "Severe Allergic Reaction",
+      "Poisoning/Overdose",
+      "Severe Dehydration",
+    ],
+  },
+  yellow: {
+    title: "Semi-Urgent (< 30 min)",
+    complaints: [
+      "Moderate Pain",
+      "Fever with Rash",
+      "Vomiting/Diarrhea",
+      "Mild Breathing Difficulty",
+      "Minor Head Injury",
+      "Fracture (closed)",
+      "Moderate Burns",
+      "Urinary Retention",
+      "Acute Back Pain",
+      "Diabetic Emergency",
+    ],
+  },
+  green: {
+    title: "Non-Urgent (< 60 min)",
+    complaints: [
+      "Minor Injuries",
+      "Mild Fever",
+      "Sore Throat",
+      "Mild Cough",
+      "Ear Pain",
+      "Minor Wound",
+      "Sprain/Strain",
+      "Skin Infection",
+      "Urinary Symptoms",
+      "Eye Irritation",
+    ],
+  },
+  blue: {
+    title: "Minor (< 120 min)",
+    complaints: [
+      "Prescription Refill",
+      "Chronic Pain Follow-up",
+      "Suture Removal",
+      "Dressing Change",
+      "Medical Certificate",
+      "Stable Chronic Condition",
+      "Minor Rash",
+      "Insect Bite",
+      "Minor Allergy",
+      "Routine Check",
+    ],
+  },
+};
+
+const TRIAGE_PRIORITY_MAP: Record<TriageCategory, number> = {
+  red: 1,
+  orange: 2,
+  yellow: 3,
+  green: 4,
+  blue: 5,
+};
+
 export default function TriageScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
@@ -54,6 +148,8 @@ export default function TriageScreen() {
 
   const [patientType, setPatientType] = useState<"adult" | "pediatric">("adult");
   const [mlc, setMlc] = useState(false);
+  const [selectedTriageColor, setSelectedTriageColor] = useState<TriageCategory>("green");
+  const [expandedCategory, setExpandedCategory] = useState<TriageCategory | null>(null);
 
   const formDataRef = useRef({
     name: "",
@@ -79,6 +175,21 @@ export default function TriageScreen() {
   const updateField = useCallback((field: string, value: string) => {
     (formDataRef.current as any)[field] = value;
     forceUpdate((n) => n + 1);
+  }, []);
+
+  const handleComplaintSelect = useCallback((complaint: string, color: TriageCategory) => {
+    const currentComplaint = formDataRef.current.chief_complaint;
+    if (currentComplaint.includes(complaint)) return;
+    
+    formDataRef.current.chief_complaint = currentComplaint 
+      ? `${currentComplaint}, ${complaint}` 
+      : complaint;
+    setSelectedTriageColor(color);
+    forceUpdate((n) => n + 1);
+  }, []);
+
+  const toggleCategory = useCallback((category: TriageCategory) => {
+    setExpandedCategory((prev) => (prev === category ? null : category));
   }, []);
 
   const startRecording = async () => {
@@ -197,8 +308,8 @@ export default function TriageScreen() {
           onset_type: "Sudden",
           course: "Progressive",
         },
-        triage_priority: 4,
-        triage_color: "green",
+        triage_priority: TRIAGE_PRIORITY_MAP[selectedTriageColor],
+        triage_color: selectedTriageColor,
         em_resident: user?.name || "",
         case_type: patientType,
       };
@@ -394,10 +505,89 @@ export default function TriageScreen() {
         </View>
 
         <View style={[styles.section, { backgroundColor: theme.card }]}>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Triage Category</Text>
+          <View style={styles.triagePriorityRow}>
+            {(["red", "orange", "yellow", "green", "blue"] as TriageCategory[]).map((color) => (
+              <Pressable
+                key={color}
+                style={[
+                  styles.triagePriorityBtn,
+                  { 
+                    backgroundColor: TriageColors[color],
+                    opacity: selectedTriageColor === color ? 1 : 0.4,
+                    borderWidth: selectedTriageColor === color ? 3 : 0,
+                    borderColor: theme.text,
+                  },
+                ]}
+                onPress={() => {
+                  setSelectedTriageColor(color);
+                  toggleCategory(color);
+                }}
+              >
+                <Text style={styles.triagePriorityText}>{TRIAGE_PRIORITY_MAP[color]}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <Text style={[styles.triageCategoryLabel, { color: TriageColors[selectedTriageColor] }]}>
+            {TRIAGE_COMPLAINTS[selectedTriageColor].title}
+          </Text>
+        </View>
+
+        <View style={[styles.section, { backgroundColor: theme.card }]}>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Quick Complaints</Text>
+          {(["red", "orange", "yellow", "green", "blue"] as TriageCategory[]).map((color) => (
+            <View key={color} style={styles.complaintCategory}>
+              <Pressable
+                style={[styles.categoryHeader, { backgroundColor: TriageColors[color] }]}
+                onPress={() => toggleCategory(color)}
+              >
+                <Text style={styles.categoryHeaderText}>
+                  {TRIAGE_COMPLAINTS[color].title}
+                </Text>
+                <Feather
+                  name={expandedCategory === color ? "chevron-up" : "chevron-down"}
+                  size={20}
+                  color="#FFFFFF"
+                />
+              </Pressable>
+              {expandedCategory === color ? (
+                <View style={[styles.complaintsGrid, { backgroundColor: theme.backgroundSecondary }]}>
+                  {TRIAGE_COMPLAINTS[color].complaints.map((complaint) => {
+                    const isSelected = formDataRef.current.chief_complaint.includes(complaint);
+                    return (
+                      <Pressable
+                        key={complaint}
+                        style={[
+                          styles.complaintChip,
+                          {
+                            backgroundColor: isSelected ? TriageColors[color] : theme.backgroundTertiary,
+                            borderColor: TriageColors[color],
+                          },
+                        ]}
+                        onPress={() => handleComplaintSelect(complaint, color)}
+                      >
+                        <Text
+                          style={[
+                            styles.complaintChipText,
+                            { color: isSelected ? "#FFFFFF" : theme.text },
+                          ]}
+                        >
+                          {complaint}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ) : null}
+            </View>
+          ))}
+        </View>
+
+        <View style={[styles.section, { backgroundColor: theme.card }]}>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>Chief Complaint</Text>
           <TextInput
             style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]}
-            placeholder="Describe the chief complaint..."
+            placeholder="Describe the chief complaint or select from above..."
             placeholderTextColor={theme.textMuted}
             value={formDataRef.current.chief_complaint}
             onChangeText={(v) => updateField("chief_complaint", v)}
@@ -493,6 +683,62 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.sm,
     borderWidth: 1,
     ...Typography.body,
+  },
+  triagePriorityRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  triagePriorityBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  triagePriorityText: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    fontWeight: "700",
+  },
+  triageCategoryLabel: {
+    textAlign: "center",
+    ...Typography.bodyMedium,
+    fontWeight: "600",
+  },
+  complaintCategory: {
+    marginBottom: Spacing.sm,
+  },
+  categoryHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: Spacing.md,
+    borderRadius: BorderRadius.sm,
+  },
+  categoryHeaderText: {
+    color: "#FFFFFF",
+    ...Typography.bodyMedium,
+    fontWeight: "600",
+  },
+  complaintsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    padding: Spacing.sm,
+    gap: Spacing.xs,
+    borderBottomLeftRadius: BorderRadius.sm,
+    borderBottomRightRadius: BorderRadius.sm,
+  },
+  complaintChip: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+  },
+  complaintChipText: {
+    ...Typography.small,
+    fontWeight: "500",
   },
   saveBtn: {
     flexDirection: "row",

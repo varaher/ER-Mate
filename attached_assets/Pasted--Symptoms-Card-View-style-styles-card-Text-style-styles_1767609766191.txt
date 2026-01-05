@@ -1,0 +1,41 @@
+{/* Symptoms Card */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Symptoms Assessment</Text>
+          
+          <SymptomCheckbox label="✓ Normal (No critical symptoms)" symptom="normal_no_symptoms" color="#22c55e" />
+          
+          <Text style={styles.symptomCategory}>Airway / Breathing</Text>
+          <View style={styles.symptomsGrid}>
+            <SymptomCheckbox label="Obstructed Airway" symptom="obstructed_airway" color="#ef4444" />
+            <SymptomCheckbox label="Stridor" symptom="stridor" color="#ef4444" />
+            <SymptomCheckbox label="Severe Resp Distress" symptom="severe_respiratory_distress" color="#ef4444" />
+            <SymptomCheckbox label="Moderate Resp Distress" symptom="moderate_respiratory_distress" color="#f97316" />
+            <SymptomCheckbox label="Cyanosis" symptom="cyanosis" color="#ef4444" />
+          </View>
+
+          <Text style={styles.symptomCategory}>Circulation</Text>
+          <View style={styles.symptomsGrid}>
+            <SymptomCheckbox label="Shock" symptom="shock" color="#ef4444" />
+            <SymptomCheckbox label="Severe Bleeding" symptom="severe_bleeding" color="#ef4444" />
+            <SymptomCheckbox label="Chest Pain" symptom="chest_pain" color="#f97316" />
+          </View>
+
+          <Text style={styles.symptomCategory}>Neurological</Text>
+          <View style={styles.symptomsGrid}>
+            <SymptomCheckbox label="Seizure (Ongoing)" symptom="seizure_ongoing" color="#ef4444" />
+            <SymptomCheckbox label="Confusion" symptom="confusion" color="#f97316" />
+            <SymptomCheckbox label="Lethargic/Unconscious" symptom="lethargic_unconscious" color="#ef4444" />
+            <SymptomCheckbox label="Focal Deficits" symptom="focal_deficits" color="#f97316" />
+          </View>
+
+          <Text style={styles.symptomCategory}>Trauma / Other</Text>
+          <View style={styles.symptomsGrid}>
+            <SymptomCheckbox label="Major Trauma" symptom="major_trauma" color="#ef4444" />
+            <SymptomCheckbox label="Moderate Trauma" symptom="moderate_trauma" color="#f97316" />
+            <SymptomCheckbox label="Minor Injury" symptom="minor_injury" color="#22c55e" />
+            <SymptomCheckbox label="Fever" symptom="fever" color="#eab308" />
+            <SymptomCheckbox label="Abdominal Pain" symptom="abdominal_pain" color="#f97316" />
+            <SymptomCheckbox label="Vomiting/Diarrhea" symptom="vomiting_diarrhea" color="#eab308" />
+            <SymptomCheckbox label="Allergic Reaction" symptom="allergic_reaction" color="#f97316" />
+          </View>
+        </View>
