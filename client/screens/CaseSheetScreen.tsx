@@ -13,9 +13,10 @@ import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
+import { Audio } from "expo-av";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useTheme } from "@/hooks/useTheme";
-import { apiGet, apiPatch, invalidateCases } from "@/lib/api";
+import { apiGet, apiPatch, apiUpload, invalidateCases } from "@/lib/api";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -47,6 +48,37 @@ export default function CaseSheetScreen() {
     disability: true,
     exposure: true,
   });
+  const [isRecording, setIsRecording] = useState(false);
+  const [isContinuousRecording, setIsContinuousRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const [activeField, setActiveField] = useState<string>("history_hpi");
+  const recordingRef = useRef<Audio.Recording | null>(null);
+  const transcriptionIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isContinuousRecordingRef = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      isContinuousRecordingRef.current = false;
+      if (transcriptionIntervalRef.current) {
+        clearTimeout(transcriptionIntervalRef.current);
+        transcriptionIntervalRef.current = null;
+      }
+      const recording = recordingRef.current;
+      if (recording) {
+        recordingRef.current = null;
+        (async () => {
+          try {
+            await recording.stopAndUnloadAsync();
+          } catch {
+          }
+        })();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    isContinuousRecordingRef.current = isContinuousRecording;
+  }, [isContinuousRecording]);
 
   const formRef = useRef({
     airway_status: "Patent",
@@ -181,6 +213,108 @@ export default function CaseSheetScreen() {
     forceUpdate((n) => n + 1);
   };
 
+  const transcribeAudio = async (uri: string) => {
+    try {
+      setTranscribing(true);
+
+      const formData = new FormData();
+      formData.append("file", {
+        uri,
+        name: "voice.m4a",
+        type: "audio/m4a",
+      } as any);
+      formData.append("engine", "auto");
+      formData.append("language", "en");
+
+      const res = await apiUpload<{ transcription: string }>("/ai/voice-to-text", formData);
+
+      if (res.success && res.data?.transcription) {
+        const currentValue = (formRef.current as any)[activeField] || "";
+        (formRef.current as any)[activeField] = currentValue 
+          ? `${currentValue} ${res.data.transcription}` 
+          : res.data.transcription;
+        forceUpdate((n) => n + 1);
+      }
+    } catch (err) {
+      console.error("Transcription error:", err);
+    } finally {
+      setTranscribing(false);
+    }
+  };
+
+  const recordChunk = async () => {
+    if (!isContinuousRecordingRef.current) return;
+    
+    try {
+      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      recordingRef.current = recording;
+      setIsRecording(true);
+      
+      transcriptionIntervalRef.current = setTimeout(async () => {
+        if (recordingRef.current && isContinuousRecordingRef.current) {
+          await recordingRef.current.stopAndUnloadAsync();
+          const uri = recordingRef.current.getURI();
+          recordingRef.current = null;
+          setIsRecording(false);
+          
+          if (uri) {
+            await transcribeAudio(uri);
+          }
+          
+          if (isContinuousRecordingRef.current) {
+            recordChunk();
+          }
+        }
+      }, 5000);
+    } catch (err) {
+      console.error("Chunk recording error:", err);
+    }
+  };
+
+  const startContinuousRecording = async () => {
+    try {
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permission Required", "Microphone access is needed for voice input");
+        return;
+      }
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      setIsContinuousRecording(true);
+      isContinuousRecordingRef.current = true;
+      recordChunk();
+    } catch (err) {
+      console.error("Recording error:", err);
+      Alert.alert("Error", "Failed to start recording");
+    }
+  };
+
+  const stopContinuousRecording = async () => {
+    setIsContinuousRecording(false);
+    isContinuousRecordingRef.current = false;
+    if (transcriptionIntervalRef.current) {
+      clearTimeout(transcriptionIntervalRef.current);
+      transcriptionIntervalRef.current = null;
+    }
+    if (recordingRef.current) {
+      try {
+        await recordingRef.current.stopAndUnloadAsync();
+        const uri = recordingRef.current.getURI();
+        recordingRef.current = null;
+        setIsRecording(false);
+        if (uri) {
+          await transcribeAudio(uri);
+        }
+      } catch (err) {
+        console.error("Stop recording error:", err);
+      }
+    }
+  };
+
   if (loading) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: theme.backgroundDefault }]}>
@@ -233,6 +367,61 @@ export default function CaseSheetScreen() {
             )}
           </View>
         )}
+
+        <View style={[styles.voiceSection, { backgroundColor: theme.card }]}>
+          <Text style={[styles.voiceTitle, { color: theme.text }]}>Voice Dictation</Text>
+          <Text style={[styles.voiceSubtitle, { color: theme.textSecondary }]}>
+            Select field, then speak to auto-populate
+          </Text>
+          <View style={styles.fieldSelector}>
+            {[
+              { key: "history_hpi", label: "HPI" },
+              { key: "exam_general", label: "General" },
+              { key: "exam_cvs", label: "CVS" },
+              { key: "exam_rs", label: "RS" },
+              { key: "exam_abdomen", label: "Abdomen" },
+              { key: "exam_cns", label: "CNS" },
+            ].map((f) => (
+              <Pressable
+                key={f.key}
+                style={[
+                  styles.fieldBtn,
+                  { backgroundColor: activeField === f.key ? theme.primary : theme.backgroundSecondary },
+                ]}
+                onPress={() => setActiveField(f.key)}
+              >
+                <Text style={{ color: activeField === f.key ? "#FFFFFF" : theme.textSecondary, fontSize: 12, fontWeight: "600" }}>
+                  {f.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          <Pressable
+            style={[
+              styles.voiceBtn,
+              { backgroundColor: isContinuousRecording ? TriageColors.red : theme.primary },
+            ]}
+            onPress={isContinuousRecording ? stopContinuousRecording : startContinuousRecording}
+            disabled={transcribing}
+          >
+            {transcribing ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <>
+                <Feather name={isContinuousRecording ? "mic-off" : "mic"} size={20} color="#FFFFFF" />
+                <Text style={styles.voiceBtnText}>
+                  {isContinuousRecording ? "Stop Recording" : "Start Continuous Recording"}
+                </Text>
+              </>
+            )}
+          </Pressable>
+          {isRecording ? (
+            <View style={styles.recordingIndicator}>
+              <View style={[styles.recordingDot, { backgroundColor: TriageColors.red }]} />
+              <Text style={[styles.recordingText, { color: TriageColors.red }]}>Recording to {activeField.replace("_", " ")}...</Text>
+            </View>
+          ) : null}
+        </View>
 
         <Text style={[styles.heading, { color: theme.text }]}>Primary Survey (ABCDE)</Text>
 
@@ -449,6 +638,23 @@ const styles = StyleSheet.create({
   patientName: { ...Typography.h3 },
   patientDetails: { ...Typography.body, marginTop: 2 },
   complaint: { ...Typography.small, marginTop: Spacing.sm, fontStyle: "italic" },
+  voiceSection: { padding: Spacing.lg, borderRadius: BorderRadius.lg, marginBottom: Spacing.lg },
+  voiceTitle: { ...Typography.h4, marginBottom: Spacing.xs },
+  voiceSubtitle: { ...Typography.small, marginBottom: Spacing.md },
+  fieldSelector: { flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm, marginBottom: Spacing.md },
+  fieldBtn: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.sm },
+  voiceBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.md,
+    gap: Spacing.sm,
+  },
+  voiceBtnText: { color: "#FFFFFF", ...Typography.bodyMedium },
+  recordingIndicator: { flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: Spacing.sm, gap: Spacing.xs },
+  recordingDot: { width: 10, height: 10, borderRadius: 5 },
+  recordingText: { ...Typography.small, fontWeight: "600" },
   heading: { ...Typography.h4, marginBottom: Spacing.md },
   section: { borderRadius: BorderRadius.lg, marginBottom: Spacing.md, overflow: "hidden" },
   sectionHeader: { flexDirection: "row", alignItems: "center", padding: Spacing.md },

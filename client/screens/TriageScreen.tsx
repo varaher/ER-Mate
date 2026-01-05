@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -42,89 +42,58 @@ const MODE_OPTIONS = ["Walk-in", "Ambulance", "Referred", "Police"];
 
 type TriageCategory = "red" | "orange" | "yellow" | "green" | "blue";
 
-interface ComplaintOption {
+interface SymptomItem {
   label: string;
-  color: TriageCategory;
-  priority: number;
+  key: string;
+  color: string;
 }
 
-const TRIAGE_COMPLAINTS: Record<TriageCategory, { title: string; complaints: string[] }> = {
-  red: {
-    title: "Critical (Immediate)",
-    complaints: [
-      "Cardiac Arrest",
-      "Respiratory Arrest",
-      "Major Trauma",
-      "Severe Burns",
-      "Active Seizure",
-      "Unconscious",
-      "Anaphylaxis",
-      "Massive Hemorrhage",
-      "Drowning",
-      "Hanging/Strangulation",
+interface SymptomCategory {
+  title: string;
+  symptoms: SymptomItem[];
+}
+
+const SYMPTOM_CATEGORIES: SymptomCategory[] = [
+  {
+    title: "Airway / Breathing",
+    symptoms: [
+      { label: "Obstructed Airway", key: "obstructed_airway", color: "#ef4444" },
+      { label: "Stridor", key: "stridor", color: "#ef4444" },
+      { label: "Severe Resp Distress", key: "severe_respiratory_distress", color: "#ef4444" },
+      { label: "Moderate Resp Distress", key: "moderate_respiratory_distress", color: "#f97316" },
+      { label: "Cyanosis", key: "cyanosis", color: "#ef4444" },
     ],
   },
-  orange: {
-    title: "Urgent (< 10 min)",
-    complaints: [
-      "Chest Pain",
-      "Stroke Symptoms",
-      "Severe Breathing Difficulty",
-      "High-Risk Pregnancy",
-      "Severe Abdominal Pain",
-      "Head Injury with LOC",
-      "Acute Psychosis",
-      "Severe Allergic Reaction",
-      "Poisoning/Overdose",
-      "Severe Dehydration",
+  {
+    title: "Circulation",
+    symptoms: [
+      { label: "Shock", key: "shock", color: "#ef4444" },
+      { label: "Severe Bleeding", key: "severe_bleeding", color: "#ef4444" },
+      { label: "Chest Pain", key: "chest_pain", color: "#f97316" },
     ],
   },
-  yellow: {
-    title: "Semi-Urgent (< 30 min)",
-    complaints: [
-      "Moderate Pain",
-      "Fever with Rash",
-      "Vomiting/Diarrhea",
-      "Mild Breathing Difficulty",
-      "Minor Head Injury",
-      "Fracture (closed)",
-      "Moderate Burns",
-      "Urinary Retention",
-      "Acute Back Pain",
-      "Diabetic Emergency",
+  {
+    title: "Neurological",
+    symptoms: [
+      { label: "Seizure (Ongoing)", key: "seizure_ongoing", color: "#ef4444" },
+      { label: "Confusion", key: "confusion", color: "#f97316" },
+      { label: "Lethargic/Unconscious", key: "lethargic_unconscious", color: "#ef4444" },
+      { label: "Focal Deficits", key: "focal_deficits", color: "#f97316" },
     ],
   },
-  green: {
-    title: "Non-Urgent (< 60 min)",
-    complaints: [
-      "Minor Injuries",
-      "Mild Fever",
-      "Sore Throat",
-      "Mild Cough",
-      "Ear Pain",
-      "Minor Wound",
-      "Sprain/Strain",
-      "Skin Infection",
-      "Urinary Symptoms",
-      "Eye Irritation",
+  {
+    title: "Trauma / Other",
+    symptoms: [
+      { label: "Major Trauma", key: "major_trauma", color: "#ef4444" },
+      { label: "Moderate Trauma", key: "moderate_trauma", color: "#f97316" },
+      { label: "Minor Injury", key: "minor_injury", color: "#22c55e" },
+      { label: "Fever", key: "fever", color: "#eab308" },
+      { label: "Abdominal Pain", key: "abdominal_pain", color: "#f97316" },
+      { label: "Vomiting/Diarrhea", key: "vomiting_diarrhea", color: "#eab308" },
+      { label: "Allergic Reaction", key: "allergic_reaction", color: "#f97316" },
     ],
   },
-  blue: {
-    title: "Minor (< 120 min)",
-    complaints: [
-      "Prescription Refill",
-      "Chronic Pain Follow-up",
-      "Suture Removal",
-      "Dressing Change",
-      "Medical Certificate",
-      "Stable Chronic Condition",
-      "Minor Rash",
-      "Insect Bite",
-      "Minor Allergy",
-      "Routine Check",
-    ],
-  },
-};
+];
 
 const TRIAGE_PRIORITY_MAP: Record<TriageCategory, number> = {
   red: 1,
@@ -149,7 +118,34 @@ export default function TriageScreen() {
   const [patientType, setPatientType] = useState<"adult" | "pediatric">("adult");
   const [mlc, setMlc] = useState(false);
   const [selectedTriageColor, setSelectedTriageColor] = useState<TriageCategory>("green");
-  const [expandedCategory, setExpandedCategory] = useState<TriageCategory | null>(null);
+  const [selectedSymptoms, setSelectedSymptoms] = useState<Set<string>>(new Set(["normal_no_symptoms"]));
+  const [isContinuousRecording, setIsContinuousRecording] = useState(false);
+  const transcriptionIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isContinuousRecordingRef = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      isContinuousRecordingRef.current = false;
+      if (transcriptionIntervalRef.current) {
+        clearTimeout(transcriptionIntervalRef.current);
+        transcriptionIntervalRef.current = null;
+      }
+      const recording = recordingRef.current;
+      if (recording) {
+        recordingRef.current = null;
+        (async () => {
+          try {
+            await recording.stopAndUnloadAsync();
+          } catch {
+          }
+        })();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    isContinuousRecordingRef.current = isContinuousRecording;
+  }, [isContinuousRecording]);
 
   const formDataRef = useRef({
     name: "",
@@ -177,20 +173,148 @@ export default function TriageScreen() {
     forceUpdate((n) => n + 1);
   }, []);
 
-  const handleComplaintSelect = useCallback((complaint: string, color: TriageCategory) => {
-    const currentComplaint = formDataRef.current.chief_complaint;
-    if (currentComplaint.includes(complaint)) return;
+  const recalculateTriageColor = useCallback((symptoms: Set<string>) => {
+    if (symptoms.size === 0 || symptoms.has("normal_no_symptoms")) {
+      return "green" as TriageCategory;
+    }
     
-    formDataRef.current.chief_complaint = currentComplaint 
-      ? `${currentComplaint}, ${complaint}` 
-      : complaint;
-    setSelectedTriageColor(color);
-    forceUpdate((n) => n + 1);
+    let highestPriority: TriageCategory = "green";
+    const allSymptoms = SYMPTOM_CATEGORIES.flatMap(cat => cat.symptoms);
+    
+    symptoms.forEach(key => {
+      const symptom = allSymptoms.find(s => s.key === key);
+      if (symptom) {
+        if (symptom.color === "#ef4444") highestPriority = "red";
+        else if (symptom.color === "#f97316" && highestPriority !== "red") highestPriority = "orange";
+        else if (symptom.color === "#eab308" && highestPriority !== "red" && highestPriority !== "orange") highestPriority = "yellow";
+      }
+    });
+    
+    return highestPriority;
   }, []);
 
-  const toggleCategory = useCallback((category: TriageCategory) => {
-    setExpandedCategory((prev) => (prev === category ? null : category));
-  }, []);
+  const normalizeComplaint = (text: string): string => {
+    return text
+      .split(",")
+      .map(s => s.trim())
+      .filter(s => s.length > 0)
+      .join(", ");
+  };
+
+  const toggleSymptom = useCallback((symptomKey: string, symptomLabel: string, symptomColor: string) => {
+    setSelectedSymptoms((prev) => {
+      const next = new Set(prev);
+      
+      if (symptomKey === "normal_no_symptoms") {
+        next.clear();
+        next.add("normal_no_symptoms");
+        formDataRef.current.chief_complaint = "";
+        forceUpdate((n) => n + 1);
+        setSelectedTriageColor("green");
+        return next;
+      }
+      
+      next.delete("normal_no_symptoms");
+      
+      let currentComplaint = formDataRef.current.chief_complaint;
+      
+      if (next.has(symptomKey)) {
+        next.delete(symptomKey);
+        const complaints = currentComplaint.split(",").map(s => s.trim()).filter(c => c !== symptomLabel && c.length > 0);
+        formDataRef.current.chief_complaint = complaints.join(", ");
+        
+        if (next.size === 0) {
+          next.add("normal_no_symptoms");
+          formDataRef.current.chief_complaint = "";
+        }
+      } else {
+        next.add(symptomKey);
+        if (currentComplaint.trim()) {
+          formDataRef.current.chief_complaint = normalizeComplaint(`${currentComplaint}, ${symptomLabel}`);
+        } else {
+          formDataRef.current.chief_complaint = symptomLabel;
+        }
+      }
+      
+      forceUpdate((n) => n + 1);
+      const newColor = recalculateTriageColor(next);
+      setSelectedTriageColor(newColor);
+      return next;
+    });
+  }, [recalculateTriageColor]);
+
+  const startContinuousRecording = async () => {
+    try {
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permission Required", "Microphone access is needed for voice input");
+        return;
+      }
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      setIsContinuousRecording(true);
+      isContinuousRecordingRef.current = true;
+      recordChunk();
+    } catch (err) {
+      console.error("Recording error:", err);
+      Alert.alert("Error", "Failed to start recording");
+    }
+  };
+
+  const recordChunk = async () => {
+    if (!isContinuousRecordingRef.current) return;
+    
+    try {
+      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      recordingRef.current = recording;
+      setIsRecording(true);
+      
+      transcriptionIntervalRef.current = setTimeout(async () => {
+        if (recordingRef.current && isContinuousRecordingRef.current) {
+          await recordingRef.current.stopAndUnloadAsync();
+          const uri = recordingRef.current.getURI();
+          recordingRef.current = null;
+          setIsRecording(false);
+          
+          if (uri) {
+            await transcribeAudio(uri);
+          }
+          
+          if (isContinuousRecordingRef.current) {
+            recordChunk();
+          }
+        }
+      }, 5000);
+    } catch (err) {
+      console.error("Chunk recording error:", err);
+    }
+  };
+
+  const stopContinuousRecording = async () => {
+    setIsContinuousRecording(false);
+    isContinuousRecordingRef.current = false;
+    if (transcriptionIntervalRef.current) {
+      clearTimeout(transcriptionIntervalRef.current);
+      transcriptionIntervalRef.current = null;
+    }
+    if (recordingRef.current) {
+      try {
+        await recordingRef.current.stopAndUnloadAsync();
+        const uri = recordingRef.current.getURI();
+        recordingRef.current = null;
+        setIsRecording(false);
+        if (uri) {
+          await transcribeAudio(uri);
+        }
+      } catch (err) {
+        console.error("Stop recording error:", err);
+      }
+    }
+  };
 
   const startRecording = async () => {
     try {
@@ -396,24 +520,37 @@ export default function TriageScreen() {
         </View>
 
         <View style={[styles.voiceSection, { backgroundColor: theme.card }]}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Voice Input</Text>
-          <Pressable
-            style={[
-              styles.voiceBtn,
-              { backgroundColor: isRecording ? TriageColors.red : theme.primary },
-            ]}
-            onPress={isRecording ? stopRecording : startRecording}
-            disabled={transcribing}
-          >
-            {transcribing ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <>
-                <Feather name={isRecording ? "mic-off" : "mic"} size={24} color="#FFFFFF" />
-                <Text style={styles.voiceBtnText}>{isRecording ? "Stop Recording" : "Start Recording"}</Text>
-              </>
-            )}
-          </Pressable>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Voice Input (Continuous)</Text>
+          <View style={styles.voiceBtnRow}>
+            <Pressable
+              style={[
+                styles.voiceBtn,
+                { 
+                  backgroundColor: isContinuousRecording ? TriageColors.red : theme.primary,
+                  flex: 1,
+                },
+              ]}
+              onPress={isContinuousRecording ? stopContinuousRecording : startContinuousRecording}
+              disabled={transcribing}
+            >
+              {transcribing ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <>
+                  <Feather name={isContinuousRecording ? "mic-off" : "mic"} size={24} color="#FFFFFF" />
+                  <Text style={styles.voiceBtnText}>
+                    {isContinuousRecording ? "Stop" : "Start Continuous"}
+                  </Text>
+                </>
+              )}
+            </Pressable>
+          </View>
+          {isRecording ? (
+            <View style={styles.recordingIndicator}>
+              <View style={[styles.recordingDot, { backgroundColor: TriageColors.red }]} />
+              <Text style={[styles.recordingText, { color: TriageColors.red }]}>Recording...</Text>
+            </View>
+          ) : null}
           {voiceText ? (
             <View style={[styles.transcriptBox, { backgroundColor: theme.backgroundSecondary }]}>
               <Text style={[styles.transcriptText, { color: theme.text }]}>{voiceText}</Text>
@@ -519,66 +656,73 @@ export default function TriageScreen() {
                     borderColor: theme.text,
                   },
                 ]}
-                onPress={() => {
-                  setSelectedTriageColor(color);
-                  toggleCategory(color);
-                }}
+                onPress={() => setSelectedTriageColor(color)}
               >
                 <Text style={styles.triagePriorityText}>{TRIAGE_PRIORITY_MAP[color]}</Text>
               </Pressable>
             ))}
           </View>
           <Text style={[styles.triageCategoryLabel, { color: TriageColors[selectedTriageColor] }]}>
-            {TRIAGE_COMPLAINTS[selectedTriageColor].title}
+            {selectedTriageColor === "red" ? "Critical (Immediate)" :
+             selectedTriageColor === "orange" ? "Urgent (< 10 min)" :
+             selectedTriageColor === "yellow" ? "Semi-Urgent (< 30 min)" :
+             selectedTriageColor === "green" ? "Non-Urgent (< 60 min)" : "Minor (< 120 min)"}
           </Text>
         </View>
 
         <View style={[styles.section, { backgroundColor: theme.card }]}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Quick Complaints</Text>
-          {(["red", "orange", "yellow", "green", "blue"] as TriageCategory[]).map((color) => (
-            <View key={color} style={styles.complaintCategory}>
-              <Pressable
-                style={[styles.categoryHeader, { backgroundColor: TriageColors[color] }]}
-                onPress={() => toggleCategory(color)}
-              >
-                <Text style={styles.categoryHeaderText}>
-                  {TRIAGE_COMPLAINTS[color].title}
-                </Text>
-                <Feather
-                  name={expandedCategory === color ? "chevron-up" : "chevron-down"}
-                  size={20}
-                  color="#FFFFFF"
-                />
-              </Pressable>
-              {expandedCategory === color ? (
-                <View style={[styles.complaintsGrid, { backgroundColor: theme.backgroundSecondary }]}>
-                  {TRIAGE_COMPLAINTS[color].complaints.map((complaint) => {
-                    const isSelected = formDataRef.current.chief_complaint.includes(complaint);
-                    return (
-                      <Pressable
-                        key={complaint}
-                        style={[
-                          styles.complaintChip,
-                          {
-                            backgroundColor: isSelected ? TriageColors[color] : theme.backgroundTertiary,
-                            borderColor: TriageColors[color],
-                          },
-                        ]}
-                        onPress={() => handleComplaintSelect(complaint, color)}
-                      >
-                        <Text
-                          style={[
-                            styles.complaintChipText,
-                            { color: isSelected ? "#FFFFFF" : theme.text },
-                          ]}
-                        >
-                          {complaint}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              ) : null}
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Symptoms Assessment</Text>
+          
+          <Pressable
+            style={[
+              styles.symptomCheckbox,
+              {
+                backgroundColor: selectedSymptoms.has("normal_no_symptoms") ? "#22c55e" : theme.backgroundSecondary,
+                borderColor: "#22c55e",
+              },
+            ]}
+            onPress={() => toggleSymptom("normal_no_symptoms", "Normal (No critical symptoms)", "#22c55e")}
+          >
+            <Feather
+              name={selectedSymptoms.has("normal_no_symptoms") ? "check-square" : "square"}
+              size={20}
+              color={selectedSymptoms.has("normal_no_symptoms") ? "#FFFFFF" : "#22c55e"}
+            />
+            <Text style={[styles.symptomLabel, { color: selectedSymptoms.has("normal_no_symptoms") ? "#FFFFFF" : theme.text }]}>
+              Normal (No critical symptoms)
+            </Text>
+          </Pressable>
+
+          {SYMPTOM_CATEGORIES.map((category) => (
+            <View key={category.title} style={styles.symptomSection}>
+              <Text style={[styles.symptomCategoryTitle, { color: theme.textSecondary }]}>{category.title}</Text>
+              <View style={styles.symptomsGrid}>
+                {category.symptoms.map((symptom) => {
+                  const isSelected = selectedSymptoms.has(symptom.key);
+                  return (
+                    <Pressable
+                      key={symptom.key}
+                      style={[
+                        styles.symptomCheckbox,
+                        {
+                          backgroundColor: isSelected ? symptom.color : theme.backgroundSecondary,
+                          borderColor: symptom.color,
+                        },
+                      ]}
+                      onPress={() => toggleSymptom(symptom.key, symptom.label, symptom.color)}
+                    >
+                      <Feather
+                        name={isSelected ? "check-square" : "square"}
+                        size={18}
+                        color={isSelected ? "#FFFFFF" : symptom.color}
+                      />
+                      <Text style={[styles.symptomLabel, { color: isSelected ? "#FFFFFF" : theme.text }]}>
+                        {symptom.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
             </View>
           ))}
         </View>
@@ -643,6 +787,10 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   voiceBtnText: { color: "#FFFFFF", ...Typography.bodyMedium },
+  voiceBtnRow: { flexDirection: "row", gap: Spacing.sm },
+  recordingIndicator: { flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: Spacing.sm, gap: Spacing.xs },
+  recordingDot: { width: 10, height: 10, borderRadius: 5 },
+  recordingText: { ...Typography.small, fontWeight: "600" },
   transcriptBox: { padding: Spacing.md, borderRadius: BorderRadius.sm, marginTop: Spacing.md },
   transcriptText: { ...Typography.small, fontStyle: "italic" },
   section: { padding: Spacing.lg, borderRadius: BorderRadius.lg, marginBottom: Spacing.lg },
@@ -706,6 +854,32 @@ const styles = StyleSheet.create({
     textAlign: "center",
     ...Typography.bodyMedium,
     fontWeight: "600",
+  },
+  symptomSection: {
+    marginTop: Spacing.md,
+  },
+  symptomCategoryTitle: {
+    ...Typography.label,
+    marginBottom: Spacing.sm,
+  },
+  symptomsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
+  },
+  symptomCheckbox: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    gap: Spacing.sm,
+    marginBottom: Spacing.xs,
+  },
+  symptomLabel: {
+    ...Typography.small,
+    fontWeight: "500",
   },
   complaintCategory: {
     marginBottom: Spacing.sm,
