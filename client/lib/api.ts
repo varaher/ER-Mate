@@ -154,12 +154,12 @@ export async function apiUpload<T>(
   }
 }
 
-export function invalidateCases() {
-  queryClient.invalidateQueries({ queryKey: ["cases"] });
+export async function invalidateCases() {
+  return queryClient.invalidateQueries({ queryKey: ["cases"] });
 }
 
-export function invalidateCase(caseId: string) {
-  queryClient.invalidateQueries({ queryKey: ["cases", caseId] });
+export async function invalidateCase(caseId: string) {
+  return queryClient.invalidateQueries({ queryKey: ["cases", caseId] });
 }
 
 export { getExternalApiUrl };

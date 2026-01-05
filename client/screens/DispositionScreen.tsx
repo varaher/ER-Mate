@@ -91,7 +91,7 @@ export default function DispositionScreen() {
       });
 
       if (res.success) {
-        invalidateCases();
+        await invalidateCases();
         if (disposition === "discharge") {
           Alert.alert("Saved", "Patient ready for discharge", [
             { text: "Generate Discharge Summary", onPress: () => navigation.navigate("DischargeSummary", { caseId }) },

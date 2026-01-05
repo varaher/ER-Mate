@@ -206,7 +206,7 @@ export default function TriageScreen() {
       const res = await apiPost<{ id: string }>("/cases", payload);
 
       if (res.success && res.data) {
-        invalidateCases();
+        await invalidateCases();
         Alert.alert("Success", "Patient saved successfully", [
           {
             text: "Continue to Case Sheet",

@@ -154,7 +154,7 @@ export default function TreatmentScreen() {
       });
 
       if (res.success) {
-        invalidateCases();
+        await invalidateCases();
         Alert.alert("Saved", "Treatment saved", [
           { text: "Continue to Disposition", onPress: () => navigation.navigate("Disposition", { caseId }) },
           { text: "Stay Here", style: "cancel" },

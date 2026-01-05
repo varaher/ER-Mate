@@ -86,7 +86,7 @@ export default function PhysicalExamScreen() {
       });
 
       if (res.success) {
-        invalidateCases();
+        await invalidateCases();
         Alert.alert("Saved", "Physical exam saved", [
           { text: "Continue to Investigations", onPress: () => navigation.navigate("Investigations", { caseId }) },
           { text: "Stay Here", style: "cancel" },

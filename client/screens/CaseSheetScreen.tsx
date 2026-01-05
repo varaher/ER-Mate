@@ -148,7 +148,7 @@ export default function CaseSheetScreen() {
       const res = await apiPatch(`/cases/${caseId}`, payload);
 
       if (res.success) {
-        invalidateCases();
+        await invalidateCases();
         Alert.alert("Saved", "Case sheet updated", [
           { text: "Continue to Physical Exam", onPress: () => navigation.navigate("PhysicalExam", { caseId }) },
           { text: "Stay Here", style: "cancel" },

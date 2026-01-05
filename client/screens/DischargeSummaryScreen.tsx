@@ -96,7 +96,7 @@ export default function DischargeSummaryScreen() {
       });
 
       if (res.success) {
-        invalidateCases();
+        await invalidateCases();
         Alert.alert("Saved", "Discharge summary saved successfully", [
           { text: "Share Summary", onPress: shareSummary },
           { text: "Go to Dashboard", onPress: () => navigation.popToTop() },

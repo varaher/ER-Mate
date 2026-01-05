@@ -94,7 +94,7 @@ export default function InvestigationsScreen() {
       });
 
       if (res.success) {
-        invalidateCases();
+        await invalidateCases();
         Alert.alert("Saved", "Investigations saved", [
           { text: "Continue to Treatment", onPress: () => navigation.navigate("Treatment", { caseId }) },
           { text: "Stay Here", style: "cancel" },
