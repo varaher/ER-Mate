@@ -1,0 +1,104 @@
+# ErMate - Emergency Room EMR Application
+
+## Overview
+
+ErMate is a mobile-first Emergency Room Electronic Medical Records (EMR) application built with React Native and Expo. It provides emergency medicine physicians and residents with a streamlined workflow for patient triage, case management, physical examinations, investigations, treatment planning, and discharge documentation. The app supports voice dictation, AI-powered features, and follows a subscription-based model.
+
+## User Preferences
+
+Preferred communication style: Simple, everyday language.
+
+## System Architecture
+
+### Frontend Architecture
+
+**Framework**: React Native with Expo SDK 54
+- Uses Expo's managed workflow with new architecture enabled
+- React 19.1.0 with React Compiler experimental feature
+- TypeScript for type safety throughout
+
+**Navigation Structure**:
+- `RootStackNavigator`: Handles authentication flow and modal screens
+- `MainTabNavigator`: 5-tab layout (Dashboard, Cases, New Patient FAB, Logs, Profile)
+- Native stack navigation for screen transitions with gesture support
+
+**State Management**:
+- `AuthContext`: Manages user authentication, tokens, and session persistence via AsyncStorage
+- `CaseContext`: Manages current case data during the triage-to-discharge workflow
+- TanStack React Query for server state management and caching
+
+**UI Components**:
+- Themed components (`ThemedView`, `ThemedText`, `Button`, `Card`) with automatic dark/light mode support
+- Medical-specific color scheme with triage priority colors (RED, ORANGE, YELLOW, GREEN, BLUE)
+- `KeyboardAwareScrollViewCompat` for form-heavy screens
+- Reanimated for smooth animations
+
+**Clinical Workflow Screens** (sequential modal flow):
+1. TriageScreen - Patient demographics, vitals, presenting complaint
+2. CaseSheetScreen - ABCDE assessment, VBG, examination
+3. PhysicalExamScreen - System-wise physical examination
+4. InvestigationsScreen - Lab and imaging orders
+5. TreatmentScreen - Medications, procedures, AI diagnosis
+6. DispositionScreen - Discharge/admit decisions
+7. DischargeSummaryScreen - Final documentation and summary generation
+
+### Backend Architecture
+
+**Server**: Express.js with TypeScript
+- Runs on port 5000 (configurable)
+- CORS configured for Replit domains
+- Static file serving for web builds
+- HTTP proxy middleware for development
+
+**Current State**: The Express server is scaffolded with basic routing infrastructure. The application currently connects to an external backend at `https://er-emr-backend.onrender.com/api` for all API calls.
+
+**API Client** (`client/lib/api.ts`):
+- Token-based authentication via AsyncStorage
+- Standard REST methods: `apiGet`, `apiPost`, `apiPatch`, `apiUpload`
+- Centralized error handling
+
+### Data Storage
+
+**Database Schema** (Drizzle ORM with PostgreSQL):
+- `users` table: Basic user authentication (id, username, password)
+- Schema defined in `shared/schema.ts` with Zod validation via drizzle-zod
+
+**Local Storage**:
+- AsyncStorage for token and user data persistence
+- Form data uses `useRef` pattern to prevent re-render lag during text input
+
+### Voice Input System
+
+The app includes voice dictation capabilities:
+- Uses `expo-av` for audio recording
+- Streaming transcription via WebSocket connection
+- Multi-language support (English, Hindi, Malayalam)
+- Real-time partial transcription updates
+
+## External Dependencies
+
+### External Backend API
+- **URL**: `https://er-emr-backend.onrender.com/api`
+- **WebSocket**: `wss://er-emr-backend.onrender.com`
+- Handles: Authentication, case management, AI features, subscription checks
+- All clinical data operations go through this external service
+
+### Database
+- PostgreSQL via Drizzle ORM
+- Connection string expected in `DATABASE_URL` environment variable
+- Migrations output to `./migrations` directory
+
+### Key NPM Packages
+- `expo-av`: Audio recording for voice input
+- `expo-blur`, `expo-glass-effect`: UI effects
+- `expo-haptics`: Tactile feedback
+- `react-native-reanimated`: Animations
+- `react-native-keyboard-controller`: Keyboard-aware forms
+- `drizzle-orm`, `drizzle-zod`: Database ORM and validation
+- `@tanstack/react-query`: Server state management
+
+### Build & Development
+- Expo CLI for development (`expo:dev`)
+- TSX for running TypeScript server
+- ESBuild for production server bundling
+- Babel with module-resolver for path aliases (`@/` → `./client`, `@shared/` → `./shared`)
