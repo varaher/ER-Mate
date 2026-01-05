@@ -1,0 +1,4336 @@
+// CaseSheetScreen_V2.js - Enhanced UI with Dropdowns, Collapsible Sections, Voice Input
+// Features: ABCDE with notes, VBG with AI, Examination dropdowns, Psychological Assessment
+// Now with Streaming Voice Input support
+
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TextInput,
+  TouchableOpacity,
+  Alert,
+  ActivityIndicator,
+  Switch,
+  KeyboardAvoidingView,
+  Platform,
+  Modal,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { Audio } from "expo-av";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import api from "./api"; // Using axios like web app
+
+const API_URL = "https://er-emr-backend.onrender.com/api";
+const WS_URL = "wss://er-emr-backend.onrender.com";
+
+// Normal Exam Auto-fill Template - DETAILED examination results
+const NORMAL_EXAM_TEMPLATE = {
+  general: "Patient is conscious, alert, and oriented to time, place, and person. Comfortable at rest, afebrile, not in distress. No pallor, icterus, cyanosis, clubbing, lymphadenopathy, or peripheral edema noted. Hydration status adequate.",
+  cvs: "Cardiovascular examination: Pulse 72 bpm, regular rhythm, normal volume, no radio-femoral delay. JVP not elevated. Apex beat in 5th intercostal space, midclavicular line. Heart sounds S1 S2 heard, normal intensity, no murmurs, gallops, or rubs. Peripheral pulses well felt bilaterally.",
+  rs: "Respiratory examination: Chest shape normal, symmetric movement with respiration. Trachea central. Respiratory rate 16/min, regular. No use of accessory muscles. Percussion note resonant bilaterally. Bilateral equal air entry, vesicular breath sounds heard, no added sounds (wheeze, crackles, rhonchi). No pleural rub.",
+  abdomen: "Abdominal examination: Abdomen soft, non-distended. No visible peristalsis or pulsations. Umbilicus central, inverted. No tenderness, guarding, or rigidity. No organomegaly. Bowel sounds present, normal. No free fluid clinically. Hernial orifices intact.",
+  cns: "Central nervous system examination: Conscious, oriented, GCS 15/15 (E4 V5 M6). Speech clear and coherent. Cranial nerves II-XII grossly intact. Pupils equal, round, reactive to light (PERL), 3mm bilaterally. No nystagmus. Motor system: Tone normal, power 5/5 in all limbs, no drift. Sensory system intact to light touch. Reflexes 2+ and symmetric. Plantars flexor bilaterally. No cerebellar signs. Gait normal.",
+  extremities: "Extremities examination: No pallor, cyanosis, or clubbing. No pedal edema. Peripheral pulses well felt - radial, dorsalis pedis, posterior tibial all present bilaterally. Capillary refill time <2 seconds. No joint swelling, tenderness, or deformity. Full range of motion in all joints.",
+};
+
+// Pediatric Normal Vital Signs by Age Group
+const PEDIATRIC_VITALS = {
+  // Age in years: { hr: [min, max], rr: [min, max], sbp: [min, max], dbp: [min, max], temp: [min, max], spo2: [min, max] }
+  newborn: { // 0-1 month
+    ageRange: "0-1 month",
+    hr: [100, 160],
+    rr: [30, 60],
+    sbp: [60, 90],
+    dbp: [30, 60],
+    temp: [36.5, 37.5],
+    spo2: [95, 100],
+  },
+  infant: { // 1-12 months
+    ageRange: "1-12 months",
+    hr: [100, 160],
+    rr: [25, 50],
+    sbp: [70, 100],
+    dbp: [40, 65],
+    temp: [36.5, 37.5],
+    spo2: [95, 100],
+  },
+  toddler: { // 1-3 years
+    ageRange: "1-3 years",
+    hr: [90, 150],
+    rr: [20, 30],
+    sbp: [80, 110],
+    dbp: [50, 70],
+    temp: [36.5, 37.5],
+    spo2: [95, 100],
+  },
+  preschool: { // 3-6 years
+    ageRange: "3-6 years",
+    hr: [80, 140],
+    rr: [20, 25],
+    sbp: [80, 110],
+    dbp: [50, 70],
+    temp: [36.5, 37.5],
+    spo2: [95, 100],
+  },
+  schoolAge: { // 6-12 years
+    ageRange: "6-12 years",
+    hr: [70, 120],
+    rr: [15, 20],
+    sbp: [90, 120],
+    dbp: [55, 80],
+    temp: [36.5, 37.5],
+    spo2: [95, 100],
+  },
+  adolescent: { // 12-16 years
+    ageRange: "12-16 years",
+    hr: [60, 100],
+    rr: [12, 20],
+    sbp: [100, 130],
+    dbp: [60, 85],
+    temp: [36.5, 37.5],
+    spo2: [95, 100],
+  },
+  adult: { // >16 years
+    ageRange: ">16 years",
+    hr: [60, 100],
+    rr: [12, 20],
+    sbp: [90, 140],
+    dbp: [60, 90],
+    temp: [36.5, 37.5],
+    spo2: [95, 100],
+  },
+};
+
+// Get age group from age in years/months
+const getAgeGroup = (ageString) => {
+  if (!ageString) return 'adult';
+  
+  const age = ageString.toLowerCase();
+  let years = 0;
+  let months = 0;
+  
+  // Parse age string like "5 years", "6 months", "2y", "3m", "5"
+  const yearMatch = age.match(/(\d+)\s*(y|year|years)/i);
+  const monthMatch = age.match(/(\d+)\s*(m|month|months)/i);
+  const dayMatch = age.match(/(\d+)\s*(d|day|days)/i);
+  const plainNumber = age.match(/^(\d+)$/);
+  
+  if (yearMatch) years = parseInt(yearMatch[1]);
+  if (monthMatch) months = parseInt(monthMatch[1]);
+  if (dayMatch) months = 0; // Days means < 1 month
+  if (plainNumber) years = parseInt(plainNumber[1]); // Assume years if just a number
+  
+  const totalMonths = (years * 12) + months;
+  
+  if (totalMonths <= 1) return 'newborn';
+  if (totalMonths <= 12) return 'infant';
+  if (years <= 3) return 'toddler';
+  if (years <= 6) return 'preschool';
+  if (years <= 12) return 'schoolAge';
+  if (years <= 16) return 'adolescent';
+  return 'adult';
+};
+
+// Check if a vital is within normal range
+const checkVitalStatus = (value, min, max) => {
+  if (!value || isNaN(parseFloat(value))) return 'unknown';
+  const numValue = parseFloat(value);
+  if (numValue < min) return 'low';
+  if (numValue > max) return 'high';
+  return 'normal';
+};
+
+// Get all vital alerts based on age
+const getVitalAlerts = (vitals, ageString) => {
+  const ageGroup = getAgeGroup(ageString);
+  const norms = PEDIATRIC_VITALS[ageGroup];
+  const alerts = [];
+  
+  if (!norms) return alerts;
+  
+  // Heart Rate
+  if (vitals.hr) {
+    const status = checkVitalStatus(vitals.hr, norms.hr[0], norms.hr[1]);
+    if (status === 'low') {
+      alerts.push({ type: 'danger', vital: 'HR', message: `Bradycardia: HR ${vitals.hr} (Normal: ${norms.hr[0]}-${norms.hr[1]} for ${norms.ageRange})` });
+    } else if (status === 'high') {
+      alerts.push({ type: 'warning', vital: 'HR', message: `Tachycardia: HR ${vitals.hr} (Normal: ${norms.hr[0]}-${norms.hr[1]} for ${norms.ageRange})` });
+    }
+  }
+  
+  // Respiratory Rate
+  if (vitals.rr) {
+    const status = checkVitalStatus(vitals.rr, norms.rr[0], norms.rr[1]);
+    if (status === 'low') {
+      alerts.push({ type: 'danger', vital: 'RR', message: `Bradypnea: RR ${vitals.rr} (Normal: ${norms.rr[0]}-${norms.rr[1]} for ${norms.ageRange})` });
+    } else if (status === 'high') {
+      alerts.push({ type: 'warning', vital: 'RR', message: `Tachypnea: RR ${vitals.rr} (Normal: ${norms.rr[0]}-${norms.rr[1]} for ${norms.ageRange})` });
+    }
+  }
+  
+  // Systolic BP
+  if (vitals.sbp) {
+    const status = checkVitalStatus(vitals.sbp, norms.sbp[0], norms.sbp[1]);
+    if (status === 'low') {
+      alerts.push({ type: 'danger', vital: 'SBP', message: `Hypotension: SBP ${vitals.sbp} (Normal: ${norms.sbp[0]}-${norms.sbp[1]} for ${norms.ageRange})` });
+    } else if (status === 'high') {
+      alerts.push({ type: 'warning', vital: 'SBP', message: `Hypertension: SBP ${vitals.sbp} (Normal: ${norms.sbp[0]}-${norms.sbp[1]} for ${norms.ageRange})` });
+    }
+  }
+  
+  // Temperature
+  if (vitals.temp) {
+    const status = checkVitalStatus(vitals.temp, norms.temp[0], norms.temp[1]);
+    if (status === 'low') {
+      alerts.push({ type: 'danger', vital: 'Temp', message: `Hypothermia: ${vitals.temp}°C (Normal: ${norms.temp[0]}-${norms.temp[1]}°C)` });
+    } else if (status === 'high') {
+      alerts.push({ type: 'warning', vital: 'Temp', message: `Fever: ${vitals.temp}°C (Normal: ${norms.temp[0]}-${norms.temp[1]}°C)` });
+    }
+  }
+  
+  // SpO2
+  if (vitals.spo2) {
+    const status = checkVitalStatus(vitals.spo2, norms.spo2[0], norms.spo2[1]);
+    if (status === 'low') {
+      alerts.push({ type: 'danger', vital: 'SpO2', message: `Hypoxia: SpO2 ${vitals.spo2}% (Normal: ≥${norms.spo2[0]}%)` });
+    }
+  }
+  
+  return alerts;
+};
+
+// Drug Database for Emergency Medicine
+const ADULT_DRUGS = [
+  { name: "Adrenaline", strength: "1mg/mL", doses: ["0.5mg IM", "1mg IV"] },
+  { name: "Atropine", strength: "0.6mg/mL", doses: ["0.6mg IV", "1.2mg IV"] },
+  { name: "Amiodarone", strength: "150mg/3mL", doses: ["150mg IV", "300mg IV"] },
+  { name: "Aspirin", strength: "325mg", doses: ["325mg PO", "150mg PO"] },
+  { name: "Clopidogrel", strength: "75mg", doses: ["300mg loading", "75mg maintenance"] },
+  { name: "Diazepam", strength: "10mg/2mL", doses: ["5mg IV", "10mg IV", "5mg PR"] },
+  { name: "Dopamine", strength: "200mg/5mL", doses: ["5mcg/kg/min", "10mcg/kg/min", "15mcg/kg/min"] },
+  { name: "Dobutamine", strength: "250mg/20mL", doses: ["5mcg/kg/min", "10mcg/kg/min"] },
+  { name: "Dexamethasone", strength: "4mg/mL", doses: ["4mg IV", "8mg IV"] },
+  { name: "Fentanyl", strength: "50mcg/mL", doses: ["50mcg IV", "100mcg IV"] },
+  { name: "Furosemide", strength: "20mg/2mL", doses: ["20mg IV", "40mg IV", "80mg IV"] },
+  { name: "Hydrocortisone", strength: "100mg", doses: ["100mg IV", "200mg IV"] },
+  { name: "Heparin", strength: "5000U/mL", doses: ["5000U SC", "60U/kg bolus"] },
+  { name: "Insulin Regular", strength: "100U/mL", doses: ["10U IV", "0.1U/kg/hr"] },
+  { name: "Ketamine", strength: "50mg/mL", doses: ["1mg/kg IV", "2mg/kg IM"] },
+  { name: "Labetalol", strength: "5mg/mL", doses: ["20mg IV", "40mg IV"] },
+  { name: "Lidocaine", strength: "2%", doses: ["1mg/kg IV", "1.5mg/kg IV"] },
+  { name: "Magnesium Sulfate", strength: "50%", doses: ["2g IV", "4g IV"] },
+  { name: "Midazolam", strength: "5mg/mL", doses: ["2mg IV", "5mg IV", "5mg IM"] },
+  { name: "Morphine", strength: "10mg/mL", doses: ["2mg IV", "4mg IV", "5mg SC"] },
+  { name: "Naloxone", strength: "0.4mg/mL", doses: ["0.4mg IV", "0.8mg IV", "2mg IN"] },
+  { name: "Nitroglycerin", strength: "5mg/mL", doses: ["0.4mg SL", "5mcg/min infusion"] },
+  { name: "Noradrenaline", strength: "4mg/4mL", doses: ["0.1mcg/kg/min", "0.2mcg/kg/min"] },
+  { name: "Ondansetron", strength: "4mg/2mL", doses: ["4mg IV", "8mg IV"] },
+  { name: "Pantoprazole", strength: "40mg", doses: ["40mg IV", "80mg IV bolus"] },
+  { name: "Paracetamol", strength: "1g/100mL", doses: ["1g IV", "650mg PO"] },
+  { name: "Phenytoin", strength: "250mg/5mL", doses: ["15mg/kg IV", "20mg/kg IV"] },
+  { name: "Propofol", strength: "10mg/mL", doses: ["1mg/kg IV", "2mg/kg IV"] },
+  { name: "Rocuronium", strength: "50mg/5mL", doses: ["0.6mg/kg IV", "1.2mg/kg IV"] },
+  { name: "Salbutamol Neb", strength: "5mg/mL", doses: ["2.5mg neb", "5mg neb"] },
+  { name: "Sodium Bicarbonate", strength: "8.4%", doses: ["50mEq IV", "1mEq/kg IV"] },
+  { name: "Succinylcholine", strength: "100mg/5mL", doses: ["1mg/kg IV", "1.5mg/kg IV"] },
+  { name: "Tramadol", strength: "50mg/mL", doses: ["50mg IV", "100mg IV"] },
+  { name: "Tranexamic Acid", strength: "500mg/5mL", doses: ["1g IV", "1g IV over 10min"] },
+  { name: "Vasopressin", strength: "20U/mL", doses: ["40U IV", "0.03U/min infusion"] },
+];
+
+const PEDIATRIC_DRUGS = [
+  { name: "Adrenaline", strength: "1:10000", doses: ["0.01mg/kg IV", "0.1mg/kg ETT"] },
+  { name: "Atropine", strength: "0.6mg/mL", doses: ["0.02mg/kg IV (min 0.1mg)"] },
+  { name: "Amoxicillin", strength: "250mg/5mL", doses: ["25mg/kg PO", "50mg/kg PO"] },
+  { name: "Ceftriaxone", strength: "1g", doses: ["50mg/kg IV", "100mg/kg IV (meningitis)"] },
+  { name: "Dexamethasone", strength: "4mg/mL", doses: ["0.15mg/kg IV", "0.6mg/kg PO (croup)"] },
+  { name: "Diazepam", strength: "10mg/2mL", doses: ["0.2mg/kg IV", "0.5mg/kg PR"] },
+  { name: "Ibuprofen", strength: "100mg/5mL", doses: ["10mg/kg PO"] },
+  { name: "Midazolam", strength: "5mg/mL", doses: ["0.1mg/kg IV", "0.2mg/kg IN", "0.5mg/kg buccal"] },
+  { name: "Ondansetron", strength: "4mg/2mL", doses: ["0.15mg/kg IV (max 4mg)"] },
+  { name: "Paracetamol", strength: "250mg/5mL", doses: ["15mg/kg PO", "20mg/kg PR"] },
+  { name: "Phenobarbital", strength: "200mg/mL", doses: ["20mg/kg IV loading"] },
+  { name: "Prednisolone", strength: "5mg/5mL", doses: ["1mg/kg PO", "2mg/kg PO (asthma)"] },
+  { name: "Salbutamol Neb", strength: "5mg/mL", doses: ["2.5mg neb (<5y)", "5mg neb (>5y)"] },
+  { name: "Sodium Bicarbonate", strength: "4.2%", doses: ["1mEq/kg IV"] },
+];
+
+// Procedures List
+const PROCEDURE_OPTIONS = [
+  { id: "cpr", name: "CPR", category: "Resuscitation" },
+  { id: "intubation", name: "Endotracheal Intubation", category: "Airway" },
+  { id: "lma", name: "LMA Insertion", category: "Airway" },
+  { id: "cricothyrotomy", name: "Cricothyrotomy", category: "Airway" },
+  { id: "bvm", name: "Bag-Valve-Mask Ventilation", category: "Airway" },
+  { id: "central_line", name: "Central Line Insertion", category: "Vascular" },
+  { id: "peripheral_iv", name: "Peripheral IV Access", category: "Vascular" },
+  { id: "io_access", name: "Intraosseous Access", category: "Vascular" },
+  { id: "arterial_line", name: "Arterial Line", category: "Vascular" },
+  { id: "chest_tube", name: "Chest Tube Insertion", category: "Chest" },
+  { id: "needle_decompression", name: "Needle Decompression", category: "Chest" },
+  { id: "pericardiocentesis", name: "Pericardiocentesis", category: "Chest" },
+  { id: "thoracentesis", name: "Thoracentesis", category: "Chest" },
+  { id: "lumbar_puncture", name: "Lumbar Puncture", category: "Neuro" },
+  { id: "foleys", name: "Foley's Catheter", category: "GU" },
+  { id: "ng_tube", name: "NG Tube Insertion", category: "GI" },
+  { id: "gastric_lavage", name: "Gastric Lavage", category: "GI" },
+  { id: "wound_closure", name: "Wound Closure/Suturing", category: "Wound" },
+  { id: "wound_irrigation", name: "Wound Irrigation", category: "Wound" },
+  { id: "fracture_splint", name: "Fracture Splinting", category: "Ortho" },
+  { id: "joint_reduction", name: "Joint Reduction", category: "Ortho" },
+  { id: "cardioversion", name: "Cardioversion", category: "Cardiac" },
+  { id: "defibrillation", name: "Defibrillation", category: "Cardiac" },
+  { id: "pacing", name: "Transcutaneous Pacing", category: "Cardiac" },
+  { id: "ecg", name: "12-Lead ECG", category: "Monitoring" },
+  { id: "abg", name: "ABG/VBG", category: "Monitoring" },
+];
+
+export default function CaseSheetScreen({ route, navigation }) {
+  const { 
+    patientType = "adult", 
+    vitals = {}, 
+    patient = {},
+    presentingComplaint = {},
+    voiceTranscript = "",
+    caseId: existingCaseId 
+  } = route.params || {};
+  const isPediatric = patientType === "pediatric";
+
+  /* ===================== STATE ===================== */
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [caseId, setCaseId] = useState(existingCaseId || null);
+  const [activeTab, setActiveTab] = useState("patient");
+  const [showMlcFields, setShowMlcFields] = useState(patient.mlc || false);
+  
+  // AI Diagnosis State
+  const [aiDiagnosisLoading, setAiDiagnosisLoading] = useState(false);
+  const [aiDiagnosisResult, setAiDiagnosisResult] = useState(null);
+  const [aiRedFlags, setAiRedFlags] = useState([]);
+  
+  // Drug Selection State
+  const [showDrugModal, setShowDrugModal] = useState(false);
+  const [drugSearchQuery, setDrugSearchQuery] = useState("");
+  const [selectedDrugs, setSelectedDrugs] = useState([]);
+  
+  // Procedures State
+  const [selectedProcedures, setSelectedProcedures] = useState([]);
+  const [procedureNotes, setProcedureNotes] = useState({});
+  
+  // Addendum Modal State
+  const [showAddendumModal, setShowAddendumModal] = useState(false);
+  const [addendumNotes, setAddendumNotes] = useState([]);
+  const [currentAddendum, setCurrentAddendum] = useState("");
+  const addendumTimerRef = useRef(null);
+  
+  // Vital Alerts State
+  const [vitalAlerts, setVitalAlerts] = useState([]);
+  
+  // Collapsed sections
+  const [collapsed, setCollapsed] = useState({
+    airway: false,
+    breathing: false,
+    circulation: false,
+    disability: false,
+    exposure: false,
+    efast: true,
+    reassessment: false,
+    adjuvants: true,
+    heent: false,
+    generalExam: false,
+    cvs: true,
+    respiratory: true,
+    abdomen: true,
+    cns: true,
+    extremities: true,
+    psychological: true,
+  });
+
+  // Examination status (Normal/Abnormal)
+  const [examStatus, setExamStatus] = useState({
+    cvs: "Normal",
+    respiratory: "Normal",
+    abdomen: "Normal",
+    cns: "Normal",
+    extremities: "Normal",
+  });
+
+  /* ===================== VOICE STATE ===================== */
+  const [recording, setRecording] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [activeVoiceField, setActiveVoiceField] = useState(null);
+  const [transcribing, setTranscribing] = useState(false);
+  
+  // Streaming voice mode
+  const [useStreamingVoice, setUseStreamingVoice] = useState(false);
+  const [streamingWs, setStreamingWs] = useState(null);
+  const [streamingText, setStreamingText] = useState("");
+  const [voiceLanguage, setVoiceLanguage] = useState("en-IN"); // en-IN, hi-IN, ml-IN
+
+  /* ===================== FORM DATA REF ===================== */
+  const formDataRef = useRef({
+    // Patient Info (populated from Triage if available)
+    patient_name: patient.name || "",
+    patient_age: patient.age ? String(patient.age) : (vitals.age ? String(vitals.age) : ""),
+    patient_sex: patient.sex || "Male",
+    patient_phone: patient.phone || "",
+    patient_uhid: patient.uhid || "",
+    patient_mode_of_arrival: patient.mode_of_arrival || "Walk-in",
+    patient_mlc: patient.mlc || false,
+    patient_brought_by: patient.brought_by || "",
+    
+    // MLC Fields
+    mlc_nature: "",
+    mlc_date_time: "",
+    mlc_place: "",
+    mlc_identification_mark: "",
+
+    // Presenting Complaint (populated from Triage if available)
+    complaint_text: presentingComplaint.text || voiceTranscript || "",
+    complaint_duration: "",
+    complaint_onset: "Sudden",
+
+    // Vitals
+    vitals_hr: vitals.hr ? String(vitals.hr) : "",
+    vitals_rr: vitals.rr ? String(vitals.rr) : "",
+    vitals_bp_systolic: vitals.bp_systolic ? String(vitals.bp_systolic) : "",
+    vitals_bp_diastolic: vitals.bp_diastolic ? String(vitals.bp_diastolic) : "",
+    vitals_spo2: vitals.spo2 ? String(vitals.spo2) : "",
+    vitals_temperature: vitals.temperature ? String(vitals.temperature) : "",
+    vitals_gcs_e: "",
+    vitals_gcs_v: "",
+    vitals_gcs_m: "",
+    vitals_pain_score: "",
+    vitals_grbs: "",
+
+    // Primary Assessment (ABCDE) with Notes
+    airway_status: "Patent",
+    airway_position: "",
+    airway_patency: "",
+    airway_obstruction_cause: "",
+    airway_speech: "",
+    airway_interventions: [],
+    airway_notes: "",
+    
+    breathing_wob: "Normal",
+    breathing_rr: "",
+    breathing_spo2: "",
+    breathing_o2_flow: "",
+    breathing_o2_device: "",
+    breathing_effort: "",
+    breathing_pattern: "",
+    breathing_expansion: "",
+    breathing_air_entry: "Equal",
+    breathing_added_sounds: "",
+    breathing_breath_sounds: "Normal",
+    breathing_interventions: [],
+    breathing_notes: "",
+    
+    circulation_status: "Normal",
+    circulation_hr: "",
+    circulation_bp: "",
+    circulation_rhythm: "",
+    circulation_crt: "Normal",
+    circulation_skin: "Warm, Dry",
+    circulation_pulse: "Regular",
+    circulation_jvp: "Normal",
+    circulation_external_bleed: false,
+    circulation_long_bone: false,
+    circulation_interventions: [],
+    circulation_notes: "",
+    
+    disability_avpu: "Alert",
+    disability_gcs_e: "",
+    disability_gcs_v: "",
+    disability_gcs_m: "",
+    disability_grbs: "",
+    disability_pupils: "Equal, Reactive",
+    disability_pupils_size: "",
+    disability_pupils_reaction: "",
+    disability_lateralizing: "",
+    disability_seizure: false,
+    disability_motor: "Normal",
+    disability_notes: "",
+    
+    exposure_status: "Normal",
+    exposure_temperature: "",
+    exposure_rashes: "",
+    exposure_bruises: "",
+    exposure_logroll: [],
+    exposure_findings: "",
+    exposure_notes: "",
+
+    // PAT (Pediatric Assessment Triangle) - Only for pediatric patients
+    pat_appearance_tone: "",
+    pat_appearance_interactivity: "",
+    pat_appearance_consolability: "",
+    pat_appearance_look_gaze: "",
+    pat_appearance_speech_cry: "",
+    pat_work_of_breathing: "",
+    pat_abnormal_sounds: [],
+    pat_abnormal_positioning: "",
+    pat_circulation_skin_color: "",
+    pat_circulation_crt: "",
+    pat_overall_impression: "",
+    pat_notes: "",
+
+    // HEENT (Pediatric)
+    heent_head: "",
+    heent_eyes: "",
+    heent_ears: "",
+    heent_nose: "",
+    heent_throat: "",
+    heent_notes: "",
+
+    // EFAST (for trauma)
+    efast_heart: "",
+    efast_abdomen: "",
+    efast_lungs: "",
+    efast_pelvis: "",
+    efast_notes: "",
+
+    // Reassessment
+    reassessment_status: "",
+    reassessment_notes: "",
+
+    // Adjuvants to Primary
+    ecg_findings: "",
+    vbg_ph: "",
+    vbg_pco2: "",
+    vbg_hco3: "",
+    vbg_hb: "",
+    vbg_glu: "",
+    vbg_lac: "",
+    vbg_na: "",
+    vbg_k: "",
+    vbg_cr: "",
+    vbg_ai_interpretation: "",
+    bedside_echo: "",
+    adjuvants_notes: "",
+
+    // History
+    history_hpi: "",
+    history_signs_symptoms: "",
+    history_secondary_survey: "",
+    history_allergies: "",
+    history_medications: "",
+    history_past_medical: "",
+    history_past_surgical: "",
+    history_last_meal: "",
+    history_family_gynae: "",
+    history_additional_notes: "",
+
+    // Psychological Assessment
+    psych_suicidal_ideation: false,
+    psych_self_harm: false,
+    psych_harm_others: false,
+    psych_substance_abuse: false,
+    psych_psychiatric_history: false,
+    psych_current_treatment: false,
+    psych_support_system: true,
+    psych_notes: "",
+
+    // Examination - General
+    general_appearance: "Well",
+    general_pallor: false,
+    general_icterus: false,
+    general_cyanosis: false,
+    general_clubbing: false,
+    general_lymphadenopathy: false,
+    general_edema: false,
+    general_notes: "",
+
+    // Examination - CVS
+    cvs_s1_s2: "Normal",
+    cvs_pulse: "Regular",
+    cvs_pulse_rate: "",
+    cvs_apex_beat: "Normal",
+    cvs_precordial_heave: "",  // Backend expects string, not boolean
+    cvs_added_sounds: "",
+    cvs_murmurs: "",
+    cvs_notes: "",
+
+    // Examination - Respiratory
+    resp_expansion: "Equal",
+    resp_percussion: "Resonant",
+    resp_breath_sounds: "Vesicular",
+    resp_vocal_resonance: "Normal",
+    resp_added_sounds: "",
+    resp_notes: "",
+
+    // Examination - Abdomen
+    abd_umbilical: "Normal",
+    abd_organomegaly: "",
+    abd_percussion: "Tympanic",
+    abd_bowel_sounds: "Present",
+    abd_external_genitalia: "Normal",
+    abd_hernial_orifices: "Normal",
+    abd_per_rectal: "",
+    abd_per_vaginal: "",
+    abd_notes: "",
+
+    // Examination - CNS
+    cns_higher_mental: "Intact",
+    cns_cranial_nerves: "Intact",
+    cns_sensory: "Intact",
+    cns_motor: "Normal",
+    cns_reflexes: "Normal",
+    cns_romberg: "Negative",
+    cns_cerebellar: "Normal",
+    cns_notes: "",
+
+    // Examination - Extremities
+    ext_findings: "",
+    ext_notes: "",
+
+    // Treatment
+    treatment_interventions: "",
+    labs_ordered: "",
+    imaging_ordered: "",
+    investigation_results: "",
+    vbg_interpretation: "",
+    diagnosis_primary: "",
+    diagnosis_differential: "",
+    treatment_medications: "",
+    treatment_fluids: "",
+    treatment_procedures: "",
+    treatment_course: "",
+
+    // Disposition
+    disposition_type: "Discharge",
+    disposition_ward: "",
+    disposition_refer_hospital: "",
+    disposition_refer_reason: "",
+    disposition_lama_notes: "",
+    disposition_death_time: "",
+    disposition_death_cause: "",
+    
+    // Observation in ER
+    er_observation_notes: "",
+    er_duration: "",
+    
+    // Discharge (only for discharge disposition)
+    discharge_medications: "",
+    discharge_followup: "",
+    
+    // Procedures & Notes
+    procedures_performed: [],
+    procedure_notes: {},
+    
+    // Addendum Notes
+    addendum_notes: [],
+  });
+
+  // Select states for UI
+  const [selectStates, setSelectStates] = useState({
+    patient_sex: "Male",
+    patient_mode_of_arrival: "Walk-in",
+    complaint_onset: "Sudden",
+    airway_status: "Patent",
+    breathing_wob: "Normal",
+    breathing_air_entry: "Equal",
+    circulation_crt: "Normal",
+    circulation_pulse: "Regular",
+    disability_avpu: "Alert",
+    disability_pupils: "Equal, Reactive",
+    patient_mlc: false,
+  });
+
+  /* ===================== HELPERS ===================== */
+  const [forceRenderKey, setForceRenderKey] = useState(0);
+  const forceUpdate = () => setForceRenderKey(prev => prev + 1);
+
+  const toggleCollapse = (section) => {
+    setCollapsed(prev => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  const updateTextField = useCallback((field, value) => {
+    formDataRef.current[field] = value;
+  }, []);
+
+  const updateSelectField = useCallback((field, value) => {
+    formDataRef.current[field] = value;
+    setSelectStates(prev => ({ ...prev, [field]: value }));
+  }, []);
+
+  const updateExamStatus = (exam, status) => {
+    setExamStatus(prev => ({ ...prev, [exam]: status }));
+    
+    // Auto-fill detailed normal findings when "Normal" is selected
+    if (status === "Normal") {
+      switch (exam) {
+        case 'cvs':
+          formDataRef.current.cvs_notes = NORMAL_EXAM_TEMPLATE.cvs;
+          break;
+        case 'respiratory':
+          formDataRef.current.resp_notes = NORMAL_EXAM_TEMPLATE.rs;
+          break;
+        case 'abdomen':
+          formDataRef.current.abd_notes = NORMAL_EXAM_TEMPLATE.abdomen;
+          break;
+        case 'cns':
+          formDataRef.current.cns_notes = NORMAL_EXAM_TEMPLATE.cns;
+          break;
+        case 'extremities':
+          formDataRef.current.ext_notes = NORMAL_EXAM_TEMPLATE.extremities;
+          break;
+      }
+      forceUpdate();
+    }
+  };
+
+  // Toggle intervention in array field
+  const toggleIntervention = (field, item) => {
+    const current = formDataRef.current[field] || [];
+    if (current.includes(item)) {
+      formDataRef.current[field] = current.filter(i => i !== item);
+    } else {
+      formDataRef.current[field] = [...current, item];
+    }
+    forceUpdate();
+  };
+
+  /* ===================== ADDENDUM TIMER ===================== */
+  useEffect(() => {
+    // Set up 2-hour reminder for addendum notes
+    const TWO_HOURS = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
+    
+    addendumTimerRef.current = setInterval(() => {
+      if (caseId) { // Only show if case is saved
+        setShowAddendumModal(true);
+      }
+    }, TWO_HOURS);
+
+    return () => {
+      if (addendumTimerRef.current) {
+        clearInterval(addendumTimerRef.current);
+      }
+    };
+  }, [caseId]);
+
+  /* ===================== AUTOSAVE ===================== */
+  const [lastSaved, setLastSaved] = useState(null);
+  const [autoSaving, setAutoSaving] = useState(false);
+  const autoSaveTimerRef = useRef(null);
+  
+  // Autosave every 30 seconds
+  useEffect(() => {
+    autoSaveTimerRef.current = setInterval(async () => {
+      // Only autosave if we have a case ID (case was created)
+      if (caseId && !saving && !autoSaving) {
+        try {
+          setAutoSaving(true);
+          await saveCaseSheet(true); // true = silent save
+          setLastSaved(new Date());
+        } catch (err) {
+          console.log("Autosave failed:", err);
+        } finally {
+          setAutoSaving(false);
+        }
+      }
+    }, 30000); // 30 seconds
+
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearInterval(autoSaveTimerRef.current);
+      }
+    };
+  }, [caseId, saving]);
+
+  /* ===================== AI DIAGNOSIS FUNCTIONS ===================== */
+  const getAIDiagnosisSuggestions = async () => {
+    const fd = formDataRef.current;
+    
+    // Build clinical context
+    const clinicalContext = {
+      age: fd.patient_age,
+      sex: fd.patient_sex,
+      presenting_complaint: fd.complaint_text,
+      vitals: {
+        hr: fd.vitals_hr,
+        rr: fd.vitals_rr,
+        bp: `${fd.vitals_bp_systolic}/${fd.vitals_bp_diastolic}`,
+        spo2: fd.vitals_spo2,
+        temp: fd.vitals_temperature,
+      },
+      history: fd.history_hpi,
+      examination_findings: fd.general_notes || "",
+      current_diagnosis: fd.diagnosis_primary || "",
+    };
+
+    if (!clinicalContext.presenting_complaint && !clinicalContext.history) {
+      Alert.alert("Insufficient Data", "Please enter presenting complaint or history first");
+      return;
+    }
+
+    setAiDiagnosisLoading(true);
+    try {
+      // Use axios (same as web app)
+      const response = await api.post('/ai/generate', {
+        prompt_type: "diagnosis_suggestions",
+        case_context: clinicalContext,
+      });
+
+      setAiDiagnosisResult(response.data.response || response.data.content || "");
+      
+      // Extract red flags from response
+      const redFlagMatch = response.data.response?.match(/RED FLAGS?:?([\s\S]*?)(?:SUGGESTED|DIFFERENTIAL|$)/i);
+      if (redFlagMatch) {
+        const flags = redFlagMatch[1].split(/[•\-\n]/).filter(f => f.trim().length > 3);
+        setAiRedFlags(flags.slice(0, 5));
+      }
+    } catch (err) {
+      console.error("AI Diagnosis error:", err);
+      const errorMsg = err.response?.data?.detail || "Failed to get AI suggestions";
+      Alert.alert("Error", errorMsg);
+    }
+    setAiDiagnosisLoading(false);
+  };
+
+  /* ===================== DRUG MANAGEMENT ===================== */
+  const drugList = isPediatric ? PEDIATRIC_DRUGS : ADULT_DRUGS;
+  
+  const filteredDrugs = drugList.filter(drug => 
+    drug.name.toLowerCase().includes(drugSearchQuery.toLowerCase())
+  );
+
+  const addDrug = (drug, dose) => {
+    const newDrug = {
+      id: Date.now(),
+      name: drug.name,
+      strength: drug.strength,
+      dose: dose,
+      time: new Date().toLocaleTimeString(),
+    };
+    setSelectedDrugs(prev => [...prev, newDrug]);
+    
+    // Update form data
+    const drugsList = [...selectedDrugs, newDrug].map(d => `${d.name} ${d.dose}`).join(", ");
+    formDataRef.current.treatment_medications = drugsList;
+    
+    setShowDrugModal(false);
+    setDrugSearchQuery("");
+  };
+
+  const removeDrug = (drugId) => {
+    const updated = selectedDrugs.filter(d => d.id !== drugId);
+    setSelectedDrugs(updated);
+    formDataRef.current.treatment_medications = updated.map(d => `${d.name} ${d.dose}`).join(", ");
+  };
+
+  /* ===================== PROCEDURE MANAGEMENT ===================== */
+  const toggleProcedure = (procedureId) => {
+    setSelectedProcedures(prev => {
+      if (prev.includes(procedureId)) {
+        return prev.filter(p => p !== procedureId);
+      }
+      return [...prev, procedureId];
+    });
+  };
+
+  const updateProcedureNote = (procedureId, note) => {
+    setProcedureNotes(prev => ({ ...prev, [procedureId]: note }));
+    
+    // Update form data
+    formDataRef.current.procedure_notes = { ...procedureNotes, [procedureId]: note };
+  };
+
+  /* ===================== ADDENDUM NOTES ===================== */
+  const saveAddendum = () => {
+    if (!currentAddendum.trim()) {
+      setShowAddendumModal(false);
+      return;
+    }
+    
+    const newAddendum = {
+      id: Date.now(),
+      text: currentAddendum,
+      timestamp: new Date().toISOString(),
+      displayTime: new Date().toLocaleString(),
+    };
+    
+    const updated = [...addendumNotes, newAddendum];
+    setAddendumNotes(updated);
+    formDataRef.current.addendum_notes = updated;
+    
+    setCurrentAddendum("");
+    setShowAddendumModal(false);
+    
+    // Auto-save case sheet with new addendum
+    saveCaseSheet();
+  };
+
+  /* ===================== VOICE RECORDING ===================== */
+  
+  // Start streaming voice input
+  const startStreamingVoice = async (field) => {
+    try {
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permission Denied", "Microphone access required");
+        return;
+      }
+      
+      const token = await AsyncStorage.getItem("token");
+      if (!token) {
+        Alert.alert("Error", "Not authenticated");
+        return;
+      }
+      
+      setActiveVoiceField(field);
+      setStreamingText("");
+      setIsRecording(true);
+      
+      // Connect to WebSocket
+      const ws = new WebSocket(`${WS_URL}/ws/stt`);
+      
+      ws.onopen = () => {
+        console.log("WS connected, sending auth...");
+        ws.send(JSON.stringify({
+          token: token,
+          language: voiceLanguage,
+        }));
+      };
+      
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log("WS message:", data.type);
+          
+          if (data.type === "connected") {
+            console.log("STT ready, starting audio capture");
+            startAudioForStreaming(ws);
+          } else if (data.type === "partial") {
+            setStreamingText(prev => prev + " " + data.text);
+          } else if (data.type === "final") {
+            // Apply final text to field
+            const currentValue = formDataRef.current[field] || "";
+            formDataRef.current[field] = currentValue 
+              ? `${currentValue}\n${data.text}` 
+              : data.text;
+            setSelectStates(prev => ({ ...prev }));
+            setStreamingText("");
+            Alert.alert("✅ Done", "Voice transcription complete");
+          } else if (data.type === "error") {
+            Alert.alert("Error", data.message);
+          }
+        } catch (e) {
+          console.error("WS parse error:", e);
+        }
+      };
+      
+      ws.onerror = (error) => {
+        console.error("WS error:", error);
+        Alert.alert("Connection Error", "Failed to connect to voice server");
+        setIsRecording(false);
+      };
+      
+      ws.onclose = () => {
+        console.log("WS closed");
+        setStreamingWs(null);
+      };
+      
+      setStreamingWs(ws);
+      
+    } catch (err) {
+      console.error("Streaming voice error:", err);
+      Alert.alert("Error", "Failed to start streaming voice");
+      setIsRecording(false);
+    }
+  };
+  
+  // Start audio capture for streaming
+  const startAudioForStreaming = async (ws) => {
+    try {
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: true,
+      });
+      
+      const { recording: rec } = await Audio.Recording.createAsync({
+        android: {
+          extension: '.wav',
+          outputFormat: Audio.AndroidOutputFormat.DEFAULT,
+          audioEncoder: Audio.AndroidAudioEncoder.DEFAULT,
+          sampleRate: 16000,
+          numberOfChannels: 1,
+          bitRate: 128000,
+        },
+        ios: {
+          extension: '.wav',
+          audioQuality: Audio.IOSAudioQuality.HIGH,
+          sampleRate: 16000,
+          numberOfChannels: 1,
+          bitRate: 128000,
+          linearPCMBitDepth: 16,
+          linearPCMIsBigEndian: false,
+          linearPCMIsFloat: false,
+        },
+        web: {},
+      });
+      
+      setRecording(rec);
+      console.log("Audio recording started for streaming");
+      
+    } catch (err) {
+      console.error("Audio start error:", err);
+    }
+  };
+  
+  // Stop streaming voice and get final result
+  const stopStreamingVoice = async () => {
+    try {
+      setIsRecording(false);
+      
+      // Stop recording and get audio file
+      if (recording) {
+        await recording.stopAndUnloadAsync();
+        const uri = recording.getURI();
+        setRecording(null);
+        
+        // Send audio to WebSocket and trigger final processing
+        if (uri && streamingWs?.readyState === WebSocket.OPEN) {
+          setTranscribing(true);
+          
+          // Read audio file
+          const response = await fetch(uri);
+          const blob = await response.blob();
+          const reader = new FileReader();
+          
+          reader.onloadend = () => {
+            const base64Audio = reader.result.split(',')[1];
+            if (streamingWs?.readyState === WebSocket.OPEN) {
+              // Send final audio chunk
+              streamingWs.send(JSON.stringify({
+                audio: base64Audio,
+                encoding: 'audio/wav',
+                sample_rate: 16000,
+              }));
+              
+              // Send STOP command
+              setTimeout(() => {
+                if (streamingWs?.readyState === WebSocket.OPEN) {
+                  streamingWs.send("STOP");
+                }
+              }, 500);
+            }
+          };
+          
+          reader.readAsDataURL(blob);
+        }
+      }
+      
+      // Close WebSocket after delay
+      setTimeout(() => {
+        if (streamingWs) {
+          streamingWs.close();
+          setStreamingWs(null);
+        }
+        setTranscribing(false);
+        setActiveVoiceField(null);
+      }, 3000);
+      
+    } catch (err) {
+      console.error("Stop streaming error:", err);
+      setTranscribing(false);
+      setActiveVoiceField(null);
+    }
+  };
+  
+  // Original file-based voice input (fallback)
+  const startVoiceInput = async (field) => {
+    // Use streaming mode if enabled
+    if (useStreamingVoice) {
+      await startStreamingVoice(field);
+      return;
+    }
+    
+    // Original file-based approach
+    try {
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permission Denied", "Microphone access required");
+        return;
+      }
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+
+      setRecording(recording);
+      setIsRecording(true);
+      setActiveVoiceField(field);
+    } catch (err) {
+      console.error("Recording error:", err);
+      Alert.alert("Error", "Cannot start recording");
+    }
+  };
+
+  const stopVoiceInput = async () => {
+    // Use streaming mode if enabled
+    if (useStreamingVoice) {
+      await stopStreamingVoice();
+      return;
+    }
+    
+    // Original file-based approach
+    try {
+      setIsRecording(false);
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      setRecording(null);
+      
+      // Transcribe
+      setTranscribing(true);
+      const token = await AsyncStorage.getItem("token");
+      
+      const formData = new FormData();
+      formData.append("file", { uri, name: "voice.m4a", type: "audio/m4a" });
+      formData.append("engine", "auto");
+      formData.append("language", voiceLanguage.split('-')[0]);
+
+      // Use axios for voice transcription (same as web app)
+      const response = await api.post('/ai/voice-to-text', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      const transcriptionText = response.data.transcription || response.data.text || "";
+      if (transcriptionText && typeof transcriptionText === 'string' && activeVoiceField) {
+        const currentValue = formDataRef.current[activeVoiceField] || "";
+        formDataRef.current[activeVoiceField] = currentValue 
+          ? `${currentValue}\n${transcriptionText}` 
+          : transcriptionText;
+        setSelectStates(prev => ({ ...prev }));
+        Alert.alert("✅ Done", "Voice transcribed successfully");
+      } else {
+        Alert.alert("No Speech", "Could not detect any speech. Try again.");
+      }
+      
+      setTranscribing(false);
+      setActiveVoiceField(null);
+    } catch (err) {
+      console.error("Voice error:", err);
+      const errorMsg = err.response?.data?.detail || err.message || "Voice transcription failed";
+      Alert.alert("Error", typeof errorMsg === 'string' ? errorMsg : "Transcription failed");
+      setTranscribing(false);
+      setActiveVoiceField(null);
+    }
+  };
+
+  /* ===================== VBG AI INTERPRETATION ===================== */
+  const getVBGInterpretation = async () => {
+    const fd = formDataRef.current;
+    
+    if (!fd.vbg_ph && !fd.vbg_pco2 && !fd.vbg_hco3) {
+      Alert.alert("Required", "Please enter VBG values first");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const vbgData = {
+        ph: fd.vbg_ph,
+        pco2: fd.vbg_pco2,
+        hco3: fd.vbg_hco3,
+        hb: fd.vbg_hb,
+        glucose: fd.vbg_glu,
+        lactate: fd.vbg_lac,
+        sodium: fd.vbg_na,
+        potassium: fd.vbg_k,
+        creatinine: fd.vbg_cr,
+      };
+
+      // Use axios (same as web app)
+      const response = await api.post('/ai/interpretation', {
+        case_sheet_id: caseId || "new",
+        type: "vbg",
+        data: vbgData,
+      });
+
+      formDataRef.current.vbg_ai_interpretation = response.data.interpretation || response.data.response || "";
+      setSelectStates(prev => ({ ...prev }));
+      Alert.alert("✅ AI Interpretation", formDataRef.current.vbg_ai_interpretation);
+    } catch (err) {
+      console.error("VBG interpretation error:", err);
+      const errorMsg = err.response?.data?.detail || "Failed to get AI interpretation";
+      Alert.alert("Error", errorMsg);
+    }
+    setLoading(false);
+  };
+
+  /* ===================== DEFAULT VALUES ===================== */
+  // NOTE: Boolean fields MUST use actual booleans (true/false), NOT strings like "Absent"
+  // The backend Pydantic model expects bool types for these fields
+  const DEFAULT_NORMAL_VALUES = {
+    // Primary Assessment (these are strings - OK)
+    airway_status: "Patent",
+    breathing_wob: "Normal",
+    breathing_air_entry: "Equal",
+    circulation_status: "Normal",
+    circulation_crt: "Normal",
+    circulation_pulse: "Regular",
+    circulation_jvp: "Normal",
+    disability_avpu: "Alert",
+    disability_pupils: "Equal, Reactive",
+    exposure_status: "Normal",
+    // Examination defaults - STRINGS for string fields
+    general_appearance: "Conscious, alert, oriented",
+    cvs_s1_s2: "Normal",
+    cvs_precordial_heave: "Normal", // Backend expects string for this field
+    resp_percussion: "Resonant",
+    resp_breath_sounds: "Vesicular",
+    abd_umbilical: "Normal",
+    abd_bowel_sounds: "Present",
+    cns_higher_mental: "Intact",
+    cns_cranial_nerves: "Intact",
+    cns_sensory: "Intact",
+    cns_motor: "Normal",
+    cns_reflexes: "Normal",
+    cns_romberg: "Negative",
+    cns_cerebellar: "Normal",
+    ext_findings: "Normal",
+  };
+  
+  // Type conversion helpers for payload
+  const toBoolean = (value) => {
+    if (typeof value === 'boolean') return value;
+    if (value === null || value === undefined || value === '') return false;
+    if (typeof value === 'string') {
+      const lower = value.toLowerCase();
+      // "Absent", "No", "None", "Nil", "false", "0" -> false
+      if (['absent', 'no', 'none', 'nil', 'false', '0', 'negative'].includes(lower)) return false;
+      // "Present", "Yes", "true", "1" -> true
+      if (['present', 'yes', 'true', '1', 'positive'].includes(lower)) return true;
+      return false; // Default to false for unknown strings
+    }
+    return Boolean(value);
+  };
+  
+  const toIntOrNull = (value) => {
+    if (value === null || value === undefined || value === '') return null;
+    const parsed = parseInt(value, 10);
+    return isNaN(parsed) ? null : parsed;
+  };
+  
+  const toFloatOrNull = (value) => {
+    if (value === null || value === undefined || value === '') return null;
+    const parsed = parseFloat(value);
+    return isNaN(parsed) ? null : parsed;
+  };
+  
+  const toStringOrEmpty = (value) => {
+    if (value === null || value === undefined) return "";
+    if (typeof value === 'boolean') return value ? "Present" : "Normal";
+    return String(value);
+  };
+
+  const applyDefaultValues = () => {
+    const fd = formDataRef.current;
+    
+    // Apply defaults only if fields are empty
+    Object.entries(DEFAULT_NORMAL_VALUES).forEach(([key, value]) => {
+      if (!fd[key] || fd[key] === "") {
+        fd[key] = value;
+      }
+    });
+    
+    // Ensure arrays have defaults
+    if (!fd.airway_interventions || fd.airway_interventions.length === 0) {
+      fd.airway_interventions = [];
+    }
+    if (!fd.breathing_interventions || fd.breathing_interventions.length === 0) {
+      fd.breathing_interventions = [];
+    }
+    if (!fd.circulation_interventions || fd.circulation_interventions.length === 0) {
+      fd.circulation_interventions = [];
+    }
+    if (!fd.exposure_logroll || fd.exposure_logroll.length === 0) {
+      fd.exposure_logroll = [];
+    }
+  };
+
+  /* ===================== SAVE ===================== */
+  const saveCaseSheet = async (silent = false) => {
+    if (!silent) setSaving(true);
+    
+    // Apply default values to empty fields before saving
+    applyDefaultValues();
+    
+    try {
+      const token = await AsyncStorage.getItem("token");
+      const user = JSON.parse(await AsyncStorage.getItem("user") || "{}");
+      const fd = formDataRef.current;
+
+      // Helper function to map disposition type
+      const mapDispositionType = (type) => {
+        const map = {
+          "Discharge": "discharged",
+          "Admit": "admitted-ward",
+          "Refer": "referred",
+          "LAMA": "dama",
+          "Absconded": "absconded",
+          "Death": "death",
+        };
+        return map[type] || "discharged";
+      };
+
+      const payload = {
+        case_type: patientType,
+        patient: {
+          name: toStringOrEmpty(fd.patient_name) || "Unknown",
+          age: toStringOrEmpty(fd.patient_age) || "Unknown",
+          sex: toStringOrEmpty(fd.patient_sex) || "Unknown",
+          phone: toStringOrEmpty(fd.patient_phone) || "Not provided",
+          address: toStringOrEmpty(fd.patient_address) || "Not provided",
+          uhid: fd.patient_uhid || null,
+          mode_of_arrival: toStringOrEmpty(fd.patient_mode_of_arrival) || "Walk-in",
+          brought_by: toStringOrEmpty(fd.patient_brought_by) || "Self",
+          informant_name: toStringOrEmpty(fd.patient_informant_name) || "Self",
+          informant_reliability: toStringOrEmpty(fd.patient_informant_reliability) || "Reliable",
+          identification_mark: toStringOrEmpty(fd.patient_identification_mark) || "None",
+          mlc: toBoolean(fd.patient_mlc),
+          arrival_datetime: new Date().toISOString(),
+        },
+        presenting_complaint: {
+          text: toStringOrEmpty(fd.complaint_text) || "To be documented",
+          duration: toStringOrEmpty(fd.complaint_duration) || "Not specified",
+          onset_type: toStringOrEmpty(fd.complaint_onset) || "Unknown",
+          course: toStringOrEmpty(fd.complaint_course) || "Stable",
+        },
+        vitals_at_arrival: {
+          hr: toFloatOrNull(fd.vitals_hr),
+          rr: toFloatOrNull(fd.vitals_rr),
+          bp_systolic: toFloatOrNull(fd.vitals_bp_systolic),
+          bp_diastolic: toFloatOrNull(fd.vitals_bp_diastolic),
+          spo2: toFloatOrNull(fd.vitals_spo2),
+          temperature: toFloatOrNull(fd.vitals_temperature),
+          gcs_e: toIntOrNull(fd.vitals_gcs_e),
+          gcs_v: toIntOrNull(fd.vitals_gcs_v),
+          gcs_m: toIntOrNull(fd.vitals_gcs_m),
+          pain_score: toIntOrNull(fd.vitals_pain_score),
+          grbs: toFloatOrNull(fd.vitals_grbs),
+        },
+        primary_assessment: {
+          airway_status: toStringOrEmpty(fd.airway_status) || "Patent",
+          airway_interventions: fd.airway_interventions || [],
+          airway_additional_notes: toStringOrEmpty(fd.airway_notes),
+          breathing_work: toStringOrEmpty(fd.breathing_wob) || "Normal",
+          breathing_air_entry: [toStringOrEmpty(fd.breathing_air_entry) || "Equal"],
+          breathing_additional_notes: toStringOrEmpty(fd.breathing_notes),
+          circulation_crt: fd.circulation_crt === "Delayed" ? 3 : 2,
+          circulation_additional_notes: toStringOrEmpty(fd.circulation_notes),
+          disability_avpu: toStringOrEmpty(fd.disability_avpu) || "Alert",
+          disability_pupils_size: toStringOrEmpty(fd.disability_pupils),
+          disability_additional_notes: toStringOrEmpty(fd.disability_notes),
+          exposure_additional_notes: toStringOrEmpty(fd.exposure_notes),
+        },
+        adjuvants: {
+          ecg_findings: toStringOrEmpty(fd.ecg_findings),
+          vbg: {
+            ph: toFloatOrNull(fd.vbg_ph),
+            pco2: toFloatOrNull(fd.vbg_pco2),
+            hco3: toFloatOrNull(fd.vbg_hco3),
+            hb: toFloatOrNull(fd.vbg_hb),
+            glucose: toFloatOrNull(fd.vbg_glu),
+            lactate: toFloatOrNull(fd.vbg_lac),
+            sodium: toFloatOrNull(fd.vbg_na),
+            potassium: toFloatOrNull(fd.vbg_k),
+            creatinine: toFloatOrNull(fd.vbg_cr),
+            ai_interpretation: toStringOrEmpty(fd.vbg_ai_interpretation),
+          },
+          bedside_echo: toStringOrEmpty(fd.bedside_echo),
+          additional_notes: toStringOrEmpty(fd.adjuvants_notes),
+        },
+        history: {
+          hpi: toStringOrEmpty(fd.history_hpi),
+          signs_and_symptoms: toStringOrEmpty(fd.history_signs_symptoms),
+          secondary_survey: toStringOrEmpty(fd.history_secondary_survey),
+          allergies: toStringOrEmpty(fd.history_allergies).split(",").map(s => s.trim()).filter(Boolean),
+          drug_history: toStringOrEmpty(fd.history_medications),
+          past_medical: toStringOrEmpty(fd.history_past_medical).split(",").map(s => s.trim()).filter(Boolean),
+          past_surgical: toStringOrEmpty(fd.history_past_surgical),
+          last_meal_lmp: toStringOrEmpty(fd.history_last_meal),
+          family_gyn_additional_notes: toStringOrEmpty(fd.history_family_gynae),
+          additional_notes: toStringOrEmpty(fd.history_additional_notes),
+        },
+        psychological_assessment: {
+          suicidal_ideation: toBoolean(fd.psych_suicidal_ideation),
+          self_harm: toBoolean(fd.psych_self_harm),
+          harm_others: toBoolean(fd.psych_harm_others),
+          substance_abuse: toBoolean(fd.psych_substance_abuse),
+          psychiatric_history: toBoolean(fd.psych_psychiatric_history),
+          current_treatment: toBoolean(fd.psych_current_treatment),
+          support_system: toBoolean(fd.psych_support_system),
+          notes: toStringOrEmpty(fd.psych_notes),
+        },
+        // PAT - Pediatric Assessment Triangle (only for pediatric)
+        pediatric_assessment_triangle: isPediatric ? {
+          appearance: {
+            tone: toStringOrEmpty(fd.pat_appearance_tone),
+            interactivity: toStringOrEmpty(fd.pat_appearance_interactivity),
+            consolability: toStringOrEmpty(fd.pat_appearance_consolability),
+            look_gaze: toStringOrEmpty(fd.pat_appearance_look_gaze),
+            speech_cry: toStringOrEmpty(fd.pat_appearance_speech_cry),
+          },
+          work_of_breathing: toStringOrEmpty(fd.pat_work_of_breathing),
+          abnormal_sounds: fd.pat_abnormal_sounds || [],
+          abnormal_positioning: toStringOrEmpty(fd.pat_abnormal_positioning),
+          circulation: {
+            skin_color: toStringOrEmpty(fd.pat_circulation_skin_color),
+            crt: toStringOrEmpty(fd.pat_circulation_crt),
+          },
+          overall_impression: toStringOrEmpty(fd.pat_overall_impression),
+          notes: toStringOrEmpty(fd.pat_notes),
+        } : null,
+        // EFAST - for trauma
+        efast: {
+          heart: toStringOrEmpty(fd.efast_heart),
+          abdomen: toStringOrEmpty(fd.efast_abdomen),
+          lungs: toStringOrEmpty(fd.efast_lungs),
+          pelvis: toStringOrEmpty(fd.efast_pelvis),
+          notes: toStringOrEmpty(fd.efast_notes),
+        },
+        // HEENT - for pediatric
+        heent: isPediatric ? {
+          head: toStringOrEmpty(fd.heent_head),
+          eyes: toStringOrEmpty(fd.heent_eyes),
+          ears: toStringOrEmpty(fd.heent_ears),
+          nose: toStringOrEmpty(fd.heent_nose),
+          throat: toStringOrEmpty(fd.heent_throat),
+          notes: toStringOrEmpty(fd.heent_notes),
+        } : null,
+        examination: {
+          // General examination - appearance is string, rest are BOOLEANS
+          general_appearance: toStringOrEmpty(fd.general_appearance) || "Well",
+          general_pallor: toBoolean(fd.general_pallor),           // bool
+          general_icterus: toBoolean(fd.general_icterus),         // bool
+          general_clubbing: toBoolean(fd.general_clubbing),       // bool
+          general_lymphadenopathy: toBoolean(fd.general_lymphadenopathy), // bool
+          general_thyroid: toStringOrEmpty(fd.general_thyroid) || "Normal",
+          general_varicose_veins: toBoolean(fd.general_varicose_veins), // bool
+          general_notes: toStringOrEmpty(fd.general_notes),
+          general_additional_notes: toStringOrEmpty(fd.general_additional_notes),
+          // CVS - strings except pulse_rate (int)
+          cvs_status: toStringOrEmpty(examStatus.cvs) || "Normal",
+          cvs_s1_s2: toStringOrEmpty(fd.cvs_s1_s2),
+          cvs_pulse: toStringOrEmpty(fd.cvs_pulse),
+          cvs_pulse_rate: toIntOrNull(fd.cvs_pulse_rate),         // int or null
+          cvs_apex_beat: toStringOrEmpty(fd.cvs_apex_beat),
+          cvs_precordial_heave: toStringOrEmpty(fd.cvs_precordial_heave), // string
+          cvs_added_sounds: toStringOrEmpty(fd.cvs_added_sounds),
+          cvs_murmurs: toStringOrEmpty(fd.cvs_murmurs),
+          cvs_additional_notes: toStringOrEmpty(fd.cvs_notes),
+          // Respiratory - all strings
+          respiratory_status: toStringOrEmpty(examStatus.respiratory) || "Normal",
+          respiratory_expansion: toStringOrEmpty(fd.resp_expansion),
+          respiratory_percussion: toStringOrEmpty(fd.resp_percussion),
+          respiratory_breath_sounds: toStringOrEmpty(fd.resp_breath_sounds),
+          respiratory_vocal_resonance: toStringOrEmpty(fd.resp_vocal_resonance),
+          respiratory_added_sounds: toStringOrEmpty(fd.resp_added_sounds),
+          respiratory_additional_notes: toStringOrEmpty(fd.resp_notes),
+          // Abdomen - all strings
+          abdomen_status: toStringOrEmpty(examStatus.abdomen) || "Normal",
+          abdomen_umbilical: toStringOrEmpty(fd.abd_umbilical),
+          abdomen_organomegaly: toStringOrEmpty(fd.abd_organomegaly),
+          abdomen_percussion: toStringOrEmpty(fd.abd_percussion),
+          abdomen_bowel_sounds: toStringOrEmpty(fd.abd_bowel_sounds),
+          abdomen_external_genitalia: toStringOrEmpty(fd.abd_external_genitalia),
+          abdomen_hernial_orifices: toStringOrEmpty(fd.abd_hernial_orifices),
+          abdomen_per_rectal: toStringOrEmpty(fd.abd_per_rectal),
+          abdomen_per_vaginal: toStringOrEmpty(fd.abd_per_vaginal),
+          abdomen_additional_notes: toStringOrEmpty(fd.abd_notes),
+          // CNS - all strings
+          cns_status: toStringOrEmpty(examStatus.cns) || "Normal",
+          cns_higher_mental: toStringOrEmpty(fd.cns_higher_mental),
+          cns_cranial_nerves: toStringOrEmpty(fd.cns_cranial_nerves),
+          cns_sensory_system: toStringOrEmpty(fd.cns_sensory),
+          cns_motor_system: toStringOrEmpty(fd.cns_motor),
+          cns_reflexes: toStringOrEmpty(fd.cns_reflexes),
+          cns_romberg_sign: toStringOrEmpty(fd.cns_romberg),
+          cns_cerebellar_signs: toStringOrEmpty(fd.cns_cerebellar),
+          cns_additional_notes: toStringOrEmpty(fd.cns_notes),
+          // Extremities - all strings
+          extremities_status: toStringOrEmpty(examStatus.extremities) || "Normal",
+          extremities_findings: toStringOrEmpty(fd.ext_findings),
+          extremities_additional_notes: toStringOrEmpty(fd.ext_notes),
+        },
+        treatment: {
+          intervention_notes: toStringOrEmpty(fd.treatment_interventions),
+          medications: toStringOrEmpty(fd.treatment_medications),
+          fluids: toStringOrEmpty(fd.treatment_fluids),
+          differential_diagnoses: toStringOrEmpty(fd.diagnosis_differential).split(",").map(s => s.trim()).filter(Boolean),
+          provisional_diagnoses: toStringOrEmpty(fd.diagnosis_primary).trim() ? [toStringOrEmpty(fd.diagnosis_primary).trim()] : [],
+          ai_diagnosis_suggestions: toStringOrEmpty(aiDiagnosisResult),
+          ai_red_flags: aiRedFlags || [],
+          drugs_administered: selectedDrugs.map(d => ({ 
+            name: toStringOrEmpty(d.name), 
+            dose: toStringOrEmpty(d.dose), 
+            time: toStringOrEmpty(d.time) 
+          })),
+        },
+        procedures: {
+          procedures_performed: selectedProcedures.map(pId => {
+            const proc = PROCEDURE_OPTIONS.find(p => p.id === pId);
+            return {
+              id: toStringOrEmpty(pId),
+              name: toStringOrEmpty(proc?.name || pId),
+              category: toStringOrEmpty(proc?.category) || "Other",
+              notes: toStringOrEmpty(procedureNotes[pId]),
+              timestamp: new Date().toISOString(),
+            };
+          }),
+        },
+        addendum_notes: addendumNotes || [],
+        investigations: {
+          panels_selected: toStringOrEmpty(fd.labs_ordered).split(",").map(s => s.trim()).filter(Boolean),
+          imaging: toStringOrEmpty(fd.imaging_ordered).split(",").map(s => s.trim()).filter(Boolean),
+          results_notes: toStringOrEmpty(fd.investigation_results),
+        },
+        er_observation: {
+          notes: toStringOrEmpty(fd.er_observation_notes),
+          duration: toStringOrEmpty(fd.er_duration),
+        },
+        disposition: {
+          type: mapDispositionType(fd.disposition_type),
+          destination: toStringOrEmpty(fd.disposition_ward || fd.disposition_refer_hospital),
+          discharge_vitals: null,
+        },
+        em_resident: toStringOrEmpty(user?.name || fd.em_resident) || "EM Resident",
+      };
+
+      // Save using axios (same as web app)
+      let response;
+      if (caseId) {
+        response = await api.put(`/cases/${caseId}`, payload);
+      } else {
+        response = await api.post('/cases', payload);
+      }
+
+      const savedCase = response.data;
+      setCaseId(savedCase.id);
+      setLastSaved(new Date());
+      if (!silent) {
+        Alert.alert("✅ Saved", "Case sheet saved!");
+      }
+      return savedCase.id;
+    } catch (err) {
+      console.error("Save error:", err);
+      if (!silent) {
+        // Axios error handling - same pattern as web app
+        const errorMsg = err.response?.data?.detail 
+          || err.response?.data?.message 
+          || err.message 
+          || "Failed to save case";
+        Alert.alert("Save Error", typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
+      }
+      return null;
+    } finally {
+      if (!silent) setSaving(false);
+    }
+  };
+
+  // Tab navigation order
+  const TAB_ORDER = ["patient", "vitals", "primary", "history", "exam", "treatment", "notes", "disposition"];
+
+  const proceedNext = async () => {
+    // Save if not saved yet and has patient name
+    if (formDataRef.current.patient_name && !caseId) {
+      await saveCaseSheet();
+    }
+    
+    // Find current tab index and go to next
+    const currentIndex = TAB_ORDER.indexOf(activeTab);
+    if (currentIndex < TAB_ORDER.length - 1) {
+      setActiveTab(TAB_ORDER[currentIndex + 1]);
+    } else {
+      // On last tab (disposition), save and go to Dashboard
+      await saveCaseSheet();
+      Alert.alert(
+        "Case Saved",
+        "Case sheet has been saved successfully.",
+        [
+          {
+            text: "Go to Dashboard",
+            onPress: () => navigation.navigate("Dashboard")
+          },
+          {
+            text: "Stay Here",
+            style: "cancel"
+          }
+        ]
+      );
+    }
+  };
+
+  const goToPrevious = () => {
+    const currentIndex = TAB_ORDER.indexOf(activeTab);
+    if (currentIndex > 0) {
+      setActiveTab(TAB_ORDER[currentIndex - 1]);
+    }
+  };
+
+  /* ===================== VBG INTERPRETATION ===================== */
+  const interpretVBG = async () => {
+    const fd = formDataRef.current;
+    const ph = parseFloat(fd.vbg_ph);
+    const pco2 = parseFloat(fd.vbg_pco2);
+    const hco3 = parseFloat(fd.vbg_hco3);
+    const lactate = parseFloat(fd.vbg_lactate);
+
+    if (!ph || !pco2 || !hco3) {
+      Alert.alert("Missing Data", "Please enter pH, pCO2, and HCO3 for interpretation");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const token = await AsyncStorage.getItem("token");
+      const response = await fetch(`${API_URL}/ai/interpret-abg`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          ph,
+          pco2,
+          po2: parseFloat(fd.vbg_po2) || null,
+          hco3,
+          lactate: lactate || null,
+          be: parseFloat(fd.vbg_be) || null,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        formDataRef.current.vbg_interpretation = data.interpretation || data.result || "Interpretation complete";
+        forceUpdate();
+      } else {
+        // Fallback to basic interpretation
+        let interpretation = "";
+        
+        // pH assessment
+        if (ph < 7.35) interpretation += "Acidemia. ";
+        else if (ph > 7.45) interpretation += "Alkalemia. ";
+        else interpretation += "Normal pH. ";
+        
+        // Primary disorder
+        if (ph < 7.35 && pco2 > 45) interpretation += "Respiratory acidosis. ";
+        else if (ph < 7.35 && hco3 < 22) interpretation += "Metabolic acidosis. ";
+        else if (ph > 7.45 && pco2 < 35) interpretation += "Respiratory alkalosis. ";
+        else if (ph > 7.45 && hco3 > 26) interpretation += "Metabolic alkalosis. ";
+        
+        // Lactate
+        if (lactate > 2) interpretation += `Elevated lactate (${lactate}). `;
+        
+        formDataRef.current.vbg_interpretation = interpretation || "Unable to interpret automatically";
+        forceUpdate();
+      }
+    } catch (error) {
+      console.log("VBG interpretation error:", error);
+      Alert.alert("Error", "Could not interpret VBG");
+    }
+    setLoading(false);
+  };
+
+  /* ===================== UI COMPONENTS ===================== */
+
+  // Collapsible Section Header
+  const CollapsibleHeader = ({ title, icon, section, color = "#1e40af" }) => (
+    <TouchableOpacity 
+      style={styles.collapsibleHeader} 
+      onPress={() => toggleCollapse(section)}
+    >
+      <View style={styles.collapsibleLeft}>
+        <Ionicons name={icon} size={20} color={color} />
+        <Text style={[styles.collapsibleTitle, { color }]}>{title}</Text>
+      </View>
+      <Ionicons 
+        name={collapsed[section] ? "chevron-down" : "chevron-up"} 
+        size={20} 
+        color="#64748b" 
+      />
+    </TouchableOpacity>
+  );
+
+  // Voice Settings Modal
+  const [showVoiceSettings, setShowVoiceSettings] = useState(false);
+  
+  const VoiceSettingsModal = () => (
+    <Modal
+      visible={showVoiceSettings}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setShowVoiceSettings(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.voiceSettingsModal}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>🎙️ Voice Settings</Text>
+            <TouchableOpacity onPress={() => setShowVoiceSettings(false)}>
+              <Ionicons name="close" size={24} color="#64748b" />
+            </TouchableOpacity>
+          </View>
+          
+          {/* Streaming Mode Toggle */}
+          <View style={styles.settingRow}>
+            <View style={styles.settingInfo}>
+              <Text style={styles.settingLabel}>Real-time Streaming</Text>
+              <Text style={styles.settingDescription}>
+                Live transcription as you speak (requires stable internet)
+              </Text>
+            </View>
+            <Switch
+              value={useStreamingVoice}
+              onValueChange={setUseStreamingVoice}
+              trackColor={{ false: "#e2e8f0", true: "#86efac" }}
+              thumbColor={useStreamingVoice ? "#22c55e" : "#94a3b8"}
+            />
+          </View>
+          
+          {/* Language Selection */}
+          <Text style={styles.settingSectionTitle}>Language</Text>
+          <View style={styles.languageOptions}>
+            {[
+              { code: "en-IN", label: "🇬🇧 English", emoji: "🔤" },
+              { code: "hi-IN", label: "🇮🇳 Hindi", emoji: "अ" },
+              { code: "ml-IN", label: "🇮🇳 Malayalam", emoji: "മ" },
+            ].map(lang => (
+              <TouchableOpacity
+                key={lang.code}
+                style={[
+                  styles.languageBtn,
+                  voiceLanguage === lang.code && styles.languageBtnActive,
+                ]}
+                onPress={() => setVoiceLanguage(lang.code)}
+              >
+                <Text style={styles.languageEmoji}>{lang.emoji}</Text>
+                <Text style={[
+                  styles.languageBtnText,
+                  voiceLanguage === lang.code && styles.languageBtnTextActive,
+                ]}>
+                  {lang.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          
+          {/* Info */}
+          <View style={styles.voiceInfoBox}>
+            <Ionicons name="information-circle" size={20} color="#3b82f6" />
+            <Text style={styles.voiceInfoText}>
+              {useStreamingVoice 
+                ? "Streaming mode uses Sarvam AI for live transcription + OpenAI for medical term cleanup"
+                : "Standard mode records audio and transcribes after you stop"}
+            </Text>
+          </View>
+          
+          <TouchableOpacity
+            style={styles.voiceSettingsDone}
+            onPress={() => setShowVoiceSettings(false)}
+          >
+            <Text style={styles.voiceSettingsDoneText}>Done</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+  
+  // Voice Input Button
+  const VoiceButton = ({ field }) => (
+    <View style={styles.voiceBtnContainer}>
+      <TouchableOpacity
+        style={[
+          styles.voiceBtn,
+          isRecording && activeVoiceField === field && styles.voiceBtnRecording,
+          useStreamingVoice && styles.voiceBtnStreaming,
+        ]}
+        onPress={() => {
+          if (isRecording && activeVoiceField === field) {
+            stopVoiceInput();
+          } else if (!isRecording) {
+            startVoiceInput(field);
+          }
+        }}
+        disabled={transcribing || (isRecording && activeVoiceField !== field)}
+      >
+        {transcribing && activeVoiceField === field ? (
+          <ActivityIndicator size="small" color="#fff" />
+        ) : (
+          <Ionicons 
+            name={isRecording && activeVoiceField === field ? "stop" : "mic"} 
+            size={16} 
+            color="#fff" 
+          />
+        )}
+      </TouchableOpacity>
+      {/* Streaming indicator dot */}
+      {useStreamingVoice && (
+        <View style={styles.streamingDot} />
+      )}
+    </View>
+  );
+  
+  // Voice Settings Button (shown in header)
+  const VoiceSettingsButton = () => (
+    <TouchableOpacity
+      style={styles.voiceSettingsBtn}
+      onPress={() => setShowVoiceSettings(true)}
+    >
+      <Ionicons name="settings-outline" size={16} color="#64748b" />
+      <Text style={styles.voiceSettingsBtnText}>
+        {useStreamingVoice ? "🔴 Live" : "🎙️"}
+      </Text>
+    </TouchableOpacity>
+  );
+
+  // Text Input with Voice
+  const InputWithVoice = ({ label, field, placeholder, multiline = false }) => (
+    <View style={styles.inputGroup}>
+      <View style={styles.labelRow}>
+        <Text style={styles.label}>{label}</Text>
+        <VoiceButton field={field} />
+      </View>
+      {/* Show streaming text preview when recording this field */}
+      {isRecording && activeVoiceField === field && streamingText && useStreamingVoice && (
+        <View style={styles.streamingPreview}>
+          <Text style={styles.streamingPreviewLabel}>🎤 Transcribing...</Text>
+          <Text style={styles.streamingPreviewText}>{streamingText}</Text>
+        </View>
+      )}
+      <TextInput
+        style={[styles.input, multiline && styles.textArea]}
+        defaultValue={formDataRef.current[field]}
+        onChangeText={(text) => updateTextField(field, text)}
+        placeholder={placeholder}
+        placeholderTextColor="#9ca3af"
+        multiline={multiline}
+      />
+    </View>
+  );
+
+  // Simple Input
+  const InputField = ({ label, field, placeholder, keyboardType = "default" }) => (
+    <View style={styles.inputGroup}>
+      <Text style={styles.label}>{label}</Text>
+      <TextInput
+        key={`${field}-${forceRenderKey}`}
+        style={styles.input}
+        defaultValue={formDataRef.current[field]}
+        onChangeText={(text) => updateTextField(field, text)}
+        placeholder={placeholder}
+        placeholderTextColor="#9ca3af"
+        keyboardType={keyboardType}
+      />
+    </View>
+  );
+
+  // Select Buttons
+  const SelectButtons = ({ label, options, field }) => (
+    <View style={styles.inputGroup}>
+      <Text style={styles.label}>{label}</Text>
+      <View style={styles.selectRow}>
+        {options.map((opt) => (
+          <TouchableOpacity
+            key={opt}
+            style={[styles.selectBtn, selectStates[field] === opt && styles.selectBtnActive]}
+            onPress={() => updateSelectField(field, opt)}
+          >
+            <Text style={[styles.selectBtnText, selectStates[field] === opt && styles.selectBtnTextActive]}>
+              {opt}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+
+  // Normal/Abnormal Dropdown
+  const ExamDropdown = ({ exam, label }) => (
+    <View style={styles.examDropdown}>
+      <Text style={styles.examLabel}>{label}</Text>
+      <View style={styles.examToggle}>
+        <TouchableOpacity
+          style={[styles.examToggleBtn, examStatus[exam] === "Normal" && styles.examToggleNormal]}
+          onPress={() => updateExamStatus(exam, "Normal")}
+        >
+          <Text style={[styles.examToggleText, examStatus[exam] === "Normal" && styles.examToggleTextActive]}>
+            Normal
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.examToggleBtn, examStatus[exam] === "Abnormal" && styles.examToggleAbnormal]}
+          onPress={() => updateExamStatus(exam, "Abnormal")}
+        >
+          <Text style={[styles.examToggleText, examStatus[exam] === "Abnormal" && styles.examToggleTextActive]}>
+            Abnormal
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  // Switch Row
+  const SwitchRow = ({ label, field, onToggle }) => (
+    <View style={styles.switchRow}>
+      <Text style={styles.switchLabel}>{label}</Text>
+      <Switch
+        value={formDataRef.current[field]}
+        onValueChange={(v) => {
+          formDataRef.current[field] = v;
+          setSelectStates(prev => ({ ...prev }));
+          if (onToggle) onToggle(v);
+        }}
+        trackColor={{ false: "#d1d5db", true: "#86efac" }}
+        thumbColor={formDataRef.current[field] ? "#22c55e" : "#f4f3f4"}
+      />
+    </View>
+  );
+
+  // Vital Input
+  // Function to update vital alerts based on current vitals
+  const updateVitalAlerts = useCallback(() => {
+    const fd = formDataRef.current;
+    const vitals = {
+      hr: fd.vitals_hr,
+      rr: fd.vitals_rr,
+      sbp: fd.vitals_bp_systolic,
+      temp: fd.vitals_temperature,
+      spo2: fd.vitals_spo2,
+    };
+    const alerts = getVitalAlerts(vitals, fd.patient_age);
+    setVitalAlerts(alerts);
+  }, []);
+
+  const VitalInput = ({ label, field, placeholder }) => (
+    <View style={styles.vitalItem}>
+      <Text style={styles.vitalLabel}>{label}</Text>
+      <TextInput
+        style={styles.vitalInput}
+        defaultValue={formDataRef.current[field]}
+        onChangeText={(text) => {
+          updateTextField(field, text);
+          // Update alerts after vital change
+          setTimeout(updateVitalAlerts, 100);
+        }}
+        placeholder={placeholder}
+        placeholderTextColor="#9ca3af"
+        keyboardType="numeric"
+      />
+    </View>
+  );
+
+  // Tab Button
+  const TabButton = ({ id, label, icon }) => (
+    <TouchableOpacity
+      style={[styles.tabBtn, activeTab === id && styles.tabBtnActive]}
+      onPress={() => setActiveTab(id)}
+    >
+      <Ionicons name={icon} size={18} color={activeTab === id ? "#fff" : "#64748b"} />
+      <Text style={[styles.tabText, activeTab === id && styles.tabTextActive]}>{label}</Text>
+    </TouchableOpacity>
+  );
+
+  /* ===================== RENDER ===================== */
+  return (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <View style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={24} color="#1e293b" />
+          </TouchableOpacity>
+          <View style={{ alignItems: 'center' }}>
+            <Text style={styles.headerTitle}>
+              {isPediatric ? "👶 Pediatric" : "🏥 Adult"} Case Sheet
+            </Text>
+            {/* Autosave Status */}
+            {lastSaved && (
+              <Text style={{ fontSize: 10, color: '#22c55e' }}>
+                ✓ Saved {lastSaved.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+              </Text>
+            )}
+            {autoSaving && (
+              <Text style={{ fontSize: 10, color: '#f59e0b' }}>
+                Saving...
+              </Text>
+            )}
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <VoiceSettingsButton />
+            <TouchableOpacity onPress={() => saveCaseSheet(false)} disabled={saving}>
+              {saving ? (
+                <ActivityIndicator size="small" color="#2563eb" />
+              ) : (
+                <Ionicons name="save" size={24} color="#2563eb" />
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+        
+        {/* Voice Settings Modal */}
+        <VoiceSettingsModal />
+
+        {/* Tabs */}
+        <View style={styles.tabBar}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <TabButton id="patient" label="Patient" icon="person" />
+            <TabButton id="vitals" label="Vitals" icon="heart" />
+            <TabButton id="primary" label="Primary" icon="fitness" />
+            <TabButton id="history" label="History" icon="document-text" />
+            <TabButton id="exam" label="Exam" icon="body" />
+            <TabButton id="treatment" label="Treatment" icon="medkit" />
+            <TabButton id="notes" label="Notes" icon="clipboard" />
+            <TabButton id="disposition" label="Disposition" icon="exit" />
+          </ScrollView>
+        </View>
+
+        <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
+          
+          {/* ==================== PATIENT TAB ==================== */}
+          {activeTab === "patient" && (
+            <View style={styles.tabContent}>
+              <View style={styles.card}>
+                <InputField label="Name *" field="patient_name" placeholder="Patient name" />
+                <View style={styles.row}>
+                  <View style={{ flex: 1 }}>
+                    <InputField label="Age *" field="patient_age" placeholder="Age" keyboardType="numeric" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <SelectButtons label="Sex" options={["Male", "Female"]} field="patient_sex" />
+                  </View>
+                </View>
+                <InputField label="UHID" field="patient_uhid" placeholder="Hospital ID" />
+                <InputField label="Phone" field="patient_phone" placeholder="Contact" keyboardType="phone-pad" />
+                <InputField label="Brought By" field="patient_brought_by" placeholder="Person who brought patient" />
+                <SelectButtons label="Mode of Arrival" options={["Walk-in", "Ambulance", "Referred"]} field="patient_mode_of_arrival" />
+                
+                {/* MLC Toggle */}
+                <View style={styles.mlcContainer}>
+                  <SwitchRow 
+                    label="MLC Case" 
+                    field="patient_mlc" 
+                    onToggle={(value) => setShowMlcFields(value)}
+                  />
+                </View>
+
+                {/* MLC Fields - Show when MLC is checked */}
+                {showMlcFields && (
+                  <View style={styles.mlcFields}>
+                    <Text style={styles.mlcTitle}>⚠️ MLC Details</Text>
+                    <InputField label="Nature of Incident" field="mlc_nature" placeholder="e.g., Road Traffic Accident, Assault" />
+                    <InputField label="Date & Time of Incident" field="mlc_date_time" placeholder="DD/MM/YYYY HH:MM" />
+                    <InputField label="Place of Incident" field="mlc_place" placeholder="Location where incident occurred" />
+                    <InputField label="Identification Mark" field="mlc_identification_mark" placeholder="Any identifying marks" />
+                    <InputField label="Informant/Brought By" field="patient_brought_by" placeholder="Name & relation of person" />
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>Presenting Complaint</Text>
+                <InputWithVoice label="Chief Complaint" field="complaint_text" placeholder="Describe complaint..." multiline />
+                <View style={styles.row}>
+                  <View style={{ flex: 1 }}>
+                    <InputField label="Duration" field="complaint_duration" placeholder="e.g., 2 hours" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <SelectButtons label="Onset" options={["Sudden", "Gradual"]} field="complaint_onset" />
+                  </View>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* ==================== VITALS TAB ==================== */}
+          {activeTab === "vitals" && (
+            <View style={styles.tabContent}>
+              {/* Vital Alerts - Show warnings for abnormal vitals */}
+              {vitalAlerts.length > 0 && (
+                <View style={styles.vitalAlertsContainer}>
+                  <View style={styles.vitalAlertsHeader}>
+                    <Ionicons name="warning" size={20} color="#dc2626" />
+                    <Text style={styles.vitalAlertsTitle}>Vital Sign Alerts</Text>
+                  </View>
+                  {vitalAlerts.map((alert, idx) => (
+                    <View 
+                      key={idx} 
+                      style={[
+                        styles.vitalAlertItem, 
+                        alert.type === 'danger' ? styles.vitalAlertDanger : styles.vitalAlertWarning
+                      ]}
+                    >
+                      <Ionicons 
+                        name={alert.type === 'danger' ? "alert-circle" : "alert"} 
+                        size={16} 
+                        color={alert.type === 'danger' ? "#dc2626" : "#d97706"} 
+                      />
+                      <Text style={[
+                        styles.vitalAlertText,
+                        alert.type === 'danger' ? styles.vitalAlertTextDanger : styles.vitalAlertTextWarning
+                      ]}>
+                        {alert.message}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {/* Normal Range Reference - for pediatric patients */}
+              {isPediatric && (
+                <View style={styles.normalRangeCard}>
+                  <View style={styles.normalRangeHeader}>
+                    <Ionicons name="information-circle" size={18} color="#0284c7" />
+                    <Text style={styles.normalRangeTitle}>
+                      Normal Ranges for {PEDIATRIC_VITALS[getAgeGroup(formDataRef.current.patient_age)]?.ageRange || 'this age'}
+                    </Text>
+                  </View>
+                  {(() => {
+                    const norms = PEDIATRIC_VITALS[getAgeGroup(formDataRef.current.patient_age)];
+                    if (!norms) return null;
+                    return (
+                      <View style={styles.normalRangeGrid}>
+                        <Text style={styles.normalRangeItem}>HR: {norms.hr[0]}-{norms.hr[1]}</Text>
+                        <Text style={styles.normalRangeItem}>RR: {norms.rr[0]}-{norms.rr[1]}</Text>
+                        <Text style={styles.normalRangeItem}>SBP: {norms.sbp[0]}-{norms.sbp[1]}</Text>
+                        <Text style={styles.normalRangeItem}>SpO2: ≥{norms.spo2[0]}%</Text>
+                      </View>
+                    );
+                  })()}
+                </View>
+              )}
+
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>Vitals at Arrival</Text>
+                <View style={styles.vitalsGrid}>
+                  <VitalInput label="HR" field="vitals_hr" placeholder="bpm" />
+                  <VitalInput label="RR" field="vitals_rr" placeholder="/min" />
+                  <VitalInput label="SpO₂" field="vitals_spo2" placeholder="%" />
+                  <VitalInput label="Temp" field="vitals_temperature" placeholder="°C" />
+                  <VitalInput label="BP Sys" field="vitals_bp_systolic" placeholder="mmHg" />
+                  <VitalInput label="BP Dia" field="vitals_bp_diastolic" placeholder="mmHg" />
+                </View>
+                
+                <Text style={styles.subSection}>GCS</Text>
+                <View style={styles.vitalsGrid}>
+                  <VitalInput label="E" field="vitals_gcs_e" placeholder="1-4" />
+                  <VitalInput label="V" field="vitals_gcs_v" placeholder="1-5" />
+                  <VitalInput label="M" field="vitals_gcs_m" placeholder="1-6" />
+                  <VitalInput label="Pain" field="vitals_pain_score" placeholder="0-10" />
+                  <VitalInput label="GRBS" field="vitals_grbs" placeholder="mg/dL" />
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* ==================== PRIMARY ASSESSMENT TAB ==================== */}
+          {activeTab === "primary" && (
+            <View style={styles.tabContent}>
+              
+              {/* PAT - Pediatric Assessment Triangle (Only for pediatric patients) */}
+              {isPediatric && (
+                <View style={[styles.card, { borderLeftWidth: 4, borderLeftColor: '#8b5cf6' }]}>
+                  <View style={styles.patHeader}>
+                    <Ionicons name="triangle" size={24} color="#8b5cf6" />
+                    <View>
+                      <Text style={styles.patTitle}>Pediatric Assessment Triangle (PAT)</Text>
+                      <Text style={styles.patSubtitle}>Quick visual assessment</Text>
+                    </View>
+                  </View>
+                  
+                  {/* Appearance */}
+                  <View style={styles.patSection}>
+                    <Text style={styles.patSectionTitle}>👶 APPEARANCE</Text>
+                    
+                    <Text style={styles.patLabel}>Tone (muscle tone & movement)</Text>
+                    <SelectButtons 
+                      options={["Moves spontaneously", "Resists examination", "Sits/Stands", "Floppy/Limp"]} 
+                      field="pat_appearance_tone" 
+                    />
+                    
+                    <Text style={styles.patLabel}>Interactivity</Text>
+                    <SelectButtons 
+                      options={["Alert & engaged", "Interacts well", "Reaches for objects", "Disinterested", "Lethargic"]} 
+                      field="pat_appearance_interactivity" 
+                    />
+                    
+                    <Text style={styles.patLabel}>Consolability</Text>
+                    <SelectButtons 
+                      options={["Easily consoled", "Consoled with holding", "Inconsolable"]} 
+                      field="pat_appearance_consolability" 
+                    />
+                    
+                    <Text style={styles.patLabel}>Look/Gaze</Text>
+                    <SelectButtons 
+                      options={["Eye contact", "Tracks visually", "Normal behavior", "Abnormal/Glassy"]} 
+                      field="pat_appearance_look_gaze" 
+                    />
+                    
+                    <Text style={styles.patLabel}>Speech/Cry</Text>
+                    <SelectButtons 
+                      options={["Age-appropriate", "Good cry", "Weak cry", "Hoarse", "No cry"]} 
+                      field="pat_appearance_speech_cry" 
+                    />
+                  </View>
+
+                  {/* Work of Breathing */}
+                  <View style={styles.patSection}>
+                    <Text style={styles.patSectionTitle}>🫁 WORK OF BREATHING</Text>
+                    
+                    <Text style={styles.patLabel}>Breathing Effort</Text>
+                    <SelectButtons 
+                      options={["Normal", "Mild increase", "Moderate increase", "Severe increase", "Minimal/Agonal"]} 
+                      field="pat_work_of_breathing" 
+                    />
+                    
+                    <Text style={styles.patLabel}>Abnormal Sounds (select all)</Text>
+                    <View style={styles.checkboxGrid}>
+                      {['Nasal flaring', 'Retractions', 'Grunting', 'Wheezing', 'Stridor', 'Snoring', 'Gurgling'].map(item => (
+                        <TouchableOpacity key={item} style={styles.checkboxItem} onPress={() => toggleIntervention('pat_abnormal_sounds', item)}>
+                          <Ionicons name={formDataRef.current.pat_abnormal_sounds?.includes(item) ? 'checkbox' : 'square-outline'} size={20} color="#8b5cf6" />
+                          <Text style={styles.checkboxText}>{item}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    
+                    <Text style={styles.patLabel}>Abnormal Positioning</Text>
+                    <SelectButtons 
+                      options={["None", "Tripod", "Sniffing", "Prefers seated"]} 
+                      field="pat_abnormal_positioning" 
+                    />
+                  </View>
+
+                  {/* Circulation to Skin */}
+                  <View style={styles.patSection}>
+                    <Text style={styles.patSectionTitle}>❤️ CIRCULATION TO SKIN</Text>
+                    
+                    <Text style={styles.patLabel}>Skin Color</Text>
+                    <SelectButtons 
+                      options={["Pink", "Pale", "Mottled", "Cyanosed", "Flushed"]} 
+                      field="pat_circulation_skin_color" 
+                    />
+                    
+                    <Text style={styles.patLabel}>Capillary Refill Time</Text>
+                    <SelectButtons 
+                      options={["<2 sec (Normal)", "2-3 sec (Delayed)", ">3 sec (Severely delayed)"]} 
+                      field="pat_circulation_crt" 
+                    />
+                  </View>
+
+                  {/* Overall PAT Impression */}
+                  <View style={styles.patSection}>
+                    <Text style={styles.patSectionTitle}>📊 OVERALL IMPRESSION</Text>
+                    <SelectButtons 
+                      options={["Stable", "Respiratory distress", "Respiratory failure", "Shock", "CNS dysfunction", "Cardiopulmonary failure"]} 
+                      field="pat_overall_impression" 
+                    />
+                    <InputWithVoice label="PAT Notes" field="pat_notes" placeholder="Additional observations..." multiline />
+                  </View>
+                </View>
+              )}
+
+              {/* A - Airway */}
+              <View style={[styles.card, { borderLeftWidth: 4, borderLeftColor: '#ef4444' }]}>
+                <CollapsibleHeader title="A - AIRWAY" icon="medical" section="airway" color="#ef4444" />
+                {!collapsed.airway && (
+                  <View style={styles.collapsibleContent}>
+                    {/* Normal/Abnormal Toggle */}
+                    <View style={styles.statusToggleRow}>
+                      <TouchableOpacity
+                        style={[styles.statusToggle, formDataRef.current.airway_status === 'Patent' && styles.statusToggleNormalActive]}
+                        onPress={() => { updateTextField('airway_status', 'Patent'); forceUpdate(); }}
+                      >
+                        <Ionicons name="checkmark-circle" size={16} color={formDataRef.current.airway_status === 'Patent' ? '#fff' : '#22c55e'} />
+                        <Text style={[styles.statusToggleText, formDataRef.current.airway_status === 'Patent' && styles.statusToggleTextActive]}>Normal</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.statusToggle, formDataRef.current.airway_status !== 'Patent' && styles.statusToggleAbnormalActive]}
+                        onPress={() => { updateTextField('airway_status', 'Compromised'); forceUpdate(); }}
+                      >
+                        <Ionicons name="alert-circle" size={16} color={formDataRef.current.airway_status !== 'Patent' ? '#fff' : '#ef4444'} />
+                        <Text style={[styles.statusToggleText, formDataRef.current.airway_status !== 'Patent' && styles.statusToggleTextActive]}>Abnormal</Text>
+                      </TouchableOpacity>
+                    </View>
+                    
+                    {/* Expanded options when Abnormal */}
+                    {formDataRef.current.airway_status !== 'Patent' && (
+                      <View style={styles.abnormalDetails}>
+                        <SelectButtons label="Position" options={["Self-maintained", "Head tilt/Chin lift", "Jaw thrust"]} field="airway_position" />
+                        <SelectButtons label="Patency" options={["Partial obstruction", "Complete obstruction"]} field="airway_patency" />
+                        <SelectButtons label="Cause" options={["Tongue fall", "Secretions", "Blood/Vomitus", "Foreign body", "Edema"]} field="airway_obstruction_cause" />
+                        <SelectButtons label="Speech" options={["Hoarse", "Stridor", "Gurgling", "Unable to speak"]} field="airway_speech" />
+                        <Text style={styles.checkboxLabel}>Interventions Done:</Text>
+                        <View style={styles.checkboxGrid}>
+                          {['Suction', 'OPA', 'NPA', 'LMA', 'ETT', 'Cricothyrotomy'].map(item => (
+                            <TouchableOpacity key={item} style={styles.checkboxItem} onPress={() => toggleIntervention('airway_interventions', item)}>
+                              <Ionicons name={formDataRef.current.airway_interventions?.includes(item) ? 'checkbox' : 'square-outline'} size={20} color="#ef4444" />
+                              <Text style={styles.checkboxText}>{item}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+                    <InputWithVoice label="Notes" field="airway_notes" placeholder="Additional airway observations..." multiline />
+                  </View>
+                )}
+              </View>
+
+              {/* B - Breathing */}
+              <View style={[styles.card, { borderLeftWidth: 4, borderLeftColor: '#f97316' }]}>
+                <CollapsibleHeader title="B - BREATHING" icon="fitness" section="breathing" color="#f97316" />
+                {!collapsed.breathing && (
+                  <View style={styles.collapsibleContent}>
+                    {/* Normal/Abnormal Toggle */}
+                    <View style={styles.statusToggleRow}>
+                      <TouchableOpacity
+                        style={[styles.statusToggle, formDataRef.current.breathing_wob === 'Normal' && styles.statusToggleNormalActive]}
+                        onPress={() => { updateTextField('breathing_wob', 'Normal'); forceUpdate(); }}
+                      >
+                        <Ionicons name="checkmark-circle" size={16} color={formDataRef.current.breathing_wob === 'Normal' ? '#fff' : '#22c55e'} />
+                        <Text style={[styles.statusToggleText, formDataRef.current.breathing_wob === 'Normal' && styles.statusToggleTextActive]}>Normal</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.statusToggle, formDataRef.current.breathing_wob !== 'Normal' && styles.statusToggleAbnormalActive]}
+                        onPress={() => { updateTextField('breathing_wob', 'Increased'); forceUpdate(); }}
+                      >
+                        <Ionicons name="alert-circle" size={16} color={formDataRef.current.breathing_wob !== 'Normal' ? '#fff' : '#ef4444'} />
+                        <Text style={[styles.statusToggleText, formDataRef.current.breathing_wob !== 'Normal' && styles.statusToggleTextActive]}>Abnormal</Text>
+                      </TouchableOpacity>
+                    </View>
+                    
+                    {/* Vitals Row */}
+                    <View style={styles.vitalsRowCompact}>
+                      <View style={styles.vitalItemCompact}>
+                        <Text style={styles.vitalLabelCompact}>RR</Text>
+                        <TextInput style={styles.vitalInputCompact} defaultValue={formDataRef.current.breathing_rr} onChangeText={(t) => updateTextField('breathing_rr', t)} placeholder="/min" keyboardType="numeric" />
+                      </View>
+                      <View style={styles.vitalItemCompact}>
+                        <Text style={styles.vitalLabelCompact}>SpO2</Text>
+                        <TextInput style={styles.vitalInputCompact} defaultValue={formDataRef.current.breathing_spo2} onChangeText={(t) => updateTextField('breathing_spo2', t)} placeholder="%" keyboardType="numeric" />
+                      </View>
+                      <View style={styles.vitalItemCompact}>
+                        <Text style={styles.vitalLabelCompact}>O2 Flow</Text>
+                        <TextInput style={styles.vitalInputCompact} defaultValue={formDataRef.current.breathing_o2_flow} onChangeText={(t) => updateTextField('breathing_o2_flow', t)} placeholder="L/min" keyboardType="numeric" />
+                      </View>
+                    </View>
+                    
+                    {/* Expanded options when Abnormal */}
+                    {formDataRef.current.breathing_wob !== 'Normal' && (
+                      <View style={styles.abnormalDetails}>
+                        <SelectButtons label="Effort" options={["Mild ↑", "Moderate ↑", "Severe ↑", "Exhaustion"]} field="breathing_effort" />
+                        <SelectButtons label="O2 Device" options={["Room air", "Nasal prongs", "Face mask", "NRM", "NIV", "Ventilator"]} field="breathing_o2_device" />
+                        <SelectButtons label="Pattern" options={["Tachypneic", "Bradypneic", "Kussmaul", "Cheyne-Stokes"]} field="breathing_pattern" />
+                        <SelectButtons label="Chest Expansion" options={["Equal", "Reduced L", "Reduced R", "Reduced both"]} field="breathing_expansion" />
+                        <SelectButtons label="Air Entry" options={["Reduced L", "Reduced R", "Reduced both", "Absent L", "Absent R"]} field="breathing_air_entry" />
+                        <SelectButtons label="Added Sounds" options={["Wheeze", "Crackles", "Rhonchi", "Stridor"]} field="breathing_added_sounds" />
+                        <Text style={styles.checkboxLabel}>Interventions:</Text>
+                        <View style={styles.checkboxGrid}>
+                          {['Nebulization', 'ICD', 'Needle decomp', 'BVM', 'Intubation'].map(item => (
+                            <TouchableOpacity key={item} style={styles.checkboxItem} onPress={() => toggleIntervention('breathing_interventions', item)}>
+                              <Ionicons name={formDataRef.current.breathing_interventions?.includes(item) ? 'checkbox' : 'square-outline'} size={20} color="#f97316" />
+                              <Text style={styles.checkboxText}>{item}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+                    <InputWithVoice label="Notes" field="breathing_notes" placeholder="Additional breathing observations..." multiline />
+                  </View>
+                )}
+              </View>
+
+              {/* C - Circulation */}
+              <View style={[styles.card, { borderLeftWidth: 4, borderLeftColor: '#eab308' }]}>
+                <CollapsibleHeader title="C - CIRCULATION" icon="heart" section="circulation" color="#eab308" />
+                {!collapsed.circulation && (
+                  <View style={styles.collapsibleContent}>
+                    {/* Normal/Abnormal Toggle */}
+                    <View style={styles.statusToggleRow}>
+                      <TouchableOpacity
+                        style={[styles.statusToggle, formDataRef.current.circulation_status === 'Normal' && styles.statusToggleNormalActive]}
+                        onPress={() => { updateTextField('circulation_status', 'Normal'); forceUpdate(); }}
+                      >
+                        <Ionicons name="checkmark-circle" size={16} color={formDataRef.current.circulation_status === 'Normal' ? '#fff' : '#22c55e'} />
+                        <Text style={[styles.statusToggleText, formDataRef.current.circulation_status === 'Normal' && styles.statusToggleTextActive]}>Normal</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.statusToggle, formDataRef.current.circulation_status !== 'Normal' && styles.statusToggleAbnormalActive]}
+                        onPress={() => { updateTextField('circulation_status', 'Abnormal'); forceUpdate(); }}
+                      >
+                        <Ionicons name="alert-circle" size={16} color={formDataRef.current.circulation_status !== 'Normal' ? '#fff' : '#ef4444'} />
+                        <Text style={[styles.statusToggleText, formDataRef.current.circulation_status !== 'Normal' && styles.statusToggleTextActive]}>Abnormal</Text>
+                      </TouchableOpacity>
+                    </View>
+                    
+                    {/* Vitals Row */}
+                    <View style={styles.vitalsRowCompact}>
+                      <View style={styles.vitalItemCompact}>
+                        <Text style={styles.vitalLabelCompact}>HR</Text>
+                        <TextInput style={styles.vitalInputCompact} defaultValue={formDataRef.current.circulation_hr} onChangeText={(t) => updateTextField('circulation_hr', t)} placeholder="bpm" keyboardType="numeric" />
+                      </View>
+                      <View style={styles.vitalItemCompact}>
+                        <Text style={styles.vitalLabelCompact}>BP</Text>
+                        <TextInput style={styles.vitalInputCompact} defaultValue={formDataRef.current.circulation_bp} onChangeText={(t) => updateTextField('circulation_bp', t)} placeholder="Sys/Dia" />
+                      </View>
+                    </View>
+                    
+                    {/* Expanded options when Abnormal */}
+                    {formDataRef.current.circulation_status !== 'Normal' && (
+                      <View style={styles.abnormalDetails}>
+                        <SelectButtons label="Rhythm" options={["Regular", "Irregular", "Irreg irregular"]} field="circulation_rhythm" />
+                        <SelectButtons label="CRT" options={["<2 sec", "2-3 sec", ">3 sec"]} field="circulation_crt" />
+                        <SelectButtons label="Skin" options={["Warm dry", "Cool dry", "Cool clammy", "Mottled"]} field="circulation_skin" />
+                        <SelectButtons label="Pulses" options={["Present", "Weak", "Absent", "Asymmetric"]} field="circulation_pulse" />
+                        <SelectButtons label="JVP" options={["Normal", "Raised", "Flat"]} field="circulation_jvp" />
+                        <View style={styles.checkboxGrid}>
+                          <TouchableOpacity style={styles.checkboxItem} onPress={() => { formDataRef.current.circulation_external_bleed = !formDataRef.current.circulation_external_bleed; forceUpdate(); }}>
+                            <Ionicons name={formDataRef.current.circulation_external_bleed ? 'checkbox' : 'square-outline'} size={20} color="#eab308" />
+                            <Text style={styles.checkboxText}>External Bleeding</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity style={styles.checkboxItem} onPress={() => { formDataRef.current.circulation_long_bone = !formDataRef.current.circulation_long_bone; forceUpdate(); }}>
+                            <Ionicons name={formDataRef.current.circulation_long_bone ? 'checkbox' : 'square-outline'} size={20} color="#eab308" />
+                            <Text style={styles.checkboxText}>Long Bone Deformity</Text>
+                          </TouchableOpacity>
+                        </View>
+                        <Text style={styles.checkboxLabel}>Interventions:</Text>
+                        <View style={styles.checkboxGrid}>
+                          {['IV access', 'IO access', 'Fluid bolus', 'Blood', 'Vasopressors', 'CPR'].map(item => (
+                            <TouchableOpacity key={item} style={styles.checkboxItem} onPress={() => toggleIntervention('circulation_interventions', item)}>
+                              <Ionicons name={formDataRef.current.circulation_interventions?.includes(item) ? 'checkbox' : 'square-outline'} size={20} color="#eab308" />
+                              <Text style={styles.checkboxText}>{item}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+                    <InputWithVoice label="Notes" field="circulation_notes" placeholder="Additional circulation observations..." multiline />
+                  </View>
+                )}
+              </View>
+
+              {/* D - Disability */}
+              <View style={[styles.card, { borderLeftWidth: 4, borderLeftColor: '#22c55e' }]}>
+                <CollapsibleHeader title="D - DISABILITY (Neuro)" icon="brain" section="disability" color="#22c55e" />
+                {!collapsed.disability && (
+                  <View style={styles.collapsibleContent}>
+                    {/* Normal/Abnormal Toggle */}
+                    <View style={styles.statusToggleRow}>
+                      <TouchableOpacity
+                        style={[styles.statusToggle, formDataRef.current.disability_avpu === 'Alert' && styles.statusToggleNormalActive]}
+                        onPress={() => { updateTextField('disability_avpu', 'Alert'); forceUpdate(); }}
+                      >
+                        <Ionicons name="checkmark-circle" size={16} color={formDataRef.current.disability_avpu === 'Alert' ? '#fff' : '#22c55e'} />
+                        <Text style={[styles.statusToggleText, formDataRef.current.disability_avpu === 'Alert' && styles.statusToggleTextActive]}>Normal</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.statusToggle, formDataRef.current.disability_avpu !== 'Alert' && styles.statusToggleAbnormalActive]}
+                        onPress={() => { updateTextField('disability_avpu', 'Verbal'); forceUpdate(); }}
+                      >
+                        <Ionicons name="alert-circle" size={16} color={formDataRef.current.disability_avpu !== 'Alert' ? '#fff' : '#ef4444'} />
+                        <Text style={[styles.statusToggleText, formDataRef.current.disability_avpu !== 'Alert' && styles.statusToggleTextActive]}>Abnormal</Text>
+                      </TouchableOpacity>
+                    </View>
+                    
+                    {/* GCS Row */}
+                    <View style={styles.vitalsRowCompact}>
+                      <View style={styles.vitalItemCompact}>
+                        <Text style={styles.vitalLabelCompact}>GCS E</Text>
+                        <TextInput style={styles.vitalInputCompact} defaultValue={formDataRef.current.disability_gcs_e} onChangeText={(t) => updateTextField('disability_gcs_e', t)} placeholder="1-4" keyboardType="numeric" />
+                      </View>
+                      <View style={styles.vitalItemCompact}>
+                        <Text style={styles.vitalLabelCompact}>V</Text>
+                        <TextInput style={styles.vitalInputCompact} defaultValue={formDataRef.current.disability_gcs_v} onChangeText={(t) => updateTextField('disability_gcs_v', t)} placeholder="1-5" keyboardType="numeric" />
+                      </View>
+                      <View style={styles.vitalItemCompact}>
+                        <Text style={styles.vitalLabelCompact}>M</Text>
+                        <TextInput style={styles.vitalInputCompact} defaultValue={formDataRef.current.disability_gcs_m} onChangeText={(t) => updateTextField('disability_gcs_m', t)} placeholder="1-6" keyboardType="numeric" />
+                      </View>
+                      <View style={styles.vitalItemCompact}>
+                        <Text style={styles.vitalLabelCompact}>GRBS</Text>
+                        <TextInput style={styles.vitalInputCompact} defaultValue={formDataRef.current.disability_grbs} onChangeText={(t) => updateTextField('disability_grbs', t)} placeholder="mg/dL" keyboardType="numeric" />
+                      </View>
+                    </View>
+                    
+                    {/* Expanded options when Abnormal */}
+                    {formDataRef.current.disability_avpu !== 'Alert' && (
+                      <View style={styles.abnormalDetails}>
+                        <SelectButtons label="AVPU" options={["Verbal", "Pain", "Unresponsive"]} field="disability_avpu" />
+                        <SelectButtons label="Pupils Size" options={["Equal", "Unequal", "Dilated", "Constricted"]} field="disability_pupils_size" />
+                        <SelectButtons label="Pupils Reaction" options={["Brisk", "Sluggish", "Non-reactive", "Fixed"]} field="disability_pupils_reaction" />
+                        <SelectButtons label="Lateralizing" options={["None", "Left hemiparesis", "Right hemiparesis", "Facial droop"]} field="disability_lateralizing" />
+                        <TouchableOpacity style={styles.checkboxItem} onPress={() => { formDataRef.current.disability_seizure = !formDataRef.current.disability_seizure; forceUpdate(); }}>
+                          <Ionicons name={formDataRef.current.disability_seizure ? 'checkbox' : 'square-outline'} size={20} color="#22c55e" />
+                          <Text style={styles.checkboxText}>Seizure Observed</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                    <InputWithVoice label="Notes" field="disability_notes" placeholder="Additional neuro observations..." multiline />
+                  </View>
+                )}
+              </View>
+
+              {/* E - Exposure */}
+              <View style={[styles.card, { borderLeftWidth: 4, borderLeftColor: '#3b82f6' }]}>
+                <CollapsibleHeader title="E - EXPOSURE" icon="body" section="exposure" color="#3b82f6" />
+                {!collapsed.exposure && (
+                  <View style={styles.collapsibleContent}>
+                    {/* Normal/Abnormal Toggle */}
+                    <View style={styles.statusToggleRow}>
+                      <TouchableOpacity
+                        style={[styles.statusToggle, formDataRef.current.exposure_status === 'Normal' && styles.statusToggleNormalActive]}
+                        onPress={() => { updateTextField('exposure_status', 'Normal'); forceUpdate(); }}
+                      >
+                        <Ionicons name="checkmark-circle" size={16} color={formDataRef.current.exposure_status === 'Normal' ? '#fff' : '#22c55e'} />
+                        <Text style={[styles.statusToggleText, formDataRef.current.exposure_status === 'Normal' && styles.statusToggleTextActive]}>Normal</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.statusToggle, formDataRef.current.exposure_status !== 'Normal' && styles.statusToggleAbnormalActive]}
+                        onPress={() => { updateTextField('exposure_status', 'Abnormal'); forceUpdate(); }}
+                      >
+                        <Ionicons name="alert-circle" size={16} color={formDataRef.current.exposure_status !== 'Normal' ? '#fff' : '#ef4444'} />
+                        <Text style={[styles.statusToggleText, formDataRef.current.exposure_status !== 'Normal' && styles.statusToggleTextActive]}>Abnormal</Text>
+                      </TouchableOpacity>
+                    </View>
+                    
+                    {/* Temperature */}
+                    <View style={styles.vitalsRowCompact}>
+                      <View style={styles.vitalItemCompact}>
+                        <Text style={styles.vitalLabelCompact}>Temp</Text>
+                        <TextInput style={styles.vitalInputCompact} defaultValue={formDataRef.current.exposure_temperature} onChangeText={(t) => updateTextField('exposure_temperature', t)} placeholder="°C" keyboardType="decimal-pad" />
+                      </View>
+                    </View>
+                    
+                    {/* Expanded options when Abnormal */}
+                    {formDataRef.current.exposure_status !== 'Normal' && (
+                      <View style={styles.abnormalDetails}>
+                        <SelectButtons label="Rashes" options={["None", "Petechiae", "Purpura", "Urticaria", "Vesicular"]} field="exposure_rashes" />
+                        <SelectButtons label="Bruises" options={["None", "Head/Face", "Chest", "Abdomen", "Extremities", "Multiple"]} field="exposure_bruises" />
+                        <Text style={styles.checkboxLabel}>Logroll Findings:</Text>
+                        <View style={styles.checkboxGrid}>
+                          {['Spinal tenderness', 'Deformity', 'Sacral edema', 'Pressure sores'].map(item => (
+                            <TouchableOpacity key={item} style={styles.checkboxItem} onPress={() => toggleIntervention('exposure_logroll', item)}>
+                              <Ionicons name={formDataRef.current.exposure_logroll?.includes(item) ? 'checkbox' : 'square-outline'} size={20} color="#3b82f6" />
+                              <Text style={styles.checkboxText}>{item}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+                    <InputWithVoice label="Local Exam / Notes" field="exposure_notes" placeholder="Local examination findings..." multiline />
+                  </View>
+                )}
+              </View>
+
+              {/* EFAST - Extended Focused Assessment with Sonography for Trauma */}
+              <View style={[styles.card, { borderLeftWidth: 4, borderLeftColor: '#06b6d4' }]}>
+                <CollapsibleHeader title="EFAST (Trauma Ultrasound)" icon="scan" section="efast" color="#06b6d4" />
+                {!collapsed.efast && (
+                  <View style={styles.collapsibleContent}>
+                    <Text style={styles.efastNote}>Extended Focused Assessment with Sonography for Trauma</Text>
+                    
+                    <View style={styles.efastGrid}>
+                      <View style={styles.efastItem}>
+                        <Text style={styles.efastLabel}>❤️ Heart (Pericardial)</Text>
+                        <SelectButtons options={["Not done", "Normal", "Effusion", "Tamponade signs"]} field="efast_heart" />
+                      </View>
+                      
+                      <View style={styles.efastItem}>
+                        <Text style={styles.efastLabel}>🩸 Abdomen (Free Fluid)</Text>
+                        <SelectButtons options={["Not done", "Normal", "RUQ fluid", "LUQ fluid", "Pelvis fluid"]} field="efast_abdomen" />
+                      </View>
+                      
+                      <View style={styles.efastItem}>
+                        <Text style={styles.efastLabel}>🫁 Lungs (Pneumothorax)</Text>
+                        <SelectButtons options={["Not done", "Normal", "PTX Right", "PTX Left", "PTX Bilateral"]} field="efast_lungs" />
+                      </View>
+                      
+                      <View style={styles.efastItem}>
+                        <Text style={styles.efastLabel}>🦴 Pelvis</Text>
+                        <SelectButtons options={["Not done", "Normal", "Fluid/Blood", "Fracture signs"]} field="efast_pelvis" />
+                      </View>
+                    </View>
+                    
+                    <InputWithVoice label="EFAST Notes" field="efast_notes" placeholder="Additional EFAST findings..." multiline />
+                  </View>
+                )}
+              </View>
+
+              {/* R - Reassessment */}
+              <View style={[styles.card, { borderLeftWidth: 4, borderLeftColor: '#8b5cf6' }]}>
+                <CollapsibleHeader title="R - REASSESSMENT" icon="refresh" section="reassessment" color="#8b5cf6" />
+                {!collapsed.reassessment && (
+                  <View style={styles.collapsibleContent}>
+                    <SelectButtons label="Status After Resuscitation" options={["Improving", "Stable", "Deteriorating", "Critical"]} field="reassessment_status" />
+                    <InputWithVoice label="Reassessment Notes" field="reassessment_notes" placeholder="Response to interventions..." multiline />
+                  </View>
+                )}
+              </View>
+
+              {/* Adjuvants to Primary */}
+              <View style={styles.card}>
+                <CollapsibleHeader title="Adjuvants to Primary" icon="analytics" section="adjuvants" color="#6b7280" />
+                {!collapsed.adjuvants && (
+                  <View style={styles.collapsibleContent}>
+                    <InputWithVoice label="ECG Findings" field="ecg_findings" placeholder="ECG interpretation..." multiline />
+                    
+                    <Text style={styles.subSection}>VBG Parameters</Text>
+                    <View style={styles.vbgGrid}>
+                      <View style={styles.vbgItem}>
+                        <Text style={styles.vbgLabel}>pH</Text>
+                        <TextInput style={styles.vbgInput} defaultValue={formDataRef.current.vbg_ph} onChangeText={(t) => updateTextField("vbg_ph", t)} placeholder="7.35-7.45" keyboardType="decimal-pad" />
+                      </View>
+                      <View style={styles.vbgItem}>
+                        <Text style={styles.vbgLabel}>PCO2</Text>
+                        <TextInput style={styles.vbgInput} defaultValue={formDataRef.current.vbg_pco2} onChangeText={(t) => updateTextField("vbg_pco2", t)} placeholder="35-45" keyboardType="decimal-pad" />
+                      </View>
+                      <View style={styles.vbgItem}>
+                        <Text style={styles.vbgLabel}>HCO3</Text>
+                        <TextInput style={styles.vbgInput} defaultValue={formDataRef.current.vbg_hco3} onChangeText={(t) => updateTextField("vbg_hco3", t)} placeholder="22-26" keyboardType="decimal-pad" />
+                      </View>
+                      <View style={styles.vbgItem}>
+                        <Text style={styles.vbgLabel}>Hb</Text>
+                        <TextInput style={styles.vbgInput} defaultValue={formDataRef.current.vbg_hb} onChangeText={(t) => updateTextField("vbg_hb", t)} placeholder="12-16" keyboardType="decimal-pad" />
+                      </View>
+                      <View style={styles.vbgItem}>
+                        <Text style={styles.vbgLabel}>Glucose</Text>
+                        <TextInput style={styles.vbgInput} defaultValue={formDataRef.current.vbg_glu} onChangeText={(t) => updateTextField("vbg_glu", t)} placeholder="70-110" keyboardType="decimal-pad" />
+                      </View>
+                      <View style={styles.vbgItem}>
+                        <Text style={styles.vbgLabel}>Lactate</Text>
+                        <TextInput style={styles.vbgInput} defaultValue={formDataRef.current.vbg_lac} onChangeText={(t) => updateTextField("vbg_lac", t)} placeholder="0.5-2" keyboardType="decimal-pad" />
+                      </View>
+                      <View style={styles.vbgItem}>
+                        <Text style={styles.vbgLabel}>Na</Text>
+                        <TextInput style={styles.vbgInput} defaultValue={formDataRef.current.vbg_na} onChangeText={(t) => updateTextField("vbg_na", t)} placeholder="135-145" keyboardType="decimal-pad" />
+                      </View>
+                      <View style={styles.vbgItem}>
+                        <Text style={styles.vbgLabel}>K</Text>
+                        <TextInput style={styles.vbgInput} defaultValue={formDataRef.current.vbg_k} onChangeText={(t) => updateTextField("vbg_k", t)} placeholder="3.5-5" keyboardType="decimal-pad" />
+                      </View>
+                      <View style={styles.vbgItem}>
+                        <Text style={styles.vbgLabel}>Cr</Text>
+                        <TextInput style={styles.vbgInput} defaultValue={formDataRef.current.vbg_cr} onChangeText={(t) => updateTextField("vbg_cr", t)} placeholder="0.7-1.3" keyboardType="decimal-pad" />
+                      </View>
+                    </View>
+
+                    <TouchableOpacity style={styles.aiBtn} onPress={getVBGInterpretation} disabled={loading}>
+                      {loading ? <ActivityIndicator color="#fff" /> : (
+                        <>
+                          <Ionicons name="sparkles" size={18} color="#fff" />
+                          <Text style={styles.aiBtnText}>AI Interpretation</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+
+                    {formDataRef.current.vbg_ai_interpretation ? (
+                      <View style={styles.aiResult}>
+                        <Text style={styles.aiResultTitle}>🤖 AI Interpretation:</Text>
+                        <Text style={styles.aiResultText}>{formDataRef.current.vbg_ai_interpretation}</Text>
+                      </View>
+                    ) : null}
+
+                    <InputWithVoice label="Bedside Echo" field="bedside_echo" placeholder="Echo findings..." multiline />
+                    <InputWithVoice label="Additional Notes" field="adjuvants_notes" placeholder="Other adjuvant notes..." multiline />
+                  </View>
+                )}
+              </View>
+            </View>
+          )}
+
+          {/* ==================== HISTORY TAB ==================== */}
+          {activeTab === "history" && (
+            <View style={styles.tabContent}>
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>History</Text>
+                <InputWithVoice label="Signs & Symptoms" field="history_signs_symptoms" placeholder="Associated symptoms..." multiline />
+                <InputWithVoice label="Allergies" field="history_allergies" placeholder="NKDA or list allergies" />
+                <InputWithVoice label="Medications" field="history_medications" placeholder="Current medications..." />
+                <InputWithVoice label="Past Medical History" field="history_past_medical" placeholder="DM, HTN, Asthma..." />
+                <InputWithVoice label="Past Surgical History" field="history_past_surgical" placeholder="Previous surgeries..." />
+                <InputField label="Last Meal / LMP" field="history_last_meal" placeholder="Time of last meal/LMP date" />
+                {/* Events / HOPI - Now placed after Last Meal/LMP */}
+                <View style={[styles.highlightedField, { borderLeftColor: '#8b5cf6' }]}>
+                  <InputWithVoice label="Events / HOPI" field="history_hpi" placeholder="Events and history of present illness..." multiline />
+                </View>
+                <InputWithVoice label="Family / Gynae History" field="history_family_gynae" placeholder="Family history..." multiline />
+                <InputWithVoice label="Additional Notes" field="history_additional_notes" placeholder="Any other relevant history..." multiline />
+              </View>
+
+              {/* Psychological Assessment */}
+              <View style={styles.card}>
+                <CollapsibleHeader title="Psychological Assessment" icon="happy" section="psychological" color="#ec4899" />
+                {!collapsed.psychological && (
+                  <View style={styles.collapsibleContent}>
+                    <SwitchRow label="Suicidal Ideation" field="psych_suicidal_ideation" />
+                    <SwitchRow label="Self-Harm History" field="psych_self_harm" />
+                    <SwitchRow label="Intent to Harm Others" field="psych_harm_others" />
+                    <SwitchRow label="Substance Abuse" field="psych_substance_abuse" />
+                    <SwitchRow label="Psychiatric History" field="psych_psychiatric_history" />
+                    <SwitchRow label="Currently on Psychiatric Treatment" field="psych_current_treatment" />
+                    <SwitchRow label="Has Support System" field="psych_support_system" />
+                    <InputWithVoice label="Notes" field="psych_notes" placeholder="Additional psychological notes..." multiline />
+                  </View>
+                )}
+              </View>
+            </View>
+          )}
+
+          {/* ==================== EXAMINATION TAB ==================== */}
+          {activeTab === "exam" && (
+            <View style={styles.tabContent}>
+              {/* Quick "All Normal" Button */}
+              <TouchableOpacity 
+                style={styles.allNormalBtn}
+                onPress={() => {
+                  // Set all exam statuses to Normal
+                  setExamStatus({
+                    cvs: "Normal",
+                    respiratory: "Normal",
+                    abdomen: "Normal",
+                    cns: "Normal",
+                    extremities: "Normal",
+                  });
+                  // Also fill in the text fields with normal templates
+                  formDataRef.current.general_notes = NORMAL_EXAM_TEMPLATE.general;
+                  formDataRef.current.cvs_notes = NORMAL_EXAM_TEMPLATE.cvs;
+                  formDataRef.current.resp_notes = NORMAL_EXAM_TEMPLATE.rs;
+                  formDataRef.current.abd_notes = NORMAL_EXAM_TEMPLATE.abdomen;
+                  formDataRef.current.cns_notes = NORMAL_EXAM_TEMPLATE.cns;
+                  formDataRef.current.ext_notes = NORMAL_EXAM_TEMPLATE.extremities;
+                  if (isPediatric) {
+                    formDataRef.current.heent_notes = "Head normocephalic, fontanelles flat (if applicable). Eyes: Pupils equal, reactive. Ears: TM clear bilaterally. Nose: Patent, no discharge. Throat: Oral mucosa moist, tonsils not enlarged.";
+                  }
+                  forceUpdate();
+                  Alert.alert("✓ Done", "All examination sections marked as Normal");
+                }}
+              >
+                <Ionicons name="checkmark-done-circle" size={20} color="#fff" />
+                <Text style={styles.allNormalBtnText}>Mark All Examination Normal</Text>
+              </TouchableOpacity>
+
+              {/* HEENT - For Pediatric Patients */}
+              {isPediatric && (
+                <View style={styles.card}>
+                  <CollapsibleHeader title="HEENT Examination" icon="eye" section="heent" color="#f59e0b" />
+                  {!collapsed.heent && (
+                    <View style={styles.collapsibleContent}>
+                      <Text style={styles.heentSubtitle}>Head, Eyes, Ears, Nose, Throat</Text>
+                      
+                      <Text style={styles.heentLabel}>Head</Text>
+                      <SelectButtons options={["Normocephalic", "Fontanelle bulging", "Fontanelle sunken", "Trauma signs"]} field="heent_head" />
+                      
+                      <Text style={styles.heentLabel}>Eyes</Text>
+                      <SelectButtons options={["Normal", "Sunken", "Conjunctival pallor", "Icterus", "Discharge"]} field="heent_eyes" />
+                      
+                      <Text style={styles.heentLabel}>Ears</Text>
+                      <SelectButtons options={["Normal", "TM bulging", "Discharge", "Mastoid tenderness"]} field="heent_ears" />
+                      
+                      <Text style={styles.heentLabel}>Nose</Text>
+                      <SelectButtons options={["Patent", "Congested", "Discharge", "Flaring"]} field="heent_nose" />
+                      
+                      <Text style={styles.heentLabel}>Throat/Oropharynx</Text>
+                      <SelectButtons options={["Normal", "Erythema", "Exudates", "Tonsillar enlargement", "Dry mucosa"]} field="heent_throat" />
+                      
+                      <InputWithVoice label="HEENT Notes" field="heent_notes" placeholder="Additional HEENT findings..." multiline />
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* General Examination */}
+              <View style={styles.card}>
+                <CollapsibleHeader title="General Examination" icon="person" section="generalExam" color="#0ea5e9" />
+                {!collapsed.generalExam && (
+                  <View style={styles.collapsibleContent}>
+                    <View style={styles.checkboxGrid}>
+                      <SwitchRow label="Pallor" field="general_pallor" />
+                      <SwitchRow label="Icterus" field="general_icterus" />
+                      <SwitchRow label="Cyanosis" field="general_cyanosis" />
+                      <SwitchRow label="Clubbing" field="general_clubbing" />
+                      <SwitchRow label="Lymphadenopathy" field="general_lymphadenopathy" />
+                      <SwitchRow label="Edema" field="general_edema" />
+                    </View>
+                    <InputWithVoice label="Additional Notes" field="general_notes" placeholder="General exam notes..." multiline />
+                  </View>
+                )}
+              </View>
+
+              {/* CVS */}
+              <View style={styles.card}>
+                <CollapsibleHeader title="Cardiovascular System" icon="heart" section="cvs" color="#ef4444" />
+                {!collapsed.cvs && (
+                  <View style={styles.collapsibleContent}>
+                    <ExamDropdown exam="cvs" label="CVS Status" />
+                    {examStatus.cvs === "Normal" ? (
+                      <Text style={styles.normalSummary}>S1S2 heard, no murmurs, regular rhythm</Text>
+                    ) : (
+                      <>
+                        <SelectButtons label="S1/S2" options={["Normal", "Soft", "Loud"]} field="cvs_s1_s2" />
+                        <SelectButtons label="Pulse" options={["Regular", "Irregular"]} field="cvs_pulse" />
+                        <InputField label="Pulse Rate" field="cvs_pulse_rate" placeholder="/min" keyboardType="numeric" />
+                        <SelectButtons label="Apex Beat" options={["Normal", "Displaced"]} field="cvs_apex_beat" />
+                        <SwitchRow label="Precordial Heave" field="cvs_precordial_heave" />
+                        <InputField label="Added Sounds" field="cvs_added_sounds" placeholder="S3, S4..." />
+                        <InputField label="Murmurs" field="cvs_murmurs" placeholder="Describe murmurs..." />
+                      </>
+                    )}
+                    <InputWithVoice label="Additional Notes" field="cvs_notes" placeholder="CVS notes..." multiline />
+                  </View>
+                )}
+              </View>
+
+              {/* Respiratory */}
+              <View style={styles.card}>
+                <CollapsibleHeader title="Respiratory System" icon="fitness" section="respiratory" color="#f97316" />
+                {!collapsed.respiratory && (
+                  <View style={styles.collapsibleContent}>
+                    <ExamDropdown exam="respiratory" label="Respiratory Status" />
+                    {examStatus.respiratory === "Normal" ? (
+                      <Text style={styles.normalSummary}>Equal air entry, vesicular breath sounds, no added sounds</Text>
+                    ) : (
+                      <>
+                        <SelectButtons label="Expansion" options={["Equal", "Reduced"]} field="resp_expansion" />
+                        <SelectButtons label="Percussion" options={["Resonant", "Dull", "Hyper-resonant"]} field="resp_percussion" />
+                        <SelectButtons label="Breath Sounds" options={["Vesicular", "Bronchial", "Diminished"]} field="resp_breath_sounds" />
+                        <SelectButtons label="Vocal Resonance" options={["Normal", "Increased", "Decreased"]} field="resp_vocal_resonance" />
+                        <InputField label="Added Sounds" field="resp_added_sounds" placeholder="Crackles, wheezes..." />
+                      </>
+                    )}
+                    <InputWithVoice label="Additional Notes" field="resp_notes" placeholder="Respiratory notes..." multiline />
+                  </View>
+                )}
+              </View>
+
+              {/* Abdomen */}
+              <View style={styles.card}>
+                <CollapsibleHeader title="Abdomen" icon="body" section="abdomen" color="#22c55e" />
+                {!collapsed.abdomen && (
+                  <View style={styles.collapsibleContent}>
+                    <ExamDropdown exam="abdomen" label="Abdomen Status" />
+                    {examStatus.abdomen === "Normal" ? (
+                      <Text style={styles.normalSummary}>Soft, non-tender, no organomegaly, bowel sounds present</Text>
+                    ) : (
+                      <>
+                        <SelectButtons label="Umbilical" options={["Normal", "Herniated"]} field="abd_umbilical" />
+                        <InputField label="Organomegaly" field="abd_organomegaly" placeholder="Hepatomegaly, splenomegaly..." />
+                        <SelectButtons label="Percussion" options={["Tympanic", "Dull", "Shifting"]} field="abd_percussion" />
+                        <SelectButtons label="Bowel Sounds" options={["Present", "Absent", "Hyperactive"]} field="abd_bowel_sounds" />
+                        <SelectButtons label="External Genitalia" options={["Normal", "Abnormal"]} field="abd_external_genitalia" />
+                        <SelectButtons label="Hernial Orifices" options={["Normal", "Hernia present"]} field="abd_hernial_orifices" />
+                        <InputField label="Per Rectal" field="abd_per_rectal" placeholder="If done..." />
+                        <InputField label="Per Vaginal" field="abd_per_vaginal" placeholder="If done..." />
+                      </>
+                    )}
+                    <InputWithVoice label="Additional Notes" field="abd_notes" placeholder="Abdomen notes..." multiline />
+                  </View>
+                )}
+              </View>
+
+              {/* CNS */}
+              <View style={styles.card}>
+                <CollapsibleHeader title="Central Nervous System" icon="brain" section="cns" color="#8b5cf6" />
+                {!collapsed.cns && (
+                  <View style={styles.collapsibleContent}>
+                    <ExamDropdown exam="cns" label="CNS Status" />
+                    {examStatus.cns === "Normal" ? (
+                      <Text style={styles.normalSummary}>Alert, oriented, cranial nerves intact, no focal deficits</Text>
+                    ) : (
+                      <>
+                        <SelectButtons label="Higher Mental Functions" options={["Intact", "Impaired"]} field="cns_higher_mental" />
+                        <SelectButtons label="Cranial Nerves" options={["Intact", "Deficit"]} field="cns_cranial_nerves" />
+                        <SelectButtons label="Sensory System" options={["Intact", "Impaired"]} field="cns_sensory" />
+                        <SelectButtons label="Motor System" options={["Normal", "Weakness"]} field="cns_motor" />
+                        <SelectButtons label="Reflexes" options={["Normal", "Brisk", "Diminished"]} field="cns_reflexes" />
+                        <SelectButtons label="Romberg Sign" options={["Negative", "Positive"]} field="cns_romberg" />
+                        <SelectButtons label="Cerebellar Signs" options={["Normal", "Abnormal"]} field="cns_cerebellar" />
+                      </>
+                    )}
+                    <InputWithVoice label="Additional Notes" field="cns_notes" placeholder="CNS notes..." multiline />
+                  </View>
+                )}
+              </View>
+
+              {/* Extremities */}
+              <View style={styles.card}>
+                <CollapsibleHeader title="Extremities" icon="hand-left" section="extremities" color="#ec4899" />
+                {!collapsed.extremities && (
+                  <View style={styles.collapsibleContent}>
+                    <ExamDropdown exam="extremities" label="Extremities Status" />
+                    {examStatus.extremities === "Abnormal" && (
+                      <InputWithVoice label="Findings" field="ext_findings" placeholder="Describe findings..." multiline />
+                    )}
+                    <InputWithVoice label="Additional Notes" field="ext_notes" placeholder="Extremities notes..." multiline />
+                  </View>
+                )}
+              </View>
+            </View>
+          )}
+
+          {/* ==================== TREATMENT TAB ==================== */}
+          {activeTab === "treatment" && (
+            <View style={styles.tabContent}>
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>Investigations</Text>
+                <InputWithVoice label="Labs Ordered" field="labs_ordered" placeholder="CBC, RFT, LFT, ABG..." multiline />
+                <InputWithVoice label="Imaging" field="imaging_ordered" placeholder="X-ray, CT, USG..." multiline />
+                <InputWithVoice label="Results Summary" field="investigation_results" placeholder="Key findings..." multiline />
+              </View>
+
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>VBG / ABG</Text>
+                <View style={styles.row}>
+                  <View style={{ flex: 1 }}><InputField label="pH" field="vbg_ph" placeholder="7.35-7.45" keyboardType="decimal-pad" /></View>
+                  <View style={{ flex: 1 }}><InputField label="pCO₂" field="vbg_pco2" placeholder="mmHg" keyboardType="decimal-pad" /></View>
+                </View>
+                <View style={styles.row}>
+                  <View style={{ flex: 1 }}><InputField label="pO₂" field="vbg_po2" placeholder="mmHg" keyboardType="decimal-pad" /></View>
+                  <View style={{ flex: 1 }}><InputField label="HCO₃" field="vbg_hco3" placeholder="mEq/L" keyboardType="decimal-pad" /></View>
+                </View>
+                <View style={styles.row}>
+                  <View style={{ flex: 1 }}><InputField label="Lactate" field="vbg_lactate" placeholder="mmol/L" keyboardType="decimal-pad" /></View>
+                  <View style={{ flex: 1 }}><InputField label="BE" field="vbg_be" placeholder="mEq/L" /></View>
+                </View>
+                <TouchableOpacity style={styles.interpretBtn} onPress={interpretVBG}>
+                  <Ionicons name="analytics" size={18} color="#fff" />
+                  <Text style={styles.interpretBtnText}>AI Interpret VBG</Text>
+                </TouchableOpacity>
+                {formDataRef.current.vbg_interpretation ? (
+                  <View style={styles.interpretResult}>
+                    <Text style={styles.interpretTitle}>Interpretation:</Text>
+                    <Text style={styles.interpretText}>{formDataRef.current.vbg_interpretation}</Text>
+                  </View>
+                ) : null}
+              </View>
+
+              {/* Provisional Diagnosis with AI */}
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>Provisional Diagnosis</Text>
+                <InputWithVoice label="Primary Diagnosis" field="diagnosis_primary" placeholder="Main diagnosis..." />
+                <InputWithVoice label="Differential Diagnoses" field="diagnosis_differential" placeholder="Other possibilities..." multiline />
+                
+                {/* AI Diagnosis Button */}
+                <TouchableOpacity 
+                  style={[styles.aiDiagnosisBtn, aiDiagnosisLoading && styles.btnDisabled]} 
+                  onPress={getAIDiagnosisSuggestions}
+                  disabled={aiDiagnosisLoading}
+                >
+                  {aiDiagnosisLoading ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons name="sparkles" size={18} color="#fff" />
+                      <Text style={styles.aiDiagnosisBtnText}>AI Suggest Diagnosis & Red Flags</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                {/* AI Diagnosis Result */}
+                {aiDiagnosisResult && (
+                  <View style={styles.aiDiagnosisResult}>
+                    <Text style={styles.aiResultHeader}>AI Suggestions</Text>
+                    <Text style={styles.aiResultContent}>{aiDiagnosisResult}</Text>
+                  </View>
+                )}
+
+                {/* Red Flags Section */}
+                {aiRedFlags.length > 0 && (
+                  <View style={styles.redFlagsContainer}>
+                    <View style={styles.redFlagsHeader}>
+                      <Ionicons name="warning" size={18} color="#dc2626" />
+                      <Text style={styles.redFlagsTitle}>Red Flags to Consider</Text>
+                    </View>
+                    {aiRedFlags.map((flag, idx) => (
+                      <View key={idx} style={styles.redFlagItem}>
+                        <Ionicons name="alert-circle" size={14} color="#dc2626" />
+                        <Text style={styles.redFlagText}>{flag.trim()}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+
+              {/* Treatment Given with Drug Dropdown */}
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>Treatment Given</Text>
+                
+                {/* Drug Selection Button */}
+                <View style={styles.drugSection}>
+                  <Text style={styles.drugSectionLabel}>
+                    Medications ({isPediatric ? "Pediatric" : "Adult"} Formulary)
+                  </Text>
+                  <TouchableOpacity 
+                    style={styles.addDrugBtn}
+                    onPress={() => setShowDrugModal(true)}
+                  >
+                    <Ionicons name="add-circle" size={20} color="#fff" />
+                    <Text style={styles.addDrugBtnText}>Add Drug from List</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Selected Drugs List */}
+                {selectedDrugs.length > 0 && (
+                  <View style={styles.selectedDrugsList}>
+                    {selectedDrugs.map((drug) => (
+                      <View key={drug.id} style={styles.selectedDrugItem}>
+                        <View style={styles.selectedDrugInfo}>
+                          <Text style={styles.selectedDrugName}>{drug.name}</Text>
+                          <Text style={styles.selectedDrugDose}>{drug.dose} • {drug.time}</Text>
+                        </View>
+                        <TouchableOpacity onPress={() => removeDrug(drug.id)}>
+                          <Ionicons name="close-circle" size={22} color="#ef4444" />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {/* Manual medication input */}
+                <InputWithVoice label="Other Medications" field="treatment_medications" placeholder="Additional drugs not in list..." multiline />
+                <InputWithVoice label="IV Fluids" field="treatment_fluids" placeholder="NS, RL, etc..." />
+              </View>
+
+              {/* Addendum Notes Section */}
+              {addendumNotes.length > 0 && (
+                <View style={styles.card}>
+                  <Text style={styles.cardTitle}>Addendum Notes</Text>
+                  {addendumNotes.map((note) => (
+                    <View key={note.id} style={styles.addendumItem}>
+                      <Text style={styles.addendumTime}>{note.displayTime}</Text>
+                      <Text style={styles.addendumText}>{note.text}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {/* Manual Add Addendum Button */}
+              <TouchableOpacity 
+                style={styles.addAddendumBtn}
+                onPress={() => setShowAddendumModal(true)}
+              >
+                <Ionicons name="add" size={18} color="#2563eb" />
+                <Text style={styles.addAddendumBtnText}>Add Addendum Note</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* ==================== NOTES TAB (Procedures) ==================== */}
+          {activeTab === "notes" && (
+            <View style={styles.tabContent}>
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>Procedures Performed</Text>
+                <Text style={styles.procedureSubtitle}>Select all procedures performed and add notes</Text>
+                
+                {/* Procedures by Category */}
+                {["Resuscitation", "Airway", "Vascular", "Chest", "Neuro", "GU", "GI", "Wound", "Ortho", "Cardiac", "Monitoring"].map((category) => {
+                  const categoryProcedures = PROCEDURE_OPTIONS.filter(p => p.category === category);
+                  if (categoryProcedures.length === 0) return null;
+                  
+                  return (
+                    <View key={category} style={styles.procedureCategory}>
+                      <Text style={styles.procedureCategoryTitle}>{category}</Text>
+                      {categoryProcedures.map((proc) => {
+                        const isSelected = selectedProcedures.includes(proc.id);
+                        return (
+                          <View key={proc.id}>
+                            <TouchableOpacity 
+                              style={[styles.procedureItem, isSelected && styles.procedureItemSelected]}
+                              onPress={() => toggleProcedure(proc.id)}
+                            >
+                              <Ionicons 
+                                name={isSelected ? "checkbox" : "square-outline"} 
+                                size={22} 
+                                color={isSelected ? "#16a34a" : "#94a3b8"} 
+                              />
+                              <Text style={[styles.procedureItemText, isSelected && styles.procedureItemTextSelected]}>
+                                {proc.name}
+                              </Text>
+                            </TouchableOpacity>
+                            
+                            {/* Notes input for selected procedure */}
+                            {isSelected && (
+                              <View style={styles.procedureNotesInput}>
+                                <TextInput
+                                  style={styles.procedureNoteField}
+                                  placeholder={`Notes for ${proc.name}...`}
+                                  placeholderTextColor="#9ca3af"
+                                  value={procedureNotes[proc.id] || ""}
+                                  onChangeText={(text) => updateProcedureNote(proc.id, text)}
+                                  multiline
+                                />
+                              </View>
+                            )}
+                          </View>
+                        );
+                      })}
+                    </View>
+                  );
+                })}
+              </View>
+
+              {/* Summary of Selected Procedures */}
+              {selectedProcedures.length > 0 && (
+                <View style={styles.card}>
+                  <Text style={styles.cardTitle}>Procedure Summary</Text>
+                  <View style={styles.procedureSummary}>
+                    {selectedProcedures.map((procId) => {
+                      const proc = PROCEDURE_OPTIONS.find(p => p.id === procId);
+                      return (
+                        <View key={procId} style={styles.procedureSummaryItem}>
+                          <Ionicons name="checkmark-circle" size={16} color="#16a34a" />
+                          <Text style={styles.procedureSummaryText}>
+                            {proc?.name || procId}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* ==================== DISPOSITION TAB ==================== */}
+          {activeTab === "disposition" && (
+            <View style={styles.tabContent}>
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>Disposition</Text>
+                <SelectButtons 
+                  label="Disposition Type" 
+                  options={["Discharge", "Admit", "Refer", "LAMA", "Absconded", "Death"]} 
+                  field="disposition_type" 
+                />
+                
+                {formDataRef.current.disposition_type === "Admit" && (
+                  <InputField label="Admit to Ward" field="disposition_ward" placeholder="e.g., ICU, Medicine, Surgery" />
+                )}
+                
+                {formDataRef.current.disposition_type === "Refer" && (
+                  <>
+                    <InputField label="Refer to Hospital" field="disposition_refer_hospital" placeholder="Hospital name" />
+                    <InputField label="Reason for Referral" field="disposition_refer_reason" placeholder="Why referring..." />
+                  </>
+                )}
+                
+                {formDataRef.current.disposition_type === "LAMA" && (
+                  <InputWithVoice label="LAMA Notes" field="disposition_lama_notes" placeholder="Patient left against advice..." multiline />
+                )}
+                
+                {formDataRef.current.disposition_type === "Death" && (
+                  <>
+                    <InputField label="Time of Death" field="disposition_death_time" placeholder="HH:MM" />
+                    <InputWithVoice label="Cause of Death" field="disposition_death_cause" placeholder="Primary cause..." />
+                  </>
+                )}
+              </View>
+
+              {/* Observation in ER */}
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>Observation in ER</Text>
+                <InputWithVoice 
+                  label="ER Observation Notes" 
+                  field="er_observation_notes" 
+                  placeholder="Patient's course in ER, response to treatment, changes in condition..." 
+                  multiline 
+                />
+                <InputField 
+                  label="Duration in ER" 
+                  field="er_duration" 
+                  placeholder="e.g., 4 hours" 
+                />
+              </View>
+
+              {/* Generate Discharge Summary Button - only for Discharge disposition */}
+              {formDataRef.current.disposition_type === "Discharge" && (
+                <TouchableOpacity 
+                  style={styles.dischargeSummaryBtn} 
+                  onPress={() => {
+                    if (caseId) {
+                      saveCaseSheet();
+                      navigation.navigate("DischargeSummary", { caseId });
+                    } else {
+                      Alert.alert("Save Required", "Please save the case sheet first");
+                    }
+                  }}
+                >
+                  <Ionicons name="document-text" size={20} color="#fff" />
+                  <Text style={styles.dischargeSummaryBtnText}>Generate Discharge Summary</Text>
+                </TouchableOpacity>
+              )}
+
+              {/* Go to Dashboard Button */}
+              <TouchableOpacity 
+                style={styles.dashboardBtn} 
+                onPress={() => {
+                  saveCaseSheet();
+                  navigation.navigate("Dashboard");
+                }}
+              >
+                <Ionicons name="home" size={20} color="#2563eb" />
+                <Text style={styles.dashboardBtnText}>Save & Go to Dashboard</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Action Buttons */}
+          <View style={styles.actionRow}>
+            {activeTab !== "patient" && (
+              <TouchableOpacity style={styles.prevBtn} onPress={goToPrevious}>
+                <Ionicons name="arrow-back" size={20} color="#64748b" />
+                <Text style={styles.prevBtnText}>Previous</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity style={[styles.saveBtn, saving && styles.btnDisabled]} onPress={saveCaseSheet} disabled={saving}>
+              {saving ? <ActivityIndicator color="#fff" /> : (
+                <>
+                  <Ionicons name="save" size={20} color="#fff" />
+                  <Text style={styles.btnText}>Save</Text>
+                </>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.nextBtn} onPress={proceedNext}>
+              <Text style={styles.btnText}>{activeTab === "disposition" ? "Finish" : "Next"}</Text>
+              <Ionicons name={activeTab === "disposition" ? "checkmark" : "arrow-forward"} size={20} color="#fff" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={{ height: 40 }} />
+        </ScrollView>
+      </View>
+
+      {/* ==================== DRUG SELECTION MODAL ==================== */}
+      <Modal
+        visible={showDrugModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowDrugModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                Select {isPediatric ? "Pediatric" : "Adult"} Drug
+              </Text>
+              <TouchableOpacity onPress={() => setShowDrugModal(false)}>
+                <Ionicons name="close" size={24} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Search Input */}
+            <View style={styles.drugSearchContainer}>
+              <Ionicons name="search" size={20} color="#94a3b8" />
+              <TextInput
+                style={styles.drugSearchInput}
+                placeholder="Search drugs..."
+                placeholderTextColor="#94a3b8"
+                value={drugSearchQuery}
+                onChangeText={setDrugSearchQuery}
+                autoFocus
+              />
+            </View>
+
+            {/* Drug List */}
+            <ScrollView style={styles.drugList}>
+              {filteredDrugs.map((drug, idx) => (
+                <View key={idx} style={styles.drugItemContainer}>
+                  <View style={styles.drugItemHeader}>
+                    <Text style={styles.drugItemName}>{drug.name}</Text>
+                    <Text style={styles.drugItemStrength}>{drug.strength}</Text>
+                  </View>
+                  <View style={styles.drugDoseOptions}>
+                    {drug.doses.map((dose, doseIdx) => (
+                      <TouchableOpacity
+                        key={doseIdx}
+                        style={styles.drugDoseBtn}
+                        onPress={() => addDrug(drug, dose)}
+                      >
+                        <Text style={styles.drugDoseBtnText}>{dose}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              ))}
+              {filteredDrugs.length === 0 && (
+                <Text style={styles.noDrugsText}>No drugs match your search</Text>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ==================== ADDENDUM NOTES MODAL ==================== */}
+      <Modal
+        visible={showAddendumModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowAddendumModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.addendumModalContainer}>
+            <View style={styles.addendumModalHeader}>
+              <Ionicons name="time" size={24} color="#2563eb" />
+              <Text style={styles.addendumModalTitle}>Add Progress Note</Text>
+            </View>
+            
+            <Text style={styles.addendumModalSubtitle}>
+              Document any changes in patient condition, new findings, or interventions
+            </Text>
+
+            <TextInput
+              style={styles.addendumInput}
+              placeholder="Enter addendum notes..."
+              placeholderTextColor="#94a3b8"
+              value={currentAddendum}
+              onChangeText={setCurrentAddendum}
+              multiline
+              numberOfLines={5}
+              autoFocus
+            />
+
+            <View style={styles.addendumModalButtons}>
+              <TouchableOpacity 
+                style={styles.addendumCancelBtn}
+                onPress={() => {
+                  setCurrentAddendum("");
+                  setShowAddendumModal(false);
+                }}
+              >
+                <Text style={styles.addendumCancelBtnText}>Skip</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.addendumSaveBtn}
+                onPress={saveAddendum}
+              >
+                <Ionicons name="checkmark" size={18} color="#fff" />
+                <Text style={styles.addendumSaveBtnText}>Save Note</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </KeyboardAvoidingView>
+  );
+}
+
+/* ===================== STYLES ===================== */
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#f8fafc" },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    backgroundColor: "#fff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
+  },
+  headerTitle: { fontSize: 18, fontWeight: "800", color: "#1e293b" },
+  tabBar: {
+    backgroundColor: "#fff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+  },
+  tabBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    marginRight: 8,
+    borderRadius: 20,
+    backgroundColor: "#f1f5f9",
+    gap: 6,
+  },
+  tabBtnActive: { backgroundColor: "#2563eb" },
+  tabText: { fontSize: 13, fontWeight: "600", color: "#64748b" },
+  tabTextActive: { color: "#fff" },
+  content: { flex: 1 },
+  tabContent: { padding: 12 },
+  card: {
+    backgroundColor: "#fff",
+    marginBottom: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    overflow: "hidden",
+  },
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#1e40af",
+    padding: 16,
+    paddingBottom: 8,
+  },
+  row: { flexDirection: "row", gap: 12, paddingHorizontal: 16 },
+  inputGroup: { marginBottom: 12, paddingHorizontal: 16 },
+  labelRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 },
+  label: { fontSize: 12, fontWeight: "600", color: "#475569" },
+  input: {
+    backgroundColor: "#f8fafc",
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    fontSize: 14,
+    color: "#1e293b",
+  },
+  textArea: { minHeight: 80, textAlignVertical: "top" },
+  selectRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  selectBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    backgroundColor: "#f1f5f9",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  selectBtnActive: { backgroundColor: "#2563eb", borderColor: "#2563eb" },
+  selectBtnText: { fontSize: 12, fontWeight: "600", color: "#475569" },
+  selectBtnTextActive: { color: "#fff" },
+  switchRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  switchLabel: { fontSize: 13, color: "#475569" },
+  voiceBtn: {
+    backgroundColor: "#2563eb",
+    padding: 6,
+    borderRadius: 6,
+  },
+  voiceBtnRecording: { backgroundColor: "#dc2626" },
+  voiceBtnStreaming: { backgroundColor: "#059669" },
+  voiceBtnContainer: { position: 'relative' },
+  streamingDot: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#22c55e',
+    borderWidth: 1,
+    borderColor: '#fff',
+  },
+  streamingPreview: {
+    backgroundColor: '#f0fdf4',
+    borderRadius: 8,
+    padding: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#86efac',
+  },
+  streamingPreviewLabel: {
+    fontSize: 10,
+    color: '#16a34a',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  streamingPreviewText: {
+    fontSize: 12,
+    color: '#166534',
+    lineHeight: 18,
+  },
+  voiceSettingsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  voiceSettingsBtnText: {
+    fontSize: 10,
+    color: '#64748b',
+    fontWeight: '600',
+  },
+  voiceSettingsModal: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    width: '90%',
+    maxWidth: 400,
+  },
+  settingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  settingInfo: { flex: 1, marginRight: 12 },
+  settingLabel: { fontSize: 14, fontWeight: '600', color: '#1e293b' },
+  settingDescription: { fontSize: 11, color: '#64748b', marginTop: 2 },
+  settingSectionTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748b',
+    marginTop: 16,
+    marginBottom: 8,
+    textTransform: 'uppercase',
+  },
+  languageOptions: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  languageBtn: {
+    flex: 1,
+    minWidth: 90,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+  },
+  languageBtnActive: {
+    borderColor: '#2563eb',
+    backgroundColor: '#eff6ff',
+  },
+  languageEmoji: { fontSize: 18, marginBottom: 4 },
+  languageBtnText: { fontSize: 11, color: '#64748b', textAlign: 'center' },
+  languageBtnTextActive: { color: '#2563eb', fontWeight: '600' },
+  voiceInfoBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#eff6ff',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 16,
+  },
+  voiceInfoText: { flex: 1, fontSize: 11, color: '#1e40af', lineHeight: 16 },
+  voiceSettingsDone: {
+    backgroundColor: '#2563eb',
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  voiceSettingsDoneText: { color: '#fff', fontWeight: '600', fontSize: 14 },
+  collapsibleHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    backgroundColor: "#f8fafc",
+  },
+  collapsibleLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
+  collapsibleTitle: { fontSize: 15, fontWeight: "700" },
+  collapsibleContent: { paddingBottom: 16 },
+  subSection: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#64748b",
+    marginTop: 16,
+    marginBottom: 8,
+    paddingHorizontal: 16,
+  },
+  vitalsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, paddingHorizontal: 16 },
+  vitalItem: { width: "30%" },
+  vitalLabel: { fontSize: 11, fontWeight: "600", color: "#64748b", marginBottom: 4, textAlign: "center" },
+  vitalInput: {
+    backgroundColor: "#f8fafc",
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    textAlign: "center",
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  vbgGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingHorizontal: 16 },
+  vbgItem: { width: "31%" },
+  vbgLabel: { fontSize: 10, fontWeight: "700", color: "#8b5cf6", marginBottom: 2, textAlign: "center" },
+  vbgInput: {
+    backgroundColor: "#f5f3ff",
+    padding: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#c4b5fd",
+    textAlign: "center",
+    fontSize: 13,
+  },
+  aiBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#8b5cf6",
+    padding: 12,
+    borderRadius: 10,
+    margin: 16,
+    gap: 8,
+  },
+  aiBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+  aiResult: {
+    backgroundColor: "#f5f3ff",
+    padding: 12,
+    marginHorizontal: 16,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#c4b5fd",
+  },
+  aiResultTitle: { fontSize: 13, fontWeight: "700", color: "#7c3aed", marginBottom: 6 },
+  aiResultText: { fontSize: 13, color: "#5b21b6", lineHeight: 20 },
+  examDropdown: { paddingHorizontal: 16, marginBottom: 12 },
+  examLabel: { fontSize: 12, fontWeight: "600", color: "#475569", marginBottom: 6 },
+  examToggle: { flexDirection: "row", gap: 8 },
+  examToggleBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: "#f1f5f9",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    alignItems: "center",
+  },
+  examToggleNormal: { backgroundColor: "#dcfce7", borderColor: "#86efac" },
+  examToggleAbnormal: { backgroundColor: "#fee2e2", borderColor: "#fca5a5" },
+  examToggleText: { fontSize: 13, fontWeight: "600", color: "#64748b" },
+  examToggleTextActive: { color: "#1e293b" },
+  normalSummary: {
+    backgroundColor: "#f0fdf4",
+    padding: 12,
+    marginHorizontal: 16,
+    borderRadius: 8,
+    fontSize: 13,
+    color: "#166534",
+    fontStyle: "italic",
+  },
+  checkboxGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingHorizontal: 16, marginBottom: 8 },
+  checkboxItem: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4, minWidth: "45%" },
+  checkboxText: { fontSize: 12, color: "#475569" },
+  checkboxLabel: { fontSize: 12, fontWeight: "600", color: "#475569", marginTop: 12, marginBottom: 6, paddingHorizontal: 16 },
+  
+  // Normal/Abnormal toggle styles
+  statusToggleRow: { flexDirection: "row", gap: 10, paddingHorizontal: 16, marginBottom: 12 },
+  statusToggle: { 
+    flex: 1, 
+    flexDirection: "row", 
+    alignItems: "center", 
+    justifyContent: "center",
+    paddingVertical: 10, 
+    borderRadius: 10, 
+    backgroundColor: "#f1f5f9", 
+    borderWidth: 2, 
+    borderColor: "#e2e8f0",
+    gap: 6,
+  },
+  statusToggleNormalActive: { backgroundColor: "#22c55e", borderColor: "#16a34a" },
+  statusToggleAbnormalActive: { backgroundColor: "#ef4444", borderColor: "#dc2626" },
+  statusToggleText: { fontSize: 14, fontWeight: "700", color: "#64748b" },
+  statusToggleTextActive: { color: "#fff" },
+  
+  abnormalDetails: { 
+    backgroundColor: "#fef2f2", 
+    padding: 12, 
+    marginHorizontal: 16, 
+    marginBottom: 12, 
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#fecaca",
+  },
+  
+  // Compact vitals row
+  vitalsRowCompact: { flexDirection: "row", gap: 8, paddingHorizontal: 16, marginBottom: 12 },
+  vitalItemCompact: { flex: 1 },
+  vitalLabelCompact: { fontSize: 10, fontWeight: "700", color: "#64748b", marginBottom: 4, textAlign: "center" },
+  vitalInputCompact: {
+    backgroundColor: "#f8fafc",
+    padding: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    textAlign: "center",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  
+  // Highlighted field
+  highlightedField: {
+    borderLeftWidth: 4,
+    paddingLeft: 8,
+    marginLeft: 16,
+    marginRight: 16,
+    marginTop: 8,
+  },
+  
+  actionRow: { flexDirection: "row", gap: 12, padding: 16 },
+  saveBtn: {
+    flex: 1,
+    backgroundColor: "#64748b",
+    padding: 16,
+    borderRadius: 12,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+  },
+  nextBtn: {
+    flex: 2,
+    backgroundColor: "#16a34a",
+    padding: 16,
+    borderRadius: 12,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+  },
+  prevBtn: {
+    flex: 1,
+    backgroundColor: "#f1f5f9",
+    padding: 16,
+    borderRadius: 12,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  prevBtnText: { color: "#64748b", fontWeight: "700", fontSize: 15 },
+  btnDisabled: { opacity: 0.6 },
+  btnText: { color: "#fff", fontWeight: "700", fontSize: 15 },
+  
+  // MLC Fields
+  mlcContainer: { marginTop: 8 },
+  mlcFields: {
+    backgroundColor: "#fef3c7",
+    padding: 12,
+    borderRadius: 10,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: "#fcd34d",
+  },
+  mlcTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#92400e",
+    marginBottom: 12,
+  },
+  
+  // VBG/Treatment styles
+  interpretBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#8b5cf6",
+    padding: 14,
+    borderRadius: 10,
+    marginTop: 12,
+    gap: 8,
+  },
+  interpretBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+  interpretResult: {
+    backgroundColor: "#f5f3ff",
+    padding: 12,
+    marginTop: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#c4b5fd",
+  },
+  interpretTitle: { fontSize: 13, fontWeight: "700", color: "#7c3aed", marginBottom: 6 },
+  interpretText: { fontSize: 13, color: "#5b21b6", lineHeight: 20 },
+  
+  // Discharge Summary button
+  dischargeSummaryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#2563eb",
+    padding: 16,
+    borderRadius: 12,
+    marginHorizontal: 12,
+    marginTop: 16,
+    gap: 8,
+  },
+  dischargeSummaryBtnText: { color: "#fff", fontWeight: "700", fontSize: 15 },
+  dashboardBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#fff",
+    borderWidth: 2,
+    borderColor: "#2563eb",
+    padding: 16,
+    borderRadius: 12,
+    marginHorizontal: 12,
+    marginTop: 12,
+    gap: 8,
+  },
+  dashboardBtnText: { color: "#2563eb", fontWeight: "700", fontSize: 15 },
+  allNormalBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#16a34a",
+    padding: 14,
+    borderRadius: 12,
+    marginHorizontal: 12,
+    marginBottom: 16,
+    gap: 8,
+  },
+  allNormalBtnText: { color: "#fff", fontWeight: "700", fontSize: 15 },
+  
+  // PAT (Pediatric Assessment Triangle) Styles
+  patHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+    paddingBottom: 8,
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e9d5ff",
+    marginBottom: 8,
+  },
+  patTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#7c3aed",
+  },
+  patSubtitle: {
+    fontSize: 12,
+    color: "#a78bfa",
+  },
+  patSection: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f3e8ff",
+  },
+  patSectionTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#6d28d9",
+    marginBottom: 12,
+    backgroundColor: "#f5f3ff",
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+  },
+  patLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#475569",
+    marginTop: 10,
+    marginBottom: 6,
+  },
+  
+  // EFAST Styles
+  efastNote: {
+    fontSize: 12,
+    color: "#0891b2",
+    fontStyle: "italic",
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  efastGrid: {
+    gap: 16,
+  },
+  efastItem: {
+    marginBottom: 8,
+  },
+  efastLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#155e75",
+    marginBottom: 8,
+  },
+  
+  // HEENT Styles (Pediatric)
+  heentSubtitle: {
+    fontSize: 12,
+    color: "#d97706",
+    fontStyle: "italic",
+    marginBottom: 12,
+  },
+  heentLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#92400e",
+    marginTop: 10,
+    marginBottom: 6,
+  },
+  
+  // Vital Alerts Styles
+  vitalAlertsContainer: {
+    backgroundColor: "#fef2f2",
+    borderRadius: 12,
+    padding: 12,
+    marginHorizontal: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#fecaca",
+  },
+  vitalAlertsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 10,
+  },
+  vitalAlertsTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#dc2626",
+  },
+  vitalAlertItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    marginBottom: 6,
+  },
+  vitalAlertDanger: {
+    backgroundColor: "#fee2e2",
+  },
+  vitalAlertWarning: {
+    backgroundColor: "#fef3c7",
+  },
+  vitalAlertText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  vitalAlertTextDanger: {
+    color: "#991b1b",
+  },
+  vitalAlertTextWarning: {
+    color: "#92400e",
+  },
+  
+  // Normal Range Reference Card
+  normalRangeCard: {
+    backgroundColor: "#f0f9ff",
+    borderRadius: 12,
+    padding: 12,
+    marginHorizontal: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#bae6fd",
+  },
+  normalRangeHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 8,
+  },
+  normalRangeTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#0284c7",
+  },
+  normalRangeGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+  },
+  normalRangeItem: {
+    fontSize: 12,
+    color: "#0369a1",
+    backgroundColor: "#e0f2fe",
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+  },
+  
+  // AI Diagnosis Styles
+  aiDiagnosisBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#7c3aed",
+    padding: 14,
+    borderRadius: 10,
+    marginTop: 12,
+    marginHorizontal: 16,
+    gap: 8,
+  },
+  aiDiagnosisBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+  aiDiagnosisResult: {
+    backgroundColor: "#f5f3ff",
+    padding: 14,
+    marginTop: 12,
+    marginHorizontal: 16,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#c4b5fd",
+  },
+  aiResultHeader: { 
+    fontSize: 14, 
+    fontWeight: "700", 
+    color: "#7c3aed", 
+    marginBottom: 8 
+  },
+  aiResultContent: { 
+    fontSize: 13, 
+    color: "#5b21b6", 
+    lineHeight: 20 
+  },
+  
+  // Red Flags Styles
+  redFlagsContainer: {
+    backgroundColor: "#fef2f2",
+    padding: 14,
+    marginTop: 12,
+    marginHorizontal: 16,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#fecaca",
+  },
+  redFlagsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 10,
+  },
+  redFlagsTitle: { 
+    fontSize: 14, 
+    fontWeight: "700", 
+    color: "#dc2626" 
+  },
+  redFlagItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    marginBottom: 6,
+    paddingLeft: 4,
+  },
+  redFlagText: { 
+    fontSize: 13, 
+    color: "#991b1b", 
+    flex: 1,
+    lineHeight: 18,
+  },
+  
+  // Drug Section Styles
+  drugSection: { 
+    paddingHorizontal: 16, 
+    marginBottom: 12 
+  },
+  drugSectionLabel: { 
+    fontSize: 12, 
+    fontWeight: "600", 
+    color: "#475569", 
+    marginBottom: 8 
+  },
+  addDrugBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#16a34a",
+    padding: 12,
+    borderRadius: 10,
+    gap: 8,
+  },
+  addDrugBtnText: { 
+    color: "#fff", 
+    fontWeight: "700", 
+    fontSize: 14 
+  },
+  selectedDrugsList: { 
+    paddingHorizontal: 16, 
+    marginBottom: 12 
+  },
+  selectedDrugItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#f0fdf4",
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "#86efac",
+  },
+  selectedDrugInfo: { flex: 1 },
+  selectedDrugName: { 
+    fontSize: 14, 
+    fontWeight: "700", 
+    color: "#166534" 
+  },
+  selectedDrugDose: { 
+    fontSize: 12, 
+    color: "#15803d", 
+    marginTop: 2 
+  },
+  
+  // Addendum Styles
+  addendumItem: {
+    backgroundColor: "#f8fafc",
+    padding: 12,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: "#2563eb",
+  },
+  addendumTime: { 
+    fontSize: 11, 
+    color: "#64748b", 
+    marginBottom: 4 
+  },
+  addendumText: { 
+    fontSize: 13, 
+    color: "#1e293b", 
+    lineHeight: 18 
+  },
+  addAddendumBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#fff",
+    padding: 14,
+    marginHorizontal: 12,
+    marginTop: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#2563eb",
+    borderStyle: "dashed",
+    gap: 6,
+  },
+  addAddendumBtnText: { 
+    color: "#2563eb", 
+    fontWeight: "600", 
+    fontSize: 14 
+  },
+  
+  // Procedure Styles
+  procedureSubtitle: {
+    fontSize: 12,
+    color: "#64748b",
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  procedureCategory: { 
+    marginBottom: 16 
+  },
+  procedureCategoryTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#1e40af",
+    backgroundColor: "#eff6ff",
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    marginBottom: 8,
+  },
+  procedureItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    gap: 10,
+  },
+  procedureItemSelected: { 
+    backgroundColor: "#f0fdf4" 
+  },
+  procedureItemText: { 
+    fontSize: 14, 
+    color: "#475569" 
+  },
+  procedureItemTextSelected: { 
+    color: "#166534", 
+    fontWeight: "600" 
+  },
+  procedureNotesInput: { 
+    paddingHorizontal: 16, 
+    paddingBottom: 10 
+  },
+  procedureNoteField: {
+    backgroundColor: "#f8fafc",
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    fontSize: 13,
+    minHeight: 60,
+    textAlignVertical: "top",
+    marginLeft: 32,
+  },
+  procedureSummary: { 
+    paddingHorizontal: 16, 
+    paddingBottom: 8 
+  },
+  procedureSummaryItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 6,
+  },
+  procedureSummaryText: { 
+    fontSize: 13, 
+    color: "#166534" 
+  },
+  
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  modalContainer: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: "80%",
+    paddingBottom: 30,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
+  },
+  modalTitle: { 
+    fontSize: 18, 
+    fontWeight: "700", 
+    color: "#1e293b" 
+  },
+  drugSearchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f1f5f9",
+    margin: 16,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    gap: 8,
+  },
+  drugSearchInput: { 
+    flex: 1, 
+    padding: 12, 
+    fontSize: 15 
+  },
+  drugList: { 
+    maxHeight: 400, 
+    paddingHorizontal: 16 
+  },
+  drugItemContainer: {
+    backgroundColor: "#f8fafc",
+    padding: 14,
+    borderRadius: 10,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  drugItemHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  drugItemName: { 
+    fontSize: 15, 
+    fontWeight: "700", 
+    color: "#1e293b" 
+  },
+  drugItemStrength: { 
+    fontSize: 12, 
+    color: "#64748b" 
+  },
+  drugDoseOptions: { 
+    flexDirection: "row", 
+    flexWrap: "wrap", 
+    gap: 8 
+  },
+  drugDoseBtn: {
+    backgroundColor: "#2563eb",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  drugDoseBtnText: { 
+    color: "#fff", 
+    fontSize: 12, 
+    fontWeight: "600" 
+  },
+  noDrugsText: { 
+    textAlign: "center", 
+    color: "#94a3b8", 
+    padding: 20 
+  },
+  
+  // Addendum Modal Styles
+  addendumModalContainer: {
+    backgroundColor: "#fff",
+    marginHorizontal: 20,
+    marginTop: "auto",
+    marginBottom: "auto",
+    borderRadius: 16,
+    padding: 20,
+  },
+  addendumModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 8,
+  },
+  addendumModalTitle: { 
+    fontSize: 18, 
+    fontWeight: "700", 
+    color: "#1e293b" 
+  },
+  addendumModalSubtitle: { 
+    fontSize: 13, 
+    color: "#64748b", 
+    marginBottom: 16 
+  },
+  addendumInput: {
+    backgroundColor: "#f8fafc",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 10,
+    padding: 14,
+    fontSize: 14,
+    minHeight: 120,
+    textAlignVertical: "top",
+    marginBottom: 16,
+  },
+  addendumModalButtons: { 
+    flexDirection: "row", 
+    gap: 12 
+  },
+  addendumCancelBtn: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 10,
+    backgroundColor: "#f1f5f9",
+    alignItems: "center",
+  },
+  addendumCancelBtnText: { 
+    color: "#64748b", 
+    fontWeight: "600", 
+    fontSize: 15 
+  },
+  addendumSaveBtn: {
+    flex: 2,
+    flexDirection: "row",
+    padding: 14,
+    borderRadius: 10,
+    backgroundColor: "#2563eb",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  addendumSaveBtnText: { 
+    color: "#fff", 
+    fontWeight: "700", 
+    fontSize: 15 
+  },
+});

@@ -1,0 +1,1419 @@
+// TriageScreen_V2.js - With Voice Recording + AI Extraction + Auto-fill defaults
+import React, { useState, useRef, useCallback } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TextInput,
+  TouchableOpacity,
+  Alert,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Modal,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Audio } from "expo-av";
+
+const API_URL = "https://er-emr-backend.onrender.com/api";
+
+// Default normal values for auto-fill
+const DEFAULT_VITALS = {
+  hr: "80",
+  bp_systolic: "120",
+  bp_diastolic: "80",
+  rr: "16",
+  spo2: "98",
+  temperature: "36.8",
+  gcs_e: "4",
+  gcs_v: "5",
+  gcs_m: "6",
+  grbs: "100",
+};
+
+// Helper function to determine if patient is pediatric based on age
+const checkIfPediatric = (ageString, ageUnit = "years") => {
+  if (!ageString) return false;
+  
+  const numericAge = parseFloat(ageString);
+  if (isNaN(numericAge)) return false;
+  
+  // Days, weeks, months are always pediatric
+  if (ageUnit === "days" || ageUnit === "weeks" || ageUnit === "months") {
+    return true;
+  }
+  
+  // For years, check if < 16
+  return numericAge < 16;
+};
+
+export default function TriageScreen({ route, navigation }) {
+  const [loading, setLoading] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  
+  // Voice Recording State
+  const [recording, setRecording] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [voiceText, setVoiceText] = useState("");
+  const [extractedData, setExtractedData] = useState(null);
+  const [showExtractedModal, setShowExtractedModal] = useState(false);
+
+  /* ===================== useRef for text inputs (prevents lag) ===================== */
+  const formDataRef = useRef({
+    // Patient Info
+    name: "",
+    age: "",
+    sex: "Male",
+    phone: "",
+    address: "",
+    brought_by: "",
+    mode_of_arrival: "Walk-in",
+    chief_complaint: "",
+    
+    // Vitals
+    hr: "",
+    bp_systolic: "",
+    bp_diastolic: "",
+    rr: "",
+    spo2: "",
+    temperature: "",
+    gcs_e: "",
+    gcs_v: "",
+    gcs_m: "",
+    grbs: "",
+  });
+
+  /* ===================== useState for UI elements that need re-render ===================== */
+  const [patientType, setPatientType] = useState("adult");
+  const [ageUnit, setAgeUnit] = useState("years");
+  const [sex, setSex] = useState("Male");
+  const [modeOfArrival, setModeOfArrival] = useState("Walk-in");
+  const [mlc, setMlc] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+  
+  // STATE VARIABLES FOR FORM FIELDS (needed for re-render after voice input)
+  const [patientName, setPatientName] = useState("");
+  const [patientAge, setPatientAge] = useState("");
+  const [chiefComplaint, setChiefComplaint] = useState("");
+  const [vitalsHr, setVitalsHr] = useState("");
+  const [vitalsBpSys, setVitalsBpSys] = useState("");
+  const [vitalsBpDia, setVitalsBpDia] = useState("");
+  const [vitalsRr, setVitalsRr] = useState("");
+  const [vitalsSpo2, setVitalsSpo2] = useState("");
+  const [vitalsTemp, setVitalsTemp] = useState("");
+  const [vitalsGrbs, setVitalsGrbs] = useState("");
+  
+  // Force re-render function
+  const forceUpdate = useCallback(() => setRefreshKey(k => k + 1), []);
+  
+  // Symptoms checkboxes
+  const [symptoms, setSymptoms] = useState({
+    normal_no_symptoms: false,
+    obstructed_airway: false,
+    stridor: false,
+    severe_respiratory_distress: false,
+    moderate_respiratory_distress: false,
+    cyanosis: false,
+    shock: false,
+    severe_bleeding: false,
+    chest_pain: false,
+    seizure_ongoing: false,
+    confusion: false,
+    lethargic_unconscious: false,
+    focal_deficits: false,
+    major_trauma: false,
+    moderate_trauma: false,
+    minor_injury: false,
+    fever: false,
+    abdominal_pain: false,
+    vomiting_diarrhea: false,
+    allergic_reaction: false,
+  });
+
+  // Triage result
+  const [triageResult, setTriageResult] = useState(null);
+
+  const updateTextField = useCallback((field, value) => {
+    formDataRef.current[field] = value;
+  }, []);
+
+  const toggleSymptom = (symptom) => {
+    if (symptom === "normal_no_symptoms") {
+      const clearedSymptoms = {};
+      Object.keys(symptoms).forEach(key => {
+        clearedSymptoms[key] = key === "normal_no_symptoms" ? !symptoms[key] : false;
+      });
+      setSymptoms(clearedSymptoms);
+    } else {
+      setSymptoms(prev => ({
+        ...prev,
+        [symptom]: !prev[symptom],
+        normal_no_symptoms: false,
+      }));
+    }
+  };
+
+  /* ===================== VOICE RECORDING ===================== */
+  const startRecording = async () => {
+    try {
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permission Denied", "Microphone access is required for voice input");
+        return;
+      }
+
+      // Clear previous transcript when starting new recording in Triage
+      setVoiceText("");
+      setExtractedData(null);
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+
+      setRecording(recording);
+      setIsRecording(true);
+    } catch (err) {
+      console.error("Recording error:", err);
+      Alert.alert("Error", "Failed to start recording");
+    }
+  };
+
+  const stopRecording = async () => {
+    if (!recording) return;
+
+    setIsRecording(false);
+    await recording.stopAndUnloadAsync();
+    const uri = recording.getURI();
+    setRecording(null);
+
+    await transcribeAndExtract(uri);
+  };
+
+  const transcribeAndExtract = async (audioUri) => {
+    try {
+      setIsTranscribing(true);
+      const token = await AsyncStorage.getItem("token");
+
+      // Create form data for audio upload
+      const formData = new FormData();
+      formData.append("file", {
+        uri: audioUri,
+        name: "voice.m4a",
+        type: "audio/m4a",
+      });
+      formData.append("engine", "auto");
+      formData.append("language", "en");
+
+      // Step 1: Transcribe
+      const transcribeRes = await fetch(`${API_URL}/ai/voice-to-text`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      if (!transcribeRes.ok) {
+        throw new Error("Transcription failed");
+      }
+
+      const transcribeData = await transcribeRes.json();
+      const transcription = transcribeData.transcription || "";
+      
+      setVoiceText(prev => prev ? `${prev}\n${transcription}` : transcription);
+      setIsTranscribing(false);
+
+      // Step 2: Extract data using AI
+      setIsExtracting(true);
+      
+      const extractRes = await fetch(`${API_URL}/extract-triage-data`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ text: transcription }),
+      });
+
+      if (extractRes.ok) {
+        const extractData = await extractRes.json();
+        if (extractData.success && extractData.data) {
+          setExtractedData(extractData.data);
+          // AUTO-APPLY the extracted data immediately
+          autoApplyExtractedData(extractData.data);
+          Alert.alert(
+            "✅ Voice Data Captured",
+            "Patient info has been auto-filled from voice. Review and click 'Save to Case Sheet' when ready.",
+            [{ text: "OK" }]
+          );
+        }
+      } else {
+        console.log("Extract endpoint failed:", extractRes.status);
+        // Even if extract fails, we have the transcript
+        Alert.alert(
+          "ℹ️ Voice Recorded",
+          "Transcript saved. Auto-extraction unavailable - please fill details manually.",
+          [{ text: "OK" }]
+        );
+      }
+    } catch (err) {
+      console.error("Voice processing error:", err);
+      // Properly format error message - CRITICAL FIX
+      let errorMsg = "Voice processing failed";
+      if (err?.response?.data?.detail) {
+        errorMsg = err.response.data.detail;
+      } else if (err?.response?.data?.message) {
+        errorMsg = err.response.data.message;
+      } else if (err?.response?.data && typeof err.response.data === 'object') {
+        errorMsg = JSON.stringify(err.response.data);
+      } else if (err?.message) {
+        errorMsg = err.message;
+      } else if (typeof err === 'string') {
+        errorMsg = err;
+      }
+      Alert.alert("Error", errorMsg);
+    } finally {
+      setIsTranscribing(false);
+      setIsExtracting(false);
+    }
+  };
+
+  // Auto-apply extracted data (called automatically after voice processing)
+  const autoApplyExtractedData = (data) => {
+    if (!data) return;
+
+    console.log("🔄 Auto-applying extracted data:", JSON.stringify(data, null, 2));
+
+    // Apply vitals (from data.vitals) - USE STATE for UI update
+    if (data.vitals) {
+      const v = data.vitals;
+      if (v.hr) {
+        formDataRef.current.hr = String(v.hr);
+        setVitalsHr(String(v.hr));
+      }
+      if (v.bp_sys || v.bp_systolic) {
+        const val = String(v.bp_sys || v.bp_systolic);
+        formDataRef.current.bp_systolic = val;
+        setVitalsBpSys(val);
+      }
+      if (v.bp_dia || v.bp_diastolic) {
+        const val = String(v.bp_dia || v.bp_diastolic);
+        formDataRef.current.bp_diastolic = val;
+        setVitalsBpDia(val);
+      }
+      if (v.rr) {
+        formDataRef.current.rr = String(v.rr);
+        setVitalsRr(String(v.rr));
+      }
+      if (v.spo2) {
+        formDataRef.current.spo2 = String(v.spo2);
+        setVitalsSpo2(String(v.spo2));
+      }
+      if (v.temp || v.temperature) {
+        const val = String(v.temp || v.temperature);
+        formDataRef.current.temperature = val;
+        setVitalsTemp(val);
+      }
+      if (v.gcs_e) formDataRef.current.gcs_e = String(v.gcs_e);
+      if (v.gcs_v) formDataRef.current.gcs_v = String(v.gcs_v);
+      if (v.gcs_m) formDataRef.current.gcs_m = String(v.gcs_m);
+      if (v.grbs) {
+        formDataRef.current.grbs = String(v.grbs);
+        setVitalsGrbs(String(v.grbs));
+      }
+    }
+
+    // Apply age from top-level - USE STATE
+    if (data.age) {
+      formDataRef.current.age = String(data.age);
+      setPatientAge(String(data.age));
+    }
+
+    // Apply name if present - USE STATE
+    if (data.name) {
+      formDataRef.current.name = data.name;
+      setPatientName(data.name);
+    }
+
+    // Apply symptoms
+    if (data.symptoms) {
+      const newSymptoms = { ...symptoms };
+      Object.keys(data.symptoms).forEach(key => {
+        if (newSymptoms.hasOwnProperty(key)) {
+          newSymptoms[key] = data.symptoms[key];
+        }
+      });
+      setSymptoms(newSymptoms);
+    }
+
+    // Apply patient info if present - USE STATE
+    if (data.patient) {
+      const p = data.patient;
+      if (p.name) {
+        formDataRef.current.name = p.name;
+        setPatientName(p.name);
+      }
+      if (p.age) {
+        formDataRef.current.age = String(p.age);
+        setPatientAge(String(p.age));
+      }
+      if (p.sex) setSex(p.sex);
+    }
+
+    // Apply chief complaint - USE STATE
+    if (data.chief_complaint) {
+      formDataRef.current.chief_complaint = data.chief_complaint;
+      setChiefComplaint(data.chief_complaint);
+    }
+
+    // Apply suggested triage priority
+    if (data.suggested_priority) {
+      const sp = data.suggested_priority;
+      if (sp.level) {
+        setTriageResult({
+          priority_level: sp.level,
+          priority_color: sp.color || "green",
+          priority_name: sp.name || "Standard",
+          reasons: sp.reasons || []
+        });
+      }
+    }
+
+    // Force UI re-render
+    forceUpdate();
+    console.log("✅ Data auto-applied successfully - UI should update now");
+  };
+
+  const applyExtractedData = () => {
+    if (!extractedData) return;
+
+    // Apply vitals
+    if (extractedData.vitals) {
+      const v = extractedData.vitals;
+      if (v.hr) formDataRef.current.hr = String(v.hr);
+      if (v.bp_systolic) formDataRef.current.bp_systolic = String(v.bp_systolic);
+      if (v.bp_diastolic) formDataRef.current.bp_diastolic = String(v.bp_diastolic);
+      if (v.rr) formDataRef.current.rr = String(v.rr);
+      if (v.spo2) formDataRef.current.spo2 = String(v.spo2);
+      if (v.temperature) formDataRef.current.temperature = String(v.temperature);
+      if (v.gcs_e) formDataRef.current.gcs_e = String(v.gcs_e);
+      if (v.gcs_v) formDataRef.current.gcs_v = String(v.gcs_v);
+      if (v.gcs_m) formDataRef.current.gcs_m = String(v.gcs_m);
+    }
+
+    // Apply symptoms
+    if (extractedData.symptoms) {
+      const newSymptoms = { ...symptoms };
+      Object.keys(extractedData.symptoms).forEach(key => {
+        if (newSymptoms.hasOwnProperty(key)) {
+          newSymptoms[key] = extractedData.symptoms[key];
+        }
+      });
+      setSymptoms(newSymptoms);
+    }
+
+    // Apply patient info if present
+    if (extractedData.patient) {
+      const p = extractedData.patient;
+      if (p.name) formDataRef.current.name = p.name;
+      if (p.age) formDataRef.current.age = String(p.age);
+      if (p.sex) setSex(p.sex);
+    }
+
+    if (extractedData.chief_complaint) {
+      formDataRef.current.chief_complaint = extractedData.chief_complaint;
+    }
+
+    setShowExtractedModal(false);
+    setExtractedData(null);
+    forceUpdate(n => n + 1);
+    Alert.alert("✅ Applied", "Voice data has been applied to the form");
+  };
+
+  /* ===================== SAVE TO CASE SHEET ===================== */
+  const saveToCaseSheet = async () => {
+    const fd = formDataRef.current;
+
+    // Auto-fill defaults for any blank vital fields
+    fillWithDefaults();
+
+    // Require at least patient name to save - check both ref and state
+    const name = fd.name || patientName;
+    if (!name) {
+      Alert.alert("Required", "Please enter at least the patient name before saving to case sheet");
+      return;
+    }
+
+    // Update ref with state values in case state was updated but not ref
+    if (patientName && !fd.name) fd.name = patientName;
+    if (patientAge && !fd.age) fd.age = patientAge;
+    if (chiefComplaint && !fd.chief_complaint) fd.chief_complaint = chiefComplaint;
+
+    setLoading(true);
+    try {
+      const token = await AsyncStorage.getItem("token");
+      const user = JSON.parse(await AsyncStorage.getItem("user") || "{}");
+
+      // Build the patient data object to pass to CaseSheet
+      const patientData = {
+        name: fd.name || "",
+        age: fd.age || "",
+        sex: sex,
+        phone: fd.phone || "",
+        address: fd.address || "",
+        arrival_datetime: new Date().toISOString(),
+        mode_of_arrival: modeOfArrival,
+        brought_by: fd.brought_by || "",
+        mlc: mlc,
+      };
+
+      const vitalsData = {
+        hr: fd.hr ? parseFloat(fd.hr) : parseFloat(DEFAULT_VITALS.hr),
+        bp_systolic: fd.bp_systolic ? parseFloat(fd.bp_systolic) : parseFloat(DEFAULT_VITALS.bp_systolic),
+        bp_diastolic: fd.bp_diastolic ? parseFloat(fd.bp_diastolic) : parseFloat(DEFAULT_VITALS.bp_diastolic),
+        rr: fd.rr ? parseFloat(fd.rr) : parseFloat(DEFAULT_VITALS.rr),
+        spo2: fd.spo2 ? parseFloat(fd.spo2) : parseFloat(DEFAULT_VITALS.spo2),
+        temperature: fd.temperature ? parseFloat(fd.temperature) : parseFloat(DEFAULT_VITALS.temperature),
+        gcs_e: fd.gcs_e ? parseInt(fd.gcs_e) : parseInt(DEFAULT_VITALS.gcs_e),
+        gcs_v: fd.gcs_v ? parseInt(fd.gcs_v) : parseInt(DEFAULT_VITALS.gcs_v),
+        gcs_m: fd.gcs_m ? parseInt(fd.gcs_m) : parseInt(DEFAULT_VITALS.gcs_m),
+        grbs: fd.grbs ? parseFloat(fd.grbs) : parseFloat(DEFAULT_VITALS.grbs),
+      };
+
+      const presentingComplaint = {
+        text: fd.chief_complaint || voiceText || "",
+        duration: "",
+        onset_type: "Sudden",
+        course: "Progressive",
+      };
+
+      // First create a case in the backend
+      const payload = {
+        patient: patientData,
+        vitals_at_arrival: vitalsData,
+        presenting_complaint: presentingComplaint,
+        triage_priority: triageResult?.priority_level || 4,
+        triage_color: triageResult?.priority_color || "green",
+        em_resident: user.name || "",
+        case_type: patientType,
+      };
+
+      const response = await fetch(`${API_URL}/cases`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.detail || "Failed to create case");
+      }
+
+      const newCase = await response.json();
+
+      Alert.alert(
+        "✅ Saved to Case Sheet",
+        `Patient "${patientData.name}" has been saved. Continue editing the case sheet?`,
+        [
+          {
+            text: "Yes, Continue",
+            onPress: () => navigation.navigate("CaseSheet", {
+              caseId: newCase.id,
+              patientType,
+              patient: patientData,
+              vitals: vitalsData,
+              presentingComplaint: presentingComplaint,
+              voiceTranscript: voiceText,
+            }),
+          },
+          {
+            text: "Go to Dashboard",
+            onPress: () => navigation.navigate("Dashboard"),
+            style: "cancel",
+          },
+        ]
+      );
+    } catch (err) {
+      console.error("Save to case sheet error:", err);
+      // Properly format error message - CRITICAL FIX for [object Object]
+      let errorMsg = "Failed to save to case sheet";
+      if (err?.response?.data?.detail) {
+        errorMsg = err.response.data.detail;
+      } else if (err?.response?.data?.message) {
+        errorMsg = err.response.data.message;
+      } else if (err?.response?.data && typeof err.response.data === 'object') {
+        errorMsg = JSON.stringify(err.response.data);
+      } else if (err?.message) {
+        errorMsg = err.message;
+      } else if (typeof err === 'string') {
+        errorMsg = err;
+      }
+      Alert.alert("Error", errorMsg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /* ===================== AUTO-FILL DEFAULTS ===================== */
+  const fillWithDefaults = () => {
+    const fd = formDataRef.current;
+    
+    // Fill empty vitals with defaults
+    if (!fd.hr) fd.hr = DEFAULT_VITALS.hr;
+    if (!fd.bp_systolic) fd.bp_systolic = DEFAULT_VITALS.bp_systolic;
+    if (!fd.bp_diastolic) fd.bp_diastolic = DEFAULT_VITALS.bp_diastolic;
+    if (!fd.rr) fd.rr = DEFAULT_VITALS.rr;
+    if (!fd.spo2) fd.spo2 = DEFAULT_VITALS.spo2;
+    if (!fd.temperature) fd.temperature = DEFAULT_VITALS.temperature;
+    if (!fd.gcs_e) fd.gcs_e = DEFAULT_VITALS.gcs_e;
+    if (!fd.gcs_v) fd.gcs_v = DEFAULT_VITALS.gcs_v;
+    if (!fd.gcs_m) fd.gcs_m = DEFAULT_VITALS.gcs_m;
+    if (!fd.grbs) fd.grbs = DEFAULT_VITALS.grbs;
+
+    // If no symptoms selected, set to normal
+    const hasSymptoms = Object.values(symptoms).some(v => v === true);
+    if (!hasSymptoms) {
+      setSymptoms(prev => ({ ...prev, normal_no_symptoms: true }));
+    }
+
+    forceUpdate(n => n + 1);
+  };
+
+  /* ===================== ANALYZE TRIAGE ===================== */
+  const analyzeTriage = async () => {
+    const fd = formDataRef.current;
+    
+    if (!fd.age) {
+      Alert.alert("Required", "Please enter patient age");
+      return;
+    }
+
+    setAnalyzing(true);
+    try {
+      const token = await AsyncStorage.getItem("token");
+
+      const payload = {
+        age: parseFloat(fd.age) || 0,
+        age_unit: ageUnit,
+        hr: fd.hr ? parseFloat(fd.hr) : null,
+        rr: fd.rr ? parseFloat(fd.rr) : null,
+        bp_systolic: fd.bp_systolic ? parseFloat(fd.bp_systolic) : null,
+        bp_diastolic: fd.bp_diastolic ? parseFloat(fd.bp_diastolic) : null,
+        spo2: fd.spo2 ? parseFloat(fd.spo2) : null,
+        temperature: fd.temperature ? parseFloat(fd.temperature) : null,
+        gcs_e: fd.gcs_e ? parseInt(fd.gcs_e) : null,
+        gcs_v: fd.gcs_v ? parseInt(fd.gcs_v) : null,
+        gcs_m: fd.gcs_m ? parseInt(fd.gcs_m) : null,
+      };
+
+      const response = await fetch(`${API_URL}/triage/analyze`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error("Triage analysis failed");
+      }
+
+      const result = await response.json();
+      setTriageResult(result);
+
+      Alert.alert(
+        `Priority: ${result.priority}`,
+        result.comment || "Triage completed",
+        [{ text: "OK" }]
+      );
+    } catch (err) {
+      console.error("Triage error:", err);
+      Alert.alert("Error", err.message || "Failed to analyze triage");
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  /* ===================== CREATE CASE ===================== */
+  const createCase = async () => {
+    const fd = formDataRef.current;
+
+    if (!fd.name || !fd.age) {
+      Alert.alert("Required", "Please enter patient name and age");
+      return;
+    }
+
+    // Auto-fill defaults before saving
+    fillWithDefaults();
+
+    setLoading(true);
+    try {
+      const token = await AsyncStorage.getItem("token");
+      const user = JSON.parse(await AsyncStorage.getItem("user") || "{}");
+
+      const payload = {
+        patient: {
+          name: fd.name,
+          age: fd.age,
+          sex: sex,
+          phone: fd.phone || "",
+          address: fd.address || "",
+          arrival_datetime: new Date().toISOString(),
+          mode_of_arrival: modeOfArrival,
+          brought_by: fd.brought_by || "",
+          informant_name: "",
+          informant_reliability: "Reliable",
+          identification_mark: "",
+          mlc: mlc,
+        },
+        vitals_at_arrival: {
+          hr: fd.hr ? parseFloat(fd.hr) : parseFloat(DEFAULT_VITALS.hr),
+          bp_systolic: fd.bp_systolic ? parseFloat(fd.bp_systolic) : parseFloat(DEFAULT_VITALS.bp_systolic),
+          bp_diastolic: fd.bp_diastolic ? parseFloat(fd.bp_diastolic) : parseFloat(DEFAULT_VITALS.bp_diastolic),
+          rr: fd.rr ? parseFloat(fd.rr) : parseFloat(DEFAULT_VITALS.rr),
+          spo2: fd.spo2 ? parseFloat(fd.spo2) : parseFloat(DEFAULT_VITALS.spo2),
+          temperature: fd.temperature ? parseFloat(fd.temperature) : parseFloat(DEFAULT_VITALS.temperature),
+          gcs_e: fd.gcs_e ? parseInt(fd.gcs_e) : parseInt(DEFAULT_VITALS.gcs_e),
+          gcs_v: fd.gcs_v ? parseInt(fd.gcs_v) : parseInt(DEFAULT_VITALS.gcs_v),
+          gcs_m: fd.gcs_m ? parseInt(fd.gcs_m) : parseInt(DEFAULT_VITALS.gcs_m),
+          grbs: fd.grbs ? parseFloat(fd.grbs) : parseFloat(DEFAULT_VITALS.grbs),
+        },
+        presenting_complaint: {
+          text: fd.chief_complaint || voiceText || "",
+          duration: "",
+          onset_type: "Sudden",
+          course: "Progressive",
+        },
+        triage_priority: triageResult?.priority_level || 4,
+        triage_color: triageResult?.priority_color || "green",
+        em_resident: user.name || "",
+        case_type: patientType,
+      };
+
+      const response = await fetch(`${API_URL}/cases`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.detail || "Failed to create case");
+      }
+
+      const newCase = await response.json();
+
+      Alert.alert("✅ Case Created", "Proceed to Case Sheet?", [
+        {
+          text: "Yes",
+          onPress: () => navigation.navigate("CaseSheet", {
+            caseId: newCase.id,
+            patientType,
+            patient: payload.patient,
+            vitals: payload.vitals_at_arrival,
+          }),
+        },
+        {
+          text: "Dashboard",
+          onPress: () => navigation.navigate("Dashboard"),
+        },
+      ]);
+    } catch (err) {
+      console.error("Create case error:", err);
+      Alert.alert("Error", err.message || "Failed to create case");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /* ===================== RENDER ===================== */
+  const InputField = ({ label, field, placeholder, keyboardType = "default", multiline = false }) => (
+    <View style={styles.inputGroup}>
+      <Text style={styles.label}>{label}</Text>
+      <TextInput
+        key={`${field}-${refreshKey}`}
+        style={[styles.input, multiline && styles.textArea]}
+        defaultValue={formDataRef.current[field]}
+        onChangeText={(t) => {
+          updateTextField(field, t);
+          // Also update state for key fields
+          if (field === 'name') setPatientName(t);
+          if (field === 'age') {
+            setPatientAge(t);
+            // Auto-detect pediatric based on age
+            const isPed = checkIfPediatric(t, ageUnit);
+            setPatientType(isPed ? "pediatric" : "adult");
+          }
+          if (field === 'chief_complaint') setChiefComplaint(t);
+        }}
+        placeholder={placeholder}
+        keyboardType={keyboardType}
+        multiline={multiline}
+      />
+    </View>
+  );
+
+  const VitalInput = ({ label, field, placeholder }) => (
+    <View style={styles.vitalItem}>
+      <Text style={styles.vitalLabel}>{label}</Text>
+      <TextInput
+        key={`${field}-${refreshKey}`}
+        style={styles.vitalInput}
+        defaultValue={formDataRef.current[field]}
+        onChangeText={(t) => {
+          updateTextField(field, t);
+          // Also update state for key vitals
+          if (field === 'hr') setVitalsHr(t);
+          if (field === 'bp_systolic') setVitalsBpSys(t);
+          if (field === 'bp_diastolic') setVitalsBpDia(t);
+          if (field === 'rr') setVitalsRr(t);
+          if (field === 'spo2') setVitalsSpo2(t);
+          if (field === 'temperature') setVitalsTemp(t);
+          if (field === 'grbs') setVitalsGrbs(t);
+        }}
+        placeholder={placeholder}
+        keyboardType="numeric"
+      />
+    </View>
+  );
+
+  const SelectButtons = ({ label, options, value, onSelect }) => (
+    <View style={styles.inputGroup}>
+      <Text style={styles.label}>{label}</Text>
+      <View style={styles.selectRow}>
+        {options.map((opt) => (
+          <TouchableOpacity
+            key={opt}
+            style={[styles.selectBtn, value === opt && styles.selectBtnActive]}
+            onPress={() => onSelect(opt)}
+          >
+            <Text style={[styles.selectBtnText, value === opt && styles.selectBtnTextActive]}>
+              {opt}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+
+  const SymptomCheckbox = ({ label, symptom, color = "#2563eb" }) => (
+    <TouchableOpacity
+      style={[styles.symptomItem, symptoms[symptom] && { backgroundColor: color + "20", borderColor: color }]}
+      onPress={() => toggleSymptom(symptom)}
+    >
+      <Ionicons
+        name={symptoms[symptom] ? "checkbox" : "square-outline"}
+        size={20}
+        color={symptoms[symptom] ? color : "#94a3b8"}
+      />
+      <Text style={[styles.symptomText, symptoms[symptom] && { color }]}>{label}</Text>
+    </TouchableOpacity>
+  );
+
+  return (
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Ionicons name="arrow-back" size={24} color="#1e293b" />
+        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Text style={styles.headerTitle}>New Patient Triage</Text>
+          <View style={{
+            backgroundColor: patientType === 'pediatric' ? '#fce7f3' : '#dbeafe',
+            paddingHorizontal: 10,
+            paddingVertical: 4,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: patientType === 'pediatric' ? '#f9a8d4' : '#93c5fd',
+          }}>
+            <Text style={{
+              color: patientType === 'pediatric' ? '#be185d' : '#1d4ed8',
+              fontSize: 12,
+              fontWeight: '600',
+            }}>
+              {patientType === 'pediatric' ? '👶 Pediatric' : '🧑 Adult'}
+            </Text>
+          </View>
+        </View>
+        <TouchableOpacity onPress={fillWithDefaults}>
+          <Ionicons name="flash" size={24} color="#f59e0b" />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
+        {/* Voice Recording Section */}
+        <View style={styles.voiceSection}>
+          <Text style={styles.voiceSectionTitle}>
+            <Ionicons name="mic" size={18} color="#2563eb" /> Voice Input (AI-Powered)
+          </Text>
+          <Text style={styles.voiceSectionSubtitle}>
+            Record patient details and vitals - AI will auto-extract
+          </Text>
+          
+          <TouchableOpacity
+            style={[styles.voiceBtn, isRecording && styles.voiceBtnRecording]}
+            onPress={isRecording ? stopRecording : startRecording}
+            disabled={isTranscribing || isExtracting}
+          >
+            {isTranscribing ? (
+              <>
+                <ActivityIndicator color="#fff" size="small" />
+                <Text style={styles.voiceBtnText}>Transcribing...</Text>
+              </>
+            ) : isExtracting ? (
+              <>
+                <ActivityIndicator color="#fff" size="small" />
+                <Text style={styles.voiceBtnText}>AI Extracting...</Text>
+              </>
+            ) : isRecording ? (
+              <>
+                <Ionicons name="stop" size={24} color="#fff" />
+                <Text style={styles.voiceBtnText}>Stop Recording</Text>
+              </>
+            ) : (
+              <>
+                <Ionicons name="mic" size={24} color="#fff" />
+                <Text style={styles.voiceBtnText}>Start Recording</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          {isRecording && (
+            <View style={styles.recordingIndicator}>
+              <View style={styles.recordingDot} />
+              <Text style={styles.recordingText}>Recording... Speak clearly</Text>
+            </View>
+          )}
+
+          {voiceText ? (
+            <View style={styles.transcriptBox}>
+              <Text style={styles.transcriptLabel}>Transcript:</Text>
+              <Text style={styles.transcriptText}>{voiceText}</Text>
+            </View>
+          ) : null}
+
+          {/* Save to Case Sheet Button */}
+          {(voiceText || extractedData) && (
+            <TouchableOpacity
+              style={styles.saveToCaseSheetBtn}
+              onPress={saveToCaseSheet}
+            >
+              <Ionicons name="save" size={20} color="#fff" />
+              <Text style={styles.saveToCaseSheetBtnText}>Save to Case Sheet</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Patient Info Card */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Patient Information</Text>
+          
+          <InputField label="Name *" field="name" placeholder="Patient name" />
+          
+          <View style={styles.row}>
+            <View style={{ flex: 1 }}>
+              <InputField label="Age *" field="age" placeholder="Age" keyboardType="numeric" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <SelectButtons
+                label="Unit"
+                options={["years", "months", "days"]}
+                value={ageUnit}
+                onSelect={(unit) => {
+                  setAgeUnit(unit);
+                  // Re-check pediatric status when unit changes
+                  const isPed = checkIfPediatric(patientAge, unit);
+                  setPatientType(isPed ? "pediatric" : "adult");
+                }}
+              />
+            </View>
+          </View>
+
+          <SelectButtons label="Sex" options={["Male", "Female"]} value={sex} onSelect={setSex} />
+          
+          <SelectButtons
+            label="Mode of Arrival"
+            options={["Walk-in", "Ambulance", "Referred"]}
+            value={modeOfArrival}
+            onSelect={setModeOfArrival}
+          />
+
+          <InputField label="Chief Complaint" field="chief_complaint" placeholder="Main complaint..." multiline />
+
+          <View style={styles.switchRow}>
+            <Text style={styles.switchLabel}>MLC Case</Text>
+            <TouchableOpacity
+              style={[styles.switchToggle, mlc && styles.switchToggleActive]}
+              onPress={() => setMlc(!mlc)}
+            >
+              <Text style={[styles.switchToggleText, mlc && styles.switchToggleTextActive]}>
+                {mlc ? "YES" : "NO"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Vitals Card */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>Vitals</Text>
+            <TouchableOpacity style={styles.normalBtn} onPress={fillWithDefaults}>
+              <Text style={styles.normalBtnText}>Fill Normal</Text>
+            </TouchableOpacity>
+          </View>
+          
+          <View style={styles.vitalsGrid}>
+            <VitalInput label="HR" field="hr" placeholder="bpm" />
+            <VitalInput label="RR" field="rr" placeholder="/min" />
+            <VitalInput label="SpO₂" field="spo2" placeholder="%" />
+            <VitalInput label="Temp" field="temperature" placeholder="°C" />
+            <VitalInput label="BP Sys" field="bp_systolic" placeholder="mmHg" />
+            <VitalInput label="BP Dia" field="bp_diastolic" placeholder="mmHg" />
+          </View>
+
+          <Text style={styles.subSection}>GCS</Text>
+          <View style={styles.vitalsGrid}>
+            <VitalInput label="E" field="gcs_e" placeholder="1-4" />
+            <VitalInput label="V" field="gcs_v" placeholder="1-5" />
+            <VitalInput label="M" field="gcs_m" placeholder="1-6" />
+            <VitalInput label="GRBS" field="grbs" placeholder="mg/dL" />
+          </View>
+        </View>
+
+        {/* Symptoms Card */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Symptoms Assessment</Text>
+          
+          <SymptomCheckbox label="✓ Normal (No critical symptoms)" symptom="normal_no_symptoms" color="#22c55e" />
+          
+          <Text style={styles.symptomCategory}>Airway / Breathing</Text>
+          <View style={styles.symptomsGrid}>
+            <SymptomCheckbox label="Obstructed Airway" symptom="obstructed_airway" color="#ef4444" />
+            <SymptomCheckbox label="Stridor" symptom="stridor" color="#ef4444" />
+            <SymptomCheckbox label="Severe Resp Distress" symptom="severe_respiratory_distress" color="#ef4444" />
+            <SymptomCheckbox label="Moderate Resp Distress" symptom="moderate_respiratory_distress" color="#f97316" />
+            <SymptomCheckbox label="Cyanosis" symptom="cyanosis" color="#ef4444" />
+          </View>
+
+          <Text style={styles.symptomCategory}>Circulation</Text>
+          <View style={styles.symptomsGrid}>
+            <SymptomCheckbox label="Shock" symptom="shock" color="#ef4444" />
+            <SymptomCheckbox label="Severe Bleeding" symptom="severe_bleeding" color="#ef4444" />
+            <SymptomCheckbox label="Chest Pain" symptom="chest_pain" color="#f97316" />
+          </View>
+
+          <Text style={styles.symptomCategory}>Neurological</Text>
+          <View style={styles.symptomsGrid}>
+            <SymptomCheckbox label="Seizure (Ongoing)" symptom="seizure_ongoing" color="#ef4444" />
+            <SymptomCheckbox label="Confusion" symptom="confusion" color="#f97316" />
+            <SymptomCheckbox label="Lethargic/Unconscious" symptom="lethargic_unconscious" color="#ef4444" />
+            <SymptomCheckbox label="Focal Deficits" symptom="focal_deficits" color="#f97316" />
+          </View>
+
+          <Text style={styles.symptomCategory}>Trauma / Other</Text>
+          <View style={styles.symptomsGrid}>
+            <SymptomCheckbox label="Major Trauma" symptom="major_trauma" color="#ef4444" />
+            <SymptomCheckbox label="Moderate Trauma" symptom="moderate_trauma" color="#f97316" />
+            <SymptomCheckbox label="Minor Injury" symptom="minor_injury" color="#22c55e" />
+            <SymptomCheckbox label="Fever" symptom="fever" color="#eab308" />
+            <SymptomCheckbox label="Abdominal Pain" symptom="abdominal_pain" color="#f97316" />
+            <SymptomCheckbox label="Vomiting/Diarrhea" symptom="vomiting_diarrhea" color="#eab308" />
+            <SymptomCheckbox label="Allergic Reaction" symptom="allergic_reaction" color="#f97316" />
+          </View>
+        </View>
+
+        {/* Triage Result */}
+        {triageResult && (
+          <View style={[styles.triageResult, { backgroundColor: triageResult.priority_color + "20", borderColor: triageResult.priority_color }]}>
+            <Text style={[styles.triageResultTitle, { color: triageResult.priority_color }]}>
+              Triage Result: {triageResult.priority}
+            </Text>
+            <Text style={styles.triageResultComment}>{triageResult.comment}</Text>
+          </View>
+        )}
+
+        {/* Action Buttons */}
+        <View style={styles.actionRow}>
+          <TouchableOpacity
+            style={[styles.analyzeBtn, analyzing && styles.btnDisabled]}
+            onPress={analyzeTriage}
+            disabled={analyzing}
+          >
+            {analyzing ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="analytics" size={20} color="#fff" />
+                <Text style={styles.btnText}>Analyze</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.createBtn, loading && styles.btnDisabled]}
+            onPress={createCase}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                <Text style={styles.btnText}>Create Case</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        <View style={{ height: 50 }} />
+      </ScrollView>
+
+      {/* Extracted Data Modal */}
+      <Modal visible={showExtractedModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>
+              <Ionicons name="sparkles" size={20} color="#2563eb" /> AI Extracted Data
+            </Text>
+
+            {extractedData?.vitals && (
+              <View style={styles.extractedSection}>
+                <Text style={styles.extractedLabel}>📊 Vitals:</Text>
+                <View style={styles.extractedTags}>
+                  {extractedData.vitals.hr && <Text style={styles.extractedTag}>HR: {extractedData.vitals.hr}</Text>}
+                  {extractedData.vitals.bp_systolic && <Text style={styles.extractedTag}>BP: {extractedData.vitals.bp_systolic}/{extractedData.vitals.bp_diastolic}</Text>}
+                  {extractedData.vitals.rr && <Text style={styles.extractedTag}>RR: {extractedData.vitals.rr}</Text>}
+                  {extractedData.vitals.spo2 && <Text style={styles.extractedTag}>SpO2: {extractedData.vitals.spo2}%</Text>}
+                  {extractedData.vitals.temperature && <Text style={styles.extractedTag}>Temp: {extractedData.vitals.temperature}°C</Text>}
+                </View>
+              </View>
+            )}
+
+            {extractedData?.symptoms && Object.values(extractedData.symptoms).some(v => v) && (
+              <View style={styles.extractedSection}>
+                <Text style={styles.extractedLabel}>🩺 Symptoms:</Text>
+                <View style={styles.extractedTags}>
+                  {Object.entries(extractedData.symptoms)
+                    .filter(([, v]) => v)
+                    .map(([k]) => (
+                      <Text key={k} style={[styles.extractedTag, styles.symptomTag]}>
+                        {k.replace(/_/g, " ")}
+                      </Text>
+                    ))}
+                </View>
+              </View>
+            )}
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity style={styles.applyBtn} onPress={applyExtractedData}>
+                <Ionicons name="checkmark" size={20} color="#fff" />
+                <Text style={styles.applyBtnText}>Apply to Form</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.rejectBtn} onPress={() => setShowExtractedModal(false)}>
+                <Ionicons name="close" size={20} color="#64748b" />
+                <Text style={styles.rejectBtnText}>Reject</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </KeyboardAvoidingView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#f8fafc" },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    paddingTop: 50,
+    backgroundColor: "#fff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
+  },
+  headerTitle: { fontSize: 18, fontWeight: "700", color: "#1e293b" },
+  content: { flex: 1 },
+
+  // Voice Section
+  voiceSection: {
+    backgroundColor: "#eff6ff",
+    margin: 16,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: "#2563eb",
+  },
+  voiceSectionTitle: { fontSize: 16, fontWeight: "700", color: "#1e40af" },
+  voiceSectionSubtitle: { fontSize: 13, color: "#3b82f6", marginTop: 4 },
+  voiceBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#2563eb",
+    padding: 14,
+    borderRadius: 10,
+    marginTop: 12,
+    gap: 8,
+  },
+  voiceBtnRecording: { backgroundColor: "#dc2626" },
+  voiceBtnText: { color: "#fff", fontWeight: "700", fontSize: 15 },
+  recordingIndicator: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 10,
+    gap: 8,
+  },
+  recordingDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#dc2626",
+  },
+  recordingText: { color: "#dc2626", fontWeight: "600" },
+  transcriptBox: {
+    backgroundColor: "#fff",
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 12,
+  },
+  transcriptLabel: { fontSize: 12, fontWeight: "600", color: "#64748b" },
+  transcriptText: { fontSize: 14, color: "#1e293b", marginTop: 4 },
+  saveToCaseSheetBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#22c55e",
+    padding: 14,
+    borderRadius: 10,
+    marginTop: 12,
+    gap: 8,
+  },
+  saveToCaseSheetBtnText: { 
+    color: "#fff", 
+    fontWeight: "700", 
+    fontSize: 15 
+  },
+
+  // Card
+  card: {
+    backgroundColor: "#fff",
+    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  cardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  cardTitle: { fontSize: 16, fontWeight: "700", color: "#1e40af", marginBottom: 12 },
+  normalBtn: {
+    backgroundColor: "#dcfce7",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  normalBtnText: { fontSize: 12, fontWeight: "600", color: "#16a34a" },
+
+  // Input
+  inputGroup: { marginBottom: 12 },
+  label: { fontSize: 13, fontWeight: "600", color: "#475569", marginBottom: 6 },
+  input: {
+    backgroundColor: "#f8fafc",
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    fontSize: 15,
+  },
+  textArea: { minHeight: 80, textAlignVertical: "top" },
+  row: { flexDirection: "row", gap: 12 },
+
+  // Select Buttons
+  selectRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  selectBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    backgroundColor: "#f1f5f9",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  selectBtnActive: { backgroundColor: "#2563eb", borderColor: "#2563eb" },
+  selectBtnText: { fontSize: 13, fontWeight: "600", color: "#64748b" },
+  selectBtnTextActive: { color: "#fff" },
+
+  // Switch
+  switchRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 8,
+  },
+  switchLabel: { fontSize: 14, color: "#475569" },
+  switchToggle: {
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    backgroundColor: "#f1f5f9",
+  },
+  switchToggleActive: { backgroundColor: "#ef4444" },
+  switchToggleText: { fontSize: 13, fontWeight: "700", color: "#64748b" },
+  switchToggleTextActive: { color: "#fff" },
+
+  // Vitals
+  subSection: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#64748b",
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  vitalsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  vitalItem: { width: "30%" },
+  vitalLabel: { fontSize: 11, fontWeight: "600", color: "#64748b", marginBottom: 4, textAlign: "center" },
+  vitalInput: {
+    backgroundColor: "#f8fafc",
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    textAlign: "center",
+    fontSize: 15,
+    fontWeight: "600",
+  },
+
+  // Symptoms
+  symptomCategory: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#64748b",
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  symptomsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  symptomItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: "#f8fafc",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    gap: 6,
+  },
+  symptomText: { fontSize: 12, color: "#64748b" },
+
+  // Triage Result
+  triageResult: {
+    marginHorizontal: 16,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 2,
+    marginBottom: 16,
+  },
+  triageResultTitle: { fontSize: 18, fontWeight: "800" },
+  triageResultComment: { fontSize: 14, color: "#475569", marginTop: 4 },
+
+  // Action Row
+  actionRow: { flexDirection: "row", gap: 12, marginHorizontal: 16, marginBottom: 16 },
+  analyzeBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#8b5cf6",
+    padding: 14,
+    borderRadius: 10,
+    gap: 8,
+  },
+  createBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#22c55e",
+    padding: 14,
+    borderRadius: 10,
+    gap: 8,
+  },
+  btnText: { color: "#fff", fontWeight: "700", fontSize: 15 },
+  btnDisabled: { opacity: 0.6 },
+
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    maxHeight: "70%",
+  },
+  modalTitle: { fontSize: 18, fontWeight: "700", color: "#1e293b", marginBottom: 16 },
+  extractedSection: { marginBottom: 16 },
+  extractedLabel: { fontSize: 14, fontWeight: "600", color: "#475569", marginBottom: 8 },
+  extractedTags: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  extractedTag: {
+    backgroundColor: "#dcfce7",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    fontSize: 13,
+    color: "#166534",
+  },
+  symptomTag: { backgroundColor: "#fed7aa", color: "#c2410c" },
+  modalButtons: { flexDirection: "row", gap: 12, marginTop: 16 },
+  applyBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#22c55e",
+    padding: 14,
+    borderRadius: 10,
+    gap: 6,
+  },
+  applyBtnText: { color: "#fff", fontWeight: "700" },
+  rejectBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#f1f5f9",
+    padding: 14,
+    borderRadius: 10,
+    gap: 6,
+  },
+  rejectBtnText: { color: "#64748b", fontWeight: "700" },
+});

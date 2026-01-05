@@ -1,0 +1,703 @@
+// DashboardScreen.js - Fixed with proper case loading and display
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  RefreshControl,
+  ActivityIndicator,
+  Alert,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect } from "@react-navigation/native";
+
+const API_URL = "https://er-emr-backend.onrender.com/api";
+
+export default function DashboardScreen({ navigation, onLogout }) {
+  const [user, setUser] = useState(null);
+  const [allCases, setAllCases] = useState([]);
+  const [todayCases, setTodayCases] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
+  const [stats, setStats] = useState({
+    total: 0,
+    critical: 0,
+    pending: 0,
+    discharged: 0,
+  });
+  const [subscriptionStatus, setSubscriptionStatus] = useState(null);
+  const [appLocked, setAppLocked] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+      checkSubscription();
+    }, [])
+  );
+
+  const checkSubscription = async () => {
+    try {
+      const token = await AsyncStorage.getItem("token");
+      const res = await fetch(`${API_URL}/subscription/check-access`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const access = await res.json();
+        if (!access.allowed) {
+          setAppLocked(true);
+          // Navigate to upgrade screen
+          navigation.navigate("Upgrade", {
+            lockReason: access.reason,
+            lockMessage: access.message,
+          });
+        } else {
+          setAppLocked(false);
+          setSubscriptionStatus(access);
+        }
+      }
+    } catch (err) {
+      console.log("Subscription check error:", err);
+    }
+  };
+
+  const loadData = async () => {
+    try {
+      setError(null);
+      const token = await AsyncStorage.getItem("token");
+      const userData = await AsyncStorage.getItem("user");
+
+      if (!token) {
+        if (onLogout) onLogout();
+        else navigation.replace("Login");
+        return;
+      }
+
+      if (userData) {
+        setUser(JSON.parse(userData));
+      }
+
+      console.log("Fetching cases from:", `${API_URL}/cases`);
+      console.log("Using token:", token ? `${token.substring(0, 20)}...` : "NO TOKEN!");
+      
+      // Fetch all cases
+      const res = await fetch(`${API_URL}/cases`, {
+        method: "GET",
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      console.log("Response status:", res.status);
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error("API Error:", errorText);
+        
+        // Show more helpful error message
+        if (res.status === 500) {
+          throw new Error("Server error (500). Please check your Render backend logs or try logging in again.");
+        } else if (res.status === 401) {
+          // Token expired - force re-login
+          Alert.alert(
+            "Session Expired",
+            "Please log in again.",
+            [{ text: "OK", onPress: () => {
+              if (onLogout) onLogout();
+              else navigation.replace("Login");
+            }}]
+          );
+          return;
+        } else {
+          throw new Error(`Failed to fetch cases: ${res.status} - ${errorText}`);
+        }
+      }
+
+      const casesData = await res.json();
+      console.log("Fetched cases count:", casesData.length);
+      
+      // Store all cases
+      setAllCases(casesData);
+
+      // Filter today's cases
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const todaysCases = casesData.filter((c) => {
+        const caseDate = new Date(c.created_at || c.createdAt);
+        caseDate.setHours(0, 0, 0, 0);
+        return caseDate.getTime() === today.getTime();
+      });
+
+      // Sort by most recent first
+      todaysCases.sort((a, b) => new Date(b.created_at || b.createdAt) - new Date(a.created_at || a.createdAt));
+
+      setTodayCases(todaysCases);
+
+      // Calculate stats
+      const critical = todaysCases.filter((c) => c.triage_priority === 1 || c.triage_priority === 2).length;
+      const pending = todaysCases.filter((c) => c.status !== "completed" && c.status !== "discharged").length;
+      const discharged = todaysCases.filter((c) => c.status === "completed" || c.status === "discharged").length;
+
+      setStats({
+        total: todaysCases.length,
+        critical,
+        pending,
+        discharged,
+      });
+    } catch (err) {
+      console.error("Load data error:", err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  };
+
+  const handleLogout = async () => {
+    Alert.alert("Logout", "Are you sure you want to logout?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Logout",
+        style: "destructive",
+        onPress: async () => {
+          await AsyncStorage.removeItem("token");
+          await AsyncStorage.removeItem("user");
+          if (onLogout) onLogout();
+          else navigation.replace("Login");
+        },
+      },
+    ]);
+  };
+
+  const startNewTriage = () => {
+    navigation.navigate("Triage");
+  };
+
+  const openCase = (caseItem) => {
+    navigation.navigate("CaseSheet", {
+      caseId: caseItem.id,
+      patientType: caseItem.case_type || "adult",
+    });
+  };
+
+  const goToDischarge = (caseItem) => {
+    navigation.navigate("DischargeSummary", {
+      caseId: caseItem.id,
+    });
+  };
+
+  const getPriorityColor = (level) => {
+    switch (level) {
+      case 1: return "#ef4444";
+      case 2: return "#f97316";
+      case 3: return "#eab308";
+      case 4: return "#22c55e";
+      case 5: return "#3b82f6";
+      default: return "#6b7280";
+    }
+  };
+
+  const getPriorityName = (level) => {
+    switch (level) {
+      case 1: return "RED";
+      case 2: return "ORANGE";
+      case 3: return "YELLOW";
+      case 4: return "GREEN";
+      case 5: return "BLUE";
+      default: return "N/A";
+    }
+  };
+
+  const getStatusBadge = (caseItem) => {
+    if (caseItem.status === "completed" || caseItem.status === "discharged") {
+      return { text: "Discharged", color: "#22c55e", bg: "#f0fdf4" };
+    }
+    if (caseItem.triage_priority === 1) {
+      return { text: "CRITICAL", color: "#dc2626", bg: "#fef2f2" };
+    }
+    if (caseItem.triage_priority === 2) {
+      return { text: "Urgent", color: "#f97316", bg: "#fff7ed" };
+    }
+    if (!caseItem.disposition || !caseItem.disposition.type) {
+      return { text: "In Progress", color: "#3b82f6", bg: "#eff6ff" };
+    }
+    return { text: "Pending", color: "#eab308", bg: "#fefce8" };
+  };
+
+  const calculateTimeInER = (createdAt) => {
+    const start = new Date(createdAt);
+    const now = new Date();
+    const diffMs = now - start;
+    const diffMins = Math.floor(diffMs / 60000);
+    const hours = Math.floor(diffMins / 60);
+    const mins = diffMins % 60;
+
+    return {
+      hours,
+      mins,
+      display: hours > 0 ? `${hours}h ${mins}m` : `${mins}m`,
+      exceeds4Hours: hours >= 4,
+    };
+  };
+
+  const formatTime = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleTimeString("en-IN", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#2563eb" />
+        <Text style={styles.loadingText}>Loading dashboard...</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      {/* Header with ErMate Logo */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <View style={styles.logoContainer}>
+            <Ionicons name="medical" size={28} color="#2563eb" />
+          </View>
+          <View>
+            <Text style={styles.logoText}>ErMate</Text>
+            <Text style={styles.greeting}>Welcome, {user?.name || "Doctor"}</Text>
+          </View>
+        </View>
+        <View style={styles.headerRight}>
+          <TouchableOpacity style={styles.headerBtn} onPress={() => navigation.navigate("Logs")}>
+            <Ionicons name="list" size={22} color="#1e293b" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.headerBtn} onPress={() => navigation.navigate("Profile")}>
+            <Ionicons name="person-circle" size={28} color="#1e293b" />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <ScrollView
+        style={styles.scrollView}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Error Banner */}
+        {error && (
+          <View style={styles.errorBanner}>
+            <Ionicons name="alert-circle" size={20} color="#dc2626" />
+            <Text style={styles.errorText}>{error}</Text>
+            <TouchableOpacity onPress={loadData}>
+              <Text style={styles.retryText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* New Patient Button */}
+        <TouchableOpacity style={styles.newPatientBtn} onPress={startNewTriage}>
+          <View style={styles.newPatientIcon}>
+            <Ionicons name="add" size={28} color="#fff" />
+          </View>
+          <View style={styles.newPatientText}>
+            <Text style={styles.newPatientTitle}>New Patient</Text>
+            <Text style={styles.newPatientSubtitle}>Start triage assessment</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={24} color="#2563eb" />
+        </TouchableOpacity>
+
+        {/* Stats Cards */}
+        <View style={styles.statsRow}>
+          <View style={[styles.statCard, { borderLeftColor: "#3b82f6" }]}>
+            <Text style={styles.statNumber}>{stats.total}</Text>
+            <Text style={styles.statLabel}>Today</Text>
+          </View>
+          <View style={[styles.statCard, { borderLeftColor: "#ef4444" }]}>
+            <Text style={[styles.statNumber, { color: "#ef4444" }]}>{stats.critical}</Text>
+            <Text style={styles.statLabel}>Critical</Text>
+          </View>
+          <View style={[styles.statCard, { borderLeftColor: "#f97316" }]}>
+            <Text style={[styles.statNumber, { color: "#f97316" }]}>{stats.pending}</Text>
+            <Text style={styles.statLabel}>Pending</Text>
+          </View>
+          <View style={[styles.statCard, { borderLeftColor: "#22c55e" }]}>
+            <Text style={[styles.statNumber, { color: "#22c55e" }]}>{stats.discharged}</Text>
+            <Text style={styles.statLabel}>Done</Text>
+          </View>
+        </View>
+
+        {/* Today's Patients */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Today's Patients</Text>
+            <Text style={styles.sectionCount}>{todayCases.length} cases</Text>
+          </View>
+
+          {todayCases.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="people-outline" size={48} color="#cbd5e1" />
+              <Text style={styles.emptyText}>No patients today</Text>
+              <Text style={styles.emptySubtext}>Tap "New Patient" to start</Text>
+            </View>
+          ) : (
+            todayCases.map((caseItem) => {
+              const time = calculateTimeInER(caseItem.created_at || caseItem.createdAt);
+              const status = getStatusBadge(caseItem);
+              const patient = caseItem.patient || {};
+
+              return (
+                <TouchableOpacity
+                  key={caseItem.id}
+                  style={[
+                    styles.caseCard,
+                    time.exceeds4Hours && status.text !== "Discharged" && styles.caseCardWarning
+                  ]}
+                  onPress={() => openCase(caseItem)}
+                >
+                  {/* Priority Indicator */}
+                  <View style={[styles.priorityBar, { backgroundColor: getPriorityColor(caseItem.triage_priority) }]} />
+
+                  <View style={styles.caseContent}>
+                    {/* Top Row */}
+                    <View style={styles.caseTopRow}>
+                      <View style={styles.caseInfo}>
+                        <Text style={styles.patientName}>{patient.name || "Unknown"}</Text>
+                        <Text style={styles.patientDetails}>
+                          {patient.age || "?"} {patient.age_unit || "yrs"} • {patient.sex || "N/A"}
+                        </Text>
+                      </View>
+                      <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
+                        <Text style={[styles.statusText, { color: status.color }]}>{status.text}</Text>
+                      </View>
+                    </View>
+
+                    {/* Complaint */}
+                    {caseItem.presenting_complaint?.text && (
+                      <Text style={styles.complaint} numberOfLines={1}>
+                        {caseItem.presenting_complaint.text}
+                      </Text>
+                    )}
+
+                    {/* Bottom Row */}
+                    <View style={styles.caseBottomRow}>
+                      <View style={styles.timeInfo}>
+                        <Ionicons name="time-outline" size={14} color="#64748b" />
+                        <Text style={styles.timeText}>
+                          {formatTime(caseItem.created_at || caseItem.createdAt)} • {time.display}
+                        </Text>
+                        {time.exceeds4Hours && status.text !== "Discharged" && (
+                          <View style={styles.warningBadge}>
+                            <Text style={styles.warningText}>⚠️ {'>'}4h</Text>
+                          </View>
+                        )}
+                      </View>
+
+                      <View style={styles.caseActions}>
+                        <TouchableOpacity
+                          style={styles.actionBtn}
+                          onPress={() => navigation.navigate("ViewCaseSheet", { caseId: caseItem.id })}
+                        >
+                          <Ionicons name="eye-outline" size={18} color="#22c55e" />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.actionBtn}
+                          onPress={() => goToDischarge(caseItem)}
+                        >
+                          <Ionicons name="document-text-outline" size={18} color="#2563eb" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            })
+          )}
+        </View>
+
+        {/* All Cases Section */}
+        {allCases.length > todayCases.length && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Previous Cases</Text>
+              <Text style={styles.sectionCount}>{allCases.length - todayCases.length} older</Text>
+            </View>
+            
+            {allCases
+              .filter(c => !todayCases.find(tc => tc.id === c.id))
+              .slice(0, 5)
+              .map((caseItem) => {
+                const patient = caseItem.patient || {};
+                const status = getStatusBadge(caseItem);
+                
+                return (
+                  <TouchableOpacity
+                    key={caseItem.id}
+                    style={styles.caseCardSmall}
+                    onPress={() => openCase(caseItem)}
+                  >
+                    <View style={[styles.priorityDot, { backgroundColor: getPriorityColor(caseItem.triage_priority) }]} />
+                    <View style={styles.caseInfoSmall}>
+                      <Text style={styles.patientNameSmall}>{patient.name || "Unknown"}</Text>
+                      <Text style={styles.dateSmall}>
+                        {new Date(caseItem.created_at || caseItem.createdAt).toLocaleDateString()}
+                      </Text>
+                    </View>
+                    <View style={styles.smallCaseActions}>
+                      <TouchableOpacity
+                        style={styles.smallActionBtn}
+                        onPress={() => navigation.navigate("ViewCaseSheet", { caseId: caseItem.id })}
+                      >
+                        <Ionicons name="eye-outline" size={16} color="#22c55e" />
+                      </TouchableOpacity>
+                    </View>
+                    <View style={[styles.statusBadgeSmall, { backgroundColor: status.bg }]}>
+                      <Text style={[styles.statusTextSmall, { color: status.color }]}>{status.text}</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+          </View>
+        )}
+
+        {/* Spacer */}
+        <View style={{ height: 100 }} />
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#f8fafc" },
+  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#f8fafc" },
+  loadingText: { marginTop: 12, fontSize: 14, color: "#64748b" },
+  
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 20,
+    paddingTop: 50,
+    backgroundColor: "#fff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  logoContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: "#eff6ff",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  logoText: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#2563eb",
+  },
+  greeting: { fontSize: 12, color: "#64748b" },
+  userName: { fontSize: 22, fontWeight: "800", color: "#1e293b" },
+  headerRight: { flexDirection: "row", gap: 12 },
+  headerBtn: { padding: 8 },
+
+  scrollView: { flex: 1 },
+
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fef2f2",
+    padding: 12,
+    marginHorizontal: 16,
+    marginTop: 16,
+    borderRadius: 8,
+    gap: 8,
+  },
+  errorText: { flex: 1, fontSize: 13, color: "#dc2626" },
+  retryText: { fontSize: 13, fontWeight: "600", color: "#2563eb" },
+
+  newPatientBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    marginHorizontal: 16,
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: "#2563eb",
+    gap: 12,
+  },
+  newPatientIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#2563eb",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  newPatientText: { flex: 1 },
+  newPatientTitle: { fontSize: 16, fontWeight: "700", color: "#1e293b" },
+  newPatientSubtitle: { fontSize: 13, color: "#64748b" },
+
+  statsRow: {
+    flexDirection: "row",
+    marginHorizontal: 16,
+    marginTop: 16,
+    gap: 8,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: "#fff",
+    padding: 12,
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    alignItems: "center",
+  },
+  statNumber: { fontSize: 24, fontWeight: "800", color: "#1e293b" },
+  statLabel: { fontSize: 11, color: "#64748b", marginTop: 2 },
+
+  section: {
+    marginTop: 24,
+    marginHorizontal: 16,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  sectionTitle: { fontSize: 18, fontWeight: "700", color: "#1e293b" },
+  sectionCount: { fontSize: 13, color: "#64748b" },
+
+  emptyState: {
+    alignItems: "center",
+    paddingVertical: 40,
+    backgroundColor: "#fff",
+    borderRadius: 12,
+  },
+  emptyText: { fontSize: 16, fontWeight: "600", color: "#94a3b8", marginTop: 12 },
+  emptySubtext: { fontSize: 13, color: "#cbd5e1", marginTop: 4 },
+
+  caseCard: {
+    flexDirection: "row",
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    marginBottom: 10,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  caseCardWarning: {
+    borderColor: "#fbbf24",
+    borderWidth: 2,
+  },
+  priorityBar: {
+    width: 6,
+  },
+  caseContent: {
+    flex: 1,
+    padding: 14,
+  },
+  caseTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+  },
+  caseInfo: { flex: 1 },
+  patientName: { fontSize: 16, fontWeight: "700", color: "#1e293b" },
+  patientDetails: { fontSize: 13, color: "#64748b", marginTop: 2 },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusText: { fontSize: 11, fontWeight: "700" },
+  complaint: {
+    fontSize: 13,
+    color: "#475569",
+    marginTop: 8,
+    fontStyle: "italic",
+  },
+  caseBottomRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 10,
+  },
+  timeInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  timeText: { fontSize: 12, color: "#64748b" },
+  warningBadge: {
+    backgroundColor: "#fef3c7",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginLeft: 6,
+  },
+  warningText: { fontSize: 10, fontWeight: "600", color: "#d97706" },
+  caseActions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  actionBtn: {
+    padding: 6,
+    backgroundColor: "#eff6ff",
+    borderRadius: 8,
+  },
+
+  // Small case card styles
+  caseCardSmall: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  priorityDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: 12,
+  },
+  caseInfoSmall: { flex: 1 },
+  patientNameSmall: { fontSize: 14, fontWeight: "600", color: "#1e293b" },
+  dateSmall: { fontSize: 12, color: "#64748b" },
+  smallCaseActions: {
+    flexDirection: "row",
+    gap: 6,
+    marginRight: 8,
+  },
+  smallActionBtn: {
+    padding: 4,
+    backgroundColor: "#f0fdf4",
+    borderRadius: 6,
+  },
+  statusBadgeSmall: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  statusTextSmall: { fontSize: 10, fontWeight: "600" },
+});

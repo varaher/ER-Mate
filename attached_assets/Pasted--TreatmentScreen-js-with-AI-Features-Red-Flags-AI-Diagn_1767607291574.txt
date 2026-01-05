@@ -1,0 +1,1104 @@
+// TreatmentScreen.js with AI Features (Red Flags & AI Diagnosis)
+// Free for first 5 patients per user - subscription model
+import React, { useState, useRef, useCallback, useEffect } from "react";
+import {
+  View,
+  Text,
+  ScrollView,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Modal,
+} from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Ionicons } from "@expo/vector-icons";
+import { Audio } from "expo-av";
+
+const API_URL = "https://er-emr-backend.onrender.com/api";
+
+export default function TreatmentScreen({ route, navigation }) {
+  const {
+    caseId,
+    patientType = "adult",
+    patient = {},
+    vitals = {},
+    triageData = {},
+    investigations = {},
+  } = route.params || {};
+
+  const isPediatric = patientType === "pediatric";
+
+  /* ===================== STATE ===================== */
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [recording, setRecording] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [transcriptText, setTranscriptText] = useState("");
+
+  /* ===================== AI STATE ===================== */
+  const [aiLoading, setAiLoading] = useState(false);
+  const [showAIModal, setShowAIModal] = useState(false);
+  const [aiResponse, setAiResponse] = useState("");
+  const [aiTitle, setAiTitle] = useState("");
+  const [aiUsageCount, setAiUsageCount] = useState(0);
+  const AI_FREE_LIMIT = 5;
+
+  /* ===================== TEXT INPUTS - useRef ===================== */
+  const formDataRef = useRef({
+    provisionalDiagnosis: "",
+    differentialDiagnoses: "",
+    courseInHospital: "",
+    treatmentNotes: "",
+    customMeds: "",
+  });
+
+  /* ===================== SELECT/TOGGLE STATE ===================== */
+  const [interventions, setInterventions] = useState({
+    iv_access: false,
+    iv_fluids: false,
+    oxygen_therapy: false,
+    nebulization: false,
+    catheterization: false,
+    ng_tube: false,
+    intubation: false,
+    cpr: false,
+    defibrillation: false,
+    chest_tube: false,
+    wound_care: false,
+    splinting: false,
+  });
+
+  const [procedures, setProcedures] = useState({
+    ecg_done: false,
+    cxr_done: false,
+    abg_done: false,
+    rbs_done: false,
+    urine_catheter: false,
+    central_line: false,
+    arterial_line: false,
+    lumbar_puncture: false,
+    wound_suturing: false,
+    fracture_reduction: false,
+  });
+
+  const [selectedMeds, setSelectedMeds] = useState([]);
+
+  /* ===================== LOAD AI USAGE COUNT ===================== */
+  useEffect(() => {
+    loadAIUsageCount();
+  }, []);
+
+  const loadAIUsageCount = async () => {
+    try {
+      const token = await AsyncStorage.getItem("token");
+      if (!token) return;
+
+      // Fetch from backend API
+      const res = await fetch(`${API_URL}/ai/usage`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setAiUsageCount(data.count || 0);
+      }
+    } catch (err) {
+      console.log("Error loading AI usage count:", err);
+    }
+  };
+
+  /* ===================== MEDICATIONS ===================== */
+  const commonMedications = {
+    "Fluids & Electrolytes": ["IV NS 0.9%", "IV RL", "IV DNS", "IV D5W"],
+    "Analgesics & Antipyretics": ["Paracetamol IV", "Paracetamol PO", "Tramadol", "Morphine", "Fentanyl", "Diclofenac"],
+    "Antiemetics": ["Ondansetron", "Metoclopramide", "Domperidone"],
+    "GI Medications": ["Pantoprazole IV", "Ranitidine", "Sucralfate", "Antacid"],
+    "Cardiac": ["Aspirin", "Clopidogrel", "Heparin", "Enoxaparin", "Nitroglycerin", "Atorvastatin", "Atropine", "Adrenaline", "Amiodarone"],
+    "Respiratory": ["Oxygen", "Salbutamol Neb", "Ipratropium Neb", "Budesonide Neb", "Aminophylline", "Hydrocortisone", "Methylprednisolone"],
+    "Antibiotics": ["Ceftriaxone", "Cefotaxime", "Amoxicillin-Clav", "Azithromycin", "Piperacillin-Tazo", "Meropenem", "Metronidazole"],
+    "Anti-allergics": ["Chlorpheniramine", "Cetirizine", "Adrenaline IM", "Hydrocortisone IV", "Dexamethasone"],
+    "Anticonvulsants": ["Diazepam IV", "Lorazepam IV", "Midazolam", "Phenytoin", "Levetiracetam"],
+  };
+
+  const medications = commonMedications;
+
+  /* ===================== UPDATE FUNCTIONS ===================== */
+  const updateTextField = useCallback((field, value) => {
+    formDataRef.current[field] = value;
+  }, []);
+
+  const toggleIntervention = (key) => {
+    setInterventions((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const toggleProcedure = (key) => {
+    setProcedures((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const toggleMed = (med) => {
+    if (selectedMeds.includes(med)) {
+      setSelectedMeds(selectedMeds.filter((m) => m !== med));
+    } else {
+      setSelectedMeds([...selectedMeds, med]);
+    }
+  };
+
+  /* =========================================================
+     🤖 AI FEATURES - Red Flags & Diagnosis Suggestions
+     ========================================================= */
+
+  const handleAISuggestion = async (type) => {
+    if (!caseId) {
+      Alert.alert("Save Required", "Please save the case first before using AI suggestions");
+      return;
+    }
+
+    // Check usage limit
+    if (aiUsageCount >= AI_FREE_LIMIT) {
+      Alert.alert(
+        "Free Limit Reached",
+        `You've used all ${AI_FREE_LIMIT} free AI consultations. Subscribe to unlock unlimited AI features.`,
+        [
+          { text: "Maybe Later", style: "cancel" },
+          { text: "View Plans", onPress: () => Alert.alert("Coming Soon", "Subscription plans will be available soon!") },
+        ]
+      );
+      return;
+    }
+
+    setAiLoading(true);
+
+    try {
+      const token = await AsyncStorage.getItem("token");
+
+      const titles = {
+        red_flags: "🚨 AI Red Flags & Critical Findings",
+        diagnosis_suggestions: "💡 AI Differential Diagnosis Suggestions",
+      };
+
+      setAiTitle(titles[type] || "AI Suggestion");
+
+      const response = await fetch(`${API_URL}/ai/generate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          case_sheet_id: caseId,
+          prompt_type: type,
+        }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.detail || "AI generation failed");
+      }
+
+      const data = await response.json();
+      setAiResponse(data.response);
+      setShowAIModal(true);
+
+      // Reload AI usage from backend (backend already incremented)
+      await loadAIUsageCount();
+
+      // Show remaining uses
+      const remaining = AI_FREE_LIMIT - (aiUsageCount + 1);
+      if (remaining > 0 && remaining <= 2) {
+        Alert.alert("AI Credits", `You have ${remaining} free AI consultations remaining today.`);
+      }
+    } catch (err) {
+      console.error("AI error:", err);
+      
+      // Handle rate limit error specifically
+      if (err.message?.includes("Daily AI limit")) {
+        Alert.alert(
+          "Daily Limit Reached",
+          "You've used all 5 free AI consultations for today. Upgrade to premium for unlimited AI access.",
+          [
+            { text: "OK", style: "cancel" },
+            { text: "View Plans", onPress: () => Alert.alert("Coming Soon", "Subscription plans will be available soon!") },
+          ]
+        );
+      } else {
+        Alert.alert("AI Error", err.message || "Failed to get AI suggestions");
+      }
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  /* ===================== VOICE RECORDING ===================== */
+  const startRecording = async () => {
+    try {
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permission Denied", "Microphone access required");
+        return;
+      }
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+
+      setRecording(recording);
+      setIsRecording(true);
+    } catch (err) {
+      console.error("Recording error:", err);
+      Alert.alert("Error", "Cannot start recording");
+    }
+  };
+
+  const stopRecording = async () => {
+    try {
+      setIsRecording(false);
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      setRecording(null);
+      await processVoice(uri);
+    } catch (err) {
+      console.error("Stop recording error:", err);
+      Alert.alert("Error", "Recording failed");
+    }
+  };
+
+  const processVoice = async (uri) => {
+    setLoading(true);
+    try {
+      const token = await AsyncStorage.getItem("token");
+      if (!token) {
+        Alert.alert("Auth Error", "Please login again");
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("file", {
+        uri,
+        name: "treatment.m4a",
+        type: "audio/m4a",
+      });
+      formData.append("engine", "auto");
+      formData.append("language", "en");
+
+      const transcribeRes = await fetch(`${API_URL}/ai/voice-to-text`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+
+      if (!transcribeRes.ok) throw new Error("Transcription failed");
+
+      const transcribeData = await transcribeRes.json();
+      if (!transcribeData?.transcription) throw new Error("No transcription");
+
+      const transcript = transcribeData.transcription;
+      setTranscriptText(transcript);
+
+      // Auto-fill treatment notes
+      formDataRef.current.treatmentNotes = formDataRef.current.treatmentNotes
+        ? formDataRef.current.treatmentNotes + "\n\n" + transcript
+        : transcript;
+
+      Alert.alert("✅ Success", "Treatment notes updated from voice!");
+    } catch (err) {
+      console.error("Voice error:", err);
+      Alert.alert("Error", err.message || "Voice processing failed");
+    }
+    setLoading(false);
+  };
+
+  /* ===================== SAVE TREATMENT ===================== */
+  const saveTreatment = async () => {
+    setSaving(true);
+    try {
+      const token = await AsyncStorage.getItem("token");
+      const fd = formDataRef.current;
+
+      const interventionsList = Object.entries(interventions)
+        .filter(([_, value]) => value)
+        .map(([key, _]) => key.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()));
+
+      const proceduresList = Object.entries(procedures)
+        .filter(([_, value]) => value)
+        .map(([key, _]) => key.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()));
+
+      const allMedications = [
+        ...selectedMeds,
+        ...fd.customMeds.split(",").map((m) => m.trim()).filter(Boolean),
+      ];
+
+      const payload = {
+        treatment: {
+          provisional_diagnosis: fd.provisionalDiagnosis,
+          differential_diagnoses: fd.differentialDiagnoses
+            .split(",")
+            .map((d) => d.trim())
+            .filter(Boolean),
+          course_in_hospital: fd.courseInHospital,
+          intervention_notes: fd.treatmentNotes,
+          interventions: interventionsList,
+          procedures: proceduresList,
+          medications: allMedications,
+        },
+      };
+
+      const response = await fetch(`${API_URL}/cases/${caseId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) throw new Error("Failed to save treatment");
+
+      Alert.alert("✅ Saved", "Treatment saved successfully!");
+      return true;
+    } catch (err) {
+      console.error("Save error:", err);
+      Alert.alert("Error", err.message || "Failed to save");
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /* ===================== PROCEED TO DISPOSITION ===================== */
+  const proceedToDisposition = async () => {
+    const saved = await saveTreatment();
+    if (!saved) return;
+
+    navigation.navigate("Disposition", {
+      caseId,
+      patientType,
+      patientName: patient.name,
+      triageData,
+    });
+  };
+
+  /* ===================== UI COMPONENTS ===================== */
+  const SectionTitle = ({ icon, title }) => (
+    <View style={styles.sectionHeader}>
+      <Ionicons name={icon} size={20} color="#1e40af" />
+      <Text style={styles.sectionTitle}>{title}</Text>
+    </View>
+  );
+
+  const InterventionItem = ({ label, value, onToggle }) => (
+    <TouchableOpacity
+      style={[styles.interventionItem, value && styles.interventionItemActive]}
+      onPress={onToggle}
+    >
+      <Ionicons
+        name={value ? "checkbox" : "square-outline"}
+        size={20}
+        color={value ? "#22c55e" : "#9ca3af"}
+      />
+      <Text style={[styles.interventionText, value && styles.interventionTextActive]}>
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+
+  const MedicationChip = ({ med, selected, onToggle }) => (
+    <TouchableOpacity
+      style={[styles.medChip, selected && styles.medChipActive]}
+      onPress={onToggle}
+    >
+      <Text style={[styles.medChipText, selected && styles.medChipTextActive]}>
+        {med}
+      </Text>
+    </TouchableOpacity>
+  );
+
+  /* ===================== MAIN UI ===================== */
+  return (
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
+      <ScrollView style={styles.container} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={24} color="#1e293b" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>💊 Treatment</Text>
+          <View style={{ width: 24 }} />
+        </View>
+
+        {/* Patient Banner */}
+        <View style={styles.patientBanner}>
+          <View style={styles.patientInfo}>
+            <Text style={styles.patientName}>{patient.name || "Patient"}</Text>
+            <Text style={styles.patientDetails}>
+              {patient.age} {patient.age_unit} • {patient.sex} •{" "}
+              {isPediatric ? "Pediatric" : "Adult"}
+            </Text>
+          </View>
+          {triageData.priority && (
+            <View
+              style={[
+                styles.priorityBadge,
+                { backgroundColor: getPriorityColor(triageData.priority) },
+              ]}
+            >
+              <Text style={styles.priorityText}>{triageData.priority}</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Voice Recording */}
+        <TouchableOpacity
+          style={[styles.voiceBtn, isRecording && styles.voiceBtnRecording]}
+          onPress={isRecording ? stopRecording : startRecording}
+          disabled={loading}
+        >
+          <Ionicons
+            name={isRecording ? "stop-circle" : "mic"}
+            size={22}
+            color="#fff"
+          />
+          <Text style={styles.voiceText}>
+            {isRecording ? "Stop & Auto-fill" : "🎤 Dictate Treatment"}
+          </Text>
+        </TouchableOpacity>
+
+        {loading && (
+          <View style={styles.loadingBox}>
+            <ActivityIndicator size="large" color="#1976d2" />
+            <Text style={styles.loadingText}>Processing voice...</Text>
+          </View>
+        )}
+
+        {transcriptText ? (
+          <View style={styles.transcriptBox}>
+            <Text style={styles.transcriptLabel}>📝 Transcript:</Text>
+            <Text style={styles.transcriptText}>{transcriptText}</Text>
+          </View>
+        ) : null}
+
+        {/* ==================== DIAGNOSIS ==================== */}
+        <SectionTitle icon="medical" title="Diagnosis" />
+        <View style={styles.card}>
+          <Text style={styles.label}>Provisional Diagnosis</Text>
+          <TextInput
+            style={[styles.input, styles.textArea]}
+            defaultValue={formDataRef.current.provisionalDiagnosis}
+            onChangeText={(text) => updateTextField("provisionalDiagnosis", text)}
+            placeholder="Primary diagnosis based on clinical findings..."
+            placeholderTextColor="#9ca3af"
+            multiline
+          />
+
+          <Text style={styles.label}>Differential Diagnoses</Text>
+          <TextInput
+            style={styles.input}
+            defaultValue={formDataRef.current.differentialDiagnoses}
+            onChangeText={(text) => updateTextField("differentialDiagnoses", text)}
+            placeholder="Comma separated (e.g., AMI, Angina, GERD)"
+            placeholderTextColor="#9ca3af"
+          />
+        </View>
+
+        {/* ==================== AI FEATURES ==================== */}
+        <SectionTitle icon="sparkles" title="AI Clinical Decision Support" />
+        <View style={styles.aiCard}>
+          <View style={styles.aiInfo}>
+            <Text style={styles.aiInfoText}>
+              🎁 Free: {Math.max(0, AI_FREE_LIMIT - aiUsageCount)} of {AI_FREE_LIMIT} AI consultations remaining today
+            </Text>
+          </View>
+
+          <View style={styles.aiButtonRow}>
+            <TouchableOpacity
+              style={[styles.aiBtn, styles.aiBtnRed]}
+              onPress={() => handleAISuggestion("red_flags")}
+              disabled={aiLoading}
+            >
+              {aiLoading ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <>
+                  <Ionicons name="warning" size={18} color="#fff" />
+                  <Text style={styles.aiBtnText}>AI Red Flags</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.aiBtn, styles.aiBtnPurple]}
+              onPress={() => handleAISuggestion("diagnosis_suggestions")}
+              disabled={aiLoading}
+            >
+              {aiLoading ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <>
+                  <Ionicons name="bulb" size={18} color="#fff" />
+                  <Text style={styles.aiBtnText}>AI Diagnosis</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          <Text style={styles.aiDisclaimer}>
+            💡 Fill in vitals, complaint & exam findings for best AI results
+          </Text>
+        </View>
+
+        {/* ==================== INTERVENTIONS ==================== */}
+        <SectionTitle icon="pulse" title="Interventions Done" />
+        <View style={styles.card}>
+          <View style={styles.interventionsGrid}>
+            <InterventionItem label="IV Access" value={interventions.iv_access} onToggle={() => toggleIntervention("iv_access")} />
+            <InterventionItem label="IV Fluids" value={interventions.iv_fluids} onToggle={() => toggleIntervention("iv_fluids")} />
+            <InterventionItem label="Oxygen" value={interventions.oxygen_therapy} onToggle={() => toggleIntervention("oxygen_therapy")} />
+            <InterventionItem label="Nebulization" value={interventions.nebulization} onToggle={() => toggleIntervention("nebulization")} />
+            <InterventionItem label="Catheter" value={interventions.catheterization} onToggle={() => toggleIntervention("catheterization")} />
+            <InterventionItem label="NG Tube" value={interventions.ng_tube} onToggle={() => toggleIntervention("ng_tube")} />
+            <InterventionItem label="Intubation" value={interventions.intubation} onToggle={() => toggleIntervention("intubation")} />
+            <InterventionItem label="CPR" value={interventions.cpr} onToggle={() => toggleIntervention("cpr")} />
+            <InterventionItem label="Defibrillation" value={interventions.defibrillation} onToggle={() => toggleIntervention("defibrillation")} />
+            <InterventionItem label="Chest Tube" value={interventions.chest_tube} onToggle={() => toggleIntervention("chest_tube")} />
+            <InterventionItem label="Wound Care" value={interventions.wound_care} onToggle={() => toggleIntervention("wound_care")} />
+            <InterventionItem label="Splinting" value={interventions.splinting} onToggle={() => toggleIntervention("splinting")} />
+          </View>
+        </View>
+
+        {/* ==================== PROCEDURES ==================== */}
+        <SectionTitle icon="construct" title="Procedures Done" />
+        <View style={styles.card}>
+          <View style={styles.interventionsGrid}>
+            <InterventionItem label="ECG" value={procedures.ecg_done} onToggle={() => toggleProcedure("ecg_done")} />
+            <InterventionItem label="CXR" value={procedures.cxr_done} onToggle={() => toggleProcedure("cxr_done")} />
+            <InterventionItem label="ABG" value={procedures.abg_done} onToggle={() => toggleProcedure("abg_done")} />
+            <InterventionItem label="RBS" value={procedures.rbs_done} onToggle={() => toggleProcedure("rbs_done")} />
+            <InterventionItem label="Central Line" value={procedures.central_line} onToggle={() => toggleProcedure("central_line")} />
+            <InterventionItem label="Arterial Line" value={procedures.arterial_line} onToggle={() => toggleProcedure("arterial_line")} />
+            <InterventionItem label="LP" value={procedures.lumbar_puncture} onToggle={() => toggleProcedure("lumbar_puncture")} />
+            <InterventionItem label="Suturing" value={procedures.wound_suturing} onToggle={() => toggleProcedure("wound_suturing")} />
+          </View>
+        </View>
+
+        {/* ==================== MEDICATIONS ==================== */}
+        <SectionTitle icon="medkit" title="Medications Given" />
+        {Object.entries(medications).map(([category, meds]) => (
+          <View key={category} style={styles.card}>
+            <Text style={styles.categoryTitle}>{category}</Text>
+            <View style={styles.medsGrid}>
+              {meds.map((med) => (
+                <MedicationChip
+                  key={med}
+                  med={med}
+                  selected={selectedMeds.includes(med)}
+                  onToggle={() => toggleMed(med)}
+                />
+              ))}
+            </View>
+          </View>
+        ))}
+
+        {/* Custom Medications */}
+        <View style={styles.card}>
+          <Text style={styles.label}>Other Medications</Text>
+          <TextInput
+            style={styles.input}
+            defaultValue={formDataRef.current.customMeds}
+            onChangeText={(text) => updateTextField("customMeds", text)}
+            placeholder="Add other medications (comma separated)"
+            placeholderTextColor="#9ca3af"
+          />
+        </View>
+
+        {/* Selected Medications Summary */}
+        {selectedMeds.length > 0 && (
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryTitle}>
+              ✅ Selected Medications ({selectedMeds.length})
+            </Text>
+            <Text style={styles.summaryText}>{selectedMeds.join(", ")}</Text>
+          </View>
+        )}
+
+        {/* ==================== COURSE IN HOSPITAL ==================== */}
+        <SectionTitle icon="time" title="Course in Hospital" />
+        <View style={styles.card}>
+          <TextInput
+            style={[styles.input, styles.textAreaLarge]}
+            defaultValue={formDataRef.current.courseInHospital}
+            onChangeText={(text) => updateTextField("courseInHospital", text)}
+            placeholder="Document the patient's course in ER..."
+            placeholderTextColor="#9ca3af"
+            multiline
+          />
+        </View>
+
+        {/* ==================== TREATMENT NOTES ==================== */}
+        <SectionTitle icon="document-text" title="Treatment Notes" />
+        <View style={styles.card}>
+          <TextInput
+            style={[styles.input, styles.textArea]}
+            defaultValue={formDataRef.current.treatmentNotes}
+            onChangeText={(text) => updateTextField("treatmentNotes", text)}
+            placeholder="Additional treatment notes, observations..."
+            placeholderTextColor="#9ca3af"
+            multiline
+          />
+        </View>
+
+        {/* ==================== ACTION BUTTONS ==================== */}
+        <View style={styles.actionRow}>
+          <TouchableOpacity
+            style={[styles.saveBtn, saving && styles.btnDisabled]}
+            onPress={saveTreatment}
+            disabled={saving}
+          >
+            {saving ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="save" size={20} color="#fff" />
+                <Text style={styles.btnText}>Save</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.nextBtn, (loading || saving) && styles.btnDisabled]}
+            onPress={proceedToDisposition}
+            disabled={loading || saving}
+          >
+            <Text style={styles.btnText}>Disposition</Text>
+            <Ionicons name="arrow-forward" size={20} color="#fff" />
+          </TouchableOpacity>
+        </View>
+
+        <View style={{ height: 40 }} />
+      </ScrollView>
+
+      {/* AI Response Modal */}
+      <Modal
+        visible={showAIModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowAIModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{aiTitle}</Text>
+              <TouchableOpacity onPress={() => setShowAIModal(false)}>
+                <Ionicons name="close" size={24} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody}>
+              <Text style={styles.aiResponseText}>{aiResponse}</Text>
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <Text style={styles.modalDisclaimer}>
+                ⚠️ AI suggestions are for reference only. Always use clinical judgment.
+              </Text>
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setShowAIModal(false)}
+              >
+                <Text style={styles.modalCloseBtnText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </KeyboardAvoidingView>
+  );
+}
+
+/* ===================== HELPERS ===================== */
+const getPriorityColor = (priority) => {
+  switch (priority) {
+    case "RED": return "#ef4444";
+    case "ORANGE": return "#f97316";
+    case "YELLOW": return "#eab308";
+    case "GREEN": return "#22c55e";
+    case "BLUE": return "#3b82f6";
+    default: return "#6b7280";
+  }
+};
+
+/* ===================== STYLES ===================== */
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#f8fafc",
+  },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    backgroundColor: "#fff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#1e293b",
+  },
+  patientBanner: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#eff6ff",
+    margin: 16,
+    padding: 12,
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: "#2563eb",
+  },
+  patientInfo: {
+    flex: 1,
+  },
+  patientName: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#1e40af",
+  },
+  patientDetails: {
+    fontSize: 12,
+    color: "#3b82f6",
+    marginTop: 2,
+  },
+  priorityBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  priorityText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 11,
+  },
+  voiceBtn: {
+    backgroundColor: "#1976d2",
+    marginHorizontal: 16,
+    padding: 14,
+    borderRadius: 12,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 10,
+  },
+  voiceBtnRecording: {
+    backgroundColor: "#dc2626",
+  },
+  voiceText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 15,
+  },
+  loadingBox: {
+    alignItems: "center",
+    padding: 16,
+  },
+  loadingText: {
+    marginTop: 8,
+    color: "#64748b",
+  },
+  transcriptBox: {
+    backgroundColor: "#f0f9ff",
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#bae6fd",
+  },
+  transcriptLabel: {
+    fontWeight: "700",
+    color: "#0369a1",
+    marginBottom: 4,
+  },
+  transcriptText: {
+    color: "#0c4a6e",
+    fontSize: 13,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 8,
+  },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#1e40af",
+  },
+  card: {
+    backgroundColor: "#fff",
+    marginHorizontal: 16,
+    marginBottom: 8,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  aiCard: {
+    backgroundColor: "#faf5ff",
+    marginHorizontal: 16,
+    marginBottom: 8,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e9d5ff",
+  },
+  aiInfo: {
+    backgroundColor: "#f3e8ff",
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  aiInfoText: {
+    color: "#7c3aed",
+    fontSize: 13,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  aiButtonRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  aiBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 14,
+    borderRadius: 10,
+    gap: 8,
+  },
+  aiBtnRed: {
+    backgroundColor: "#ef4444",
+  },
+  aiBtnPurple: {
+    backgroundColor: "#7c3aed",
+  },
+  aiBtnText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 14,
+  },
+  aiDisclaimer: {
+    fontSize: 11,
+    color: "#7c3aed",
+    textAlign: "center",
+    marginTop: 10,
+  },
+  label: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#475569",
+    marginBottom: 6,
+    marginTop: 8,
+  },
+  input: {
+    backgroundColor: "#f8fafc",
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    fontSize: 14,
+    color: "#1e293b",
+  },
+  textArea: {
+    minHeight: 80,
+    textAlignVertical: "top",
+  },
+  textAreaLarge: {
+    minHeight: 150,
+    textAlignVertical: "top",
+  },
+  interventionsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  interventionItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: "#f1f5f9",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  interventionItemActive: {
+    backgroundColor: "#f0fdf4",
+    borderColor: "#22c55e",
+  },
+  interventionText: {
+    fontSize: 13,
+    color: "#475569",
+  },
+  interventionTextActive: {
+    color: "#166534",
+    fontWeight: "600",
+  },
+  categoryTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#1e293b",
+    marginBottom: 10,
+  },
+  medsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  medChip: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    backgroundColor: "#f1f5f9",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  medChipActive: {
+    backgroundColor: "#dbeafe",
+    borderColor: "#2563eb",
+  },
+  medChipText: {
+    fontSize: 12,
+    color: "#475569",
+  },
+  medChipTextActive: {
+    color: "#1e40af",
+    fontWeight: "600",
+  },
+  summaryCard: {
+    backgroundColor: "#f0fdf4",
+    marginHorizontal: 16,
+    marginTop: 8,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#86efac",
+  },
+  summaryTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#166534",
+    marginBottom: 6,
+  },
+  summaryText: {
+    fontSize: 13,
+    color: "#15803d",
+    lineHeight: 18,
+  },
+  actionRow: {
+    flexDirection: "row",
+    gap: 12,
+    padding: 16,
+    marginTop: 10,
+  },
+  saveBtn: {
+    flex: 1,
+    backgroundColor: "#64748b",
+    padding: 16,
+    borderRadius: 12,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+  },
+  nextBtn: {
+    flex: 2,
+    backgroundColor: "#16a34a",
+    padding: 16,
+    borderRadius: 12,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+  },
+  btnDisabled: {
+    opacity: 0.6,
+  },
+  btnText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 15,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: "85%",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#1e293b",
+  },
+  modalBody: {
+    padding: 16,
+    maxHeight: 400,
+  },
+  aiResponseText: {
+    fontSize: 14,
+    color: "#334155",
+    lineHeight: 22,
+  },
+  modalFooter: {
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#e2e8f0",
+  },
+  modalDisclaimer: {
+    fontSize: 11,
+    color: "#94a3b8",
+    textAlign: "center",
+    marginBottom: 12,
+  },
+  modalCloseBtn: {
+    backgroundColor: "#2563eb",
+    padding: 14,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  modalCloseBtnText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 15,
+  },
+});

@@ -1,0 +1,450 @@
+// StreamingVoiceInput.js - Real-time streaming voice transcription component
+// Uses WebSocket connection to backend for continuous speech-to-text
+
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Animated,
+  Platform,
+} from 'react-native';
+import { Audio } from 'expo-av';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
+
+// WebSocket URL - uses the same base URL as API
+const WS_BASE_URL = 'wss://er-emr-backend.onrender.com';
+
+const StreamingVoiceInput = ({
+  onTranscriptionUpdate,  // Callback for partial transcriptions
+  onFinalTranscription,   // Callback for final refined text
+  onError,                // Callback for errors
+  language = 'auto',      // Language: 'en-IN', 'hi-IN', 'ml-IN', 'auto'
+  fieldName = '',         // Field being dictated (for display)
+  disabled = false,
+}) => {
+  const [isRecording, setIsRecording] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+  const [partialText, setPartialText] = useState('');
+  const [error, setError] = useState(null);
+  
+  const wsRef = useRef(null);
+  const recordingRef = useRef(null);
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const audioChunkIntervalRef = useRef(null);
+  
+  // Pulse animation when recording
+  useEffect(() => {
+    if (isRecording) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.2,
+            duration: 500,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 500,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    } else {
+      pulseAnim.setValue(1);
+    }
+  }, [isRecording]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      stopRecording();
+    };
+  }, []);
+
+  const connectWebSocket = async () => {
+    try {
+      setIsConnecting(true);
+      setError(null);
+      
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        throw new Error('Not authenticated');
+      }
+
+      // Create WebSocket connection
+      const ws = new WebSocket(`${WS_BASE_URL}/ws/stt`);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        console.log('WebSocket connected, sending auth...');
+        // Send authentication message
+        ws.send(JSON.stringify({
+          token: token,
+          language: language === 'auto' ? 'en-IN' : language,
+        }));
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log('WS message:', data.type);
+          
+          switch (data.type) {
+            case 'connected':
+              console.log('STT ready:', data.message);
+              setIsConnected(true);
+              setIsConnecting(false);
+              startAudioCapture();
+              break;
+              
+            case 'speech_start':
+              console.log('Speech detected');
+              break;
+              
+            case 'speech_end':
+              console.log('Speech ended');
+              break;
+              
+            case 'partial':
+              setPartialText(prev => prev + ' ' + data.text);
+              if (onTranscriptionUpdate) {
+                onTranscriptionUpdate(data.text);
+              }
+              break;
+              
+            case 'final':
+              console.log('Final transcript received');
+              if (onFinalTranscription) {
+                onFinalTranscription(data.text, data.raw_text);
+              }
+              setPartialText('');
+              break;
+              
+            case 'error':
+              console.error('STT error:', data.message);
+              setError(data.message);
+              if (onError) {
+                onError(data.message);
+              }
+              break;
+          }
+        } catch (e) {
+          console.error('Error parsing WS message:', e);
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        setError('Connection error');
+        setIsConnecting(false);
+        setIsConnected(false);
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket closed');
+        setIsConnected(false);
+        setIsRecording(false);
+      };
+
+    } catch (err) {
+      console.error('WebSocket connect error:', err);
+      setError(err.message);
+      setIsConnecting(false);
+      if (onError) {
+        onError(err.message);
+      }
+    }
+  };
+
+  const startAudioCapture = async () => {
+    try {
+      // Request permission
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== 'granted') {
+        throw new Error('Microphone permission denied');
+      }
+
+      // Configure audio mode
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: true,
+        shouldDuckAndroid: true,
+      });
+
+      // Create recording with PCM format for streaming
+      const { recording } = await Audio.Recording.createAsync({
+        android: {
+          extension: '.pcm',
+          outputFormat: Audio.AndroidOutputFormat.DEFAULT,
+          audioEncoder: Audio.AndroidAudioEncoder.DEFAULT,
+          sampleRate: 16000,
+          numberOfChannels: 1,
+          bitRate: 256000,
+        },
+        ios: {
+          extension: '.wav',
+          audioQuality: Audio.IOSAudioQuality.HIGH,
+          sampleRate: 16000,
+          numberOfChannels: 1,
+          bitRate: 256000,
+          linearPCMBitDepth: 16,
+          linearPCMIsBigEndian: false,
+          linearPCMIsFloat: false,
+        },
+        web: {},
+      });
+
+      recordingRef.current = recording;
+      setIsRecording(true);
+      console.log('Audio recording started');
+
+      // For continuous streaming, we need to periodically send audio chunks
+      // Note: expo-av doesn't support true streaming, so we use periodic capture
+      audioChunkIntervalRef.current = setInterval(async () => {
+        if (recordingRef.current && wsRef.current?.readyState === WebSocket.OPEN) {
+          try {
+            // Get recording status
+            const status = await recordingRef.current.getStatusAsync();
+            if (status.isRecording && status.metering !== undefined) {
+              // In a production app, you'd use a native module for true PCM streaming
+              // For now, this is a simplified version
+              console.log('Recording level:', status.metering);
+            }
+          } catch (e) {
+            console.log('Status check error:', e);
+          }
+        }
+      }, 100); // Check every 100ms
+
+    } catch (err) {
+      console.error('Audio capture error:', err);
+      setError(err.message);
+      if (onError) {
+        onError(err.message);
+      }
+    }
+  };
+
+  const stopRecording = async () => {
+    try {
+      // Clear interval
+      if (audioChunkIntervalRef.current) {
+        clearInterval(audioChunkIntervalRef.current);
+        audioChunkIntervalRef.current = null;
+      }
+
+      // Stop recording
+      if (recordingRef.current) {
+        await recordingRef.current.stopAndUnloadAsync();
+        const uri = recordingRef.current.getURI();
+        recordingRef.current = null;
+        
+        // If we have a recording URI, send final audio
+        if (uri && wsRef.current?.readyState === WebSocket.OPEN) {
+          try {
+            // Read the audio file and send to WebSocket
+            const response = await fetch(uri);
+            const blob = await response.blob();
+            const reader = new FileReader();
+            
+            reader.onloadend = () => {
+              const base64Audio = reader.result.split(',')[1];
+              if (wsRef.current?.readyState === WebSocket.OPEN) {
+                // Send the audio data
+                wsRef.current.send(JSON.stringify({
+                  audio: base64Audio,
+                  encoding: 'audio/wav',
+                  sample_rate: 16000,
+                }));
+                
+                // Then send STOP to trigger final refinement
+                setTimeout(() => {
+                  if (wsRef.current?.readyState === WebSocket.OPEN) {
+                    wsRef.current.send('STOP');
+                  }
+                }, 500);
+              }
+            };
+            
+            reader.readAsDataURL(blob);
+          } catch (e) {
+            console.error('Error sending final audio:', e);
+          }
+        }
+      }
+
+      setIsRecording(false);
+      
+      // Close WebSocket after getting final result
+      setTimeout(() => {
+        if (wsRef.current) {
+          wsRef.current.close();
+          wsRef.current = null;
+        }
+        setIsConnected(false);
+      }, 3000); // Wait for final transcript
+
+    } catch (err) {
+      console.error('Stop recording error:', err);
+    }
+  };
+
+  const handlePress = async () => {
+    if (disabled) return;
+    
+    if (isRecording) {
+      await stopRecording();
+    } else {
+      setPartialText('');
+      await connectWebSocket();
+    }
+  };
+
+  const getButtonStyle = () => {
+    if (isRecording) return [styles.button, styles.buttonRecording];
+    if (isConnecting) return [styles.button, styles.buttonConnecting];
+    if (disabled) return [styles.button, styles.buttonDisabled];
+    return [styles.button];
+  };
+
+  const getIconName = () => {
+    if (isRecording) return 'stop';
+    if (isConnecting) return 'hourglass';
+    return 'mic';
+  };
+
+  const getStatusText = () => {
+    if (isConnecting) return 'Connecting...';
+    if (isRecording) return 'Recording... Tap to stop';
+    if (error) return error;
+    return 'Tap to dictate';
+  };
+
+  return (
+    <View style={styles.container}>
+      {/* Voice button */}
+      <Animated.View style={{ transform: [{ scale: isRecording ? pulseAnim : 1 }] }}>
+        <TouchableOpacity
+          style={getButtonStyle()}
+          onPress={handlePress}
+          disabled={disabled || isConnecting}
+          activeOpacity={0.7}
+        >
+          <Ionicons 
+            name={getIconName()} 
+            size={24} 
+            color={isRecording ? '#fff' : '#2563eb'} 
+          />
+        </TouchableOpacity>
+      </Animated.View>
+
+      {/* Status text */}
+      <Text style={[
+        styles.statusText,
+        isRecording && styles.statusRecording,
+        error && styles.statusError,
+      ]}>
+        {getStatusText()}
+      </Text>
+
+      {/* Partial transcription display */}
+      {partialText && (
+        <View style={styles.partialContainer}>
+          <Text style={styles.partialLabel}>Transcribing:</Text>
+          <Text style={styles.partialText}>{partialText}</Text>
+        </View>
+      )}
+
+      {/* Language indicator */}
+      {isConnected && (
+        <View style={styles.languageBadge}>
+          <Text style={styles.languageText}>
+            {language === 'auto' ? '🌐 Auto' : 
+             language === 'hi-IN' ? '🇮🇳 Hindi' :
+             language === 'ml-IN' ? '🇮🇳 Malayalam' :
+             '🇬🇧 English'}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    alignItems: 'center',
+    padding: 8,
+  },
+  button: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#e0e7ff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  buttonRecording: {
+    backgroundColor: '#dc2626',
+  },
+  buttonConnecting: {
+    backgroundColor: '#f59e0b',
+  },
+  buttonDisabled: {
+    backgroundColor: '#e2e8f0',
+    opacity: 0.6,
+  },
+  statusText: {
+    marginTop: 8,
+    fontSize: 12,
+    color: '#64748b',
+  },
+  statusRecording: {
+    color: '#dc2626',
+    fontWeight: '600',
+  },
+  statusError: {
+    color: '#dc2626',
+  },
+  partialContainer: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 8,
+    maxWidth: 300,
+  },
+  partialLabel: {
+    fontSize: 10,
+    color: '#64748b',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+  },
+  partialText: {
+    fontSize: 14,
+    color: '#1e293b',
+    lineHeight: 20,
+  },
+  languageBadge: {
+    marginTop: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: '#dbeafe',
+    borderRadius: 12,
+  },
+  languageText: {
+    fontSize: 10,
+    color: '#1e40af',
+    fontWeight: '600',
+  },
+});
+
+export default StreamingVoiceInput;

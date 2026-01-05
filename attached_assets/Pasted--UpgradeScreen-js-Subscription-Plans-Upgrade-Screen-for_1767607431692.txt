@@ -1,0 +1,555 @@
+// UpgradeScreen.js - Subscription Plans & Upgrade Screen for ErMate
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
+  Linking,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const API_URL = "https://er-emr-backend.onrender.com/api";
+
+// Plan configurations
+const PLANS = {
+  free: {
+    name: "Free Trial",
+    price: "₹0",
+    period: "5 patients",
+    icon: "gift-outline",
+    color: "#64748b",
+    features: [
+      { text: "5 patients total", included: true },
+      { text: "Full ER workflow", included: true },
+      { text: "Voice dictation", included: true },
+      { text: "AI features (5 uses)", included: true },
+      { text: "Red flag alerts", included: true },
+      { text: "Unlimited patients", included: false },
+      { text: "Analytics", included: false },
+    ],
+  },
+  pro_monthly: {
+    name: "ERmate PRO",
+    price: "₹999",
+    period: "/month",
+    icon: "star",
+    color: "#2563eb",
+    popular: true,
+    features: [
+      { text: "Unlimited patients", included: true },
+      { text: "Full ER workflow", included: true },
+      { text: "Voice dictation", included: true },
+      { text: "Core AI (fair use)", included: true },
+      { text: "Red flag alerts", included: true },
+      { text: "Email support", included: true },
+      { text: "Advanced AI (credits)", included: "partial" },
+      { text: "Analytics", included: false },
+    ],
+  },
+  pro_annual: {
+    name: "PRO Annual",
+    price: "₹9,999",
+    period: "/year",
+    icon: "ribbon",
+    color: "#8b5cf6",
+    savings: "Save ₹2,000",
+    features: [
+      { text: "Everything in PRO", included: true },
+      { text: "2 months FREE", included: true },
+      { text: "150 AI credits/month", included: true },
+      { text: "Priority support", included: true },
+    ],
+  },
+  hospital_basic: {
+    name: "Hospital Basic",
+    price: "₹15,000",
+    period: "/month",
+    icon: "business",
+    color: "#059669",
+    features: [
+      { text: "Up to 10 users", included: true },
+      { text: "Unlimited patients", included: true },
+      { text: "Full AI access", included: true },
+      { text: "Analytics dashboard", included: true },
+      { text: "Priority support", included: true },
+      { text: "Admin controls", included: true },
+    ],
+  },
+  hospital_premium: {
+    name: "Hospital Premium",
+    price: "₹40,000+",
+    period: "/month",
+    icon: "globe",
+    color: "#dc2626",
+    features: [
+      { text: "Unlimited users", included: true },
+      { text: "Unlimited AI", included: true },
+      { text: "Full analytics", included: true },
+      { text: "Audit logs", included: true },
+      { text: "Custom integrations", included: true },
+      { text: "Dedicated support", included: true },
+    ],
+  },
+};
+
+const CREDIT_PACKS = [
+  { id: "pack_10", credits: 10, price: 299, perCredit: "₹30" },
+  { id: "pack_25", credits: 25, price: 699, perCredit: "₹28", popular: true },
+  { id: "pack_50", credits: 50, price: 1299, perCredit: "₹26" },
+];
+
+export default function UpgradeScreen({ navigation, route }) {
+  const [loading, setLoading] = useState(true);
+  const [subscriptionStatus, setSubscriptionStatus] = useState(null);
+  const [selectedTab, setSelectedTab] = useState("plans"); // plans, credits
+
+  const lockReason = route?.params?.lockReason;
+  const lockMessage = route?.params?.lockMessage;
+
+  useEffect(() => {
+    loadSubscriptionStatus();
+  }, []);
+
+  const loadSubscriptionStatus = async () => {
+    try {
+      const token = await AsyncStorage.getItem("token");
+      const res = await fetch(`${API_URL}/subscription/status`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSubscriptionStatus(data);
+      }
+    } catch (err) {
+      console.error("Error loading subscription:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSelectPlan = async (planId) => {
+    if (planId === "free") {
+      Alert.alert("Current Plan", "You are already on the Free plan.");
+      return;
+    }
+
+    // For now, show contact info. In production, integrate Razorpay here
+    Alert.alert(
+      "Upgrade to " + PLANS[planId].name,
+      `Price: ${PLANS[planId].price}${PLANS[planId].period}\n\nTo complete your upgrade, please contact us or we'll integrate payment shortly.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Contact Support",
+          onPress: () => {
+            // You can integrate Razorpay payment here
+            Linking.openURL("mailto:support@ermate.app?subject=Upgrade%20to%20" + planId);
+          },
+        },
+      ]
+    );
+  };
+
+  const handleBuyCredits = async (packId) => {
+    const pack = CREDIT_PACKS.find((p) => p.id === packId);
+    
+    Alert.alert(
+      "Buy AI Credits",
+      `${pack.credits} credits for ₹${pack.price}\n\nPayment integration coming soon!`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Contact Support",
+          onPress: () => {
+            Linking.openURL("mailto:support@ermate.app?subject=Buy%20AI%20Credits%20" + packId);
+          },
+        },
+      ]
+    );
+  };
+
+  const PlanCard = ({ planId, plan }) => {
+    const isCurrentPlan = subscriptionStatus?.tier === planId;
+    
+    return (
+      <TouchableOpacity
+        style={[
+          styles.planCard,
+          { borderColor: plan.color },
+          plan.popular && styles.popularCard,
+          isCurrentPlan && styles.currentPlanCard,
+        ]}
+        onPress={() => handleSelectPlan(planId)}
+        disabled={isCurrentPlan}
+      >
+        {plan.popular && (
+          <View style={[styles.popularBadge, { backgroundColor: plan.color }]}>
+            <Text style={styles.popularText}>MOST POPULAR</Text>
+          </View>
+        )}
+        
+        {plan.savings && (
+          <View style={styles.savingsBadge}>
+            <Text style={styles.savingsText}>{plan.savings}</Text>
+          </View>
+        )}
+
+        <View style={styles.planHeader}>
+          <View style={[styles.planIcon, { backgroundColor: plan.color + "20" }]}>
+            <Ionicons name={plan.icon} size={24} color={plan.color} />
+          </View>
+          <View>
+            <Text style={styles.planName}>{plan.name}</Text>
+            <View style={styles.priceRow}>
+              <Text style={[styles.planPrice, { color: plan.color }]}>{plan.price}</Text>
+              <Text style={styles.planPeriod}>{plan.period}</Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.featuresContainer}>
+          {plan.features.map((feature, idx) => (
+            <View key={idx} style={styles.featureRow}>
+              <Ionicons
+                name={
+                  feature.included === true
+                    ? "checkmark-circle"
+                    : feature.included === "partial"
+                    ? "ellipse-outline"
+                    : "close-circle"
+                }
+                size={18}
+                color={
+                  feature.included === true
+                    ? "#22c55e"
+                    : feature.included === "partial"
+                    ? "#f59e0b"
+                    : "#ef4444"
+                }
+              />
+              <Text
+                style={[
+                  styles.featureText,
+                  !feature.included && styles.featureTextDisabled,
+                ]}
+              >
+                {feature.text}
+              </Text>
+            </View>
+          ))}
+        </View>
+
+        <TouchableOpacity
+          style={[
+            styles.selectBtn,
+            { backgroundColor: isCurrentPlan ? "#e2e8f0" : plan.color },
+          ]}
+          onPress={() => handleSelectPlan(planId)}
+          disabled={isCurrentPlan}
+        >
+          <Text style={[styles.selectBtnText, isCurrentPlan && { color: "#64748b" }]}>
+            {isCurrentPlan ? "Current Plan" : "Select Plan"}
+          </Text>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    );
+  };
+
+  const CreditPackCard = ({ pack }) => (
+    <TouchableOpacity
+      style={[styles.creditCard, pack.popular && styles.creditCardPopular]}
+      onPress={() => handleBuyCredits(pack.id)}
+    >
+      {pack.popular && (
+        <View style={styles.creditPopularBadge}>
+          <Text style={styles.creditPopularText}>BEST VALUE</Text>
+        </View>
+      )}
+      <Text style={styles.creditAmount}>{pack.credits}</Text>
+      <Text style={styles.creditLabel}>credits</Text>
+      <Text style={styles.creditPrice}>₹{pack.price}</Text>
+      <Text style={styles.creditPerUnit}>{pack.perCredit}/credit</Text>
+    </TouchableOpacity>
+  );
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#2563eb" />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Ionicons name="arrow-back" size={24} color="#1e293b" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Upgrade ERmate</Text>
+        <View style={{ width: 24 }} />
+      </View>
+
+      {/* Lock Message Banner */}
+      {lockMessage && (
+        <View style={styles.lockBanner}>
+          <Ionicons name="lock-closed" size={20} color="#dc2626" />
+          <Text style={styles.lockText}>{lockMessage}</Text>
+        </View>
+      )}
+
+      {/* Current Status */}
+      {subscriptionStatus && (
+        <View style={styles.statusCard}>
+          <View style={styles.statusRow}>
+            <Text style={styles.statusLabel}>Current Plan:</Text>
+            <Text style={styles.statusValue}>{subscriptionStatus.plan_name}</Text>
+          </View>
+          <View style={styles.statusRow}>
+            <Text style={styles.statusLabel}>Patients Used:</Text>
+            <Text style={styles.statusValue}>
+              {subscriptionStatus.patient_count}
+              {subscriptionStatus.max_patients > 0 ? ` / ${subscriptionStatus.max_patients}` : " (Unlimited)"}
+            </Text>
+          </View>
+          <View style={styles.statusRow}>
+            <Text style={styles.statusLabel}>AI Credits:</Text>
+            <Text style={styles.statusValue}>{subscriptionStatus.ai_credits || 0}</Text>
+          </View>
+        </View>
+      )}
+
+      {/* Tabs */}
+      <View style={styles.tabRow}>
+        <TouchableOpacity
+          style={[styles.tab, selectedTab === "plans" && styles.tabActive]}
+          onPress={() => setSelectedTab("plans")}
+        >
+          <Text style={[styles.tabText, selectedTab === "plans" && styles.tabTextActive]}>
+            Subscription Plans
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, selectedTab === "credits" && styles.tabActive]}
+          onPress={() => setSelectedTab("credits")}
+        >
+          <Text style={[styles.tabText, selectedTab === "credits" && styles.tabTextActive]}>
+            AI Credits
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {selectedTab === "plans" ? (
+          <View style={styles.plansContainer}>
+            {/* Individual Plans */}
+            <Text style={styles.sectionTitle}>👨‍⚕️ Individual Plans</Text>
+            <PlanCard planId="pro_monthly" plan={PLANS.pro_monthly} />
+            <PlanCard planId="pro_annual" plan={PLANS.pro_annual} />
+
+            {/* Hospital Plans */}
+            <Text style={[styles.sectionTitle, { marginTop: 24 }]}>🏥 Hospital Plans</Text>
+            <PlanCard planId="hospital_basic" plan={PLANS.hospital_basic} />
+            <PlanCard planId="hospital_premium" plan={PLANS.hospital_premium} />
+          </View>
+        ) : (
+          <View style={styles.creditsContainer}>
+            <Text style={styles.creditsIntro}>
+              AI Credits are used for advanced features like VBG interpretation and differential diagnosis.
+            </Text>
+            
+            <View style={styles.creditPacksRow}>
+              {CREDIT_PACKS.map((pack) => (
+                <CreditPackCard key={pack.id} pack={pack} />
+              ))}
+            </View>
+
+            <View style={styles.creditsInfo}>
+              <Ionicons name="information-circle" size={20} color="#3b82f6" />
+              <Text style={styles.creditsInfoText}>
+                Credits never expire and work alongside your subscription.
+              </Text>
+            </View>
+          </View>
+        )}
+
+        <View style={{ height: 40 }} />
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#f8fafc" },
+  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+  
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    paddingTop: 50,
+    backgroundColor: "#fff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
+  },
+  headerTitle: { fontSize: 18, fontWeight: "700", color: "#1e293b" },
+
+  lockBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fef2f2",
+    padding: 12,
+    marginHorizontal: 16,
+    marginTop: 16,
+    borderRadius: 8,
+    gap: 8,
+  },
+  lockText: { flex: 1, fontSize: 13, color: "#dc2626", fontWeight: "500" },
+
+  statusCard: {
+    backgroundColor: "#fff",
+    margin: 16,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  statusRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  statusLabel: { fontSize: 14, color: "#64748b" },
+  statusValue: { fontSize: 14, fontWeight: "600", color: "#1e293b" },
+
+  tabRow: {
+    flexDirection: "row",
+    marginHorizontal: 16,
+    backgroundColor: "#e2e8f0",
+    borderRadius: 10,
+    padding: 4,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: "center",
+    borderRadius: 8,
+  },
+  tabActive: { backgroundColor: "#fff" },
+  tabText: { fontSize: 14, fontWeight: "600", color: "#64748b" },
+  tabTextActive: { color: "#2563eb" },
+
+  content: { flex: 1 },
+  plansContainer: { padding: 16 },
+  sectionTitle: { fontSize: 16, fontWeight: "700", color: "#1e293b", marginBottom: 12 },
+
+  planCard: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: "#e2e8f0",
+    position: "relative",
+  },
+  popularCard: { borderWidth: 3 },
+  currentPlanCard: { opacity: 0.7 },
+  
+  popularBadge: {
+    position: "absolute",
+    top: -10,
+    right: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  popularText: { color: "#fff", fontSize: 10, fontWeight: "800" },
+  
+  savingsBadge: {
+    position: "absolute",
+    top: -10,
+    left: 16,
+    backgroundColor: "#dcfce7",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  savingsText: { color: "#166534", fontSize: 10, fontWeight: "700" },
+
+  planHeader: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 16 },
+  planIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  planName: { fontSize: 18, fontWeight: "700", color: "#1e293b" },
+  priceRow: { flexDirection: "row", alignItems: "baseline" },
+  planPrice: { fontSize: 24, fontWeight: "800" },
+  planPeriod: { fontSize: 14, color: "#64748b", marginLeft: 2 },
+
+  featuresContainer: { marginBottom: 16 },
+  featureRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 },
+  featureText: { fontSize: 13, color: "#475569" },
+  featureTextDisabled: { color: "#94a3b8", textDecorationLine: "line-through" },
+
+  selectBtn: {
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  selectBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
+
+  // Credits
+  creditsContainer: { padding: 16 },
+  creditsIntro: {
+    fontSize: 14,
+    color: "#475569",
+    textAlign: "center",
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  creditPacksRow: { flexDirection: "row", justifyContent: "space-between", gap: 10 },
+  creditCard: {
+    flex: 1,
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 16,
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#e2e8f0",
+  },
+  creditCardPopular: { borderColor: "#2563eb", borderWidth: 3 },
+  creditPopularBadge: {
+    position: "absolute",
+    top: -8,
+    backgroundColor: "#2563eb",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  creditPopularText: { color: "#fff", fontSize: 8, fontWeight: "800" },
+  creditAmount: { fontSize: 32, fontWeight: "800", color: "#1e293b" },
+  creditLabel: { fontSize: 12, color: "#64748b" },
+  creditPrice: { fontSize: 18, fontWeight: "700", color: "#2563eb", marginTop: 8 },
+  creditPerUnit: { fontSize: 11, color: "#94a3b8" },
+
+  creditsInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#eff6ff",
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 20,
+    gap: 8,
+  },
+  creditsInfoText: { flex: 1, fontSize: 12, color: "#1e40af" },
+});

@@ -1,0 +1,418 @@
+// FIXED InvestigationsScreen.js - Now navigates to Treatment screen (not directly to Disposition)
+import React, { useState, useRef, useCallback } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TextInput,
+  TouchableOpacity,
+  Alert,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const API_URL = "https://er-emr-backend.onrender.com/api";
+
+export default function InvestigationsScreen({ route, navigation }) {
+  const { caseId, patientType, patient, vitals, triageData } = route.params || {};
+
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  /* ===================== useRef for text inputs (prevents lag) ===================== */
+  const customTestsRef = useRef("");
+  const resultsNotesRef = useRef("");
+
+  /* ===================== INVESTIGATION PANELS ===================== */
+  const [selectedPanels, setSelectedPanels] = useState([]);
+
+  /* ===================== COMMON PANELS ===================== */
+  const investigationPanels = {
+    "Basic Labs": [
+      "CBC",
+      "RBS",
+      "RFT (Urea, Creatinine)",
+      "LFT",
+      "Serum Electrolytes",
+    ],
+    "Cardiac": [
+      "ECG",
+      "Troponin I",
+      "CK-MB",
+      "NT-proBNP",
+    ],
+    "Coagulation": [
+      "PT/INR",
+      "aPTT",
+      "D-Dimer",
+    ],
+    "Infection": [
+      "CRP",
+      "Procalcitonin",
+      "Blood Culture",
+      "Urine Culture",
+    ],
+    "ABG & Others": [
+      "ABG",
+      "Lactate",
+      "Ammonia",
+      "Lipase",
+    ],
+    "Imaging": [
+      "X-Ray Chest",
+      "X-Ray Abdomen",
+      "CT Head",
+      "CT Chest",
+      "CT Abdomen",
+      "USG Abdomen",
+      "ECHO",
+    ],
+    "Urine": [
+      "Urine Routine",
+      "Urine Pregnancy Test",
+    ],
+  };
+
+  /* ===================== TOGGLE PANEL ===================== */
+  const toggleTest = (test) => {
+    setSelectedPanels((prev) =>
+      prev.includes(test) ? prev.filter((t) => t !== test) : [...prev, test]
+    );
+  };
+
+  /* ===================== SAVE INVESTIGATIONS ===================== */
+  const saveInvestigations = async () => {
+    setSaving(true);
+    try {
+      const token = await AsyncStorage.getItem("token");
+
+      const payload = {
+        investigations: {
+          panels_selected: selectedPanels,
+          individual_tests: customTestsRef.current.split(",").map(t => t.trim()).filter(Boolean),
+          results_notes: resultsNotesRef.current,
+        },
+      };
+
+      const response = await fetch(`${API_URL}/cases/${caseId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to save investigations");
+      }
+
+      Alert.alert("✅ Saved", "Investigations saved successfully!");
+      return true;
+    } catch (err) {
+      console.error("Save error:", err);
+      Alert.alert("Error", err.message || "Failed to save");
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /* ===================== PROCEED TO TREATMENT (NOT Disposition!) ===================== */
+  const proceedToTreatment = async () => {
+    const saved = await saveInvestigations();
+    if (!saved) return;
+
+    // Navigate to TREATMENT screen with AI features
+    navigation.navigate("Treatment", {
+      caseId,
+      patientType,
+      patient,
+      vitals,
+      triageData,
+      investigations: {
+        panels_selected: selectedPanels,
+        custom_tests: customTestsRef.current,
+        results_notes: resultsNotesRef.current,
+      },
+    });
+  };
+
+  /* ===================== UI ===================== */
+
+  return (
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
+      <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={24} color="#1e293b" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>🔬 Investigations</Text>
+          <View style={{ width: 24 }} />
+        </View>
+
+        {/* Patient Info Banner */}
+        <View style={styles.patientBanner}>
+          <Text style={styles.patientName}>{patient?.name || "Patient"}</Text>
+          <Text style={styles.patientDetails}>
+            {patient?.age} {patient?.age_unit || "yrs"} • {patient?.sex} • Case ID: {caseId?.slice(0, 8)}...
+          </Text>
+        </View>
+
+        {/* Investigation Panels */}
+        {Object.entries(investigationPanels).map(([category, tests]) => (
+          <View key={category} style={styles.card}>
+            <Text style={styles.categoryTitle}>{category}</Text>
+            <View style={styles.testsGrid}>
+              {tests.map((test) => (
+                <TouchableOpacity
+                  key={test}
+                  style={[
+                    styles.testChip,
+                    selectedPanels.includes(test) && styles.testChipActive,
+                  ]}
+                  onPress={() => toggleTest(test)}
+                >
+                  <Ionicons
+                    name={selectedPanels.includes(test) ? "checkbox" : "square-outline"}
+                    size={18}
+                    color={selectedPanels.includes(test) ? "#fff" : "#64748b"}
+                  />
+                  <Text
+                    style={[
+                      styles.testChipText,
+                      selectedPanels.includes(test) && styles.testChipTextActive,
+                    ]}
+                  >
+                    {test}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        ))}
+
+        {/* Custom Tests */}
+        <View style={styles.card}>
+          <Text style={styles.categoryTitle}>Other Tests</Text>
+          <TextInput
+            style={styles.textArea}
+            defaultValue=""
+            onChangeText={(text) => { customTestsRef.current = text; }}
+            placeholder="Add any other tests (comma separated)..."
+            placeholderTextColor="#9ca3af"
+            multiline
+          />
+        </View>
+
+        {/* Results Notes */}
+        <View style={styles.card}>
+          <Text style={styles.categoryTitle}>Results / Findings</Text>
+          <TextInput
+            style={[styles.textArea, { minHeight: 120 }]}
+            defaultValue=""
+            onChangeText={(text) => { resultsNotesRef.current = text; }}
+            placeholder="Document investigation results here..."
+            placeholderTextColor="#9ca3af"
+            multiline
+          />
+        </View>
+
+        {/* Selected Tests Summary */}
+        {selectedPanels.length > 0 && (
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryTitle}>
+              ✅ Selected Tests ({selectedPanels.length})
+            </Text>
+            <Text style={styles.summaryText}>{selectedPanels.join(", ")}</Text>
+          </View>
+        )}
+
+        {/* Action Buttons */}
+        <View style={styles.actionButtons}>
+          <TouchableOpacity
+            style={[styles.saveBtn, saving && styles.btnDisabled]}
+            onPress={saveInvestigations}
+            disabled={saving}
+          >
+            {saving ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="save" size={20} color="#fff" />
+                <Text style={styles.btnText}>Save</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.nextBtn, saving && styles.btnDisabled]}
+            onPress={proceedToTreatment}
+            disabled={saving}
+          >
+            <Text style={styles.btnText}>Treatment & Diagnosis</Text>
+            <Ionicons name="arrow-forward" size={20} color="#fff" />
+          </TouchableOpacity>
+        </View>
+
+        <View style={{ height: 40 }} />
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+/* ===================== STYLES ===================== */
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#f8fafc",
+  },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    backgroundColor: "#fff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#1e293b",
+  },
+  patientBanner: {
+    backgroundColor: "#eff6ff",
+    padding: 12,
+    margin: 16,
+    borderRadius: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: "#2563eb",
+  },
+  patientName: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#1e40af",
+  },
+  patientDetails: {
+    fontSize: 13,
+    color: "#3b82f6",
+    marginTop: 2,
+  },
+  card: {
+    backgroundColor: "#fff",
+    marginHorizontal: 16,
+    marginBottom: 12,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  categoryTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#1e293b",
+    marginBottom: 12,
+  },
+  testsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  testChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: "#f1f5f9",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  testChipActive: {
+    backgroundColor: "#2563eb",
+    borderColor: "#2563eb",
+  },
+  testChipText: {
+    fontSize: 13,
+    color: "#475569",
+    fontWeight: "500",
+  },
+  testChipTextActive: {
+    color: "#fff",
+  },
+  textArea: {
+    backgroundColor: "#f8fafc",
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    fontSize: 14,
+    color: "#1e293b",
+    minHeight: 80,
+    textAlignVertical: "top",
+  },
+  summaryCard: {
+    backgroundColor: "#f0fdf4",
+    marginHorizontal: 16,
+    marginBottom: 12,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#86efac",
+  },
+  summaryTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#166534",
+    marginBottom: 8,
+  },
+  summaryText: {
+    fontSize: 13,
+    color: "#15803d",
+    lineHeight: 20,
+  },
+  actionButtons: {
+    flexDirection: "row",
+    gap: 12,
+    padding: 16,
+  },
+  saveBtn: {
+    flex: 1,
+    backgroundColor: "#64748b",
+    padding: 16,
+    borderRadius: 12,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+  },
+  nextBtn: {
+    flex: 2,
+    backgroundColor: "#7c3aed",
+    padding: 16,
+    borderRadius: 12,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+  },
+  btnDisabled: {
+    opacity: 0.6,
+  },
+  btnText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 15,
+  },
+});
