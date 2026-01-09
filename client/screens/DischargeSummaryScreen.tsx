@@ -37,6 +37,7 @@ export default function DischargeSummaryScreen() {
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportingDocx, setExportingDocx] = useState(false);
   const [caseData, setCaseData] = useState<any>(null);
   const [summary, setSummary] = useState({
     diagnosis: "",
@@ -224,6 +225,66 @@ Doctor: ${summary.doctor_name || "N/A"}
     });
   };
 
+  const exportDOCX = async () => {
+    setExportingDocx(true);
+    try {
+      const exportData = {
+        patient: caseData?.patient || {},
+        triage: caseData?.triage || {},
+        vitals: caseData?.vitals || {},
+        discharge_summary: summary,
+        created_at: caseData?.created_at,
+      };
+
+      const baseUrl = getApiUrl();
+      const exportUrl = new URL("/api/export/discharge-docx", baseUrl);
+      
+      const response = await fetch(exportUrl.toString(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(exportData),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to generate DOCX");
+      }
+
+      const blob = await response.blob();
+      const fileName = `discharge_summary_${(caseData?.patient?.name || "patient").replace(/\s+/g, "_")}.docx`;
+
+      if (Platform.OS === "web") {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } else {
+        const fileUri = FileSystem.documentDirectory + fileName;
+        const base64 = await blobToBase64(blob);
+        await FileSystem.writeAsStringAsync(fileUri, base64, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(fileUri, {
+            mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            dialogTitle: "Share Discharge Summary",
+          });
+        } else {
+          Alert.alert("Success", `Word document saved to: ${fileUri}`);
+        }
+      }
+    } catch (err) {
+      console.error("DOCX export error:", err);
+      Alert.alert("Error", "Failed to export Word document. Please try again.");
+    } finally {
+      setExportingDocx(false);
+    }
+  };
+
   const updateField = (field: string, value: string) => {
     setSummary((prev) => ({ ...prev, [field]: value }));
   };
@@ -391,6 +452,24 @@ Doctor: ${summary.doctor_name || "N/A"}
               <>
                 <Feather name="file-text" size={18} color={theme.danger} />
                 <Text style={[styles.exportBtnText, { color: theme.danger }]}>PDF</Text>
+              </>
+            )}
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.exportBtn,
+              { backgroundColor: theme.primaryLight, opacity: pressed || exportingDocx ? 0.8 : 1 },
+            ]}
+            onPress={exportDOCX}
+            disabled={exportingDocx}
+          >
+            {exportingDocx ? (
+              <ActivityIndicator color={theme.primary} size="small" />
+            ) : (
+              <>
+                <Feather name="file" size={18} color={theme.primary} />
+                <Text style={[styles.exportBtnText, { color: theme.primary }]}>Word</Text>
               </>
             )}
           </Pressable>

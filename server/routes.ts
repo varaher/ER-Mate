@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "node:http";
 import PDFDocument from "pdfkit";
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from "docx";
 
 interface DischargeSummaryData {
   patient: {
@@ -153,6 +154,175 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err) {
       console.error("PDF generation error:", err);
       res.status(500).json({ error: "Failed to generate PDF" });
+    }
+  });
+
+  app.post("/api/export/discharge-docx", async (req: Request, res: Response) => {
+    try {
+      const data: DischargeSummaryData = req.body;
+      
+      if (!data.patient || !data.discharge_summary) {
+        return res.status(400).json({ error: "Missing patient or discharge summary data" });
+      }
+
+      const children: Paragraph[] = [];
+
+      children.push(
+        new Paragraph({
+          text: "DISCHARGE SUMMARY",
+          heading: HeadingLevel.TITLE,
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 100 },
+        }),
+        new Paragraph({
+          text: "Emergency Department",
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 400 },
+        })
+      );
+
+      children.push(
+        new Paragraph({
+          text: "PATIENT INFORMATION",
+          heading: HeadingLevel.HEADING_2,
+          spacing: { before: 200, after: 100 },
+        }),
+        new Paragraph({ text: `Name: ${data.patient.name || "N/A"}` }),
+        new Paragraph({ text: `Age/Sex: ${data.patient.age || "N/A"} / ${data.patient.sex || "N/A"}` })
+      );
+
+      if (data.patient.phone) {
+        children.push(new Paragraph({ text: `Contact: ${data.patient.phone}` }));
+      }
+
+      children.push(
+        new Paragraph({ text: `Admission Date: ${formatDate(data.created_at)}` }),
+        new Paragraph({ text: `Discharge Date: ${formatDate()}`, spacing: { after: 200 } })
+      );
+
+      if (data.triage?.chief_complaint) {
+        children.push(
+          new Paragraph({
+            text: "PRESENTING COMPLAINT",
+            heading: HeadingLevel.HEADING_2,
+            spacing: { before: 200, after: 100 },
+          }),
+          new Paragraph({ text: data.triage.chief_complaint, spacing: { after: 200 } })
+        );
+      }
+
+      if (data.vitals && (data.vitals.hr || data.vitals.bp_systolic)) {
+        const vitalsText: string[] = [];
+        if (data.vitals.hr) vitalsText.push(`HR: ${data.vitals.hr}/min`);
+        if (data.vitals.bp_systolic && data.vitals.bp_diastolic) {
+          vitalsText.push(`BP: ${data.vitals.bp_systolic}/${data.vitals.bp_diastolic} mmHg`);
+        }
+        if (data.vitals.rr) vitalsText.push(`RR: ${data.vitals.rr}/min`);
+        if (data.vitals.spo2) vitalsText.push(`SpO2: ${data.vitals.spo2}%`);
+        if (data.vitals.temperature) vitalsText.push(`Temp: ${data.vitals.temperature}°F`);
+
+        children.push(
+          new Paragraph({
+            text: "VITAL SIGNS AT PRESENTATION",
+            heading: HeadingLevel.HEADING_2,
+            spacing: { before: 200, after: 100 },
+          }),
+          new Paragraph({ text: vitalsText.join("  |  "), spacing: { after: 200 } })
+        );
+      }
+
+      children.push(
+        new Paragraph({
+          text: "FINAL DIAGNOSIS",
+          heading: HeadingLevel.HEADING_2,
+          spacing: { before: 200, after: 100 },
+        }),
+        new Paragraph({ text: data.discharge_summary.diagnosis || "N/A", spacing: { after: 200 } })
+      );
+
+      children.push(
+        new Paragraph({
+          text: "TREATMENT GIVEN",
+          heading: HeadingLevel.HEADING_2,
+          spacing: { before: 200, after: 100 },
+        }),
+        new Paragraph({ text: data.discharge_summary.treatment_given || "N/A", spacing: { after: 200 } })
+      );
+
+      children.push(
+        new Paragraph({
+          text: "CONDITION AT DISCHARGE",
+          heading: HeadingLevel.HEADING_2,
+          spacing: { before: 200, after: 100 },
+        }),
+        new Paragraph({ text: data.discharge_summary.condition_at_discharge || "Stable", spacing: { after: 200 } })
+      );
+
+      if (data.discharge_summary.medications) {
+        children.push(
+          new Paragraph({
+            text: "MEDICATIONS TO CONTINUE",
+            heading: HeadingLevel.HEADING_2,
+            spacing: { before: 200, after: 100 },
+          }),
+          new Paragraph({ text: data.discharge_summary.medications, spacing: { after: 200 } })
+        );
+      }
+
+      children.push(
+        new Paragraph({
+          text: "FOLLOW-UP",
+          heading: HeadingLevel.HEADING_2,
+          spacing: { before: 200, after: 100 },
+        }),
+        new Paragraph({ text: data.discharge_summary.follow_up || "As advised", spacing: { after: 200 } })
+      );
+
+      if (data.discharge_summary.instructions) {
+        children.push(
+          new Paragraph({
+            text: "INSTRUCTIONS",
+            heading: HeadingLevel.HEADING_2,
+            spacing: { before: 200, after: 100 },
+          }),
+          new Paragraph({ text: data.discharge_summary.instructions, spacing: { after: 400 } })
+        );
+      }
+
+      children.push(
+        new Paragraph({
+          alignment: AlignmentType.RIGHT,
+          spacing: { before: 400 },
+          children: [
+            new TextRun({
+              text: data.discharge_summary.doctor_name || "Treating Physician",
+              bold: true,
+            }),
+          ],
+        }),
+        new Paragraph({
+          text: "Emergency Medicine",
+          alignment: AlignmentType.RIGHT,
+        })
+      );
+
+      const docxDoc = new Document({
+        sections: [
+          {
+            properties: {},
+            children,
+          },
+        ],
+      });
+
+      const buffer = await Packer.toBuffer(docxDoc);
+      
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+      res.setHeader("Content-Disposition", `attachment; filename="discharge_summary_${data.patient.name.replace(/\s+/g, "_")}.docx"`);
+      res.send(Buffer.from(buffer));
+    } catch (err) {
+      console.error("DOCX generation error:", err);
+      res.status(500).json({ error: "Failed to generate DOCX" });
     }
   });
 
