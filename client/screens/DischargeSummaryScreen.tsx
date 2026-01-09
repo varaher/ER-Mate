@@ -14,9 +14,12 @@ import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useTheme } from "@/hooks/useTheme";
 import { apiGet, apiPatch, apiPost, invalidateCases } from "@/lib/api";
+import { getApiUrl } from "@/lib/query-client";
 import { Spacing, BorderRadius, Typography } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -33,6 +36,7 @@ export default function DischargeSummaryScreen() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [caseData, setCaseData] = useState<any>(null);
   const [summary, setSummary] = useState({
     diagnosis: "",
@@ -146,6 +150,78 @@ Doctor: ${summary.doctor_name || "N/A"}
     } catch (err) {
       console.error("Share error:", err);
     }
+  };
+
+  const exportPDF = async () => {
+    setExporting(true);
+    try {
+      const exportData = {
+        patient: caseData?.patient || {},
+        triage: caseData?.triage || {},
+        vitals: caseData?.vitals || {},
+        discharge_summary: summary,
+        created_at: caseData?.created_at,
+      };
+
+      const baseUrl = getApiUrl();
+      const exportUrl = new URL("/api/export/discharge-pdf", baseUrl);
+      
+      const response = await fetch(exportUrl.toString(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(exportData),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to generate PDF");
+      }
+
+      const blob = await response.blob();
+      const fileName = `discharge_summary_${(caseData?.patient?.name || "patient").replace(/\s+/g, "_")}.pdf`;
+
+      if (Platform.OS === "web") {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } else {
+        const fileUri = FileSystem.documentDirectory + fileName;
+        const base64 = await blobToBase64(blob);
+        await FileSystem.writeAsStringAsync(fileUri, base64, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(fileUri, {
+            mimeType: "application/pdf",
+            dialogTitle: "Share Discharge Summary",
+          });
+        } else {
+          Alert.alert("Success", `PDF saved to: ${fileUri}`);
+        }
+      }
+    } catch (err) {
+      console.error("PDF export error:", err);
+      Alert.alert("Error", "Failed to export PDF. Please try again.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const blobToBase64 = (blob: Blob): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = (reader.result as string).split(",")[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
   };
 
   const updateField = (field: string, value: string) => {
@@ -300,7 +376,25 @@ Doctor: ${summary.doctor_name || "N/A"}
           </View>
         </View>
 
-        <View style={styles.buttonRow}>
+        <View style={styles.exportRow}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.exportBtn,
+              { backgroundColor: theme.dangerLight, opacity: pressed || exporting ? 0.8 : 1 },
+            ]}
+            onPress={exportPDF}
+            disabled={exporting}
+          >
+            {exporting ? (
+              <ActivityIndicator color={theme.danger} size="small" />
+            ) : (
+              <>
+                <Feather name="file-text" size={18} color={theme.danger} />
+                <Text style={[styles.exportBtnText, { color: theme.danger }]}>PDF</Text>
+              </>
+            )}
+          </Pressable>
+
           <Pressable
             style={({ pressed }) => [
               styles.shareBtn,
@@ -311,25 +405,25 @@ Doctor: ${summary.doctor_name || "N/A"}
             <Feather name="share-2" size={18} color={theme.primary} />
             <Text style={[styles.shareBtnText, { color: theme.primary }]}>Share</Text>
           </Pressable>
-
-          <Pressable
-            style={({ pressed }) => [
-              styles.saveBtn,
-              { backgroundColor: theme.primary, opacity: pressed || saving ? 0.8 : 1, flex: 1 },
-            ]}
-            onPress={handleSave}
-            disabled={saving}
-          >
-            {saving ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <>
-                <Feather name="check" size={20} color="#FFFFFF" />
-                <Text style={styles.saveBtnText}>Complete & Save</Text>
-              </>
-            )}
-          </Pressable>
         </View>
+
+        <Pressable
+          style={({ pressed }) => [
+            styles.saveBtn,
+            { backgroundColor: theme.primary, opacity: pressed || saving ? 0.8 : 1 },
+          ]}
+          onPress={handleSave}
+          disabled={saving}
+        >
+          {saving ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <>
+              <Feather name="check" size={20} color="#FFFFFF" />
+              <Text style={styles.saveBtnText}>Complete & Save</Text>
+            </>
+          )}
+        </Pressable>
       </KeyboardAwareScrollViewCompat>
     </View>
   );
@@ -369,7 +463,18 @@ const styles = StyleSheet.create({
   },
   conditionRow: { flexDirection: "row", gap: Spacing.sm },
   conditionBtn: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.sm },
-  buttonRow: { flexDirection: "row", gap: Spacing.md },
+  exportRow: { flexDirection: "row", gap: Spacing.md, marginBottom: Spacing.md },
+  exportBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    height: Spacing.buttonHeight,
+    paddingHorizontal: Spacing.xl,
+    borderRadius: BorderRadius.md,
+    gap: Spacing.sm,
+    flex: 1,
+  },
+  exportBtnText: { ...Typography.bodyMedium, fontWeight: "600" },
   shareBtn: {
     flexDirection: "row",
     alignItems: "center",
