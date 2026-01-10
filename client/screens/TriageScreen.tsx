@@ -460,16 +460,28 @@ export default function TriageScreen() {
         case_type: patientType,
       };
 
-      const res = await apiPost<{ id: string }>("/cases", payload);
+      console.log("[TriageScreen] Saving case with payload:", JSON.stringify(payload, null, 2));
+      const res = await apiPost<any>("/cases", payload);
+      console.log("[TriageScreen] API response:", JSON.stringify(res, null, 2));
 
       if (res.success && res.data) {
-        await invalidateCases();
-        navigation.navigate("CaseSheet", {
-          caseId: res.data.id,
-          patientType,
-          triageData: payload,
-        });
+        // Handle different response formats - API may return id, _id, or case_id
+        const caseId = res.data.id || res.data._id || res.data.case_id;
+        console.log("[TriageScreen] Success! Navigating to CaseSheet with id:", caseId);
+        
+        if (caseId) {
+          await invalidateCases();
+          navigation.navigate("CaseSheet", {
+            caseId: String(caseId),
+            patientType,
+            triageData: payload,
+          });
+        } else {
+          console.log("[TriageScreen] No case ID found in response data:", res.data);
+          Alert.alert("Error", "Case saved but no ID returned. Please check Cases list.");
+        }
       } else {
+        console.log("[TriageScreen] API failed:", res.error);
         Alert.alert("Error", res.error || "Failed to save patient");
       }
     } catch (err) {
