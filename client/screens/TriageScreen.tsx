@@ -121,6 +121,7 @@ export default function TriageScreen() {
   const [selectedTriageColor, setSelectedTriageColor] = useState<TriageCategory>("green");
   const [selectedSymptoms, setSelectedSymptoms] = useState<Set<string>>(new Set(["normal_no_symptoms"]));
   const [isContinuousRecording, setIsContinuousRecording] = useState(false);
+  const [savedCaseId, setSavedCaseId] = useState<string | null>(null);
   const [vitalRanges, setVitalRanges] = useState<VitalRanges>(getVitalRanges(30));
   const [ageGroupLabel, setAgeGroupLabel] = useState<string>("Adult (18+ years)");
   const transcriptionIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -441,6 +442,7 @@ export default function TriageScreen() {
           brought_by: fd.brought_by || "Self",
           informant_name: fd.informant_name || fd.name,
           informant_reliability: fd.informant_reliability || "Reliable",
+          identification_mark: "None noted",
           mode_of_arrival: fd.mode_of_arrival,
           mlc,
           arrival_datetime: new Date().toISOString(),
@@ -461,6 +463,7 @@ export default function TriageScreen() {
           text: fd.chief_complaint || voiceText,
           onset_type: "Sudden",
           course: "Progressive",
+          duration: "Recent onset",
         },
         triage_priority: TRIAGE_PRIORITY_MAP[selectedTriageColor],
         triage_color: selectedTriageColor,
@@ -475,22 +478,35 @@ export default function TriageScreen() {
       if (res.success && res.data) {
         // Handle different response formats - API may return id, _id, or case_id
         const caseId = res.data.id || res.data._id || res.data.case_id;
-        console.log("[TriageScreen] Success! Navigating to CaseSheet with id:", caseId);
+        console.log("[TriageScreen] Success! Case saved with id:", caseId);
         
+        await invalidateCases();
         if (caseId) {
-          await invalidateCases();
-          navigation.navigate("CaseSheet", {
-            caseId: String(caseId),
-            patientType,
-            triageData: payload,
-          });
-        } else {
-          console.log("[TriageScreen] No case ID found in response data:", res.data);
-          Alert.alert("Error", "Case saved but no ID returned. Please check Cases list.");
+          setSavedCaseId(String(caseId));
         }
+        Alert.alert("Success", "Patient saved successfully!", [
+          {
+            text: "Go to Case Sheet",
+            onPress: () => {
+              if (caseId) {
+                navigation.navigate("CaseSheet", {
+                  caseId: String(caseId),
+                  patientType,
+                  triageData: payload,
+                });
+              } else {
+                navigation.navigate("CasesTab" as any);
+              }
+            },
+          },
+          { text: "Stay Here", style: "cancel" },
+        ]);
       } else {
         console.log("[TriageScreen] API failed:", res.error);
-        Alert.alert("Error", res.error || "Failed to save patient");
+        const errorMsg = Array.isArray(res.error) 
+          ? res.error.map((e: any) => e.msg || e).join(", ")
+          : (res.error || "Failed to save patient");
+        Alert.alert("Error", errorMsg);
       }
     } catch (err) {
       Alert.alert("Error", (err as Error).message);
@@ -830,6 +846,19 @@ export default function TriageScreen() {
             </>
           )}
         </Pressable>
+
+        {savedCaseId && (
+          <Pressable
+            style={({ pressed }) => [
+              styles.goToCaseBtn,
+              { backgroundColor: TriageColors.green, opacity: pressed ? 0.8 : 1 },
+            ]}
+            onPress={() => navigation.navigate("CaseSheet", { caseId: savedCaseId, patientType })}
+          >
+            <Feather name="arrow-right" size={20} color="#FFFFFF" />
+            <Text style={styles.saveBtnText}>Go to Case Sheet</Text>
+          </Pressable>
+        )}
       </KeyboardAwareScrollViewCompat>
     </View>
   );
@@ -1032,6 +1061,15 @@ const styles = StyleSheet.create({
     height: Spacing.buttonHeight,
     borderRadius: BorderRadius.md,
     gap: Spacing.sm,
+  },
+  goToCaseBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    height: Spacing.buttonHeight,
+    borderRadius: BorderRadius.md,
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
   },
   saveBtnText: { color: "#FFFFFF", ...Typography.h4 },
 });
