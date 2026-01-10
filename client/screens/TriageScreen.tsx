@@ -21,6 +21,7 @@ import { useAuth } from "@/context/AuthContext";
 import { apiPost, apiUpload, invalidateCases } from "@/lib/api";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { getVitalRanges, getAgeGroup, getAgeGroupLabel, isPediatric, type VitalRanges } from "@/lib/pediatricVitals";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -120,6 +121,8 @@ export default function TriageScreen() {
   const [selectedTriageColor, setSelectedTriageColor] = useState<TriageCategory>("green");
   const [selectedSymptoms, setSelectedSymptoms] = useState<Set<string>>(new Set(["normal_no_symptoms"]));
   const [isContinuousRecording, setIsContinuousRecording] = useState(false);
+  const [vitalRanges, setVitalRanges] = useState<VitalRanges>(getVitalRanges(30));
+  const [ageGroupLabel, setAgeGroupLabel] = useState<string>("Adult (18+ years)");
   const transcriptionIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isContinuousRecordingRef = useRef(false);
 
@@ -170,6 +173,15 @@ export default function TriageScreen() {
 
   const updateField = useCallback((field: string, value: string) => {
     (formDataRef.current as any)[field] = value;
+    
+    if (field === "age") {
+      const ageValue = parseFloat(value) || 0;
+      const newPatientType = isPediatric(ageValue) ? "pediatric" : "adult";
+      setPatientType(newPatientType);
+      setVitalRanges(getVitalRanges(ageValue));
+      setAgeGroupLabel(getAgeGroupLabel(getAgeGroup(ageValue)));
+    }
+    
     forceUpdate((n) => n + 1);
   }, []);
 
@@ -602,6 +614,46 @@ export default function TriageScreen() {
 
         <View style={[styles.section, { backgroundColor: theme.card }]}>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>Vitals</Text>
+          <Text style={[styles.sectionSubtitle, { color: theme.textSecondary }]}>Enter patient vital signs</Text>
+          
+          <View style={[styles.vitalReferenceCard, { backgroundColor: theme.backgroundSecondary, borderColor: theme.border }]}>
+            <View style={styles.vitalReferenceHeader}>
+              <Feather name="bar-chart-2" size={16} color={theme.primary} />
+              <Text style={[styles.vitalReferenceTitle, { color: theme.text }]}>
+                Normal Vitals Reference ({patientType === "pediatric" ? "Pediatric" : "Adult"})
+              </Text>
+            </View>
+            <Text style={[styles.ageGroupText, { color: theme.textSecondary }]}>{ageGroupLabel}</Text>
+            <View style={styles.vitalReferenceGrid}>
+              <View style={styles.vitalRefItem}>
+                <Text style={[styles.vitalRefLabel, { color: theme.primary }]}>HR:</Text>
+                <Text style={[styles.vitalRefValue, { color: theme.primary }]}>{vitalRanges.hr.label}</Text>
+              </View>
+              <View style={styles.vitalRefItem}>
+                <Text style={[styles.vitalRefLabel, { color: theme.primary }]}>BP:</Text>
+                <Text style={[styles.vitalRefValue, { color: theme.primary }]}>
+                  {vitalRanges.bp_systolic.min}-{vitalRanges.bp_systolic.max}/{vitalRanges.bp_diastolic.min}-{vitalRanges.bp_diastolic.max}
+                </Text>
+              </View>
+              <View style={styles.vitalRefItem}>
+                <Text style={[styles.vitalRefLabel, { color: theme.primary }]}>RR:</Text>
+                <Text style={[styles.vitalRefValue, { color: theme.primary }]}>{vitalRanges.rr.label}</Text>
+              </View>
+              <View style={styles.vitalRefItem}>
+                <Text style={[styles.vitalRefLabel, { color: theme.primary }]}>SpO2:</Text>
+                <Text style={[styles.vitalRefValue, { color: theme.primary }]}>{vitalRanges.spo2.label}</Text>
+              </View>
+              <View style={styles.vitalRefItem}>
+                <Text style={[styles.vitalRefLabel, { color: theme.primary }]}>Temp:</Text>
+                <Text style={[styles.vitalRefValue, { color: theme.primary }]}>{vitalRanges.temperature.label}</Text>
+              </View>
+              <View style={styles.vitalRefItem}>
+                <Text style={[styles.vitalRefLabel, { color: theme.primary }]}>GCS:</Text>
+                <Text style={[styles.vitalRefValue, { color: theme.primary }]}>{vitalRanges.gcs.label}</Text>
+              </View>
+            </View>
+          </View>
+
           <View style={styles.row}>
             <View style={{ flex: 1 }}>
               <InputField label="HR (bpm)" field="hr" keyboardType="numeric" placeholder="80" />
@@ -794,6 +846,45 @@ const styles = StyleSheet.create({
   transcriptBox: { padding: Spacing.md, borderRadius: BorderRadius.sm, marginTop: Spacing.md },
   transcriptText: { ...Typography.small, fontStyle: "italic" },
   section: { padding: Spacing.lg, borderRadius: BorderRadius.lg, marginBottom: Spacing.lg },
+  sectionSubtitle: { ...Typography.small, marginBottom: Spacing.md },
+  vitalReferenceCard: {
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    marginBottom: Spacing.lg,
+  },
+  vitalReferenceHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginBottom: Spacing.xs,
+  },
+  vitalReferenceTitle: {
+    ...Typography.bodyMedium,
+    fontWeight: "600",
+  },
+  ageGroupText: {
+    ...Typography.small,
+    marginBottom: Spacing.sm,
+  },
+  vitalReferenceGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.xs,
+  },
+  vitalRefItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    minWidth: "45%",
+  },
+  vitalRefLabel: {
+    ...Typography.small,
+    fontWeight: "600",
+  },
+  vitalRefValue: {
+    ...Typography.small,
+  },
   inputGroup: { marginBottom: Spacing.md },
   label: { ...Typography.label, marginBottom: Spacing.xs },
   input: {
