@@ -24,7 +24,7 @@ export type RootStackParamList = {
   Register: undefined;
   Main: undefined;
   Triage: undefined;
-  CaseSheet: { caseId: string; patientType?: string; caseData?: CaseData };
+  CaseSheet: { caseId: string; patientType?: string; caseData?: CaseData; triageData?: any };
   PhysicalExam: { caseId: string };
   Investigations: { caseId: string };
   Treatment: { caseId: string };

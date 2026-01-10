@@ -356,14 +356,55 @@ export default function CaseSheetScreen() {
       >
         {caseData?.patient && (
           <View style={[styles.patientCard, { backgroundColor: theme.card }]}>
-            <Text style={[styles.patientName, { color: theme.text }]}>{caseData.patient.name}</Text>
-            <Text style={[styles.patientDetails, { color: theme.textSecondary }]}>
-              {caseData.patient.age} yrs | {caseData.patient.sex}
-            </Text>
+            <View style={styles.patientHeader}>
+              <View style={styles.patientInfo}>
+                <Text style={[styles.patientName, { color: theme.text }]}>{caseData.patient.name}</Text>
+                <Text style={[styles.patientDetails, { color: theme.textSecondary }]}>
+                  {caseData.patient.age} yrs | {caseData.patient.sex} | {caseData.patient.mode_of_arrival || "Walk-in"}
+                </Text>
+              </View>
+              {caseData.triage_color && (
+                <View style={[styles.triageBadge, { backgroundColor: TriageColors[caseData.triage_color as keyof typeof TriageColors] || TriageColors.green }]}>
+                  <Text style={styles.triageBadgeText}>P{caseData.triage_priority || "4"}</Text>
+                </View>
+              )}
+            </View>
             {caseData.presenting_complaint?.text && (
               <Text style={[styles.complaint, { color: theme.textMuted }]}>
-                {caseData.presenting_complaint.text}
+                Chief Complaint: {caseData.presenting_complaint.text}
               </Text>
+            )}
+            {caseData.vitals_at_arrival && (
+              <View style={[styles.vitalsRow, { backgroundColor: theme.backgroundSecondary }]}>
+                <View style={styles.vitalItem}>
+                  <Text style={[styles.vitalLabel, { color: theme.textSecondary }]}>HR</Text>
+                  <Text style={[styles.vitalValue, { color: theme.text }]}>{caseData.vitals_at_arrival.hr || "-"}</Text>
+                </View>
+                <View style={styles.vitalItem}>
+                  <Text style={[styles.vitalLabel, { color: theme.textSecondary }]}>BP</Text>
+                  <Text style={[styles.vitalValue, { color: theme.text }]}>
+                    {caseData.vitals_at_arrival.bp_systolic || "-"}/{caseData.vitals_at_arrival.bp_diastolic || "-"}
+                  </Text>
+                </View>
+                <View style={styles.vitalItem}>
+                  <Text style={[styles.vitalLabel, { color: theme.textSecondary }]}>RR</Text>
+                  <Text style={[styles.vitalValue, { color: theme.text }]}>{caseData.vitals_at_arrival.rr || "-"}</Text>
+                </View>
+                <View style={styles.vitalItem}>
+                  <Text style={[styles.vitalLabel, { color: theme.textSecondary }]}>SpO2</Text>
+                  <Text style={[styles.vitalValue, { color: theme.text }]}>{caseData.vitals_at_arrival.spo2 || "-"}%</Text>
+                </View>
+                <View style={styles.vitalItem}>
+                  <Text style={[styles.vitalLabel, { color: theme.textSecondary }]}>Temp</Text>
+                  <Text style={[styles.vitalValue, { color: theme.text }]}>{caseData.vitals_at_arrival.temperature || "-"}</Text>
+                </View>
+                <View style={styles.vitalItem}>
+                  <Text style={[styles.vitalLabel, { color: theme.textSecondary }]}>GCS</Text>
+                  <Text style={[styles.vitalValue, { color: theme.text }]}>
+                    {(caseData.vitals_at_arrival.gcs_e || 0) + (caseData.vitals_at_arrival.gcs_v || 0) + (caseData.vitals_at_arrival.gcs_m || 0)}/15
+                  </Text>
+                </View>
+              </View>
             )}
           </View>
         )}
@@ -635,9 +676,31 @@ const styles = StyleSheet.create({
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
   content: { padding: Spacing.lg },
   patientCard: { padding: Spacing.lg, borderRadius: BorderRadius.lg, marginBottom: Spacing.lg },
+  patientHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
+  patientInfo: { flex: 1 },
   patientName: { ...Typography.h3 },
   patientDetails: { ...Typography.body, marginTop: 2 },
+  triageBadge: { 
+    width: 40, 
+    height: 40, 
+    borderRadius: 20, 
+    justifyContent: "center", 
+    alignItems: "center",
+    marginLeft: Spacing.md,
+  },
+  triageBadgeText: { color: "#FFFFFF", fontWeight: "700", fontSize: 16 },
   complaint: { ...Typography.small, marginTop: Spacing.sm, fontStyle: "italic" },
+  vitalsRow: { 
+    flexDirection: "row", 
+    flexWrap: "wrap",
+    gap: Spacing.sm, 
+    marginTop: Spacing.md, 
+    padding: Spacing.md, 
+    borderRadius: BorderRadius.md,
+  },
+  vitalItem: { alignItems: "center", minWidth: 50 },
+  vitalLabel: { ...Typography.label, fontSize: 10 },
+  vitalValue: { ...Typography.bodyMedium, fontWeight: "600" },
   voiceSection: { padding: Spacing.lg, borderRadius: BorderRadius.lg, marginBottom: Spacing.lg },
   voiceTitle: { ...Typography.h4, marginBottom: Spacing.xs },
   voiceSubtitle: { ...Typography.small, marginBottom: Spacing.md },

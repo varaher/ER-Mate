@@ -126,6 +126,25 @@ export default function TriageScreen() {
   const transcriptionIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isContinuousRecordingRef = useRef(false);
 
+  const [formData, setFormData] = useState({
+    name: "",
+    age: "",
+    sex: "Male",
+    phone: "",
+    mode_of_arrival: "Walk-in",
+    chief_complaint: "",
+    hr: "",
+    bp_systolic: "",
+    bp_diastolic: "",
+    rr: "",
+    spo2: "",
+    temperature: "",
+    gcs_e: "",
+    gcs_v: "",
+    gcs_m: "",
+    grbs: "",
+  });
+
   useEffect(() => {
     return () => {
       isContinuousRecordingRef.current = false;
@@ -150,29 +169,8 @@ export default function TriageScreen() {
     isContinuousRecordingRef.current = isContinuousRecording;
   }, [isContinuousRecording]);
 
-  const formDataRef = useRef({
-    name: "",
-    age: "",
-    sex: "Male",
-    phone: "",
-    mode_of_arrival: "Walk-in",
-    chief_complaint: "",
-    hr: "",
-    bp_systolic: "",
-    bp_diastolic: "",
-    rr: "",
-    spo2: "",
-    temperature: "",
-    gcs_e: "",
-    gcs_v: "",
-    gcs_m: "",
-    grbs: "",
-  });
-
-  const [, forceUpdate] = useState(0);
-
   const updateField = useCallback((field: string, value: string) => {
-    (formDataRef.current as any)[field] = value;
+    setFormData(prev => ({ ...prev, [field]: value }));
     
     if (field === "age") {
       const ageValue = parseFloat(value) || 0;
@@ -181,8 +179,6 @@ export default function TriageScreen() {
       setVitalRanges(getVitalRanges(ageValue));
       setAgeGroupLabel(getAgeGroupLabel(getAgeGroup(ageValue)));
     }
-    
-    forceUpdate((n) => n + 1);
   }, []);
 
   const recalculateTriageColor = useCallback((symptoms: Set<string>) => {
@@ -220,40 +216,40 @@ export default function TriageScreen() {
       if (symptomKey === "normal_no_symptoms") {
         next.clear();
         next.add("normal_no_symptoms");
-        formDataRef.current.chief_complaint = "";
-        forceUpdate((n) => n + 1);
+        setFormData(prev => ({ ...prev, chief_complaint: "" }));
         setSelectedTriageColor("green");
         return next;
       }
       
       next.delete("normal_no_symptoms");
       
-      let currentComplaint = formDataRef.current.chief_complaint;
+      let currentComplaint = formData.chief_complaint;
       
       if (next.has(symptomKey)) {
         next.delete(symptomKey);
         const complaints = currentComplaint.split(",").map(s => s.trim()).filter(c => c !== symptomLabel && c.length > 0);
-        formDataRef.current.chief_complaint = complaints.join(", ");
+        const newComplaint = complaints.join(", ");
         
         if (next.size === 0) {
           next.add("normal_no_symptoms");
-          formDataRef.current.chief_complaint = "";
+          setFormData(prev => ({ ...prev, chief_complaint: "" }));
+        } else {
+          setFormData(prev => ({ ...prev, chief_complaint: newComplaint }));
         }
       } else {
         next.add(symptomKey);
         if (currentComplaint.trim()) {
-          formDataRef.current.chief_complaint = normalizeComplaint(`${currentComplaint}, ${symptomLabel}`);
+          setFormData(prev => ({ ...prev, chief_complaint: normalizeComplaint(`${currentComplaint}, ${symptomLabel}`) }));
         } else {
-          formDataRef.current.chief_complaint = symptomLabel;
+          setFormData(prev => ({ ...prev, chief_complaint: symptomLabel }));
         }
       }
       
-      forceUpdate((n) => n + 1);
       const newColor = recalculateTriageColor(next);
       setSelectedTriageColor(newColor);
       return next;
     });
-  }, [recalculateTriageColor]);
+  }, [formData.chief_complaint, recalculateTriageColor]);
 
   const startContinuousRecording = async () => {
     try {
@@ -380,8 +376,7 @@ export default function TriageScreen() {
 
       if (res.success && res.data?.transcription) {
         setVoiceText((prev) => (prev ? `${prev}\n${res.data!.transcription}` : res.data!.transcription));
-        formDataRef.current.chief_complaint = res.data.transcription;
-        forceUpdate((n) => n + 1);
+        setFormData(prev => ({ ...prev, chief_complaint: res.data!.transcription }));
       }
     } catch (err) {
       console.error("Transcription error:", err);
@@ -390,30 +385,45 @@ export default function TriageScreen() {
     }
   };
 
+  const getFormWithDefaults = () => {
+    return {
+      ...formData,
+      hr: formData.hr || DEFAULT_VITALS.hr,
+      bp_systolic: formData.bp_systolic || DEFAULT_VITALS.bp_systolic,
+      bp_diastolic: formData.bp_diastolic || DEFAULT_VITALS.bp_diastolic,
+      rr: formData.rr || DEFAULT_VITALS.rr,
+      spo2: formData.spo2 || DEFAULT_VITALS.spo2,
+      temperature: formData.temperature || DEFAULT_VITALS.temperature,
+      gcs_e: formData.gcs_e || DEFAULT_VITALS.gcs_e,
+      gcs_v: formData.gcs_v || DEFAULT_VITALS.gcs_v,
+      gcs_m: formData.gcs_m || DEFAULT_VITALS.gcs_m,
+      grbs: formData.grbs || DEFAULT_VITALS.grbs,
+    };
+  };
+
   const fillDefaults = () => {
-    const fd = formDataRef.current;
-    if (!fd.hr) fd.hr = DEFAULT_VITALS.hr;
-    if (!fd.bp_systolic) fd.bp_systolic = DEFAULT_VITALS.bp_systolic;
-    if (!fd.bp_diastolic) fd.bp_diastolic = DEFAULT_VITALS.bp_diastolic;
-    if (!fd.rr) fd.rr = DEFAULT_VITALS.rr;
-    if (!fd.spo2) fd.spo2 = DEFAULT_VITALS.spo2;
-    if (!fd.temperature) fd.temperature = DEFAULT_VITALS.temperature;
-    if (!fd.gcs_e) fd.gcs_e = DEFAULT_VITALS.gcs_e;
-    if (!fd.gcs_v) fd.gcs_v = DEFAULT_VITALS.gcs_v;
-    if (!fd.gcs_m) fd.gcs_m = DEFAULT_VITALS.gcs_m;
-    if (!fd.grbs) fd.grbs = DEFAULT_VITALS.grbs;
-    forceUpdate((n) => n + 1);
+    setFormData(prev => ({
+      ...prev,
+      hr: prev.hr || DEFAULT_VITALS.hr,
+      bp_systolic: prev.bp_systolic || DEFAULT_VITALS.bp_systolic,
+      bp_diastolic: prev.bp_diastolic || DEFAULT_VITALS.bp_diastolic,
+      rr: prev.rr || DEFAULT_VITALS.rr,
+      spo2: prev.spo2 || DEFAULT_VITALS.spo2,
+      temperature: prev.temperature || DEFAULT_VITALS.temperature,
+      gcs_e: prev.gcs_e || DEFAULT_VITALS.gcs_e,
+      gcs_v: prev.gcs_v || DEFAULT_VITALS.gcs_v,
+      gcs_m: prev.gcs_m || DEFAULT_VITALS.gcs_m,
+      grbs: prev.grbs || DEFAULT_VITALS.grbs,
+    }));
   };
 
   const handleSave = async () => {
-    const fd = formDataRef.current;
-
-    if (!fd.name) {
+    if (!formData.name) {
       Alert.alert("Required", "Please enter patient name");
       return;
     }
 
-    fillDefaults();
+    const fd = getFormWithDefaults();
     setLoading(true);
 
     try {
@@ -454,21 +464,11 @@ export default function TriageScreen() {
 
       if (res.success && res.data) {
         await invalidateCases();
-        Alert.alert("Success", "Patient saved successfully", [
-          {
-            text: "Continue to Case Sheet",
-            onPress: () =>
-              navigation.navigate("CaseSheet", {
-                caseId: res.data!.id,
-                patientType,
-              }),
-          },
-          {
-            text: "Go to Dashboard",
-            onPress: () => navigation.goBack(),
-            style: "cancel",
-          },
-        ]);
+        navigation.navigate("CaseSheet", {
+          caseId: res.data.id,
+          patientType,
+          triageData: payload,
+        });
       } else {
         Alert.alert("Error", res.error || "Failed to save patient");
       }
@@ -496,7 +496,7 @@ export default function TriageScreen() {
         style={[styles.input, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]}
         placeholder={placeholder}
         placeholderTextColor={theme.textMuted}
-        value={(formDataRef.current as any)[field]}
+        value={(formData as any)[field]}
         onChangeText={(v) => updateField(field, v)}
         keyboardType={keyboardType}
       />
@@ -586,14 +586,14 @@ export default function TriageScreen() {
                     style={[
                       styles.segmentBtn,
                       {
-                        backgroundColor: formDataRef.current.sex === s ? theme.primary : "transparent",
+                        backgroundColor: formData.sex === s ? theme.primary : "transparent",
                       },
                     ]}
                     onPress={() => updateField("sex", s)}
                   >
                     <Text
                       style={{
-                        color: formDataRef.current.sex === s ? "#FFFFFF" : theme.textSecondary,
+                        color: formData.sex === s ? "#FFFFFF" : theme.textSecondary,
                         fontSize: 12,
                         fontWeight: "600",
                       }}
@@ -684,7 +684,7 @@ export default function TriageScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.label, { color: theme.textSecondary }]}>
-                GCS: {parseInt(formDataRef.current.gcs_e || "4") + parseInt(formDataRef.current.gcs_v || "5") + parseInt(formDataRef.current.gcs_m || "6")}/15
+                GCS: {parseInt(formData.gcs_e || "4") + parseInt(formData.gcs_v || "5") + parseInt(formData.gcs_m || "6")}/15
               </Text>
             </View>
           </View>
@@ -785,7 +785,7 @@ export default function TriageScreen() {
             style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]}
             placeholder="Describe the chief complaint or select from above..."
             placeholderTextColor={theme.textMuted}
-            value={formDataRef.current.chief_complaint}
+            value={formData.chief_complaint}
             onChangeText={(v) => updateField("chief_complaint", v)}
             multiline
             numberOfLines={4}
