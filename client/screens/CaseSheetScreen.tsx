@@ -61,7 +61,7 @@ import {
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteProps = RouteProp<RootStackParamList, "CaseSheet">;
 
-type TabType = "patient" | "primary" | "history" | "exam";
+type TabType = "patient" | "primary" | "history" | "exam" | "treatment";
 
 interface ExamFormData {
   general: {
@@ -74,7 +74,7 @@ interface ExamFormData {
     notes: string;
   };
   cvs: {
-    status: "Normal" | "Abnormal";
+    status: string;
     s1s2: string;
     pulse: string;
     pulseRate: string;
@@ -85,39 +85,52 @@ interface ExamFormData {
     notes: string;
   };
   respiratory: {
-    status: "Normal" | "Abnormal";
-    chestShape: string;
-    airEntry: string;
+    status: string;
+    expansion: string;
     percussion: string;
     breathSounds: string;
+    vocalResonance: string;
+    addedSounds: string;
     notes: string;
   };
   abdomen: {
-    status: "Normal" | "Abnormal";
-    shape: string;
-    tenderness: string;
-    guarding: boolean;
-    rigidity: boolean;
-    bowelSounds: string;
+    status: string;
+    umbilical: string;
     organomegaly: string;
+    percussion: string;
+    bowelSounds: string;
+    externalGenitalia: string;
+    hernialOrifices: string;
+    perRectal: string;
+    perVaginal: string;
     notes: string;
   };
   cns: {
-    status: "Normal" | "Abnormal";
-    consciousness: string;
-    orientation: string;
-    speech: string;
-    motorPower: string;
+    status: string;
+    higherMentalFunctions: string;
+    cranialNerves: string;
+    sensorySystem: string;
+    motorSystem: string;
     reflexes: string;
+    rombergSign: string;
+    cerebellarSigns: string;
     notes: string;
   };
   extremities: {
-    status: "Normal" | "Abnormal";
+    status: string;
     pulses: string;
     edema: boolean;
     deformity: boolean;
     notes: string;
   };
+}
+
+interface TreatmentFormData {
+  labsOrdered: string;
+  imaging: string;
+  resultsSummary: string;
+  primaryDiagnosis: string;
+  differentialDiagnoses: string;
 }
 
 interface PsychFormData {
@@ -134,10 +147,18 @@ interface PsychFormData {
 const getDefaultExamFormData = (): ExamFormData => ({
   general: { pallor: false, icterus: false, cyanosis: false, clubbing: false, lymphadenopathy: false, edema: false, notes: "" },
   cvs: { status: "Normal", s1s2: "Normal", pulse: "Regular", pulseRate: "", apexBeat: "Normal", precordialHeave: false, addedSounds: "", murmurs: "", notes: "" },
-  respiratory: { status: "Normal", chestShape: "Normal", airEntry: "Bilateral equal", percussion: "Resonant", breathSounds: "Vesicular", notes: "" },
-  abdomen: { status: "Normal", shape: "Flat", tenderness: "Nil", guarding: false, rigidity: false, bowelSounds: "Normal", organomegaly: "Nil", notes: "" },
-  cns: { status: "Normal", consciousness: "Alert", orientation: "Oriented", speech: "Normal", motorPower: "5/5", reflexes: "Normal", notes: "" },
+  respiratory: { status: "Normal", expansion: "Equal", percussion: "Resonant", breathSounds: "Vesicular", vocalResonance: "Normal", addedSounds: "", notes: "" },
+  abdomen: { status: "Normal", umbilical: "Normal", organomegaly: "", percussion: "Tympanic", bowelSounds: "Present", externalGenitalia: "Normal", hernialOrifices: "Normal", perRectal: "", perVaginal: "", notes: "" },
+  cns: { status: "Normal", higherMentalFunctions: "Intact", cranialNerves: "Intact", sensorySystem: "Intact", motorSystem: "Normal", reflexes: "Normal", rombergSign: "Negative", cerebellarSigns: "Normal", notes: "" },
   extremities: { status: "Normal", pulses: "Present", edema: false, deformity: false, notes: "" },
+});
+
+const getDefaultTreatmentFormData = (): TreatmentFormData => ({
+  labsOrdered: "",
+  imaging: "",
+  resultsSummary: "",
+  primaryDiagnosis: "",
+  differentialDiagnoses: "",
 });
 
 const getDefaultPsychFormData = (): PsychFormData => ({
@@ -166,6 +187,7 @@ export default function CaseSheetScreen() {
   const [formData, setFormData] = useState<ATLSFormData>(getDefaultATLSFormData());
   const [examData, setExamData] = useState<ExamFormData>(getDefaultExamFormData());
   const [psychData, setPsychData] = useState<PsychFormData>(getDefaultPsychFormData());
+  const [treatmentData, setTreatmentData] = useState<TreatmentFormData>(getDefaultTreatmentFormData());
   const [pastSurgicalHistory, setPastSurgicalHistory] = useState("");
   const [otherHistory, setOtherHistory] = useState("");
   const [isRecording, setIsRecording] = useState(false);
@@ -350,6 +372,10 @@ export default function CaseSheetScreen() {
           const [, section, field] = fieldKey.split(".");
           const current = (examData as any)[section]?.[field] || "";
           updateExamData(section as keyof ExamFormData, field, current ? `${current} ${text}` : text);
+        } else if (fieldKey.startsWith("treatment.")) {
+          const field = fieldKey.replace("treatment.", "") as keyof TreatmentFormData;
+          const current = treatmentData[field] || "";
+          setTreatmentData((prev) => ({ ...prev, [field]: current ? `${current} ${text}` : text }));
         }
       }
     } catch (err) {
@@ -361,15 +387,15 @@ export default function CaseSheetScreen() {
     setExamData({
       general: { pallor: false, icterus: false, cyanosis: false, clubbing: false, lymphadenopathy: false, edema: false, notes: "" },
       cvs: { status: "Normal", s1s2: "Normal", pulse: "Regular", pulseRate: "", apexBeat: "Normal", precordialHeave: false, addedSounds: "", murmurs: "", notes: "" },
-      respiratory: { status: "Normal", chestShape: "Normal", airEntry: "Bilateral equal", percussion: "Resonant", breathSounds: "Vesicular", notes: "" },
-      abdomen: { status: "Normal", shape: "Flat", tenderness: "Nil", guarding: false, rigidity: false, bowelSounds: "Normal", organomegaly: "Nil", notes: "" },
-      cns: { status: "Normal", consciousness: "Alert", orientation: "Oriented", speech: "Normal", motorPower: "5/5", reflexes: "Normal", notes: "" },
+      respiratory: { status: "Normal", expansion: "Equal", percussion: "Resonant", breathSounds: "Vesicular", vocalResonance: "Normal", addedSounds: "", notes: "" },
+      abdomen: { status: "Normal", umbilical: "Normal", organomegaly: "", percussion: "Tympanic", bowelSounds: "Present", externalGenitalia: "Normal", hernialOrifices: "Normal", perRectal: "", perVaginal: "", notes: "" },
+      cns: { status: "Normal", higherMentalFunctions: "Intact", cranialNerves: "Intact", sensorySystem: "Intact", motorSystem: "Normal", reflexes: "Normal", rombergSign: "Negative", cerebellarSigns: "Normal", notes: "" },
       extremities: { status: "Normal", pulses: "Present", edema: false, deformity: false, notes: "" },
     });
   };
 
   const handleNext = () => {
-    const tabs: TabType[] = ["patient", "primary", "history", "exam"];
+    const tabs: TabType[] = ["patient", "primary", "history", "exam", "treatment"];
     const currentIndex = tabs.indexOf(activeTab);
     if (currentIndex < tabs.length - 1) {
       setActiveTab(tabs[currentIndex + 1]);
@@ -380,12 +406,22 @@ export default function CaseSheetScreen() {
   };
 
   const handlePrevious = () => {
-    const tabs: TabType[] = ["patient", "primary", "history", "exam"];
+    const tabs: TabType[] = ["patient", "primary", "history", "exam", "treatment"];
     const currentIndex = tabs.indexOf(activeTab);
     if (currentIndex > 0) {
       setActiveTab(tabs[currentIndex - 1]);
     }
   };
+
+  const OptionButtons = ({ options, value, onChange }: { options: string[]; value: string; onChange: (v: string) => void }) => (
+    <View style={styles.optionButtons}>
+      {options.map((opt) => (
+        <Pressable key={opt} style={[styles.optionBtn, { backgroundColor: value === opt ? theme.primary : theme.backgroundSecondary }]} onPress={() => onChange(opt)}>
+          <Text style={{ color: value === opt ? "#FFFFFF" : theme.text, fontWeight: "500", fontSize: 13 }}>{opt}</Text>
+        </Pressable>
+      ))}
+    </View>
+  );
 
   const VoiceButton = ({ fieldKey, small }: { fieldKey: string; small?: boolean }) => (
     <Pressable
@@ -453,6 +489,7 @@ export default function CaseSheetScreen() {
           <TabButton tab="primary" label="Primary" icon="activity" />
           <TabButton tab="history" label="History" icon="file-text" />
           <TabButton tab="exam" label="Exam" icon="clipboard" />
+          <TabButton tab="treatment" label="Treatment" icon="plus-square" />
         </ScrollView>
         <View style={styles.swipeHint}>
           <Feather name="chevron-left" size={14} color={theme.textMuted} />
@@ -707,10 +744,15 @@ export default function CaseSheetScreen() {
             <CollapsibleSection title="Respiratory System" icon="wind" iconColor={TriageColors.orange}>
               <Text style={[styles.fieldLabel, { color: theme.text }]}>Respiratory Status</Text>
               <SegmentedControl options={["Normal", "Abnormal"]} value={examData.respiratory.status} onChange={(v) => updateExamData("respiratory", "status", v)} />
-              <TextInputField label="Chest Shape" value={examData.respiratory.chestShape} onChangeText={(v) => updateExamData("respiratory", "chestShape", v)} placeholder="Normal, Barrel, etc." />
-              <TextInputField label="Air Entry" value={examData.respiratory.airEntry} onChangeText={(v) => updateExamData("respiratory", "airEntry", v)} placeholder="Bilateral equal, reduced, etc." />
-              <TextInputField label="Percussion" value={examData.respiratory.percussion} onChangeText={(v) => updateExamData("respiratory", "percussion", v)} placeholder="Resonant, dull, etc." />
-              <TextInputField label="Breath Sounds" value={examData.respiratory.breathSounds} onChangeText={(v) => updateExamData("respiratory", "breathSounds", v)} placeholder="Vesicular, bronchial, etc." />
+              <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.md }]}>Expansion</Text>
+              <OptionButtons options={["Equal", "Reduced"]} value={examData.respiratory.expansion} onChange={(v) => updateExamData("respiratory", "expansion", v)} />
+              <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.md }]}>Percussion</Text>
+              <OptionButtons options={["Resonant", "Dull", "Hyper-resonant"]} value={examData.respiratory.percussion} onChange={(v) => updateExamData("respiratory", "percussion", v)} />
+              <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.md }]}>Breath Sounds</Text>
+              <OptionButtons options={["Vesicular", "Bronchial", "Diminished"]} value={examData.respiratory.breathSounds} onChange={(v) => updateExamData("respiratory", "breathSounds", v)} />
+              <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.md }]}>Vocal Resonance</Text>
+              <OptionButtons options={["Normal", "Increased", "Decreased"]} value={examData.respiratory.vocalResonance} onChange={(v) => updateExamData("respiratory", "vocalResonance", v)} />
+              <TextInputField label="Added Sounds" value={examData.respiratory.addedSounds} onChangeText={(v) => updateExamData("respiratory", "addedSounds", v)} placeholder="Crackles, wheezes..." />
               <View style={styles.fieldWithVoice}>
                 <Text style={[styles.fieldLabel, { color: theme.text }]}>Additional Notes</Text>
                 <VoiceButton fieldKey="exam.respiratory.notes" />
@@ -721,12 +763,19 @@ export default function CaseSheetScreen() {
             <CollapsibleSection title="Abdomen" icon="activity" iconColor={TriageColors.yellow}>
               <Text style={[styles.fieldLabel, { color: theme.text }]}>Abdomen Status</Text>
               <SegmentedControl options={["Normal", "Abnormal"]} value={examData.abdomen.status} onChange={(v) => updateExamData("abdomen", "status", v)} />
-              <TextInputField label="Shape" value={examData.abdomen.shape} onChangeText={(v) => updateExamData("abdomen", "shape", v)} placeholder="Flat, distended, etc." />
-              <TextInputField label="Tenderness" value={examData.abdomen.tenderness} onChangeText={(v) => updateExamData("abdomen", "tenderness", v)} placeholder="Nil, RIF, epigastric, etc." />
-              <ToggleRow label="Guarding" value={examData.abdomen.guarding} onValueChange={(v) => updateExamData("abdomen", "guarding", v)} />
-              <ToggleRow label="Rigidity" value={examData.abdomen.rigidity} onValueChange={(v) => updateExamData("abdomen", "rigidity", v)} />
-              <TextInputField label="Bowel Sounds" value={examData.abdomen.bowelSounds} onChangeText={(v) => updateExamData("abdomen", "bowelSounds", v)} placeholder="Normal, hyperactive, etc." />
-              <TextInputField label="Organomegaly" value={examData.abdomen.organomegaly} onChangeText={(v) => updateExamData("abdomen", "organomegaly", v)} placeholder="Nil, hepatomegaly, etc." />
+              <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.md }]}>Umbilical</Text>
+              <OptionButtons options={["Normal", "Herniated"]} value={examData.abdomen.umbilical} onChange={(v) => updateExamData("abdomen", "umbilical", v)} />
+              <TextInputField label="Organomegaly" value={examData.abdomen.organomegaly} onChangeText={(v) => updateExamData("abdomen", "organomegaly", v)} placeholder="Hepatomegaly, splenomegaly..." />
+              <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.md }]}>Percussion</Text>
+              <OptionButtons options={["Tympanic", "Dull", "Shifting"]} value={examData.abdomen.percussion} onChange={(v) => updateExamData("abdomen", "percussion", v)} />
+              <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.md }]}>Bowel Sounds</Text>
+              <OptionButtons options={["Present", "Absent", "Hyperactive"]} value={examData.abdomen.bowelSounds} onChange={(v) => updateExamData("abdomen", "bowelSounds", v)} />
+              <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.md }]}>External Genitalia</Text>
+              <OptionButtons options={["Normal", "Abnormal"]} value={examData.abdomen.externalGenitalia} onChange={(v) => updateExamData("abdomen", "externalGenitalia", v)} />
+              <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.md }]}>Hernial Orifices</Text>
+              <OptionButtons options={["Normal", "Hernia present"]} value={examData.abdomen.hernialOrifices} onChange={(v) => updateExamData("abdomen", "hernialOrifices", v)} />
+              <TextInputField label="Per Rectal" value={examData.abdomen.perRectal} onChangeText={(v) => updateExamData("abdomen", "perRectal", v)} placeholder="If done..." />
+              <TextInputField label="Per Vaginal" value={examData.abdomen.perVaginal} onChangeText={(v) => updateExamData("abdomen", "perVaginal", v)} placeholder="If done..." />
               <View style={styles.fieldWithVoice}>
                 <Text style={[styles.fieldLabel, { color: theme.text }]}>Additional Notes</Text>
                 <VoiceButton fieldKey="exam.abdomen.notes" />
@@ -737,11 +786,20 @@ export default function CaseSheetScreen() {
             <CollapsibleSection title="Central Nervous System" icon="cpu" iconColor={TriageColors.green}>
               <Text style={[styles.fieldLabel, { color: theme.text }]}>CNS Status</Text>
               <SegmentedControl options={["Normal", "Abnormal"]} value={examData.cns.status} onChange={(v) => updateExamData("cns", "status", v)} />
-              <TextInputField label="Consciousness" value={examData.cns.consciousness} onChangeText={(v) => updateExamData("cns", "consciousness", v)} placeholder="Alert, drowsy, etc." />
-              <TextInputField label="Orientation" value={examData.cns.orientation} onChangeText={(v) => updateExamData("cns", "orientation", v)} placeholder="Oriented to TPP, disoriented, etc." />
-              <TextInputField label="Speech" value={examData.cns.speech} onChangeText={(v) => updateExamData("cns", "speech", v)} placeholder="Normal, slurred, etc." />
-              <TextInputField label="Motor Power" value={examData.cns.motorPower} onChangeText={(v) => updateExamData("cns", "motorPower", v)} placeholder="5/5 all limbs, etc." />
-              <TextInputField label="Reflexes" value={examData.cns.reflexes} onChangeText={(v) => updateExamData("cns", "reflexes", v)} placeholder="Normal, hyperreflexia, etc." />
+              <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.md }]}>Higher Mental Functions</Text>
+              <OptionButtons options={["Intact", "Impaired"]} value={examData.cns.higherMentalFunctions} onChange={(v) => updateExamData("cns", "higherMentalFunctions", v)} />
+              <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.md }]}>Cranial Nerves</Text>
+              <OptionButtons options={["Intact", "Deficit"]} value={examData.cns.cranialNerves} onChange={(v) => updateExamData("cns", "cranialNerves", v)} />
+              <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.md }]}>Sensory System</Text>
+              <OptionButtons options={["Intact", "Impaired"]} value={examData.cns.sensorySystem} onChange={(v) => updateExamData("cns", "sensorySystem", v)} />
+              <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.md }]}>Motor System</Text>
+              <OptionButtons options={["Normal", "Weakness"]} value={examData.cns.motorSystem} onChange={(v) => updateExamData("cns", "motorSystem", v)} />
+              <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.md }]}>Reflexes</Text>
+              <OptionButtons options={["Normal", "Brisk", "Diminished"]} value={examData.cns.reflexes} onChange={(v) => updateExamData("cns", "reflexes", v)} />
+              <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.md }]}>Romberg Sign</Text>
+              <OptionButtons options={["Negative", "Positive"]} value={examData.cns.rombergSign} onChange={(v) => updateExamData("cns", "rombergSign", v)} />
+              <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.md }]}>Cerebellar Signs</Text>
+              <OptionButtons options={["Normal", "Abnormal"]} value={examData.cns.cerebellarSigns} onChange={(v) => updateExamData("cns", "cerebellarSigns", v)} />
               <View style={styles.fieldWithVoice}>
                 <Text style={[styles.fieldLabel, { color: theme.text }]}>Additional Notes</Text>
                 <VoiceButton fieldKey="exam.cns.notes" />
@@ -761,6 +819,59 @@ export default function CaseSheetScreen() {
               </View>
               <TextInput style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Extremities notes..." placeholderTextColor={theme.textMuted} value={examData.extremities.notes} onChangeText={(v) => updateExamData("extremities", "notes", v)} multiline />
             </CollapsibleSection>
+          </>
+        )}
+
+        {activeTab === "treatment" && (
+          <>
+            <View style={[styles.card, { backgroundColor: theme.card }]}>
+              <Text style={[styles.cardTitle, { color: theme.text }]}>Investigations</Text>
+              
+              <View style={styles.fieldWithVoice}>
+                <Text style={[styles.fieldLabel, { color: theme.text }]}>Labs Ordered</Text>
+                <VoiceButton fieldKey="treatment.labsOrdered" />
+              </View>
+              <TextInput style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="CBC, RFT, LFT..." placeholderTextColor={theme.textMuted} value={treatmentData.labsOrdered} onChangeText={(v) => setTreatmentData((prev) => ({ ...prev, labsOrdered: v }))} multiline />
+
+              <View style={styles.fieldWithVoice}>
+                <Text style={[styles.fieldLabel, { color: theme.text }]}>Imaging</Text>
+                <VoiceButton fieldKey="treatment.imaging" />
+              </View>
+              <TextInput style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="X-ray, CT, USG..." placeholderTextColor={theme.textMuted} value={treatmentData.imaging} onChangeText={(v) => setTreatmentData((prev) => ({ ...prev, imaging: v }))} multiline />
+
+              <View style={styles.fieldWithVoice}>
+                <Text style={[styles.fieldLabel, { color: theme.text }]}>Results Summary</Text>
+                <VoiceButton fieldKey="treatment.resultsSummary" />
+              </View>
+              <TextInput style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Key findings..." placeholderTextColor={theme.textMuted} value={treatmentData.resultsSummary} onChangeText={(v) => setTreatmentData((prev) => ({ ...prev, resultsSummary: v }))} multiline />
+            </View>
+
+            <View style={[styles.card, { backgroundColor: theme.card }]}>
+              <Text style={[styles.cardTitle, { color: theme.text }]}>Provisional Diagnosis</Text>
+              
+              <View style={styles.fieldWithVoice}>
+                <Text style={[styles.fieldLabel, { color: theme.text }]}>Primary Diagnosis</Text>
+                <VoiceButton fieldKey="treatment.primaryDiagnosis" />
+              </View>
+              <TextInput style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Main diagnosis..." placeholderTextColor={theme.textMuted} value={treatmentData.primaryDiagnosis} onChangeText={(v) => setTreatmentData((prev) => ({ ...prev, primaryDiagnosis: v }))} multiline />
+
+              <View style={styles.fieldWithVoice}>
+                <Text style={[styles.fieldLabel, { color: theme.text }]}>Differential Diagnoses</Text>
+                <VoiceButton fieldKey="treatment.differentialDiagnoses" />
+              </View>
+              <TextInput style={[styles.textAreaLarge, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Other possibilities..." placeholderTextColor={theme.textMuted} value={treatmentData.differentialDiagnoses} onChangeText={(v) => setTreatmentData((prev) => ({ ...prev, differentialDiagnoses: v }))} multiline />
+            </View>
+
+            <View style={styles.actionButtonsRow}>
+              <Pressable style={[styles.actionBtn, { backgroundColor: "#FEE2E2" }]}>
+                <Feather name="alert-triangle" size={18} color={TriageColors.red} />
+                <Text style={[styles.actionBtnText, { color: TriageColors.red }]}>Red Flags</Text>
+              </Pressable>
+              <Pressable style={[styles.actionBtn, { backgroundColor: "#E0E7FF" }]}>
+                <Feather name="zap" size={18} color={theme.primary} />
+                <Text style={[styles.actionBtnText, { color: theme.primary }]}>AI Diagnosis</Text>
+              </Pressable>
+            </View>
           </>
         )}
       </KeyboardAwareScrollViewCompat>
@@ -846,4 +957,9 @@ const styles = StyleSheet.create({
   saveNavBtnText: { color: "#FFFFFF", ...Typography.bodyMedium },
   nextBtn: { flex: 1.5 },
   nextBtnText: { color: "#FFFFFF", ...Typography.bodyMedium, fontWeight: "600" },
+  optionButtons: { flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm },
+  optionBtn: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.md },
+  actionButtonsRow: { flexDirection: "row", gap: Spacing.md, marginTop: Spacing.lg },
+  actionBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: Spacing.md, borderRadius: BorderRadius.md, gap: Spacing.sm },
+  actionBtnText: { ...Typography.bodyMedium, fontWeight: "600" },
 });
