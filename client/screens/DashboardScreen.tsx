@@ -16,6 +16,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { fetchFromApi } from "@/lib/api";
+import { isPediatric } from "@/lib/pediatricVitals";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -223,7 +224,11 @@ export default function DashboardScreen() {
                     { backgroundColor: theme.card, opacity: pressed ? 0.9 : 1 },
                     time.exceeds4Hours && status.text !== "Discharged" && styles.caseCardWarning,
                   ]}
-                  onPress={() => navigation.navigate("CaseSheet", { caseId: caseItem.id })}
+                  onPress={() => {
+                    const patientAge = parseFloat(caseItem.patient?.age) || 0;
+                    const screenName = isPediatric(patientAge) ? "PediatricCaseSheet" : "CaseSheet";
+                    navigation.navigate(screenName, { caseId: caseItem.id });
+                  }}
                 >
                   <View style={[styles.priorityBar, { backgroundColor: getPriorityColor(caseItem.triage_priority) }]} />
                   <View style={styles.caseContent}>

@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
 import { apiGet } from "@/lib/api";
+import { isPediatric } from "@/lib/pediatricVitals";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -198,7 +199,11 @@ export default function ViewCaseScreen() {
               styles.editBtn,
               { backgroundColor: theme.primary, opacity: pressed ? 0.8 : 1 },
             ]}
-            onPress={() => navigation.navigate("CaseSheet", { caseId })}
+            onPress={() => {
+              const patientAge = parseFloat(caseData?.patient?.age) || 0;
+              const screenName = isPediatric(patientAge) ? "PediatricCaseSheet" : "CaseSheet";
+              navigation.navigate(screenName, { caseId });
+            }}
           >
             <Feather name="edit-2" size={18} color="#FFFFFF" />
             <Text style={styles.editBtnText}>Edit Case</Text>

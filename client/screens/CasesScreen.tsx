@@ -16,6 +16,7 @@ import { Feather } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import { useTheme } from "@/hooks/useTheme";
 import { fetchFromApi } from "@/lib/api";
+import { isPediatric } from "@/lib/pediatricVitals";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -97,7 +98,11 @@ export default function CasesScreen() {
         styles.caseCard,
         { backgroundColor: theme.card, opacity: pressed ? 0.9 : 1 },
       ]}
-      onPress={() => navigation.navigate("CaseSheet", { caseId: item.id })}
+      onPress={() => {
+        const patientAge = parseFloat(item.patient?.age) || 0;
+        const screenName = isPediatric(patientAge) ? "PediatricCaseSheet" : "CaseSheet";
+        navigation.navigate(screenName, { caseId: item.id });
+      }}
     >
       <View style={[styles.priorityDot, { backgroundColor: getPriorityColor(item.triage_priority) }]} />
       <View style={styles.caseInfo}>
