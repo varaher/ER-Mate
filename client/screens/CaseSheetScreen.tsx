@@ -759,13 +759,13 @@ export default function CaseSheetScreen() {
     });
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     const tabs: TabType[] = ["patient", "primary", "history", "exam", "treatment", "notes", "disposition"];
     const currentIndex = tabs.indexOf(activeTab);
     if (currentIndex < tabs.length - 1) {
       setActiveTab(tabs[currentIndex + 1]);
     } else {
-      handleSave(false);
+      await handleSave(false);
       navigation.goBack();
     }
   };
@@ -1773,7 +1773,7 @@ export default function CaseSheetScreen() {
               <Text style={styles.generateSummaryBtnText}>Generate Discharge Summary</Text>
             </Pressable>
 
-            <Pressable style={[styles.saveDashboardBtn, { borderColor: theme.primary }]}>
+            <Pressable style={[styles.saveDashboardBtn, { borderColor: theme.primary }]} onPress={async () => { await handleSave(false); navigation.goBack(); }}>
               <Feather name="home" size={18} color={theme.primary} />
               <Text style={[styles.saveDashboardBtnText, { color: theme.primary }]}>Save & Go to Dashboard</Text>
             </Pressable>

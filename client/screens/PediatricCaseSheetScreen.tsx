@@ -363,13 +363,43 @@ export default function PediatricCaseSheetScreen() {
     return () => clearTimeout(autoSaveTimer);
   }, [patData, airwayData, breathingData, circulationData, disabilityData, exposureData, efastData, historyData, examData]);
 
-  const handleNext = () => {
+  const handleNext = async () => {
     const currentIndex = TABS.findIndex((t) => t.key === activeTab);
     if (currentIndex < TABS.length - 1) {
       setActiveTab(TABS[currentIndex + 1].key);
     } else {
-      handleSave(false).then(() => navigation.goBack());
+      await handleSave(false);
+      navigation.goBack();
     }
+  };
+
+  const markAllAsNormal = () => {
+    setPatData({
+      appearance: { tone: "Moves spontaneously", interactivity: "Alert", consolability: "Stops crying with caregiver", lookGaze: "Makes eye contact", speechCry: "Strong cry" },
+      workOfBreathing: "Normal",
+      circulationToSkin: "Pink",
+    });
+    setAirwayData({ cry: "Good", status: "Patent", intervention: "None required" });
+    setBreathingData({
+      respiratoryRate: "", spo2: "98", workOfBreathing: [], abnormalPositioning: "None", airEntry: "Normal", subcutaneousEmphysema: "No", intervention: "None required"
+    });
+    setCirculationData({
+      crt: "Normal (<2s)", heartRate: "", bloodPressure: "", skinColorTemp: "Pink", distendedNeckVeins: "No", intervention: "None required"
+    });
+    setDisabilityData({ avpuGcs: "Alert", pupils: "Equal, round, reactive", abnormalResponses: "None noted", glucose: "" });
+    setExposureData({
+      temperature: "36.8", trauma: "No signs of trauma", signsOfTraumaIllness: [], evidenceOfInfection: "None", longBoneDeformities: "None", extremities: "Normal", immobilize: "Not required"
+    });
+    setEfastData({ heart: "Normal", abdomen: "No free fluid", lungs: "No pneumothorax", pelvis: "Normal" });
+    setExamData({
+      heent: { head: "Normocephalic, atraumatic", eyes: "PERRLA, conjunctiva clear", ears: "TM intact bilaterally", nose: "No discharge, septum midline", throat: "Pharynx clear, tonsils normal", lymphNodes: "No lymphadenopathy" },
+      respiratory: "Clear breath sounds bilaterally, no wheezing/crackles/stridor, chest expansion symmetric",
+      cardiovascular: "S1S2 normal, no murmurs, regular rhythm, peripheral pulses strong and equal",
+      abdomen: "Soft, non-tender, non-distended, no organomegaly, bowel sounds present",
+      back: "No spinal tenderness, no deformity",
+      extremities: "No swelling, deformity or tenderness, full range of motion, pulses intact"
+    });
+    Alert.alert("Done", "All sections marked as normal");
   };
 
   const handlePrevious = () => {
@@ -555,6 +585,11 @@ export default function PediatricCaseSheetScreen() {
 
         {activeTab === "primary" && (
           <>
+            <Pressable style={[styles.markNormalBtn, { backgroundColor: TriageColors.green }]} onPress={markAllAsNormal}>
+              <Feather name="check-circle" size={18} color="#FFFFFF" />
+              <Text style={styles.markNormalBtnText}>Mark Everything as Normal</Text>
+            </Pressable>
+
             <View style={[styles.card, { backgroundColor: theme.card }]}>
               <Text style={[styles.cardTitle, { color: theme.text }]}>Pediatric Assessment Triangle (PAT)</Text>
               <Text style={[styles.cardSubtitle, { color: theme.textSecondary }]}>Quick visual assessment without touching the child</Text>
@@ -1048,7 +1083,7 @@ export default function PediatricCaseSheetScreen() {
               <Text style={styles.generateSummaryBtnText}>Generate Discharge Summary</Text>
             </Pressable>
 
-            <Pressable style={[styles.saveDashboardBtn, { borderColor: theme.primary }]}>
+            <Pressable style={[styles.saveDashboardBtn, { borderColor: theme.primary }]} onPress={async () => { await handleSave(false); navigation.goBack(); }}>
               <Feather name="home" size={18} color={theme.primary} />
               <Text style={[styles.saveDashboardBtnText, { color: theme.primary }]}>Save & Go to Dashboard</Text>
             </Pressable>
@@ -1088,6 +1123,8 @@ const styles = StyleSheet.create({
   tabBtn: { flexDirection: "row", alignItems: "center", paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm, borderRadius: BorderRadius.full, gap: Spacing.xs },
   tabBtnText: { fontSize: 13, fontWeight: "600" },
   content: { padding: Spacing.lg },
+  markNormalBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: Spacing.md, borderRadius: BorderRadius.md, gap: Spacing.sm, marginBottom: Spacing.lg },
+  markNormalBtnText: { color: "#FFFFFF", ...Typography.bodyMedium, fontWeight: "600" },
   card: { padding: Spacing.lg, borderRadius: BorderRadius.lg, marginBottom: Spacing.lg },
   cardTitle: { ...Typography.h4, marginBottom: Spacing.lg },
   cardSubtitle: { ...Typography.body, marginBottom: Spacing.md, marginTop: -Spacing.sm },
