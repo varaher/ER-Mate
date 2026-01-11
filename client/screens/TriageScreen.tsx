@@ -489,7 +489,8 @@ export default function TriageScreen() {
             text: "Go to Case Sheet",
             onPress: () => {
               if (caseId) {
-                navigation.navigate("CaseSheet", {
+                const screenName = patientType === "pediatric" ? "PediatricCaseSheet" : "CaseSheet";
+                navigation.navigate(screenName, {
                   caseId: String(caseId),
                   patientType,
                   triageData: payload,
@@ -853,7 +854,10 @@ export default function TriageScreen() {
               styles.goToCaseBtn,
               { backgroundColor: TriageColors.green, opacity: pressed ? 0.8 : 1 },
             ]}
-            onPress={() => navigation.navigate("CaseSheet", { caseId: savedCaseId, patientType })}
+            onPress={() => {
+              const screenName = patientType === "pediatric" ? "PediatricCaseSheet" : "CaseSheet";
+              navigation.navigate(screenName, { caseId: savedCaseId!, patientType });
+            }}
           >
             <Feather name="arrow-right" size={20} color="#FFFFFF" />
             <Text style={styles.saveBtnText}>Go to Case Sheet</Text>

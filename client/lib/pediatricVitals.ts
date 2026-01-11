@@ -16,7 +16,7 @@ export function getAgeGroup(ageInYears: number): AgeGroup {
   if (ageInYears < 3) return "toddler";
   if (ageInYears < 6) return "preschool";
   if (ageInYears < 12) return "school";
-  if (ageInYears < 18) return "adolescent";
+  if (ageInYears <= 16) return "adolescent";
   return "adult";
 }
 
@@ -27,14 +27,14 @@ export function getAgeGroupLabel(ageGroup: AgeGroup): string {
     toddler: "Toddler (1-3 years)",
     preschool: "Preschool (3-6 years)",
     school: "School Age (6-12 years)",
-    adolescent: "Adolescent (12-18 years)",
-    adult: "Adult (18+ years)",
+    adolescent: "Adolescent (12-16 years)",
+    adult: "Adult (17+ years)",
   };
   return labels[ageGroup];
 }
 
 export function isPediatric(ageInYears: number): boolean {
-  return ageInYears < 18;
+  return ageInYears <= 16;
 }
 
 export function getVitalRanges(ageInYears: number): VitalRanges {

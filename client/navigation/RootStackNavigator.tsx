@@ -11,6 +11,7 @@ import LoginScreen from "@/screens/LoginScreen";
 import RegisterScreen from "@/screens/RegisterScreen";
 import TriageScreen from "@/screens/TriageScreen";
 import CaseSheetScreen from "@/screens/CaseSheetScreen";
+import PediatricCaseSheetScreen from "@/screens/PediatricCaseSheetScreen";
 import PhysicalExamScreen from "@/screens/PhysicalExamScreen";
 import InvestigationsScreen from "@/screens/InvestigationsScreen";
 import TreatmentScreen from "@/screens/TreatmentScreen";
@@ -25,6 +26,7 @@ export type RootStackParamList = {
   Main: undefined;
   Triage: undefined;
   CaseSheet: { caseId: string; patientType?: string; caseData?: CaseData; triageData?: any };
+  PediatricCaseSheet: { caseId: string; patientType?: string; caseData?: CaseData; triageData?: any };
   PhysicalExam: { caseId: string };
   Investigations: { caseId: string };
   Treatment: { caseId: string };
@@ -85,6 +87,14 @@ export default function RootStackNavigator() {
             options={{
               presentation: "modal",
               headerTitle: "Case Sheet",
+            }}
+          />
+          <Stack.Screen
+            name="PediatricCaseSheet"
+            component={PediatricCaseSheetScreen}
+            options={{
+              presentation: "modal",
+              headerTitle: "Pediatric Case Sheet",
             }}
           />
           <Stack.Screen
