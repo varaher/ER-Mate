@@ -616,7 +616,7 @@ export default function CaseSheetScreen() {
           allergies: formData.sample.allergies ? formData.sample.allergies.split(',').map((s: string) => s.trim()).filter((s: string) => s) : [],
           medications: formData.sample.medications,
           past_medical: formData.sample.pastMedicalHistory ? formData.sample.pastMedicalHistory.split(',').map((s: string) => s.trim()).filter((s: string) => s) : [],
-          past_surgical: pastSurgicalHistory ? pastSurgicalHistory.split(',').map((s: string) => s.trim()).filter((s: string) => s) : [],
+          past_surgical: pastSurgicalHistory || "",
           other: otherHistory,
         },
         vitals_at_arrival: {
