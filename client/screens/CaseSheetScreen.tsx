@@ -165,6 +165,38 @@ interface PsychFormData {
   notes: string;
 }
 
+interface MLCDetailsData {
+  natureOfIncident: string;
+  dateTimeOfIncident: string;
+  placeOfIncident: string;
+  identificationMark: string;
+  informantBroughtBy: string;
+}
+
+interface ABCDEStatusData {
+  airway: "Normal" | "Abnormal";
+  breathing: "Normal" | "Abnormal";
+  circulation: "Normal" | "Abnormal";
+  disability: "Normal" | "Abnormal";
+  exposure: "Normal" | "Abnormal";
+}
+
+const getDefaultMLCDetails = (): MLCDetailsData => ({
+  natureOfIncident: "",
+  dateTimeOfIncident: "",
+  placeOfIncident: "",
+  identificationMark: "",
+  informantBroughtBy: "Self",
+});
+
+const getDefaultABCDEStatus = (): ABCDEStatusData => ({
+  airway: "Normal",
+  breathing: "Normal",
+  circulation: "Normal",
+  disability: "Normal",
+  exposure: "Normal",
+});
+
 const getDefaultExamFormData = (): ExamFormData => ({
   general: { pallor: false, icterus: false, cyanosis: false, clubbing: false, lymphadenopathy: false, edema: false, notes: "" },
   cvs: { status: "Normal", s1s2: "Normal", pulse: "Regular", pulseRate: "", apexBeat: "Normal", precordialHeave: false, addedSounds: "", murmurs: "", notes: "" },
@@ -226,6 +258,161 @@ const getDefaultPsychFormData = (): PsychFormData => ({
   notes: "",
 });
 
+const CHIP_OPTIONS = {
+  airwayMaintenance: [
+    { label: "Self-maintained", value: "self_maintained" },
+    { label: "Head tilt/Chin lift", value: "head_tilt_chin_lift" },
+    { label: "Jaw thrust", value: "jaw_thrust" },
+  ],
+  airwayStatus: [
+    { label: "Partially obstructed", value: "partially_obstructed" },
+    { label: "Completely obstructed", value: "completely_obstructed" },
+  ],
+  airwayCause: [
+    { label: "Tongue fall", value: "tongue_fall" },
+    { label: "Secretions", value: "secretions" },
+    { label: "Blood/Vomitus", value: "blood_vomitus" },
+    { label: "Foreign body", value: "foreign_body" },
+    { label: "Edema", value: "edema" },
+  ],
+  airwaySpeech: [
+    { label: "Hoarse", value: "hoarse" },
+    { label: "Stridor", value: "stridor" },
+    { label: "Gurgling", value: "gurgling" },
+    { label: "Unable to speak", value: "unable_to_speak" },
+  ],
+  airwayInterventions: [
+    { label: "Suction", value: "suction" },
+    { label: "OPA", value: "opa" },
+    { label: "NPA", value: "npa" },
+    { label: "LMA", value: "lma" },
+    { label: "ETT", value: "ett" },
+    { label: "Cricothyrotomy", value: "cricothyrotomy" },
+  ],
+  breathingEffort: [
+    { label: "Mild \u2191", value: "mild" },
+    { label: "Moderate \u2191", value: "moderate" },
+    { label: "Severe \u2191", value: "severe" },
+    { label: "Exhaustion", value: "exhaustion" },
+  ],
+  breathingO2Device: [
+    { label: "Room air", value: "room_air" },
+    { label: "Nasal prongs", value: "nasal_prongs" },
+    { label: "Face mask", value: "simple_face_mask" },
+    { label: "NRM", value: "nrm" },
+    { label: "NIV", value: "niv_bipap" },
+    { label: "Ventilator", value: "mechanical_ventilation" },
+  ],
+  breathingPattern: [
+    { label: "Tachypneic", value: "tachypneic" },
+    { label: "Bradypneic", value: "bradypneic" },
+    { label: "Kussmaul", value: "kussmaul" },
+    { label: "Cheyne-Stokes", value: "cheyne_stokes" },
+  ],
+  breathingChestExpansion: [
+    { label: "Equal", value: "equal_bilateral" },
+    { label: "Reduced L", value: "reduced_left" },
+    { label: "Reduced R", value: "reduced_right" },
+    { label: "Reduced both", value: "reduced_bilateral" },
+  ],
+  breathingAirEntry: [
+    { label: "Reduced L", value: "reduced_left" },
+    { label: "Reduced R", value: "reduced_right" },
+    { label: "Reduced both", value: "reduced_bilateral" },
+    { label: "Absent L", value: "absent_left" },
+    { label: "Absent R", value: "absent_right" },
+  ],
+  breathingAddedSounds: [
+    { label: "Wheeze", value: "wheeze" },
+    { label: "Crackles", value: "crackles" },
+    { label: "Rhonchi", value: "rhonchi" },
+    { label: "Stridor", value: "stridor" },
+  ],
+  breathingInterventions: [
+    { label: "Nebulization", value: "nebulization" },
+    { label: "ICD", value: "icd_insertion" },
+    { label: "Needle decomp", value: "needle_decompression" },
+    { label: "BVM", value: "bag_mask_ventilation" },
+    { label: "Intubation", value: "intubation" },
+  ],
+  circulationRhythm: [
+    { label: "Regular", value: "strong_regular" },
+    { label: "Irregular", value: "irregular" },
+    { label: "Thready", value: "thready" },
+    { label: "Bounding", value: "bounding" },
+  ],
+  circulationCRT: [
+    { label: "<2 sec", value: "normal" },
+    { label: "2-3 sec", value: "delayed_mild" },
+    { label: "3-5 sec", value: "delayed_moderate" },
+    { label: ">5 sec", value: "delayed_severe" },
+  ],
+  circulationSkin: [
+    { label: "Warm", value: "warm" },
+    { label: "Cool", value: "cool_peripherally" },
+    { label: "Cold", value: "cold" },
+    { label: "Diaphoretic", value: "diaphoretic" },
+  ],
+  circulationSkinColor: [
+    { label: "Normal", value: "normal" },
+    { label: "Pale", value: "pale" },
+    { label: "Mottled", value: "mottled" },
+    { label: "Cyanotic", value: "cyanotic" },
+  ],
+  circulationIVAccess: [
+    { label: "None", value: "none" },
+    { label: "Peripheral IV", value: "peripheral_iv" },
+    { label: "Central line", value: "central_line" },
+    { label: "IO access", value: "io_access" },
+  ],
+  circulationInterventions: [
+    { label: "IV fluids NS", value: "iv_ns" },
+    { label: "IV fluids RL", value: "iv_rl" },
+    { label: "Blood transfusion", value: "blood_transfusion" },
+    { label: "Vasopressors", value: "vasopressors" },
+  ],
+  disabilityAVPU: [
+    { label: "Weakness left", value: "weakness_left" },
+    { label: "Weakness right", value: "weakness_right" },
+    { label: "Bilateral weakness", value: "weakness_bilateral" },
+    { label: "Paralysis", value: "paralysis" },
+  ],
+  disabilityPupilSize: [
+    { label: "Normal", value: "normal" },
+    { label: "Dilated", value: "dilated" },
+    { label: "Constricted", value: "constricted" },
+    { label: "Anisocoric", value: "anisocoric" },
+  ],
+  disabilityPupilReaction: [
+    { label: "Reactive", value: "reactive_bilateral" },
+    { label: "Sluggish", value: "sluggish_bilateral" },
+    { label: "Non-reactive", value: "non_reactive_bilateral" },
+  ],
+  disabilityLateralizing: [
+    { label: "Head elevation", value: "head_elevation" },
+    { label: "Seizure precautions", value: "seizure_precautions" },
+    { label: "Mannitol", value: "mannitol" },
+    { label: "Anticonvulsants", value: "anticonvulsants" },
+  ],
+  exposureFindings: [
+    { label: "No injuries", value: "no_injuries" },
+    { label: "Lacerations", value: "lacerations" },
+    { label: "Contusions", value: "contusions" },
+    { label: "Deformity", value: "deformity" },
+    { label: "Open wounds", value: "open_wounds" },
+    { label: "Burns", value: "burns" },
+    { label: "Rash", value: "rash" },
+  ],
+  exposureInterventions: [
+    { label: "Warming blanket", value: "warming_blanket" },
+    { label: "Cooling", value: "cooling" },
+    { label: "Log roll", value: "log_roll" },
+    { label: "Splinting", value: "splinting" },
+    { label: "Wound care", value: "wound_care" },
+    { label: "Tetanus", value: "tetanus" },
+  ],
+};
+
 export default function CaseSheetScreen() {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RouteProps>();
@@ -249,6 +436,10 @@ export default function CaseSheetScreen() {
   const [isRecording, setIsRecording] = useState(false);
   const [activeVoiceField, setActiveVoiceField] = useState<string | null>(null);
   const recordingRef = useRef<Audio.Recording | null>(null);
+  const [modeOfArrival, setModeOfArrival] = useState("Walk-in");
+  const [isMLC, setIsMLC] = useState(false);
+  const [mlcDetails, setMLCDetails] = useState<MLCDetailsData>(getDefaultMLCDetails());
+  const [abcdeStatus, setABCDEStatus] = useState<ABCDEStatusData>(getDefaultABCDEStatus());
 
   useEffect(() => {
     loadCase();
@@ -300,6 +491,84 @@ export default function CaseSheetScreen() {
           setExamData({ ...getDefaultExamFormData(), ...res.data.examination });
         }
         setFormData(newFormData);
+
+        if (res.data.patient?.mode_of_arrival) {
+          setModeOfArrival(res.data.patient.mode_of_arrival);
+        }
+        if (res.data.mlc !== undefined) {
+          setIsMLC(res.data.mlc === true);
+        }
+        if (res.data.mlc_details) {
+          setMLCDetails({
+            natureOfIncident: res.data.mlc_details.nature_of_incident || "",
+            dateTimeOfIncident: res.data.mlc_details.date_time || "",
+            placeOfIncident: res.data.mlc_details.place || "",
+            identificationMark: res.data.mlc_details.identification_mark || "",
+            informantBroughtBy: res.data.mlc_details.informant || "Self",
+          });
+        }
+
+        const newABCDEStatus: ABCDEStatusData = { airway: "Normal", breathing: "Normal", circulation: "Normal", disability: "Normal", exposure: "Normal" };
+        if (res.data.abcde) {
+          const a = res.data.abcde.airway || {};
+          if (a.abcdeStatus) newABCDEStatus.airway = a.abcdeStatus;
+          else if (
+            (a.status && a.status !== "patent" && a.status !== "") ||
+            (a.maintenance && a.maintenance !== "self_maintained" && a.maintenance !== "") ||
+            (a.obstructionCause && a.obstructionCause !== "none" && a.obstructionCause !== "") ||
+            (a.speech && a.speech !== "clear" && a.speech !== "") ||
+            (a.interventions?.length > 0)
+          ) {
+            newABCDEStatus.airway = "Abnormal";
+          }
+
+          const b = res.data.abcde.breathing || {};
+          if (b.abcdeStatus) newABCDEStatus.breathing = b.abcdeStatus;
+          else if (
+            (b.effort && b.effort !== "normal" && b.effort !== "") ||
+            (b.pattern && b.pattern !== "regular" && b.pattern !== "") ||
+            (b.chestExpansion && b.chestExpansion !== "equal_bilateral" && b.chestExpansion !== "") ||
+            (b.airEntry && b.airEntry !== "equal_bilateral" && b.airEntry !== "") ||
+            (b.addedSounds && b.addedSounds !== "none" && b.addedSounds !== "") ||
+            (b.interventions?.length > 0)
+          ) {
+            newABCDEStatus.breathing = "Abnormal";
+          }
+
+          const c = res.data.abcde.circulation || {};
+          if (c.abcdeStatus) newABCDEStatus.circulation = c.abcdeStatus;
+          else if (
+            (c.pulseQuality && c.pulseQuality !== "strong_regular" && c.pulseQuality !== "") ||
+            (c.capillaryRefill && c.capillaryRefill !== "normal" && c.capillaryRefill !== "") ||
+            (c.skinColor && c.skinColor !== "normal" && c.skinColor !== "") ||
+            (c.skinTemperature && c.skinTemperature !== "warm" && c.skinTemperature !== "") ||
+            (c.interventions?.length > 0)
+          ) {
+            newABCDEStatus.circulation = "Abnormal";
+          }
+
+          const d = res.data.abcde.disability || {};
+          if (d.abcdeStatus) newABCDEStatus.disability = d.abcdeStatus;
+          else {
+            const gcsTotal = (parseInt(d.gcsE) || 4) + (parseInt(d.gcsV) || 5) + (parseInt(d.gcsM) || 6);
+            if (
+              gcsTotal < 15 ||
+              (d.pupilSize && d.pupilSize !== "equal" && d.pupilSize !== "") ||
+              (d.pupilReaction && d.pupilReaction !== "brisk" && d.pupilReaction !== "") ||
+              (d.motorResponse && d.motorResponse !== "" && d.motorResponse !== "obeys") ||
+              (d.interventions?.length > 0)
+            ) {
+              newABCDEStatus.disability = "Abnormal";
+            }
+          }
+
+          const e = res.data.abcde.exposure || {};
+          if (e.abcdeStatus) newABCDEStatus.exposure = e.abcdeStatus;
+          else if ((e.findings?.length > 0) || (e.interventions?.length > 0)) {
+            newABCDEStatus.exposure = "Abnormal";
+          }
+        }
+        setABCDEStatus(newABCDEStatus);
       }
     } catch (err) {
       console.error("Error loading case:", err);
@@ -326,13 +595,13 @@ export default function CaseSheetScreen() {
     setSaving(true);
     try {
       const gcsTotal = (parseInt(formData.disability.gcsE) || 0) + (parseInt(formData.disability.gcsV) || 0) + (parseInt(formData.disability.gcsM) || 0);
-      const payload = {
+      const payload: any = {
         abcde: {
-          airway: formData.airway,
-          breathing: formData.breathing,
-          circulation: formData.circulation,
-          disability: formData.disability,
-          exposure: formData.exposure,
+          airway: { ...formData.airway, abcdeStatus: abcdeStatus.airway },
+          breathing: { ...formData.breathing, abcdeStatus: abcdeStatus.breathing },
+          circulation: { ...formData.circulation, abcdeStatus: abcdeStatus.circulation },
+          disability: { ...formData.disability, abcdeStatus: abcdeStatus.disability },
+          exposure: { ...formData.exposure, abcdeStatus: abcdeStatus.exposure },
         },
         adjuncts: formData.adjuncts,
         sample: formData.sample,
@@ -357,6 +626,15 @@ export default function CaseSheetScreen() {
           gcs_total: gcsTotal || 15,
           grbs: parseFloat(formData.disability.glucose) || undefined,
         },
+        mode_of_arrival: modeOfArrival,
+        mlc: isMLC,
+        mlc_details: isMLC ? {
+          nature_of_incident: mlcDetails.natureOfIncident,
+          date_time: mlcDetails.dateTimeOfIncident,
+          place: mlcDetails.placeOfIncident,
+          identification_mark: mlcDetails.identificationMark,
+          informant: mlcDetails.informantBroughtBy,
+        } : null,
       };
       const res = await apiPatch(`/cases/${caseId}`, payload);
       if (res.success) {
@@ -598,7 +876,7 @@ export default function CaseSheetScreen() {
                   <View style={styles.patientInfo}>
                     <Text style={[styles.patientName, { color: theme.text }]}>{caseData.patient.name}</Text>
                     <Text style={[styles.patientDetails, { color: theme.textSecondary }]}>
-                      {caseData.patient.age} yrs | {caseData.patient.sex} | {caseData.patient.mode_of_arrival || "Walk-in"}
+                      {caseData.patient.age} yrs | {caseData.patient.sex} | {modeOfArrival}
                     </Text>
                   </View>
                   {caseData.triage_color && (
@@ -620,82 +898,494 @@ export default function CaseSheetScreen() {
                 </View>
               </View>
             )}
+
+            <View style={[styles.card, { backgroundColor: theme.card }]}>
+              <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Mode of Arrival</Text>
+              <View style={styles.arrivalRow}>
+                {["Walk-in", "Ambulance", "Referred"].map((mode) => (
+                  <Pressable
+                    key={mode}
+                    style={[styles.arrivalBtn, { backgroundColor: modeOfArrival === mode ? theme.primary : theme.backgroundSecondary }]}
+                    onPress={() => setModeOfArrival(mode)}
+                  >
+                    <Text style={{ color: modeOfArrival === mode ? "#FFFFFF" : theme.text, fontWeight: "600", fontSize: 13 }}>{mode}</Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <View style={styles.mlcRow}>
+                <Text style={[styles.fieldLabel, { color: theme.text, flex: 1 }]}>MLC Case</Text>
+                <Switch
+                  value={isMLC}
+                  onValueChange={setIsMLC}
+                  trackColor={{ false: theme.backgroundSecondary, true: TriageColors.green }}
+                  thumbColor="#FFFFFF"
+                />
+              </View>
+            </View>
+
+            {isMLC && (
+              <View style={[styles.mlcCard, { backgroundColor: "#FFF8E1", borderColor: "#FFB300" }]}>
+                <View style={styles.mlcHeader}>
+                  <Feather name="alert-triangle" size={18} color="#FF8F00" />
+                  <Text style={[styles.mlcTitle, { color: "#FF8F00" }]}>MLC Details</Text>
+                </View>
+
+                <View style={styles.field}>
+                  <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Nature of Incident</Text>
+                  <TextInput
+                    style={[styles.inputField, { backgroundColor: "#FFFFFF", color: theme.text, borderColor: "#FFB300" }]}
+                    value={mlcDetails.natureOfIncident}
+                    onChangeText={(v) => setMLCDetails((prev) => ({ ...prev, natureOfIncident: v }))}
+                    placeholder="e.g., Road Traffic Accident, Assault"
+                    placeholderTextColor={theme.textMuted}
+                  />
+                </View>
+
+                <View style={styles.field}>
+                  <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Date & Time of Incident</Text>
+                  <TextInput
+                    style={[styles.inputField, { backgroundColor: "#FFFFFF", color: theme.text, borderColor: "#FFB300" }]}
+                    value={mlcDetails.dateTimeOfIncident}
+                    onChangeText={(v) => setMLCDetails((prev) => ({ ...prev, dateTimeOfIncident: v }))}
+                    placeholder="DD/MM/YYYY HH:MM"
+                    placeholderTextColor={theme.textMuted}
+                  />
+                </View>
+
+                <View style={styles.field}>
+                  <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Place of Incident</Text>
+                  <TextInput
+                    style={[styles.inputField, { backgroundColor: "#FFFFFF", color: theme.text, borderColor: "#FFB300" }]}
+                    value={mlcDetails.placeOfIncident}
+                    onChangeText={(v) => setMLCDetails((prev) => ({ ...prev, placeOfIncident: v }))}
+                    placeholder="Location where incident occurred"
+                    placeholderTextColor={theme.textMuted}
+                  />
+                </View>
+
+                <View style={styles.field}>
+                  <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Identification Mark</Text>
+                  <TextInput
+                    style={[styles.inputField, { backgroundColor: "#FFFFFF", color: theme.text, borderColor: "#FFB300" }]}
+                    value={mlcDetails.identificationMark}
+                    onChangeText={(v) => setMLCDetails((prev) => ({ ...prev, identificationMark: v }))}
+                    placeholder="Any identifying marks"
+                    placeholderTextColor={theme.textMuted}
+                  />
+                </View>
+
+                <View style={styles.field}>
+                  <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Informant/Brought By</Text>
+                  <TextInput
+                    style={[styles.inputField, { backgroundColor: "#FFFFFF", color: theme.text, borderColor: "#FFB300" }]}
+                    value={mlcDetails.informantBroughtBy}
+                    onChangeText={(v) => setMLCDetails((prev) => ({ ...prev, informantBroughtBy: v }))}
+                    placeholder="Self"
+                    placeholderTextColor={theme.textMuted}
+                  />
+                </View>
+              </View>
+            )}
           </>
         )}
 
         {activeTab === "primary" && (
           <>
-            <CollapsibleSection title="AIRWAY" icon="A" iconColor={TriageColors.red} defaultExpanded>
-              <DropdownField label="Airway Status" options={AIRWAY_STATUS_OPTIONS} value={formData.airway.status} onChange={(v) => updateFormData("airway", "status", v)} />
-              <DropdownField label="Airway Maintenance" options={AIRWAY_MAINTENANCE_OPTIONS} value={formData.airway.maintenance} onChange={(v) => updateFormData("airway", "maintenance", v)} />
-              <DropdownField label="Obstruction Cause" options={AIRWAY_OBSTRUCTION_CAUSE_OPTIONS} value={formData.airway.obstructionCause} onChange={(v) => updateFormData("airway", "obstructionCause", v)} />
-              <DropdownField label="Speech" options={AIRWAY_SPEECH_OPTIONS} value={formData.airway.speech} onChange={(v) => updateFormData("airway", "speech", v)} />
-              <DropdownField label="Signs of Compromise" options={AIRWAY_COMPROMISE_SIGNS_OPTIONS} value={formData.airway.compromiseSigns} onChange={(v) => updateFormData("airway", "compromiseSigns", v)} />
-              <CheckboxGroup label="Interventions Done" options={AIRWAY_INTERVENTIONS} selectedValues={formData.airway.interventions} onChange={(v) => updateFormData("airway", "interventions", v)} columns={3} />
-              <TextInputField label="Additional Notes" value={formData.airway.notes} onChangeText={(v) => updateFormData("airway", "notes", v)} placeholder="Additional airway observations..." multiline numberOfLines={3} />
+            <CollapsibleSection title="A - AIRWAY" icon="*" iconColor={TriageColors.red} defaultExpanded>
+              <View style={styles.normalAbnormalRow}>
+                <Pressable
+                  style={[styles.normalBtn, { backgroundColor: abcdeStatus.airway === "Normal" ? "#E8F5E9" : theme.backgroundSecondary }]}
+                  onPress={() => setABCDEStatus((prev) => ({ ...prev, airway: "Normal" }))}
+                >
+                  <Feather name="check-circle" size={16} color={abcdeStatus.airway === "Normal" ? TriageColors.green : theme.textMuted} />
+                  <Text style={{ color: abcdeStatus.airway === "Normal" ? TriageColors.green : theme.textMuted, fontWeight: "600" }}>Normal</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.abnormalBtn, { backgroundColor: abcdeStatus.airway === "Abnormal" ? "#FEE2E2" : theme.backgroundSecondary }]}
+                  onPress={() => setABCDEStatus((prev) => ({ ...prev, airway: "Abnormal" }))}
+                >
+                  <Feather name="alert-circle" size={16} color={abcdeStatus.airway === "Abnormal" ? TriageColors.red : theme.textMuted} />
+                  <Text style={{ color: abcdeStatus.airway === "Abnormal" ? TriageColors.red : theme.textMuted, fontWeight: "600" }}>Abnormal</Text>
+                </Pressable>
+              </View>
+
+              {abcdeStatus.airway === "Abnormal" && (
+                <View style={styles.abnormalSection}>
+                  <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Position</Text>
+                  <View style={styles.chipRow}>
+                    {CHIP_OPTIONS.airwayMaintenance.map((opt) => (
+                      <Pressable key={opt.value} style={[styles.chip, formData.airway.maintenance === opt.value && styles.chipSelected, { backgroundColor: formData.airway.maintenance === opt.value ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => updateFormData("airway", "maintenance", opt.value)}>
+                        <Text style={[styles.chipText, { color: formData.airway.maintenance === opt.value ? TriageColors.red : theme.text }]}>{opt.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+
+                  <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Patency</Text>
+                  <View style={styles.chipRow}>
+                    {CHIP_OPTIONS.airwayStatus.map((opt) => (
+                      <Pressable key={opt.value} style={[styles.chip, formData.airway.status === opt.value && styles.chipSelected, { backgroundColor: formData.airway.status === opt.value ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => updateFormData("airway", "status", opt.value)}>
+                        <Text style={[styles.chipText, { color: formData.airway.status === opt.value ? TriageColors.red : theme.text }]}>{opt.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+
+                  <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Cause</Text>
+                  <View style={styles.chipRow}>
+                    {CHIP_OPTIONS.airwayCause.map((opt) => (
+                      <Pressable key={opt.value} style={[styles.chip, formData.airway.obstructionCause === opt.value && styles.chipSelected, { backgroundColor: formData.airway.obstructionCause === opt.value ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => updateFormData("airway", "obstructionCause", opt.value)}>
+                        <Text style={[styles.chipText, { color: formData.airway.obstructionCause === opt.value ? TriageColors.red : theme.text }]}>{opt.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+
+                  <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Speech</Text>
+                  <View style={styles.chipRow}>
+                    {CHIP_OPTIONS.airwaySpeech.map((opt) => (
+                      <Pressable key={opt.value} style={[styles.chip, formData.airway.speech === opt.value && styles.chipSelected, { backgroundColor: formData.airway.speech === opt.value ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => updateFormData("airway", "speech", opt.value)}>
+                        <Text style={[styles.chipText, { color: formData.airway.speech === opt.value ? TriageColors.red : theme.text }]}>{opt.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+
+                  <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Interventions Done:</Text>
+                  {CHIP_OPTIONS.airwayInterventions.map((int) => (
+                    <Pressable key={int.value} style={styles.interventionRow} onPress={() => {
+                      const current = formData.airway.interventions || [];
+                      updateFormData("airway", "interventions", current.includes(int.value) ? current.filter((i: string) => i !== int.value) : [...current, int.value]);
+                    }}>
+                      <View style={[styles.interventionCheckbox, (formData.airway.interventions || []).includes(int.value) && styles.interventionCheckboxSelected]}>
+                        {(formData.airway.interventions || []).includes(int.value) && <Feather name="check" size={12} color="#FFFFFF" />}
+                      </View>
+                      <Text style={[styles.interventionLabel, { color: theme.text }]}>{int.label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+
+              <View style={[styles.fieldWithVoice, { marginTop: Spacing.md }]}>
+                <Text style={[styles.fieldLabel, { color: theme.text }]}>Notes</Text>
+                <VoiceButton fieldKey="airway.notes" small />
+              </View>
+              <TextInput style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Additional airway observations..." placeholderTextColor={theme.textMuted} value={formData.airway.notes} onChangeText={(v) => updateFormData("airway", "notes", v)} multiline />
             </CollapsibleSection>
 
-            <CollapsibleSection title="BREATHING" icon="B" iconColor={TriageColors.orange}>
-              <View style={styles.row}>
-                <View style={styles.halfField}><TextInputField label="RR (/min)" value={formData.breathing.rr} onChangeText={(v) => updateFormData("breathing", "rr", v)} keyboardType="numeric" /></View>
-                <View style={styles.halfField}><TextInputField label="SpO2 (%)" value={formData.breathing.spo2} onChangeText={(v) => updateFormData("breathing", "spo2", v)} keyboardType="numeric" /></View>
+            <CollapsibleSection title="B - BREATHING" icon="*" iconColor={TriageColors.orange}>
+              <View style={styles.normalAbnormalRow}>
+                <Pressable style={[styles.normalBtn, { backgroundColor: abcdeStatus.breathing === "Normal" ? "#E8F5E9" : theme.backgroundSecondary }]} onPress={() => setABCDEStatus((prev) => ({ ...prev, breathing: "Normal" }))}>
+                  <Feather name="check-circle" size={16} color={abcdeStatus.breathing === "Normal" ? TriageColors.green : theme.textMuted} />
+                  <Text style={{ color: abcdeStatus.breathing === "Normal" ? TriageColors.green : theme.textMuted, fontWeight: "600" }}>Normal</Text>
+                </Pressable>
+                <Pressable style={[styles.abnormalBtn, { backgroundColor: abcdeStatus.breathing === "Abnormal" ? "#FEE2E2" : theme.backgroundSecondary }]} onPress={() => setABCDEStatus((prev) => ({ ...prev, breathing: "Abnormal" }))}>
+                  <Feather name="alert-circle" size={16} color={abcdeStatus.breathing === "Abnormal" ? TriageColors.red : theme.textMuted} />
+                  <Text style={{ color: abcdeStatus.breathing === "Abnormal" ? TriageColors.red : theme.textMuted, fontWeight: "600" }}>Abnormal</Text>
+                </Pressable>
               </View>
-              <DropdownField label="O2 Device" options={O2_DEVICE_OPTIONS} value={formData.breathing.o2Device} onChange={(v) => updateFormData("breathing", "o2Device", v)} />
-              <TextInputField label="O2 Flow (L/min)" value={formData.breathing.o2Flow} onChangeText={(v) => updateFormData("breathing", "o2Flow", v)} keyboardType="numeric" />
-              <DropdownField label="Breathing Pattern" options={BREATHING_PATTERN_OPTIONS} value={formData.breathing.pattern} onChange={(v) => updateFormData("breathing", "pattern", v)} />
-              <DropdownField label="Chest Expansion" options={CHEST_EXPANSION_OPTIONS} value={formData.breathing.chestExpansion} onChange={(v) => updateFormData("breathing", "chestExpansion", v)} />
-              <DropdownField label="Air Entry" options={AIR_ENTRY_OPTIONS} value={formData.breathing.airEntry} onChange={(v) => updateFormData("breathing", "airEntry", v)} />
-              <DropdownField label="Effort" options={BREATHING_EFFORT_OPTIONS} value={formData.breathing.effort} onChange={(v) => updateFormData("breathing", "effort", v)} />
-              <DropdownField label="Added Breath Sounds" options={ADDED_BREATH_SOUNDS_OPTIONS} value={formData.breathing.addedSounds} onChange={(v) => updateFormData("breathing", "addedSounds", v)} />
-              <CheckboxGroup label="Interventions Done" options={BREATHING_INTERVENTIONS} selectedValues={formData.breathing.interventions} onChange={(v) => updateFormData("breathing", "interventions", v)} columns={2} />
-              <TextInputField label="Additional Notes" value={formData.breathing.notes} onChangeText={(v) => updateFormData("breathing", "notes", v)} placeholder="Additional breathing observations..." multiline numberOfLines={3} />
+
+              <View style={styles.abcdeVitalsRow}>
+                <View style={styles.abcdeVitalInput}><TextInputField label="RR" value={formData.breathing.rr} onChangeText={(v) => updateFormData("breathing", "rr", v)} keyboardType="numeric" suffix="/min" /></View>
+                <View style={styles.abcdeVitalInput}><TextInputField label="SpO2" value={formData.breathing.spo2} onChangeText={(v) => updateFormData("breathing", "spo2", v)} keyboardType="numeric" suffix="%" /></View>
+                <View style={styles.abcdeVitalInput}><TextInputField label="O2 Flow" value={formData.breathing.o2Flow} onChangeText={(v) => updateFormData("breathing", "o2Flow", v)} keyboardType="numeric" suffix="L/min" /></View>
+              </View>
+
+              {abcdeStatus.breathing === "Abnormal" && (
+                <View style={styles.abnormalSection}>
+                  <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Effort</Text>
+                  <View style={styles.chipRow}>
+                    {CHIP_OPTIONS.breathingEffort.map((opt) => (
+                      <Pressable key={opt.value} style={[styles.chip, formData.breathing.effort === opt.value && styles.chipSelected, { backgroundColor: formData.breathing.effort === opt.value ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => updateFormData("breathing", "effort", opt.value)}>
+                        <Text style={[styles.chipText, { color: formData.breathing.effort === opt.value ? TriageColors.red : theme.text }]}>{opt.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+
+                  <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>O2 Device</Text>
+                  <View style={styles.chipRow}>
+                    {CHIP_OPTIONS.breathingO2Device.map((opt) => (
+                      <Pressable key={opt.value} style={[styles.chip, formData.breathing.o2Device === opt.value && styles.chipSelected, { backgroundColor: formData.breathing.o2Device === opt.value ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => updateFormData("breathing", "o2Device", opt.value)}>
+                        <Text style={[styles.chipText, { color: formData.breathing.o2Device === opt.value ? TriageColors.red : theme.text }]}>{opt.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+
+                  <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Pattern</Text>
+                  <View style={styles.chipRow}>
+                    {CHIP_OPTIONS.breathingPattern.map((opt) => (
+                      <Pressable key={opt.value} style={[styles.chip, formData.breathing.pattern === opt.value && styles.chipSelected, { backgroundColor: formData.breathing.pattern === opt.value ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => updateFormData("breathing", "pattern", opt.value)}>
+                        <Text style={[styles.chipText, { color: formData.breathing.pattern === opt.value ? TriageColors.red : theme.text }]}>{opt.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+
+                  <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Chest Expansion</Text>
+                  <View style={styles.chipRow}>
+                    {CHIP_OPTIONS.breathingChestExpansion.map((opt) => (
+                      <Pressable key={opt.value} style={[styles.chip, formData.breathing.chestExpansion === opt.value && styles.chipSelected, { backgroundColor: formData.breathing.chestExpansion === opt.value ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => updateFormData("breathing", "chestExpansion", opt.value)}>
+                        <Text style={[styles.chipText, { color: formData.breathing.chestExpansion === opt.value ? TriageColors.red : theme.text }]}>{opt.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+
+                  <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Air Entry</Text>
+                  <View style={styles.chipRow}>
+                    {CHIP_OPTIONS.breathingAirEntry.map((opt) => (
+                      <Pressable key={opt.value} style={[styles.chip, formData.breathing.airEntry === opt.value && styles.chipSelected, { backgroundColor: formData.breathing.airEntry === opt.value ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => updateFormData("breathing", "airEntry", opt.value)}>
+                        <Text style={[styles.chipText, { color: formData.breathing.airEntry === opt.value ? TriageColors.red : theme.text }]}>{opt.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+
+                  <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Added Sounds</Text>
+                  <View style={styles.chipRow}>
+                    {CHIP_OPTIONS.breathingAddedSounds.map((opt) => (
+                      <Pressable key={opt.value} style={[styles.chip, formData.breathing.addedSounds === opt.value && styles.chipSelected, { backgroundColor: formData.breathing.addedSounds === opt.value ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => updateFormData("breathing", "addedSounds", opt.value)}>
+                        <Text style={[styles.chipText, { color: formData.breathing.addedSounds === opt.value ? TriageColors.red : theme.text }]}>{opt.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+
+                  <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Interventions:</Text>
+                  {CHIP_OPTIONS.breathingInterventions.map((int) => (
+                    <Pressable key={int.value} style={styles.interventionRow} onPress={() => {
+                      const current = formData.breathing.interventions || [];
+                      updateFormData("breathing", "interventions", current.includes(int.value) ? current.filter((i: string) => i !== int.value) : [...current, int.value]);
+                    }}>
+                      <View style={[styles.interventionCheckbox, (formData.breathing.interventions || []).includes(int.value) && styles.interventionCheckboxSelected]}>
+                        {(formData.breathing.interventions || []).includes(int.value) && <Feather name="check" size={12} color="#FFFFFF" />}
+                      </View>
+                      <Text style={[styles.interventionLabel, { color: theme.text }]}>{int.label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+
+              <View style={[styles.fieldWithVoice, { marginTop: Spacing.md }]}>
+                <Text style={[styles.fieldLabel, { color: theme.text }]}>Notes</Text>
+                <VoiceButton fieldKey="breathing.notes" small />
+              </View>
+              <TextInput style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Additional breathing observations..." placeholderTextColor={theme.textMuted} value={formData.breathing.notes} onChangeText={(v) => updateFormData("breathing", "notes", v)} multiline />
             </CollapsibleSection>
 
-            <CollapsibleSection title="CIRCULATION" icon="C" iconColor={TriageColors.yellow}>
-              <View style={styles.row}>
-                <View style={styles.halfField}><TextInputField label="Heart Rate (bpm)" value={formData.circulation.hr} onChangeText={(v) => updateFormData("circulation", "hr", v)} keyboardType="numeric" /></View>
-                <View style={styles.halfField}><DropdownField label="Pulse Quality" options={PULSE_QUALITY_OPTIONS} value={formData.circulation.pulseQuality} onChange={(v) => updateFormData("circulation", "pulseQuality", v)} /></View>
+            <CollapsibleSection title="C - CIRCULATION" icon="*" iconColor={TriageColors.yellow}>
+              <View style={styles.normalAbnormalRow}>
+                <Pressable style={[styles.normalBtn, { backgroundColor: abcdeStatus.circulation === "Normal" ? "#E8F5E9" : theme.backgroundSecondary }]} onPress={() => setABCDEStatus((prev) => ({ ...prev, circulation: "Normal" }))}>
+                  <Feather name="check-circle" size={16} color={abcdeStatus.circulation === "Normal" ? TriageColors.green : theme.textMuted} />
+                  <Text style={{ color: abcdeStatus.circulation === "Normal" ? TriageColors.green : theme.textMuted, fontWeight: "600" }}>Normal</Text>
+                </Pressable>
+                <Pressable style={[styles.abnormalBtn, { backgroundColor: abcdeStatus.circulation === "Abnormal" ? "#FEE2E2" : theme.backgroundSecondary }]} onPress={() => setABCDEStatus((prev) => ({ ...prev, circulation: "Abnormal" }))}>
+                  <Feather name="alert-circle" size={16} color={abcdeStatus.circulation === "Abnormal" ? TriageColors.red : theme.textMuted} />
+                  <Text style={{ color: abcdeStatus.circulation === "Abnormal" ? TriageColors.red : theme.textMuted, fontWeight: "600" }}>Abnormal</Text>
+                </Pressable>
               </View>
-              <View style={styles.row}>
-                <View style={styles.halfField}><TextInputField label="BP Systolic" value={formData.circulation.bpSystolic} onChangeText={(v) => updateFormData("circulation", "bpSystolic", v)} keyboardType="numeric" /></View>
-                <View style={styles.halfField}><TextInputField label="BP Diastolic" value={formData.circulation.bpDiastolic} onChangeText={(v) => updateFormData("circulation", "bpDiastolic", v)} keyboardType="numeric" /></View>
+
+              <View style={styles.abcdeVitalsRow}>
+                <View style={styles.abcdeVitalInput}><TextInputField label="HR" value={formData.circulation.hr} onChangeText={(v) => updateFormData("circulation", "hr", v)} keyboardType="numeric" suffix="bpm" /></View>
+                <View style={styles.abcdeVitalInput}><TextInputField label="BP" value={`${formData.circulation.bpSystolic}/${formData.circulation.bpDiastolic}`} onChangeText={(v) => {
+                  const parts = v.split("/");
+                  updateFormData("circulation", "bpSystolic", parts[0] || "");
+                  updateFormData("circulation", "bpDiastolic", parts[1] || "");
+                }} placeholder="Sys/Dia" /></View>
               </View>
-              <DropdownField label="Capillary Refill" options={CAPILLARY_REFILL_OPTIONS} value={formData.circulation.capillaryRefill} onChange={(v) => updateFormData("circulation", "capillaryRefill", v)} />
-              <View style={styles.row}>
-                <View style={styles.halfField}><DropdownField label="Skin Color" options={SKIN_COLOR_OPTIONS} value={formData.circulation.skinColor} onChange={(v) => updateFormData("circulation", "skinColor", v)} /></View>
-                <View style={styles.halfField}><DropdownField label="Skin Temperature" options={SKIN_TEMPERATURE_OPTIONS} value={formData.circulation.skinTemperature} onChange={(v) => updateFormData("circulation", "skinTemperature", v)} /></View>
+
+              {abcdeStatus.circulation === "Abnormal" && (
+                <View style={styles.abnormalSection}>
+                  <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Rhythm</Text>
+                  <View style={styles.chipRow}>
+                    {CHIP_OPTIONS.circulationRhythm.map((opt) => (
+                      <Pressable key={opt.value} style={[styles.chip, formData.circulation.pulseQuality === opt.value && styles.chipSelected, { backgroundColor: formData.circulation.pulseQuality === opt.value ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => updateFormData("circulation", "pulseQuality", opt.value)}>
+                        <Text style={[styles.chipText, { color: formData.circulation.pulseQuality === opt.value ? TriageColors.red : theme.text }]}>{opt.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+
+                  <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>CRT</Text>
+                  <View style={styles.chipRow}>
+                    {CHIP_OPTIONS.circulationCRT.map((opt) => (
+                      <Pressable key={opt.value} style={[styles.chip, formData.circulation.capillaryRefill === opt.value && styles.chipSelected, { backgroundColor: formData.circulation.capillaryRefill === opt.value ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => updateFormData("circulation", "capillaryRefill", opt.value)}>
+                        <Text style={[styles.chipText, { color: formData.circulation.capillaryRefill === opt.value ? TriageColors.red : theme.text }]}>{opt.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+
+                  <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Skin</Text>
+                  <View style={styles.chipRow}>
+                    {CHIP_OPTIONS.circulationSkin.map((opt) => (
+                      <Pressable key={opt.value} style={[styles.chip, formData.circulation.skinTemperature === opt.value && styles.chipSelected, { backgroundColor: formData.circulation.skinTemperature === opt.value ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => updateFormData("circulation", "skinTemperature", opt.value)}>
+                        <Text style={[styles.chipText, { color: formData.circulation.skinTemperature === opt.value ? TriageColors.red : theme.text }]}>{opt.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+
+                  <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Skin Color</Text>
+                  <View style={styles.chipRow}>
+                    {CHIP_OPTIONS.circulationSkinColor.map((opt) => (
+                      <Pressable key={opt.value} style={[styles.chip, formData.circulation.skinColor === opt.value && styles.chipSelected, { backgroundColor: formData.circulation.skinColor === opt.value ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => updateFormData("circulation", "skinColor", opt.value)}>
+                        <Text style={[styles.chipText, { color: formData.circulation.skinColor === opt.value ? TriageColors.red : theme.text }]}>{opt.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+
+                  <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>IV Access</Text>
+                  <View style={styles.chipRow}>
+                    {CHIP_OPTIONS.circulationIVAccess.map((opt) => (
+                      <Pressable key={opt.value} style={[styles.chip, formData.circulation.ivAccess === opt.value && styles.chipSelected, { backgroundColor: formData.circulation.ivAccess === opt.value ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => updateFormData("circulation", "ivAccess", opt.value)}>
+                        <Text style={[styles.chipText, { color: formData.circulation.ivAccess === opt.value ? TriageColors.red : theme.text }]}>{opt.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+
+                  <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Interventions:</Text>
+                  {CHIP_OPTIONS.circulationInterventions.map((int) => (
+                    <Pressable key={int.value} style={styles.interventionRow} onPress={() => {
+                      const current = formData.circulation.interventions || [];
+                      updateFormData("circulation", "interventions", current.includes(int.value) ? current.filter((i: string) => i !== int.value) : [...current, int.value]);
+                    }}>
+                      <View style={[styles.interventionCheckbox, (formData.circulation.interventions || []).includes(int.value) && styles.interventionCheckboxSelected]}>
+                        {(formData.circulation.interventions || []).includes(int.value) && <Feather name="check" size={12} color="#FFFFFF" />}
+                      </View>
+                      <Text style={[styles.interventionLabel, { color: theme.text }]}>{int.label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+
+              <View style={[styles.fieldWithVoice, { marginTop: Spacing.md }]}>
+                <Text style={[styles.fieldLabel, { color: theme.text }]}>Notes</Text>
+                <VoiceButton fieldKey="circulation.notes" small />
               </View>
-              <DropdownField label="IV Access" options={IV_ACCESS_OPTIONS} value={formData.circulation.ivAccess} onChange={(v) => updateFormData("circulation", "ivAccess", v)} />
-              <CheckboxGroup label="Interventions Done" options={CIRCULATION_INTERVENTIONS} selectedValues={formData.circulation.interventions} onChange={(v) => updateFormData("circulation", "interventions", v)} columns={2} />
-              <TextInputField label="Additional Notes" value={formData.circulation.notes} onChangeText={(v) => updateFormData("circulation", "notes", v)} placeholder="Additional circulation observations..." multiline numberOfLines={3} />
+              <TextInput style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Additional circulation observations..." placeholderTextColor={theme.textMuted} value={formData.circulation.notes} onChangeText={(v) => updateFormData("circulation", "notes", v)} multiline />
             </CollapsibleSection>
 
-            <CollapsibleSection title="DISABILITY" icon="D" iconColor={TriageColors.green}>
-              <Text style={[styles.subLabel, { color: theme.textSecondary }]}>Glasgow Coma Scale</Text>
-              <View style={styles.row}>
-                <View style={styles.thirdField}><TextInputField label="Eye (1-4)" value={formData.disability.gcsE} onChangeText={(v) => updateFormData("disability", "gcsE", v)} keyboardType="numeric" /></View>
-                <View style={styles.thirdField}><TextInputField label="Verbal (1-5)" value={formData.disability.gcsV} onChangeText={(v) => updateFormData("disability", "gcsV", v)} keyboardType="numeric" /></View>
-                <View style={styles.thirdField}><TextInputField label="Motor (1-6)" value={formData.disability.gcsM} onChangeText={(v) => updateFormData("disability", "gcsM", v)} keyboardType="numeric" /></View>
+            <CollapsibleSection title="D - DISABILITY (Neuro)" icon="?" iconColor={TriageColors.green}>
+              <View style={styles.normalAbnormalRow}>
+                <Pressable style={[styles.normalBtn, { backgroundColor: abcdeStatus.disability === "Normal" ? "#E8F5E9" : theme.backgroundSecondary }]} onPress={() => setABCDEStatus((prev) => ({ ...prev, disability: "Normal" }))}>
+                  <Feather name="check-circle" size={16} color={abcdeStatus.disability === "Normal" ? TriageColors.green : theme.textMuted} />
+                  <Text style={{ color: abcdeStatus.disability === "Normal" ? TriageColors.green : theme.textMuted, fontWeight: "600" }}>Normal</Text>
+                </Pressable>
+                <Pressable style={[styles.abnormalBtn, { backgroundColor: abcdeStatus.disability === "Abnormal" ? "#FEE2E2" : theme.backgroundSecondary }]} onPress={() => setABCDEStatus((prev) => ({ ...prev, disability: "Abnormal" }))}>
+                  <Feather name="alert-circle" size={16} color={abcdeStatus.disability === "Abnormal" ? TriageColors.red : theme.textMuted} />
+                  <Text style={{ color: abcdeStatus.disability === "Abnormal" ? TriageColors.red : theme.textMuted, fontWeight: "600" }}>Abnormal</Text>
+                </Pressable>
               </View>
-              <View style={[styles.gcsTotal, { backgroundColor: theme.backgroundSecondary }]}>
-                <Text style={[styles.gcsTotalLabel, { color: theme.textSecondary }]}>GCS Total:</Text>
-                <Text style={[styles.gcsTotalValue, { color: theme.text }]}>{(parseInt(formData.disability.gcsE) || 0) + (parseInt(formData.disability.gcsV) || 0) + (parseInt(formData.disability.gcsM) || 0)}/15</Text>
+
+              <View style={styles.abcdeVitalsRow}>
+                <View style={styles.abcdeVitalInput}><TextInputField label="GCS E" value={formData.disability.gcsE} onChangeText={(v) => updateFormData("disability", "gcsE", v)} keyboardType="numeric" suffix="1-4" /></View>
+                <View style={styles.abcdeVitalInput}><TextInputField label="V" value={formData.disability.gcsV} onChangeText={(v) => updateFormData("disability", "gcsV", v)} keyboardType="numeric" suffix="1-5" /></View>
+                <View style={styles.abcdeVitalInput}><TextInputField label="M" value={formData.disability.gcsM} onChangeText={(v) => updateFormData("disability", "gcsM", v)} keyboardType="numeric" suffix="1-6" /></View>
+                <View style={styles.abcdeVitalInput}><TextInputField label="GRBS" value={formData.disability.glucose} onChangeText={(v) => updateFormData("disability", "glucose", v)} keyboardType="numeric" suffix="mg/dL" /></View>
               </View>
-              <View style={styles.row}>
-                <View style={styles.halfField}><DropdownField label="Pupil Size" options={PUPIL_SIZE_OPTIONS} value={formData.disability.pupilSize} onChange={(v) => updateFormData("disability", "pupilSize", v)} /></View>
-                <View style={styles.halfField}><DropdownField label="Pupil Reaction" options={PUPIL_REACTION_OPTIONS} value={formData.disability.pupilReaction} onChange={(v) => updateFormData("disability", "pupilReaction", v)} /></View>
+
+              {abcdeStatus.disability === "Abnormal" && (
+                <View style={styles.abnormalSection}>
+                  <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>AVPU</Text>
+                  <View style={styles.chipRow}>
+                    {CHIP_OPTIONS.disabilityAVPU.map((opt) => (
+                      <Pressable key={opt.value} style={[styles.chip, formData.disability.motorResponse === opt.value && styles.chipSelected, { backgroundColor: formData.disability.motorResponse === opt.value ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => updateFormData("disability", "motorResponse", opt.value)}>
+                        <Text style={[styles.chipText, { color: formData.disability.motorResponse === opt.value ? TriageColors.red : theme.text }]}>{opt.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+
+                  <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Pupils Size</Text>
+                  <View style={styles.chipRow}>
+                    {CHIP_OPTIONS.disabilityPupilSize.map((opt) => (
+                      <Pressable key={opt.value} style={[styles.chip, formData.disability.pupilSize === opt.value && styles.chipSelected, { backgroundColor: formData.disability.pupilSize === opt.value ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => updateFormData("disability", "pupilSize", opt.value)}>
+                        <Text style={[styles.chipText, { color: formData.disability.pupilSize === opt.value ? TriageColors.red : theme.text }]}>{opt.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+
+                  <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Pupils Reaction</Text>
+                  <View style={styles.chipRow}>
+                    {CHIP_OPTIONS.disabilityPupilReaction.map((opt) => (
+                      <Pressable key={opt.value} style={[styles.chip, formData.disability.pupilReaction === opt.value && styles.chipSelected, { backgroundColor: formData.disability.pupilReaction === opt.value ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => updateFormData("disability", "pupilReaction", opt.value)}>
+                        <Text style={[styles.chipText, { color: formData.disability.pupilReaction === opt.value ? TriageColors.red : theme.text }]}>{opt.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+
+                  <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Lateralizing</Text>
+                  <View style={styles.chipRow}>
+                    {CHIP_OPTIONS.disabilityLateralizing.map((opt) => (
+                      <Pressable key={opt.value} style={[styles.chip, (formData.disability.interventions || []).includes(opt.value) && styles.chipSelected, { backgroundColor: (formData.disability.interventions || []).includes(opt.value) ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => {
+                        const current = formData.disability.interventions || [];
+                        updateFormData("disability", "interventions", current.includes(opt.value) ? current.filter((i: string) => i !== opt.value) : [...current, opt.value]);
+                      }}>
+                        <Text style={[styles.chipText, { color: (formData.disability.interventions || []).includes(opt.value) ? TriageColors.red : theme.text }]}>{opt.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+
+                  <Pressable style={styles.interventionRow} onPress={() => {
+                    const current = formData.disability.interventions || [];
+                    const opt = "seizure_observed";
+                    updateFormData("disability", "interventions", current.includes(opt) ? current.filter((i: string) => i !== opt) : [...current, opt]);
+                  }}>
+                    <View style={[styles.interventionCheckbox, (formData.disability.interventions || []).includes("seizure_observed") && styles.interventionCheckboxSelected]}>
+                      {(formData.disability.interventions || []).includes("seizure_observed") && <Feather name="check" size={12} color="#FFFFFF" />}
+                    </View>
+                    <Text style={[styles.interventionLabel, { color: theme.text }]}>Seizure Observed</Text>
+                  </Pressable>
+                </View>
+              )}
+
+              <View style={[styles.fieldWithVoice, { marginTop: Spacing.md }]}>
+                <Text style={[styles.fieldLabel, { color: theme.text }]}>Notes</Text>
+                <VoiceButton fieldKey="disability.notes" small />
               </View>
-              <DropdownField label="Motor Response" options={MOTOR_RESPONSE_OPTIONS} value={formData.disability.motorResponse} onChange={(v) => updateFormData("disability", "motorResponse", v)} />
-              <TextInputField label="Glucose (mg/dL)" value={formData.disability.glucose} onChangeText={(v) => updateFormData("disability", "glucose", v)} keyboardType="numeric" />
-              <CheckboxGroup label="Interventions Done" options={DISABILITY_INTERVENTIONS} selectedValues={formData.disability.interventions} onChange={(v) => updateFormData("disability", "interventions", v)} columns={2} />
-              <TextInputField label="Additional Notes" value={formData.disability.notes} onChangeText={(v) => updateFormData("disability", "notes", v)} placeholder="Additional neurological observations..." multiline numberOfLines={3} />
+              <TextInput style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Additional neuro observations..." placeholderTextColor={theme.textMuted} value={formData.disability.notes} onChangeText={(v) => updateFormData("disability", "notes", v)} multiline />
             </CollapsibleSection>
 
-            <CollapsibleSection title="EXPOSURE" icon="E" iconColor={TriageColors.blue}>
-              <TextInputField label="Temperature" value={formData.exposure.temperature} onChangeText={(v) => updateFormData("exposure", "temperature", v)} keyboardType="decimal-pad" suffix="C" />
-              <CheckboxGroup label="Findings" options={EXPOSURE_FINDINGS_OPTIONS} selectedValues={formData.exposure.findings} onChange={(v) => updateFormData("exposure", "findings", v)} columns={2} />
-              <CheckboxGroup label="Interventions Done" options={EXPOSURE_INTERVENTIONS} selectedValues={formData.exposure.interventions} onChange={(v) => updateFormData("exposure", "interventions", v)} columns={2} />
-              <TextInputField label="Additional Notes" value={formData.exposure.notes} onChangeText={(v) => updateFormData("exposure", "notes", v)} placeholder="Additional exposure findings..." multiline numberOfLines={3} />
+            <CollapsibleSection title="E - EXPOSURE" icon="*" iconColor={TriageColors.blue}>
+              <View style={styles.normalAbnormalRow}>
+                <Pressable style={[styles.normalBtn, { backgroundColor: abcdeStatus.exposure === "Normal" ? "#E8F5E9" : theme.backgroundSecondary }]} onPress={() => setABCDEStatus((prev) => ({ ...prev, exposure: "Normal" }))}>
+                  <Feather name="check-circle" size={16} color={abcdeStatus.exposure === "Normal" ? TriageColors.green : theme.textMuted} />
+                  <Text style={{ color: abcdeStatus.exposure === "Normal" ? TriageColors.green : theme.textMuted, fontWeight: "600" }}>Normal</Text>
+                </Pressable>
+                <Pressable style={[styles.abnormalBtn, { backgroundColor: abcdeStatus.exposure === "Abnormal" ? "#FEE2E2" : theme.backgroundSecondary }]} onPress={() => setABCDEStatus((prev) => ({ ...prev, exposure: "Abnormal" }))}>
+                  <Feather name="alert-circle" size={16} color={abcdeStatus.exposure === "Abnormal" ? TriageColors.red : theme.textMuted} />
+                  <Text style={{ color: abcdeStatus.exposure === "Abnormal" ? TriageColors.red : theme.textMuted, fontWeight: "600" }}>Abnormal</Text>
+                </Pressable>
+              </View>
+
+              <View style={styles.abcdeVitalsRow}>
+                <View style={{ flex: 1 }}><TextInputField label="Temp" value={formData.exposure.temperature} onChangeText={(v) => updateFormData("exposure", "temperature", v)} keyboardType="decimal-pad" suffix="\u00B0C" /></View>
+              </View>
+
+              {abcdeStatus.exposure === "Abnormal" && (
+                <View style={styles.abnormalSection}>
+                  <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Findings</Text>
+                  <View style={styles.chipRow}>
+                    {CHIP_OPTIONS.exposureFindings.map((opt) => (
+                      <Pressable key={opt.value} style={[styles.chip, (formData.exposure.findings || []).includes(opt.value) && styles.chipSelected, { backgroundColor: (formData.exposure.findings || []).includes(opt.value) ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => {
+                        const current = formData.exposure.findings || [];
+                        updateFormData("exposure", "findings", current.includes(opt.value) ? current.filter((i: string) => i !== opt.value) : [...current, opt.value]);
+                      }}>
+                        <Text style={[styles.chipText, { color: (formData.exposure.findings || []).includes(opt.value) ? TriageColors.red : theme.text }]}>{opt.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+
+                  <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Interventions:</Text>
+                  {CHIP_OPTIONS.exposureInterventions.map((int) => (
+                    <Pressable key={int.value} style={styles.interventionRow} onPress={() => {
+                      const current = formData.exposure.interventions || [];
+                      updateFormData("exposure", "interventions", current.includes(int.value) ? current.filter((i: string) => i !== int.value) : [...current, int.value]);
+                    }}>
+                      <View style={[styles.interventionCheckbox, (formData.exposure.interventions || []).includes(int.value) && styles.interventionCheckboxSelected]}>
+                        {(formData.exposure.interventions || []).includes(int.value) && <Feather name="check" size={12} color="#FFFFFF" />}
+                      </View>
+                      <Text style={[styles.interventionLabel, { color: theme.text }]}>{int.label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+
+              <View style={[styles.fieldWithVoice, { marginTop: Spacing.md }]}>
+                <Text style={[styles.fieldLabel, { color: theme.text }]}>Local Exam / Notes</Text>
+                <VoiceButton fieldKey="exposure.notes" small />
+              </View>
+              <TextInput style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Additional exposure findings..." placeholderTextColor={theme.textMuted} value={formData.exposure.notes} onChangeText={(v) => updateFormData("exposure", "notes", v)} multiline />
             </CollapsibleSection>
 
             <Text style={[styles.sectionHeading, { color: theme.text }]}>Adjuncts to Primary Survey</Text>
@@ -1155,4 +1845,26 @@ const styles = StyleSheet.create({
   generateSummaryBtnText: { color: "#FFFFFF", ...Typography.bodyMedium, fontWeight: "600" },
   saveDashboardBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: Spacing.lg, borderRadius: BorderRadius.md, borderWidth: 1, gap: Spacing.sm, marginTop: Spacing.md },
   saveDashboardBtnText: { ...Typography.bodyMedium, fontWeight: "600" },
+  arrivalRow: { flexDirection: "row", gap: Spacing.sm, marginTop: Spacing.sm, marginBottom: Spacing.md },
+  arrivalBtn: { flex: 1, paddingVertical: Spacing.sm, alignItems: "center", borderRadius: BorderRadius.md },
+  mlcRow: { flexDirection: "row", alignItems: "center", paddingTop: Spacing.sm },
+  mlcCard: { padding: Spacing.lg, borderRadius: BorderRadius.lg, marginBottom: Spacing.lg, borderWidth: 1 },
+  mlcHeader: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginBottom: Spacing.lg },
+  mlcTitle: { ...Typography.h4 },
+  field: { marginBottom: Spacing.md },
+  normalAbnormalRow: { flexDirection: "row", marginBottom: Spacing.lg },
+  normalBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: Spacing.md, borderRadius: BorderRadius.md, gap: Spacing.xs, marginRight: Spacing.sm },
+  abnormalBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: Spacing.md, borderRadius: BorderRadius.md, gap: Spacing.xs },
+  abnormalSection: { backgroundColor: "#FFF5F5", padding: Spacing.md, borderRadius: BorderRadius.md, borderLeftWidth: 3, borderLeftColor: "#EF4444" },
+  abnormalSectionLabel: { ...Typography.bodyMedium, fontWeight: "600", marginBottom: Spacing.sm },
+  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm, marginBottom: Spacing.md },
+  chip: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.full, borderWidth: 1, borderColor: "#E5E7EB" },
+  chipSelected: { borderColor: "#EF4444" },
+  chipText: { fontSize: 13 },
+  interventionRow: { flexDirection: "row", alignItems: "center", paddingVertical: Spacing.sm, gap: Spacing.md },
+  interventionCheckbox: { width: 20, height: 20, borderWidth: 1.5, borderColor: "#9CA3AF", borderRadius: 4, justifyContent: "center", alignItems: "center" },
+  interventionCheckboxSelected: { backgroundColor: "#EF4444", borderColor: "#EF4444" },
+  interventionLabel: { ...Typography.body, flex: 1 },
+  abcdeVitalsRow: { flexDirection: "row", gap: Spacing.md, marginBottom: Spacing.md },
+  abcdeVitalInput: { flex: 1 },
 });
