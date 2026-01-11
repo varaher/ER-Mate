@@ -61,7 +61,7 @@ import {
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteProps = RouteProp<RootStackParamList, "CaseSheet">;
 
-type TabType = "patient" | "primary" | "history" | "exam" | "treatment";
+type TabType = "patient" | "primary" | "history" | "exam" | "treatment" | "notes" | "disposition";
 
 interface ExamFormData {
   general: {
@@ -131,6 +131,27 @@ interface TreatmentFormData {
   resultsSummary: string;
   primaryDiagnosis: string;
   differentialDiagnoses: string;
+  otherMedications: string;
+  ivFluids: string;
+  addendumNotes: string;
+}
+
+interface ProceduresData {
+  resuscitation: string[];
+  airway: string[];
+  vascular: string[];
+  chest: string[];
+  neuro: string[];
+  gu: string[];
+  gi: string[];
+  wound: string[];
+  ortho: string[];
+}
+
+interface DispositionData {
+  dispositionType: string;
+  erObservationNotes: string;
+  durationInER: string;
 }
 
 interface PsychFormData {
@@ -159,7 +180,40 @@ const getDefaultTreatmentFormData = (): TreatmentFormData => ({
   resultsSummary: "",
   primaryDiagnosis: "",
   differentialDiagnoses: "",
+  otherMedications: "",
+  ivFluids: "",
+  addendumNotes: "",
 });
+
+const getDefaultProceduresData = (): ProceduresData => ({
+  resuscitation: [],
+  airway: [],
+  vascular: [],
+  chest: [],
+  neuro: [],
+  gu: [],
+  gi: [],
+  wound: [],
+  ortho: [],
+});
+
+const getDefaultDispositionData = (): DispositionData => ({
+  dispositionType: "",
+  erObservationNotes: "",
+  durationInER: "",
+});
+
+const PROCEDURES_OPTIONS = {
+  resuscitation: ["CPR"],
+  airway: ["Endotracheal Intubation", "LMA Insertion", "Cricothyrotomy", "Bag-Valve-Mask Ventilation"],
+  vascular: ["Central Line Insertion", "Peripheral IV Access", "Intraosseous Access", "Arterial Line"],
+  chest: ["Chest Tube Insertion", "Needle Decompression", "Pericardiocentesis", "Thoracentesis"],
+  neuro: ["Lumbar Puncture"],
+  gu: ["Foley's Catheter"],
+  gi: ["NG Tube Insertion", "Gastric Lavage"],
+  wound: ["Wound Closure/Suturing", "Wound Irrigation"],
+  ortho: ["Fracture Splinting", "Joint Reduction"],
+};
 
 const getDefaultPsychFormData = (): PsychFormData => ({
   suicidalIdeation: false,
@@ -188,6 +242,8 @@ export default function CaseSheetScreen() {
   const [examData, setExamData] = useState<ExamFormData>(getDefaultExamFormData());
   const [psychData, setPsychData] = useState<PsychFormData>(getDefaultPsychFormData());
   const [treatmentData, setTreatmentData] = useState<TreatmentFormData>(getDefaultTreatmentFormData());
+  const [proceduresData, setProceduresData] = useState<ProceduresData>(getDefaultProceduresData());
+  const [dispositionData, setDispositionData] = useState<DispositionData>(getDefaultDispositionData());
   const [pastSurgicalHistory, setPastSurgicalHistory] = useState("");
   const [otherHistory, setOtherHistory] = useState("");
   const [isRecording, setIsRecording] = useState(false);
@@ -376,6 +432,8 @@ export default function CaseSheetScreen() {
           const field = fieldKey.replace("treatment.", "") as keyof TreatmentFormData;
           const current = treatmentData[field] || "";
           setTreatmentData((prev) => ({ ...prev, [field]: current ? `${current} ${text}` : text }));
+        } else if (fieldKey === "erObservationNotes") {
+          setDispositionData((prev) => ({ ...prev, erObservationNotes: prev.erObservationNotes ? `${prev.erObservationNotes} ${text}` : text }));
         }
       }
     } catch (err) {
@@ -395,23 +453,54 @@ export default function CaseSheetScreen() {
   };
 
   const handleNext = () => {
-    const tabs: TabType[] = ["patient", "primary", "history", "exam", "treatment"];
+    const tabs: TabType[] = ["patient", "primary", "history", "exam", "treatment", "notes", "disposition"];
     const currentIndex = tabs.indexOf(activeTab);
     if (currentIndex < tabs.length - 1) {
       setActiveTab(tabs[currentIndex + 1]);
     } else {
       handleSave();
-      navigation.navigate("PhysicalExam", { caseId });
+      navigation.goBack();
     }
   };
 
   const handlePrevious = () => {
-    const tabs: TabType[] = ["patient", "primary", "history", "exam", "treatment"];
+    const tabs: TabType[] = ["patient", "primary", "history", "exam", "treatment", "notes", "disposition"];
     const currentIndex = tabs.indexOf(activeTab);
     if (currentIndex > 0) {
       setActiveTab(tabs[currentIndex - 1]);
     }
   };
+
+  const toggleProcedure = (category: keyof ProceduresData, procedure: string) => {
+    setProceduresData((prev) => {
+      const current = prev[category];
+      if (current.includes(procedure)) {
+        return { ...prev, [category]: current.filter((p) => p !== procedure) };
+      } else {
+        return { ...prev, [category]: [...current, procedure] };
+      }
+    });
+  };
+
+  const ProcedureCheckbox = ({ category, procedure }: { category: keyof ProceduresData; procedure: string }) => (
+    <Pressable style={styles.procedureRow} onPress={() => toggleProcedure(category, procedure)}>
+      <View style={[styles.checkbox, { borderColor: theme.border }, proceduresData[category].includes(procedure) && { backgroundColor: theme.primary, borderColor: theme.primary }]}>
+        {proceduresData[category].includes(procedure) && <Feather name="check" size={14} color="#FFFFFF" />}
+      </View>
+      <Text style={[styles.procedureLabel, { color: theme.text }]}>{procedure}</Text>
+    </Pressable>
+  );
+
+  const ProcedureSection = ({ title, category }: { title: string; category: keyof ProceduresData }) => (
+    <View>
+      <View style={[styles.procedureHeader, { backgroundColor: "#E0E7FF" }]}>
+        <Text style={[styles.procedureHeaderText, { color: theme.primary }]}>{title}</Text>
+      </View>
+      {PROCEDURES_OPTIONS[category].map((proc) => (
+        <ProcedureCheckbox key={proc} category={category} procedure={proc} />
+      ))}
+    </View>
+  );
 
   const OptionButtons = ({ options, value, onChange }: { options: string[]; value: string; onChange: (v: string) => void }) => (
     <View style={styles.optionButtons}>
@@ -490,6 +579,8 @@ export default function CaseSheetScreen() {
           <TabButton tab="history" label="History" icon="file-text" />
           <TabButton tab="exam" label="Exam" icon="clipboard" />
           <TabButton tab="treatment" label="Treatment" icon="plus-square" />
+          <TabButton tab="notes" label="Notes" icon="file" />
+          <TabButton tab="disposition" label="Disposition" icon="log-out" />
         </ScrollView>
         <View style={styles.swipeHint}>
           <Feather name="chevron-left" size={14} color={theme.textMuted} />
@@ -872,6 +963,92 @@ export default function CaseSheetScreen() {
                 <Text style={[styles.actionBtnText, { color: theme.primary }]}>AI Diagnosis</Text>
               </Pressable>
             </View>
+
+            <View style={[styles.card, { backgroundColor: theme.card }]}>
+              <Text style={[styles.cardTitle, { color: theme.text }]}>Treatment Given</Text>
+              
+              <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Medications (Adult Formulary)</Text>
+              <Pressable style={[styles.addDrugBtn, { backgroundColor: TriageColors.green }]}>
+                <Feather name="plus" size={18} color="#FFFFFF" />
+                <Text style={styles.addDrugBtnText}>Add Drug from List</Text>
+              </Pressable>
+
+              <View style={styles.fieldWithVoice}>
+                <Text style={[styles.fieldLabel, { color: theme.text }]}>Other Medications</Text>
+                <VoiceButton fieldKey="treatment.otherMedications" />
+              </View>
+              <TextInput style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Additional drugs not in list..." placeholderTextColor={theme.textMuted} value={treatmentData.otherMedications} onChangeText={(v) => setTreatmentData((prev) => ({ ...prev, otherMedications: v }))} multiline />
+
+              <View style={styles.fieldWithVoice}>
+                <Text style={[styles.fieldLabel, { color: theme.text }]}>IV Fluids</Text>
+                <VoiceButton fieldKey="treatment.ivFluids" />
+              </View>
+              <TextInput style={[styles.inputField, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="NS, RL, etc..." placeholderTextColor={theme.textMuted} value={treatmentData.ivFluids} onChangeText={(v) => setTreatmentData((prev) => ({ ...prev, ivFluids: v }))} />
+            </View>
+
+            <Pressable style={[styles.addAddendumBtn, { borderColor: theme.border }]}>
+              <Feather name="plus" size={18} color={theme.primary} />
+              <Text style={[styles.addAddendumBtnText, { color: theme.primary }]}>Add Addendum Note</Text>
+            </Pressable>
+          </>
+        )}
+
+        {activeTab === "notes" && (
+          <>
+            <View style={[styles.card, { backgroundColor: theme.card }]}>
+              <Text style={[styles.cardTitle, { color: theme.text }]}>Procedures Performed</Text>
+              <Text style={[styles.cardSubtitle, { color: theme.textSecondary }]}>Select all procedures performed and add notes</Text>
+              
+              <ProcedureSection title="Resuscitation" category="resuscitation" />
+              <ProcedureSection title="Airway" category="airway" />
+              <ProcedureSection title="Vascular" category="vascular" />
+              <ProcedureSection title="Chest" category="chest" />
+              <ProcedureSection title="Neuro" category="neuro" />
+              <ProcedureSection title="GU" category="gu" />
+              <ProcedureSection title="GI" category="gi" />
+              <ProcedureSection title="Wound" category="wound" />
+              <ProcedureSection title="Ortho" category="ortho" />
+            </View>
+          </>
+        )}
+
+        {activeTab === "disposition" && (
+          <>
+            <View style={[styles.card, { backgroundColor: theme.card }]}>
+              <Text style={[styles.cardTitle, { color: theme.text }]}>Disposition</Text>
+              
+              <Text style={[styles.fieldLabel, { color: theme.text }]}>Disposition Type</Text>
+              <View style={styles.dispositionOptions}>
+                {["Discharge", "Admit", "Refer", "LAMA", "Absconded", "Death"].map((opt) => (
+                  <Pressable key={opt} style={[styles.dispositionBtn, { backgroundColor: dispositionData.dispositionType === opt ? theme.primary : theme.backgroundSecondary }]} onPress={() => setDispositionData((prev) => ({ ...prev, dispositionType: opt }))}>
+                    <Text style={{ color: dispositionData.dispositionType === opt ? "#FFFFFF" : theme.text, fontWeight: "500", fontSize: 13 }}>{opt}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+
+            <View style={[styles.card, { backgroundColor: theme.card }]}>
+              <Text style={[styles.cardTitle, { color: theme.text }]}>Observation in ER</Text>
+              
+              <View style={styles.fieldWithVoice}>
+                <Text style={[styles.fieldLabel, { color: theme.text }]}>ER Observation Notes</Text>
+                <VoiceButton fieldKey="erObservationNotes" />
+              </View>
+              <TextInput style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Patient's course in ER, response to treatment, changes in condition..." placeholderTextColor={theme.textMuted} value={dispositionData.erObservationNotes} onChangeText={(v) => setDispositionData((prev) => ({ ...prev, erObservationNotes: v }))} multiline />
+
+              <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.md }]}>Duration in ER</Text>
+              <TextInput style={[styles.inputField, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="e.g., 4 hours" placeholderTextColor={theme.textMuted} value={dispositionData.durationInER} onChangeText={(v) => setDispositionData((prev) => ({ ...prev, durationInER: v }))} />
+            </View>
+
+            <Pressable style={[styles.generateSummaryBtn, { backgroundColor: theme.primary }]}>
+              <Feather name="file-text" size={18} color="#FFFFFF" />
+              <Text style={styles.generateSummaryBtnText}>Generate Discharge Summary</Text>
+            </Pressable>
+
+            <Pressable style={[styles.saveDashboardBtn, { borderColor: theme.primary }]}>
+              <Feather name="home" size={18} color={theme.primary} />
+              <Text style={[styles.saveDashboardBtnText, { color: theme.primary }]}>Save & Go to Dashboard</Text>
+            </Pressable>
           </>
         )}
       </KeyboardAwareScrollViewCompat>
@@ -885,8 +1062,8 @@ export default function CaseSheetScreen() {
           {saving ? <ActivityIndicator size="small" color="#FFFFFF" /> : <><Feather name="save" size={18} color="#FFFFFF" /><Text style={styles.saveNavBtnText}>Save</Text></>}
         </Pressable>
         <Pressable style={[styles.navBtn, styles.nextBtn, { backgroundColor: TriageColors.green }]} onPress={handleNext}>
-          <Text style={styles.nextBtnText}>Next</Text>
-          <Feather name="arrow-right" size={18} color="#FFFFFF" />
+          <Text style={styles.nextBtnText}>{activeTab === "disposition" ? "Finish" : "Next"}</Text>
+          {activeTab === "disposition" ? <Feather name="check" size={18} color="#FFFFFF" /> : <Feather name="arrow-right" size={18} color="#FFFFFF" />}
         </Pressable>
       </View>
     </View>
@@ -962,4 +1139,20 @@ const styles = StyleSheet.create({
   actionButtonsRow: { flexDirection: "row", gap: Spacing.md, marginTop: Spacing.lg },
   actionBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: Spacing.md, borderRadius: BorderRadius.md, gap: Spacing.sm },
   actionBtnText: { ...Typography.bodyMedium, fontWeight: "600" },
+  cardSubtitle: { ...Typography.body, marginBottom: Spacing.md, marginTop: -Spacing.sm },
+  addDrugBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: Spacing.md, borderRadius: BorderRadius.md, gap: Spacing.sm, marginTop: Spacing.sm, marginBottom: Spacing.md },
+  addDrugBtnText: { color: "#FFFFFF", ...Typography.bodyMedium, fontWeight: "600" },
+  addAddendumBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1, borderStyle: "dashed", gap: Spacing.sm, marginTop: Spacing.md },
+  addAddendumBtnText: { ...Typography.bodyMedium, fontWeight: "500" },
+  procedureHeader: { paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, marginTop: Spacing.md },
+  procedureHeaderText: { ...Typography.bodyMedium, fontWeight: "600" },
+  procedureRow: { flexDirection: "row", alignItems: "center", paddingVertical: Spacing.md, paddingHorizontal: Spacing.md, gap: Spacing.md },
+  checkbox: { width: 22, height: 22, borderWidth: 2, borderRadius: 4, justifyContent: "center", alignItems: "center" },
+  procedureLabel: { ...Typography.body, flex: 1 },
+  dispositionOptions: { flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm, marginTop: Spacing.sm },
+  dispositionBtn: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.md },
+  generateSummaryBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: Spacing.lg, borderRadius: BorderRadius.md, gap: Spacing.sm, marginTop: Spacing.lg },
+  generateSummaryBtnText: { color: "#FFFFFF", ...Typography.bodyMedium, fontWeight: "600" },
+  saveDashboardBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: Spacing.lg, borderRadius: BorderRadius.md, borderWidth: 1, gap: Spacing.sm, marginTop: Spacing.md },
+  saveDashboardBtnText: { ...Typography.bodyMedium, fontWeight: "600" },
 });
