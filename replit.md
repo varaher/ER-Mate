@@ -35,12 +35,15 @@ Preferred communication style: Simple, everyday language.
 
 **Clinical Workflow Screens** (sequential modal flow):
 1. TriageScreen - Patient demographics, vitals, presenting complaint
-2. CaseSheetScreen - ABCDE assessment, VBG, examination
-3. PhysicalExamScreen - System-wise physical examination
-4. InvestigationsScreen - Lab and imaging orders
-5. TreatmentScreen - Medications, procedures, AI diagnosis
-6. DispositionScreen - Discharge/admit decisions
-7. DischargeSummaryScreen - Final documentation and summary generation
+2. CaseSheetScreen (adults 17+) - ATLS-based ABCDE assessment with 7 tabs (Patient, Primary, History, Exam, Treatment, Notes, Disposition)
+3. PediatricCaseSheetScreen (≤16 years) - PALS-based assessment with PAT, modified ABCDE, pediatric SAMPLE history, HEENT exam
+4. DischargeSummaryScreen - Final documentation and PDF/Word export
+
+**Age-Based Routing**:
+- Patients aged ≤16 years are classified as pediatric and routed to PediatricCaseSheetScreen
+- Adults (17+ years) use CaseSheetScreen with ATLS protocol
+- Age classification uses `isPediatric()` from `client/lib/pediatricVitals.ts`
+- All navigation points (Dashboard, Cases, ViewCase, Triage) respect this routing
 
 ### Backend Architecture
 
