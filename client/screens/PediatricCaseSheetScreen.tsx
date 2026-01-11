@@ -311,29 +311,50 @@ export default function PediatricCaseSheetScreen() {
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = async (silent: boolean = false) => {
+    if (!caseId) {
+      console.error("Cannot save: No case ID");
+      if (!silent) Alert.alert("Error", "No case ID available");
+      return;
+    }
     try {
       setSaving(true);
-      await apiPatch(`/cases/${caseId}`, {
+      const payload = {
         primary_assessment: { pat: patData, airway: airwayData, breathing: breathingData, circulation: circulationData, disability: disabilityData, exposure: exposureData, efast: efastData },
         history: historyData,
         physical_exam: examData,
-      });
-      setLastSaved(new Date());
+      };
+      console.log("Saving pediatric case:", caseId, "payload keys:", Object.keys(payload));
+      const res = await apiPatch(`/cases/${caseId}`, payload);
+      console.log("Pediatric save response:", res);
+      if (res && res.success !== false) {
+        setLastSaved(new Date());
+      } else {
+        console.error("Pediatric save failed:", res);
+        if (!silent) Alert.alert("Error", "Failed to save case data. Please try again.");
+      }
     } catch (error) {
       console.error("Failed to save:", error);
-      Alert.alert("Error", "Failed to save case data");
+      if (!silent) Alert.alert("Error", "Failed to save case data");
     } finally {
       setSaving(false);
     }
   };
+
+  useEffect(() => {
+    if (!caseId || loading) return;
+    const autoSaveTimer = setTimeout(() => {
+      handleSave(true);
+    }, 5000);
+    return () => clearTimeout(autoSaveTimer);
+  }, [patData, airwayData, breathingData, circulationData, disabilityData, exposureData, efastData, historyData, examData]);
 
   const handleNext = () => {
     const currentIndex = TABS.findIndex((t) => t.key === activeTab);
     if (currentIndex < TABS.length - 1) {
       setActiveTab(TABS[currentIndex + 1].key);
     } else {
-      handleSave().then(() => navigation.goBack());
+      handleSave(false).then(() => navigation.goBack());
     }
   };
 
@@ -1026,7 +1047,7 @@ export default function PediatricCaseSheetScreen() {
           <Feather name="arrow-left" size={18} color={activeTab === "patient" ? theme.textMuted : theme.text} />
           <Text style={[styles.navBtnText, { color: activeTab === "patient" ? theme.textMuted : theme.text }]}>Previous</Text>
         </Pressable>
-        <Pressable style={[styles.navBtn, styles.saveNavBtn, { backgroundColor: theme.textSecondary }]} onPress={handleSave} disabled={saving}>
+        <Pressable style={[styles.navBtn, styles.saveNavBtn, { backgroundColor: theme.textSecondary }]} onPress={() => handleSave(false)} disabled={saving}>
           {saving ? <ActivityIndicator size="small" color="#FFFFFF" /> : <><Feather name="save" size={18} color="#FFFFFF" /><Text style={styles.saveNavBtnText}>Save</Text></>}
         </Pressable>
         <Pressable style={[styles.navBtn, styles.nextBtn, { backgroundColor: TriageColors.green }]} onPress={handleNext}>

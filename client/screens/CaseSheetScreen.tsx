@@ -592,7 +592,12 @@ export default function CaseSheetScreen() {
     }));
   };
 
-  const handleSave = async () => {
+  const handleSave = async (silent: boolean = false) => {
+    if (!caseId) {
+      console.error("Cannot save: No case ID");
+      if (!silent) Alert.alert("Error", "No case ID available");
+      return;
+    }
     setSaving(true);
     try {
       const gcsTotal = (parseInt(formData.disability.gcsE) || 0) + (parseInt(formData.disability.gcsV) || 0) + (parseInt(formData.disability.gcsM) || 0);
@@ -637,19 +642,31 @@ export default function CaseSheetScreen() {
           informant: mlcDetails.informantBroughtBy,
         } : null,
       };
+      console.log("Saving case:", caseId, "payload keys:", Object.keys(payload));
       const res = await apiPatch(`/cases/${caseId}`, payload);
+      console.log("Save response:", res.success, res.error || "");
       if (res.success) {
         await invalidateCases();
         setLastSaved(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
       } else {
-        Alert.alert("Error", res.error || "Failed to save");
+        console.error("Save failed:", res.error);
+        if (!silent) Alert.alert("Error", res.error || "Failed to save case. Please try again.");
       }
     } catch (err) {
-      Alert.alert("Error", (err as Error).message);
+      console.error("Save exception:", err);
+      if (!silent) Alert.alert("Error", (err as Error).message);
     } finally {
       setSaving(false);
     }
   };
+
+  useEffect(() => {
+    if (!caseId || loading) return;
+    const autoSaveTimer = setTimeout(() => {
+      handleSave(true);
+    }, 5000);
+    return () => clearTimeout(autoSaveTimer);
+  }, [formData, examData, treatmentData, pastSurgicalHistory, otherHistory, abcdeStatus, modeOfArrival, isMLC, mlcDetails]);
 
   const startVoiceRecording = async (fieldKey: string) => {
     try {
@@ -737,7 +754,7 @@ export default function CaseSheetScreen() {
     if (currentIndex < tabs.length - 1) {
       setActiveTab(tabs[currentIndex + 1]);
     } else {
-      handleSave();
+      handleSave(false);
       navigation.goBack();
     }
   };
@@ -1758,7 +1775,7 @@ export default function CaseSheetScreen() {
           <Feather name="arrow-left" size={18} color={activeTab === "patient" ? theme.textMuted : theme.text} />
           <Text style={[styles.navBtnText, { color: activeTab === "patient" ? theme.textMuted : theme.text }]}>Previous</Text>
         </Pressable>
-        <Pressable style={[styles.navBtn, styles.saveNavBtn, { backgroundColor: theme.textSecondary }]} onPress={handleSave} disabled={saving}>
+        <Pressable style={[styles.navBtn, styles.saveNavBtn, { backgroundColor: theme.textSecondary }]} onPress={() => handleSave(false)} disabled={saving}>
           {saving ? <ActivityIndicator size="small" color="#FFFFFF" /> : <><Feather name="save" size={18} color="#FFFFFF" /><Text style={styles.saveNavBtnText}>Save</Text></>}
         </Pressable>
         <Pressable style={[styles.navBtn, styles.nextBtn, { backgroundColor: TriageColors.green }]} onPress={handleNext}>
