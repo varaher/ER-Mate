@@ -8,7 +8,7 @@ import { Audio } from "expo-av";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { useTheme } from "@/hooks/useTheme";
-import { apiGet, apiPatch } from "@/lib/api";
+import { apiGet, apiPatch, apiPut } from "@/lib/api";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { getAgeGroupLabel, getAgeGroup } from "@/lib/pediatricVitals";
@@ -325,7 +325,7 @@ export default function PediatricCaseSheetScreen() {
         physical_exam: examData,
       };
       console.log("Saving pediatric case:", caseId, "payload keys:", Object.keys(payload));
-      const res = await apiPatch(`/cases/${caseId}`, payload);
+      const res = await apiPut(`/cases/${caseId}`, payload);
       console.log("Pediatric save response:", res);
       if (res && res.success !== false) {
         setLastSaved(new Date());

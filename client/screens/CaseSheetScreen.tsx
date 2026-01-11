@@ -22,7 +22,7 @@ import { CheckboxGroup } from "@/components/CheckboxGroup";
 import { TextInputField } from "@/components/TextInputField";
 import { AIDiagnosisPanel } from "@/components/AIDiagnosisPanel";
 import { useTheme } from "@/hooks/useTheme";
-import { apiGet, apiPatch, apiUpload, invalidateCases } from "@/lib/api";
+import { apiGet, apiPatch, apiPut, apiUpload, invalidateCases } from "@/lib/api";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import {
@@ -643,7 +643,7 @@ export default function CaseSheetScreen() {
         } : null,
       };
       console.log("Saving case:", caseId, "payload keys:", Object.keys(payload));
-      const res = await apiPatch(`/cases/${caseId}`, payload);
+      const res = await apiPut(`/cases/${caseId}`, payload);
       console.log("Save response:", res.success, res.error || "");
       if (res.success) {
         await invalidateCases();

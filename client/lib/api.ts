@@ -117,6 +117,27 @@ export async function apiPatch<T>(
   }
 }
 
+export async function apiPut<T>(
+  endpoint: string,
+  data?: unknown
+): Promise<ApiResponse<T>> {
+  try {
+    const apiUrl = getExternalApiUrl();
+    const token = await getToken();
+    const res = await fetch(`${apiUrl}${endpoint}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: data ? JSON.stringify(data) : undefined,
+    });
+    return handleResponse<T>(res);
+  } catch (err) {
+    return { success: false, error: (err as Error).message };
+  }
+}
+
 export async function apiDelete<T>(endpoint: string): Promise<ApiResponse<T>> {
   try {
     const apiUrl = getExternalApiUrl();
