@@ -613,10 +613,10 @@ export default function CaseSheetScreen() {
         sample: formData.sample,
         history: {
           hpi: formData.sample.eventsHopi,
-          allergies: formData.sample.allergies,
+          allergies: formData.sample.allergies ? formData.sample.allergies.split(',').map((s: string) => s.trim()).filter((s: string) => s) : [],
           medications: formData.sample.medications,
-          past_medical: formData.sample.pastMedicalHistory,
-          past_surgical: pastSurgicalHistory,
+          past_medical: formData.sample.pastMedicalHistory ? formData.sample.pastMedicalHistory.split(',').map((s: string) => s.trim()).filter((s: string) => s) : [],
+          past_surgical: pastSurgicalHistory ? pastSurgicalHistory.split(',').map((s: string) => s.trim()).filter((s: string) => s) : [],
           other: otherHistory,
         },
         vitals_at_arrival: {
@@ -650,7 +650,18 @@ export default function CaseSheetScreen() {
         setLastSaved(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
       } else {
         console.error("Save failed:", res.error);
-        if (!silent) Alert.alert("Error", res.error || "Failed to save case. Please try again.");
+        const errorData = res.error as any;
+        let errorMessage = "Failed to save case. Please try again.";
+        if (errorData?.error === "edit_limit_reached") {
+          errorMessage = errorData.message || "Edit limit reached. Please upgrade for unlimited edits.";
+        } else if (Array.isArray(errorData)) {
+          errorMessage = errorData.map((e: any) => e.msg || e.message).join(", ");
+        } else if (typeof errorData === "string") {
+          errorMessage = errorData;
+        } else if (errorData?.message) {
+          errorMessage = errorData.message;
+        }
+        if (!silent) Alert.alert("Save Error", errorMessage);
       }
     } catch (err) {
       console.error("Save exception:", err);

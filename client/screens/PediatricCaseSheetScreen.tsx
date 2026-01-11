@@ -321,7 +321,10 @@ export default function PediatricCaseSheetScreen() {
       setSaving(true);
       const payload = {
         primary_assessment: { pat: patData, airway: airwayData, breathing: breathingData, circulation: circulationData, disability: disabilityData, exposure: exposureData, efast: efastData },
-        history: historyData,
+        history: {
+          ...historyData,
+          allergies: historyData.allergies ? historyData.allergies.split(',').map((s: string) => s.trim()).filter((s: string) => s) : [],
+        },
         physical_exam: examData,
       };
       console.log("Saving pediatric case:", caseId, "payload keys:", Object.keys(payload));
@@ -331,7 +334,18 @@ export default function PediatricCaseSheetScreen() {
         setLastSaved(new Date());
       } else {
         console.error("Pediatric save failed:", res);
-        if (!silent) Alert.alert("Error", "Failed to save case data. Please try again.");
+        const errorData = res.error as any;
+        let errorMessage = "Failed to save case data. Please try again.";
+        if (errorData?.error === "edit_limit_reached") {
+          errorMessage = errorData.message || "Edit limit reached. Please upgrade for unlimited edits.";
+        } else if (Array.isArray(errorData)) {
+          errorMessage = errorData.map((e: any) => e.msg || e.message).join(", ");
+        } else if (typeof errorData === "string") {
+          errorMessage = errorData;
+        } else if (errorData?.message) {
+          errorMessage = errorData.message;
+        }
+        if (!silent) Alert.alert("Save Error", errorMessage);
       }
     } catch (error) {
       console.error("Failed to save:", error);
