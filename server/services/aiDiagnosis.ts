@@ -1,0 +1,350 @@
+import OpenAI from "openai";
+import { randomUUID } from "crypto";
+import { getDb } from "../db";
+import { aiFeedback } from "@shared/schema";
+import { count, eq, sql } from "drizzle-orm";
+
+function getOpenAIClient(): OpenAI | null {
+  const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
+  const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
+  
+  if (!apiKey || !baseURL) {
+    console.warn("OpenAI API not configured - AI_INTEGRATIONS_OPENAI_API_KEY or AI_INTEGRATIONS_OPENAI_BASE_URL missing");
+    return null;
+  }
+  
+  return new OpenAI({ apiKey, baseURL });
+}
+
+export interface Citation {
+  id: string;
+  source: string;
+  title: string;
+  year?: string;
+  url?: string;
+  excerpt: string;
+}
+
+export interface DiagnosisSuggestion {
+  id: string;
+  diagnosis: string;
+  confidence: "high" | "moderate" | "low";
+  reasoning: string;
+  citations: Citation[];
+}
+
+export interface RedFlag {
+  id: string;
+  flag: string;
+  severity: "critical" | "warning";
+  action: string;
+  citations: Citation[];
+}
+
+export interface AIFeedback {
+  suggestionId: string;
+  caseId: string;
+  feedbackType: "accepted" | "modified" | "rejected";
+  userCorrection?: string;
+  suggestionText?: string;
+  timestamp: Date;
+  userId?: string;
+}
+
+const MEDICAL_KNOWLEDGE_BASE = {
+  atls: {
+    source: "ATLS - Advanced Trauma Life Support",
+    title: "American College of Surgeons ATLS Guidelines",
+    year: "2023",
+    url: "https://www.facs.org/quality-programs/trauma/atls",
+  },
+  pals: {
+    source: "PALS - Pediatric Advanced Life Support",
+    title: "American Heart Association PALS Guidelines",
+    year: "2023",
+    url: "https://cpr.heart.org/en/resuscitation-science/cpr-and-ecc-guidelines/pediatric-advanced-life-support",
+  },
+  sepsis: {
+    source: "Surviving Sepsis Campaign",
+    title: "International Guidelines for Management of Sepsis and Septic Shock",
+    year: "2021",
+    url: "https://www.sccm.org/SurvivingSepsisCampaign",
+  },
+  acs: {
+    source: "ACC/AHA Guidelines",
+    title: "Guidelines for Management of Patients with Acute Coronary Syndromes",
+    year: "2023",
+    url: "https://www.acc.org/guidelines",
+  },
+  stroke: {
+    source: "AHA/ASA Stroke Guidelines",
+    title: "Guidelines for Early Management of Acute Ischemic Stroke",
+    year: "2019",
+    url: "https://www.stroke.org/en/professionals",
+  },
+  trauma: {
+    source: "Eastern Association for Surgery of Trauma",
+    title: "EAST Practice Management Guidelines",
+    year: "2022",
+    url: "https://www.east.org/education-resources/practice-management-guidelines",
+  },
+  toxicology: {
+    source: "AACT Clinical Toxicology Guidelines",
+    title: "American Academy of Clinical Toxicology Position Statements",
+    year: "2023",
+    url: undefined as string | undefined,
+  },
+  pediatricEmergency: {
+    source: "Pediatric Emergency Medicine",
+    title: "Fleisher & Ludwig's Textbook of Pediatric Emergency Medicine",
+    year: "2020",
+    url: undefined as string | undefined,
+  },
+} as const;
+
+export async function generateDiagnosisSuggestions(caseData: {
+  chiefComplaint: string;
+  vitals: Record<string, string>;
+  history: string;
+  examination: string;
+  age: number;
+  gender: string;
+}): Promise<{ suggestions: DiagnosisSuggestion[]; redFlags: RedFlag[] }> {
+  const isPediatric = caseData.age <= 16;
+  
+  const systemPrompt = `You are an expert emergency medicine physician assistant. Analyze the patient case and provide:
+1. Up to 3 differential diagnoses ranked by likelihood
+2. Any red flags requiring immediate attention
+
+For EACH diagnosis and red flag, you MUST cite specific medical guidelines or sources.
+
+Guidelines to reference:
+- ATLS (Advanced Trauma Life Support) for trauma cases
+- PALS (Pediatric Advanced Life Support) for pediatric emergencies
+- Surviving Sepsis Campaign for sepsis/infection
+- ACC/AHA Guidelines for cardiac conditions
+- AHA/ASA Guidelines for stroke
+- EAST Guidelines for surgical emergencies
+
+Patient is ${isPediatric ? "pediatric (use PALS protocols)" : "adult (use ATLS protocols)"}.
+
+Respond in JSON format:
+{
+  "suggestions": [
+    {
+      "diagnosis": "Primary diagnosis",
+      "confidence": "high|moderate|low",
+      "reasoning": "Brief clinical reasoning",
+      "citations": [
+        {
+          "id": "cite1",
+          "sourceKey": "atls|pals|sepsis|acs|stroke|trauma|toxicology|pediatricEmergency",
+          "excerpt": "Specific guideline text or criterion referenced"
+        }
+      ]
+    }
+  ],
+  "redFlags": [
+    {
+      "flag": "Critical finding",
+      "severity": "critical|warning",
+      "action": "Immediate action required",
+      "citations": [
+        {
+          "id": "rf1",
+          "sourceKey": "atls|pals|sepsis|acs|stroke|trauma",
+          "excerpt": "Guideline-based criteria for this red flag"
+        }
+      ]
+    }
+  ]
+}`;
+
+  const userPrompt = `Patient Case:
+- Age: ${caseData.age} years, Gender: ${caseData.gender}
+- Chief Complaint: ${caseData.chiefComplaint}
+- Vitals: ${JSON.stringify(caseData.vitals)}
+- History: ${caseData.history}
+- Examination: ${caseData.examination}
+
+Provide differential diagnoses and identify any red flags.`;
+
+  const openai = getOpenAIClient();
+  if (!openai) {
+    return { suggestions: [], redFlags: [] };
+  }
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.3,
+    });
+
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      return { suggestions: [], redFlags: [] };
+    }
+
+    const parsed = JSON.parse(content);
+    
+    const suggestions: DiagnosisSuggestion[] = (parsed.suggestions || []).map((s: { diagnosis: string; confidence: string; reasoning: string; citations?: Array<{ id: string; sourceKey: string; excerpt: string }> }) => ({
+      id: randomUUID(),
+      diagnosis: s.diagnosis,
+      confidence: s.confidence as "high" | "moderate" | "low",
+      reasoning: s.reasoning,
+      citations: (s.citations || []).map((c: { id: string; sourceKey: string; excerpt: string }) => {
+        const sourceInfo = MEDICAL_KNOWLEDGE_BASE[c.sourceKey as keyof typeof MEDICAL_KNOWLEDGE_BASE] || {
+          source: "Medical Literature",
+          title: "Clinical Guidelines",
+        };
+        return {
+          id: c.id,
+          source: sourceInfo.source,
+          title: sourceInfo.title,
+          year: sourceInfo.year,
+          url: sourceInfo.url,
+          excerpt: c.excerpt,
+        };
+      }),
+    }));
+
+    const redFlags: RedFlag[] = (parsed.redFlags || []).map((r: { flag: string; severity: string; action: string; citations?: Array<{ id: string; sourceKey: string; excerpt: string }> }) => ({
+      id: randomUUID(),
+      flag: r.flag,
+      severity: r.severity as "critical" | "warning",
+      action: r.action,
+      citations: (r.citations || []).map((c: { id: string; sourceKey: string; excerpt: string }) => {
+        const sourceInfo = MEDICAL_KNOWLEDGE_BASE[c.sourceKey as keyof typeof MEDICAL_KNOWLEDGE_BASE] || {
+          source: "Medical Literature",
+          title: "Clinical Guidelines",
+        };
+        return {
+          id: c.id,
+          source: sourceInfo.source,
+          title: sourceInfo.title,
+          year: sourceInfo.year,
+          url: sourceInfo.url,
+          excerpt: c.excerpt,
+        };
+      }),
+    }));
+
+    return { suggestions, redFlags };
+  } catch (error) {
+    console.error("AI Diagnosis error:", error);
+    return { suggestions: [], redFlags: [] };
+  }
+}
+
+export interface FeedbackResult {
+  success: boolean;
+  error?: string;
+}
+
+export async function recordFeedback(feedback: AIFeedback): Promise<FeedbackResult> {
+  const db = getDb();
+  
+  if (!db) {
+    console.error("DATABASE_URL not configured - feedback feature unavailable");
+    return { 
+      success: false, 
+      error: "Database not configured. Self-learning feedback feature is unavailable." 
+    };
+  }
+
+  try {
+    await db.insert(aiFeedback).values({
+      suggestionId: feedback.suggestionId,
+      caseId: feedback.caseId,
+      feedbackType: feedback.feedbackType,
+      userCorrection: feedback.userCorrection,
+      suggestionText: feedback.suggestionText,
+      userId: feedback.userId,
+    });
+    console.log(`Feedback persisted to database: ${feedback.feedbackType} for suggestion ${feedback.suggestionId}`);
+    return { success: true };
+  } catch (error) {
+    console.error("Database insert failed:", error);
+    return { 
+      success: false, 
+      error: "Failed to save feedback to database. Please try again." 
+    };
+  }
+}
+
+export async function getFeedbackStats(): Promise<{
+  total: number;
+  accepted: number;
+  modified: number;
+  rejected: number;
+  acceptanceRate: number;
+  available: boolean;
+}> {
+  const db = getDb();
+  if (!db) {
+    return { total: 0, accepted: 0, modified: 0, rejected: 0, acceptanceRate: 0, available: false };
+  }
+
+  try {
+    const totalResult = await db.select({ count: count() }).from(aiFeedback);
+    const acceptedResult = await db.select({ count: count() }).from(aiFeedback).where(eq(aiFeedback.feedbackType, "accepted"));
+    const modifiedResult = await db.select({ count: count() }).from(aiFeedback).where(eq(aiFeedback.feedbackType, "modified"));
+    const rejectedResult = await db.select({ count: count() }).from(aiFeedback).where(eq(aiFeedback.feedbackType, "rejected"));
+    
+    const total = totalResult[0]?.count || 0;
+    const accepted = acceptedResult[0]?.count || 0;
+    const modified = modifiedResult[0]?.count || 0;
+    const rejected = rejectedResult[0]?.count || 0;
+    
+    return {
+      total,
+      accepted,
+      modified,
+      rejected,
+      acceptanceRate: total > 0 ? (accepted / total) * 100 : 0,
+      available: true,
+    };
+  } catch (error) {
+    console.error("Failed to get feedback stats from database:", error);
+    return { total: 0, accepted: 0, modified: 0, rejected: 0, acceptanceRate: 0, available: false };
+  }
+}
+
+export async function getLearningInsights(): Promise<string[]> {
+  const insights: string[] = [];
+  const db = getDb();
+  
+  if (!db) {
+    insights.push("Self-learning analytics unavailable - database not configured");
+    return insights;
+  }
+
+  try {
+    const corrections = await db.select()
+      .from(aiFeedback)
+      .where(eq(aiFeedback.feedbackType, "modified"));
+    
+    const correctionCount = corrections.filter(f => f.userCorrection).length;
+    
+    if (correctionCount > 0) {
+      insights.push(`${correctionCount} diagnoses have been corrected by clinicians`);
+    }
+    
+    const stats = await getFeedbackStats();
+    if (stats.acceptanceRate < 70 && stats.total > 10) {
+      insights.push("AI suggestions need improvement - acceptance rate below 70%");
+    } else if (stats.acceptanceRate >= 90 && stats.total > 10) {
+      insights.push("AI suggestions performing well - 90%+ acceptance rate");
+    }
+  } catch (error) {
+    console.error("Failed to get learning insights from database:", error);
+    insights.push("Unable to load learning insights");
+  }
+  
+  return insights;
+}

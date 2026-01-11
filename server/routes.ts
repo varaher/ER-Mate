@@ -2,6 +2,7 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "node:http";
 import PDFDocument from "pdfkit";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, BorderStyle } from "docx";
+import { generateDiagnosisSuggestions, recordFeedback, getFeedbackStats, getLearningInsights, type AIFeedback, type FeedbackResult } from "./services/aiDiagnosis";
 
 interface VitalsData {
   hr?: string;
@@ -508,6 +509,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err) {
       console.error("DOCX generation error:", err);
       res.status(500).json({ error: "Failed to generate DOCX" });
+    }
+  });
+
+  app.post("/api/ai/diagnose", async (req: Request, res: Response) => {
+    try {
+      const { chiefComplaint, vitals, history, examination, age, gender } = req.body;
+      
+      if (!chiefComplaint) {
+        return res.status(400).json({ error: "Chief complaint is required" });
+      }
+
+      const result = await generateDiagnosisSuggestions({
+        chiefComplaint,
+        vitals: vitals || {},
+        history: history || "",
+        examination: examination || "",
+        age: age || 30,
+        gender: gender || "Unknown",
+      });
+
+      res.json(result);
+    } catch (error) {
+      console.error("AI diagnosis error:", error);
+      res.status(500).json({ error: "Failed to generate diagnosis suggestions" });
+    }
+  });
+
+  app.post("/api/ai/feedback", async (req: Request, res: Response) => {
+    try {
+      const { suggestionId, caseId, feedbackType, userCorrection, suggestionText, userId } = req.body;
+      
+      if (!suggestionId || !feedbackType) {
+        return res.status(400).json({ error: "Missing required fields (suggestionId, feedbackType)" });
+      }
+
+      if (!caseId || caseId.trim() === "") {
+        return res.status(400).json({ error: "Valid caseId is required for feedback tracking" });
+      }
+
+      const feedback: AIFeedback = {
+        suggestionId,
+        caseId,
+        feedbackType,
+        userCorrection,
+        suggestionText,
+        userId,
+        timestamp: new Date(),
+      };
+
+      const result = await recordFeedback(feedback);
+      if (result.success) {
+        res.json({ success: true });
+      } else {
+        res.status(503).json({ error: result.error || "Failed to record feedback" });
+      }
+    } catch (error) {
+      console.error("Feedback error:", error);
+      res.status(500).json({ error: "Failed to record feedback" });
+    }
+  });
+
+  app.get("/api/ai/stats", async (_req: Request, res: Response) => {
+    try {
+      const stats = await getFeedbackStats();
+      const insights = await getLearningInsights();
+      res.json({ stats, insights });
+    } catch (error) {
+      console.error("Stats error:", error);
+      res.status(500).json({ error: "Failed to get AI stats" });
     }
   });
 

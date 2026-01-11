@@ -64,7 +64,9 @@ Preferred communication style: Simple, everyday language.
 
 **Database Schema** (Drizzle ORM with PostgreSQL):
 - `users` table: Basic user authentication (id, username, password)
+- `ai_feedback` table: AI diagnosis feedback for self-learning (suggestion_id, case_id, feedback_type, user_correction, suggestion_text, user_id, created_at)
 - Schema defined in `shared/schema.ts` with Zod validation via drizzle-zod
+- Database connection in `server/db.ts` using pg Pool
 
 **Local Storage**:
 - AsyncStorage for token and user data persistence
@@ -77,6 +79,32 @@ The app includes voice dictation capabilities:
 - Streaming transcription via WebSocket connection
 - Multi-language support (English, Hindi, Malayalam)
 - Real-time partial transcription updates
+
+### AI Diagnosis System (Self-Learning)
+
+**AI-Powered Diagnosis with References** (Perplexity-style):
+- Generates differential diagnoses with confidence levels (high/moderate/low)
+- Cites medical guidelines (ATLS, PALS, Surviving Sepsis, ACC/AHA, etc.)
+- Expandable citation cards showing source, title, year, excerpt, and link
+- Red flag detection with severity levels and recommended actions
+- Uses OpenAI via Replit AI Integrations (no API key needed, uses credits)
+
+**Self-Learning Feedback System**:
+- Thumbs up/down feedback on AI suggestions
+- Tracks user acceptance, rejection, and corrections
+- Stores feedback in `ai_feedback` database table (requires DATABASE_URL)
+- Learning insights based on acceptance rate
+- When user accepts diagnosis, it auto-populates the Primary Diagnosis field
+- Returns 503 error when database unavailable - no ephemeral storage fallback
+
+**API Endpoints** (server/routes.ts):
+- `POST /api/ai/diagnose` - Get AI diagnosis suggestions with references
+- `POST /api/ai/feedback` - Record user feedback on suggestions
+- `GET /api/ai/stats` - Get feedback statistics and learning insights
+
+**Components**:
+- `AIDiagnosisPanel` - Purple-themed AI assistant panel in Treatment tab
+- `server/services/aiDiagnosis.ts` - AI diagnosis service with medical knowledge base
 
 ## External Dependencies
 

@@ -20,6 +20,7 @@ import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { DropdownField } from "@/components/DropdownField";
 import { CheckboxGroup } from "@/components/CheckboxGroup";
 import { TextInputField } from "@/components/TextInputField";
+import { AIDiagnosisPanel } from "@/components/AIDiagnosisPanel";
 import { useTheme } from "@/hooks/useTheme";
 import { apiGet, apiPatch, apiUpload, invalidateCases } from "@/lib/api";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
@@ -1643,15 +1644,24 @@ export default function CaseSheetScreen() {
               <TextInput style={[styles.textAreaLarge, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Other possibilities..." placeholderTextColor={theme.textMuted} value={treatmentData.differentialDiagnoses} onChangeText={(v) => setTreatmentData((prev) => ({ ...prev, differentialDiagnoses: v }))} multiline />
             </View>
 
-            <View style={styles.actionButtonsRow}>
-              <Pressable style={[styles.actionBtn, { backgroundColor: "#FEE2E2" }]}>
-                <Feather name="alert-triangle" size={18} color={TriageColors.red} />
-                <Text style={[styles.actionBtnText, { color: TriageColors.red }]}>Red Flags</Text>
-              </Pressable>
-              <Pressable style={[styles.actionBtn, { backgroundColor: "#E0E7FF" }]}>
-                <Feather name="zap" size={18} color={theme.primary} />
-                <Text style={[styles.actionBtnText, { color: theme.primary }]}>AI Diagnosis</Text>
-              </Pressable>
+            <View style={[styles.card, { backgroundColor: theme.card }]}>
+              <AIDiagnosisPanel
+                caseId={caseId || ""}
+                chiefComplaint={formData.sample.signsSymptoms}
+                vitals={{
+                  hr: formData.circulation.hr,
+                  bp: `${formData.circulation.bpSystolic}/${formData.circulation.bpDiastolic}`,
+                  rr: formData.breathing.rr,
+                  spo2: formData.breathing.spo2,
+                  gcs: `${parseInt(formData.disability.gcsE || "4") + parseInt(formData.disability.gcsV || "5") + parseInt(formData.disability.gcsM || "6")}`,
+                  temp: formData.exposure.temperature,
+                }}
+                history={`${formData.sample.eventsHopi}\n${formData.sample.pastMedicalHistory}\n${formData.sample.medications}`}
+                examination={`General: ${examData.general.notes}\nCVS: ${examData.cvs.notes}\nAbdomen: ${examData.abdomen.notes}`}
+                age={parseInt(caseData?.patient?.age?.toString() || "30")}
+                gender={caseData?.patient?.sex || "Unknown"}
+                onDiagnosisSelect={(diagnosis) => setTreatmentData((prev) => ({ ...prev, primaryDiagnosis: diagnosis }))}
+              />
             </View>
 
             <View style={[styles.card, { backgroundColor: theme.card }]}>
