@@ -84,7 +84,7 @@ The app includes voice dictation capabilities:
 
 **AI-Powered Diagnosis with References** (Perplexity-style):
 - Generates differential diagnoses with confidence levels (high/moderate/low)
-- Cites medical guidelines (ATLS, PALS, Surviving Sepsis, ACC/AHA, etc.)
+- Cites medical guidelines (ATLS, PALS, Surviving Sepsis, ACC/AHA, WikEM, Tintinalli's, Rosen's, etc.)
 - Expandable citation cards showing source, title, year, excerpt, and link
 - Red flag detection with severity levels and recommended actions
 - Uses OpenAI via Replit AI Integrations (no API key needed, uses credits)
