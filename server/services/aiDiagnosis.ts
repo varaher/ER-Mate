@@ -100,6 +100,24 @@ const MEDICAL_KNOWLEDGE_BASE = {
     year: "2020",
     url: undefined as string | undefined,
   },
+  wikiem: {
+    source: "WikEM",
+    title: "The Global Emergency Medicine Wiki",
+    year: "2024",
+    url: "https://wikem.org",
+  },
+  tintinalli: {
+    source: "Tintinalli's Emergency Medicine",
+    title: "Tintinalli's Emergency Medicine: A Comprehensive Study Guide",
+    year: "2020",
+    url: undefined as string | undefined,
+  },
+  rosens: {
+    source: "Rosen's Emergency Medicine",
+    title: "Rosen's Emergency Medicine: Concepts and Clinical Practice",
+    year: "2022",
+    url: undefined as string | undefined,
+  },
 } as const;
 
 export async function generateDiagnosisSuggestions(caseData: {
@@ -118,13 +136,16 @@ export async function generateDiagnosisSuggestions(caseData: {
 
 For EACH diagnosis and red flag, you MUST cite specific medical guidelines or sources.
 
-Guidelines to reference:
+Guidelines and sources to reference:
 - ATLS (Advanced Trauma Life Support) for trauma cases
 - PALS (Pediatric Advanced Life Support) for pediatric emergencies
 - Surviving Sepsis Campaign for sepsis/infection
 - ACC/AHA Guidelines for cardiac conditions
 - AHA/ASA Guidelines for stroke
 - EAST Guidelines for surgical emergencies
+- WikEM (wikiem) - emergency medicine wiki for quick reference
+- Tintinalli's Emergency Medicine (tintinalli) - comprehensive EM textbook
+- Rosen's Emergency Medicine (rosens) - clinical practice reference
 
 Patient is ${isPediatric ? "pediatric (use PALS protocols)" : "adult (use ATLS protocols)"}.
 
