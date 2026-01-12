@@ -1,0 +1,391 @@
+This is a forked j...
+
+Buy
+right arrow
+
+Hey varah, Quick input needed :
+Ask Question
+Agent will continue working after your reply
+Here's the complete Save Case Sheet Code from CaseSheetScreen.js:
+
+📋 Complete Save Case Sheet Code
+// Helper functions for type conversion
+const toStringOrEmpty = (val) => {
+  if (val === null || val === undefined) return "";
+  if (typeof val === "object") return JSON.stringify(val);
+  return String(val);
+};
+
+const toFloatOrNull = (val) => {
+  if (!val) return null;
+  const num = parseFloat(val);
+  return isNaN(num) ? null : num;
+};
+
+const toIntOrNull = (val) => {
+  if (!val) return null;
+  const num = parseInt(val);
+  return isNaN(num) ? null : num;
+};
+
+const toBoolean = (val) => {
+  return val === true || val === "true" || val === 1 || val === "1";
+};
+
+// Main Save Function
+const saveCaseSheet = async (silent = false) => {
+  if (!silent) setSaving(true);
+  
+  // Apply default values to empty fields before saving
+  applyDefaultValues();
+  
+  try {
+    const token = await AsyncStorage.getItem("token");
+    const user = JSON.parse(await AsyncStorage.getItem("user") || "{}");
+    const fd = formDataRef.current;
+
+    // Helper function to map disposition type
+    const mapDispositionType = (type) => {
+      const map = {
+        "Discharge": "discharged",
+        "Admit": "admitted-ward",
+        "Refer": "referred",
+        "LAMA": "dama",
+        "Absconded": "absconded",
+        "Death": "death",
+      };
+      return map[type] || "discharged";
+    };
+
+    const payload = {
+      case_type: patientType,
+      
+      // ============ PATIENT TAB ============
+      patient: {
+        name: toStringOrEmpty(fd.patient_name) || "Unknown",
+        age: toStringOrEmpty(fd.patient_age) || "Unknown",
+        sex: toStringOrEmpty(fd.patient_sex) || "Unknown",
+        phone: toStringOrEmpty(fd.patient_phone) || "Not provided",
+        address: toStringOrEmpty(fd.patient_address) || "Not provided",
+        uhid: fd.patient_uhid || null,
+        mode_of_arrival: toStringOrEmpty(fd.patient_mode_of_arrival) || "Walk-in",
+        brought_by: toStringOrEmpty(fd.patient_brought_by) || "Self",
+        informant_name: toStringOrEmpty(fd.patient_informant_name) || "Self",
+        informant_reliability: toStringOrEmpty(fd.patient_informant_reliability) || "Reliable",
+        identification_mark: toStringOrEmpty(fd.patient_identification_mark) || "None",
+        mlc: toBoolean(fd.patient_mlc),
+        arrival_datetime: new Date().toISOString(),
+      },
+      
+      // ============ PRESENTING COMPLAINT ============
+      presenting_complaint: {
+        text: toStringOrEmpty(fd.complaint_text) || "To be documented",
+        duration: toStringOrEmpty(fd.complaint_duration) || "Not specified",
+        onset_type: toStringOrEmpty(fd.complaint_onset) || "Unknown",
+        course: toStringOrEmpty(fd.complaint_course) || "Stable",
+      },
+      
+      // ============ VITALS ============
+      vitals_at_arrival: {
+        hr: toFloatOrNull(fd.vitals_hr),
+        rr: toFloatOrNull(fd.vitals_rr),
+        bp_systolic: toFloatOrNull(fd.vitals_bp_systolic),
+        bp_diastolic: toFloatOrNull(fd.vitals_bp_diastolic),
+        spo2: toFloatOrNull(fd.vitals_spo2),
+        temperature: toFloatOrNull(fd.vitals_temperature),
+        gcs_e: toIntOrNull(fd.vitals_gcs_e),
+        gcs_v: toIntOrNull(fd.vitals_gcs_v),
+        gcs_m: toIntOrNull(fd.vitals_gcs_m),
+        pain_score: toIntOrNull(fd.vitals_pain_score),
+        grbs: toFloatOrNull(fd.vitals_grbs),
+      },
+      
+      // ============ PRIMARY SURVEY TAB (ABCDE) ============
+      primary_assessment: {
+        // Airway
+        airway_status: toStringOrEmpty(fd.airway_status) || "Patent",
+        airway_interventions: fd.airway_interventions || [],
+        airway_additional_notes: toStringOrEmpty(fd.airway_notes),
+        // Breathing
+        breathing_rr: toFloatOrNull(fd.breathing_rr),
+        breathing_spo2: toFloatOrNull(fd.breathing_spo2),
+        breathing_oxygen_device: toStringOrEmpty(fd.breathing_o2_device),
+        breathing_oxygen_flow: toFloatOrNull(fd.breathing_o2_flow),
+        breathing_work: toStringOrEmpty(fd.breathing_wob) || "Normal",
+        breathing_air_entry: [toStringOrEmpty(fd.breathing_air_entry) || "Equal"],
+        breathing_additional_notes: toStringOrEmpty(fd.breathing_notes),
+        // Circulation
+        circulation_hr: toFloatOrNull(fd.circulation_hr),
+        circulation_bp_systolic: toFloatOrNull(fd.vitals_bp_systolic),
+        circulation_bp_diastolic: toFloatOrNull(fd.vitals_bp_diastolic),
+        circulation_crt: fd.circulation_crt === "Delayed" ? 3 : 2,
+        circulation_adjuncts: fd.circulation_interventions || [],
+        circulation_additional_notes: toStringOrEmpty(fd.circulation_notes),
+        // Disability
+        disability_avpu: toStringOrEmpty(fd.disability_avpu) || "Alert",
+        disability_gcs_e: toIntOrNull(fd.disability_gcs_e || fd.vitals_gcs_e),
+        disability_gcs_v: toIntOrNull(fd.disability_gcs_v || fd.vitals_gcs_v),
+        disability_gcs_m: toIntOrNull(fd.disability_gcs_m || fd.vitals_gcs_m),
+        disability_grbs: toFloatOrNull(fd.disability_grbs || fd.vitals_grbs),
+        disability_pupils_size: toStringOrEmpty(fd.disability_pupils),
+        disability_pupils_reaction: toStringOrEmpty(fd.disability_pupils_reaction),
+        disability_additional_notes: toStringOrEmpty(fd.disability_notes),
+        // Exposure
+        exposure_temperature: toFloatOrNull(fd.exposure_temperature || fd.vitals_temperature),
+        exposure_additional_notes: toStringOrEmpty(fd.exposure_notes),
+      },
+      
+      // ============ ADJUVANTS (ECG, VBG, ECHO) ============
+      adjuvants: {
+        ecg_findings: toStringOrEmpty(fd.ecg_findings),
+        vbg: {
+          ph: toFloatOrNull(fd.vbg_ph),
+          pco2: toFloatOrNull(fd.vbg_pco2),
+          hco3: toFloatOrNull(fd.vbg_hco3),
+          hb: toFloatOrNull(fd.vbg_hb),
+          glucose: toFloatOrNull(fd.vbg_glu),
+          lactate: toFloatOrNull(fd.vbg_lac),
+          sodium: toFloatOrNull(fd.vbg_na),
+          potassium: toFloatOrNull(fd.vbg_k),
+          creatinine: toFloatOrNull(fd.vbg_cr),
+          ai_interpretation: toStringOrEmpty(fd.vbg_ai_interpretation),
+        },
+        bedside_echo: toStringOrEmpty(fd.bedside_echo),
+        additional_notes: toStringOrEmpty(fd.adjuvants_notes),
+      },
+      
+      // ============ HISTORY TAB ============
+      history: {
+        hpi: toStringOrEmpty(fd.history_hpi),
+        signs_and_symptoms: toStringOrEmpty(fd.history_signs_symptoms),
+        secondary_survey: toStringOrEmpty(fd.history_secondary_survey),
+        allergies: toStringOrEmpty(fd.history_allergies).split(",").map(s => s.trim()).filter(Boolean),
+        drug_history: toStringOrEmpty(fd.history_medications),
+        past_medical: toStringOrEmpty(fd.history_past_medical).split(",").map(s => s.trim()).filter(Boolean),
+        past_surgical: toStringOrEmpty(fd.history_past_surgical),
+        last_meal_lmp: toStringOrEmpty(fd.history_last_meal),
+        family_gyn_additional_notes: toStringOrEmpty(fd.history_family_gynae),
+        additional_notes: toStringOrEmpty(fd.history_additional_notes),
+      },
+      
+      // ============ PSYCHOLOGICAL ASSESSMENT ============
+      psychological_assessment: {
+        suicidal_ideation: toBoolean(fd.psych_suicidal_ideation),
+        self_harm: toBoolean(fd.psych_self_harm),
+        harm_others: toBoolean(fd.psych_harm_others),
+        substance_abuse: toBoolean(fd.psych_substance_abuse),
+        psychiatric_history: toBoolean(fd.psych_psychiatric_history),
+        current_treatment: toBoolean(fd.psych_current_treatment),
+        support_system: toBoolean(fd.psych_support_system),
+        notes: toStringOrEmpty(fd.psych_notes),
+      },
+      
+      // ============ PEDIATRIC ASSESSMENT TRIANGLE (PAT) ============
+      pediatric_assessment_triangle: isPediatric ? {
+        appearance: {
+          tone: toStringOrEmpty(fd.pat_appearance_tone),
+          interactivity: toStringOrEmpty(fd.pat_appearance_interactivity),
+          consolability: toStringOrEmpty(fd.pat_appearance_consolability),
+          look_gaze: toStringOrEmpty(fd.pat_appearance_look_gaze),
+          speech_cry: toStringOrEmpty(fd.pat_appearance_speech_cry),
+        },
+        work_of_breathing: toStringOrEmpty(fd.pat_work_of_breathing),
+        abnormal_sounds: fd.pat_abnormal_sounds || [],
+        abnormal_positioning: toStringOrEmpty(fd.pat_abnormal_positioning),
+        circulation: {
+          skin_color: toStringOrEmpty(fd.pat_circulation_skin_color),
+          crt: toStringOrEmpty(fd.pat_circulation_crt),
+        },
+        overall_impression: toStringOrEmpty(fd.pat_overall_impression),
+        notes: toStringOrEmpty(fd.pat_notes),
+      } : null,
+      
+      // ============ EFAST (Trauma) ============
+      efast: {
+        heart: toStringOrEmpty(fd.efast_heart),
+        abdomen: toStringOrEmpty(fd.efast_abdomen),
+        lungs: toStringOrEmpty(fd.efast_lungs),
+        pelvis: toStringOrEmpty(fd.efast_pelvis),
+        notes: toStringOrEmpty(fd.efast_notes),
+      },
+      
+      // ============ HEENT (Pediatric) ============
+      heent: isPediatric ? {
+        head: toStringOrEmpty(fd.heent_head),
+        eyes: toStringOrEmpty(fd.heent_eyes),
+        ears: toStringOrEmpty(fd.heent_ears),
+        nose: toStringOrEmpty(fd.heent_nose),
+        throat: toStringOrEmpty(fd.heent_throat),
+        notes: toStringOrEmpty(fd.heent_notes),
+      } : null,
+      
+      // ============ EXAM TAB ============
+      examination: {
+        // General
+        general_appearance: toStringOrEmpty(fd.general_appearance) || "Well",
+        general_pallor: toBoolean(fd.general_pallor),
+        general_icterus: toBoolean(fd.general_icterus),
+        general_clubbing: toBoolean(fd.general_clubbing),
+        general_lymphadenopathy: toBoolean(fd.general_lymphadenopathy),
+        general_thyroid: toStringOrEmpty(fd.general_thyroid) || "Normal",
+        general_varicose_veins: toBoolean(fd.general_varicose_veins),
+        general_notes: toStringOrEmpty(fd.general_notes),
+        general_additional_notes: toStringOrEmpty(fd.general_additional_notes),
+        // CVS
+        cvs_status: toStringOrEmpty(examStatus.cvs) || "Normal",
+        cvs_s1_s2: toStringOrEmpty(fd.cvs_s1_s2),
+        cvs_pulse: toStringOrEmpty(fd.cvs_pulse),
+        cvs_pulse_rate: toIntOrNull(fd.cvs_pulse_rate),
+        cvs_apex_beat: toStringOrEmpty(fd.cvs_apex_beat),
+        cvs_precordial_heave: toStringOrEmpty(fd.cvs_precordial_heave),
+        cvs_added_sounds: toStringOrEmpty(fd.cvs_added_sounds),
+        cvs_murmurs: toStringOrEmpty(fd.cvs_murmurs),
+        cvs_additional_notes: toStringOrEmpty(fd.cvs_notes),
+        // Respiratory
+        respiratory_status: toStringOrEmpty(examStatus.respiratory) || "Normal",
+        respiratory_expansion: toStringOrEmpty(fd.resp_expansion),
+        respiratory_percussion: toStringOrEmpty(fd.resp_percussion),
+        respiratory_breath_sounds: toStringOrEmpty(fd.resp_breath_sounds),
+        respiratory_vocal_resonance: toStringOrEmpty(fd.resp_vocal_resonance),
+        respiratory_added_sounds: toStringOrEmpty(fd.resp_added_sounds),
+        respiratory_additional_notes: toStringOrEmpty(fd.resp_notes),
+        // Abdomen
+        abdomen_status: toStringOrEmpty(examStatus.abdomen) || "Normal",
+        abdomen_umbilical: toStringOrEmpty(fd.abd_umbilical),
+        abdomen_organomegaly: toStringOrEmpty(fd.abd_organomegaly),
+        abdomen_percussion: toStringOrEmpty(fd.abd_percussion),
+        abdomen_bowel_sounds: toStringOrEmpty(fd.abd_bowel_sounds),
+        abdomen_external_genitalia: toStringOrEmpty(fd.abd_external_genitalia),
+        abdomen_hernial_orifices: toStringOrEmpty(fd.abd_hernial_orifices),
+        abdomen_per_rectal: toStringOrEmpty(fd.abd_per_rectal),
+        abdomen_per_vaginal: toStringOrEmpty(fd.abd_per_vaginal),
+        abdomen_additional_notes: toStringOrEmpty(fd.abd_notes),
+        // CNS
+        cns_status: toStringOrEmpty(examStatus.cns) || "Normal",
+        cns_higher_mental: toStringOrEmpty(fd.cns_higher_mental),
+        cns_cranial_nerves: toStringOrEmpty(fd.cns_cranial_nerves),
+        cns_sensory_system: toStringOrEmpty(fd.cns_sensory),
+        cns_motor_system: toStringOrEmpty(fd.cns_motor),
+        cns_reflexes: toStringOrEmpty(fd.cns_reflexes),
+        cns_romberg_sign: toStringOrEmpty(fd.cns_romberg),
+        cns_cerebellar_signs: toStringOrEmpty(fd.cns_cerebellar),
+        cns_additional_notes: toStringOrEmpty(fd.cns_notes),
+        // Extremities
+        extremities_status: toStringOrEmpty(examStatus.extremities) || "Normal",
+        extremities_findings: toStringOrEmpty(fd.ext_findings),
+        extremities_additional_notes: toStringOrEmpty(fd.ext_notes),
+      },
+      
+      // ============ TREATMENT TAB ============
+      treatment: {
+        intervention_notes: toStringOrEmpty(fd.treatment_interventions),
+        medications: toStringOrEmpty(fd.treatment_medications),
+        fluids: toStringOrEmpty(fd.treatment_fluids),
+        differential_diagnoses: toStringOrEmpty(fd.diagnosis_differential).split(",").map(s => s.trim()).filter(Boolean),
+        provisional_diagnoses: toStringOrEmpty(fd.diagnosis_primary).trim() ? [toStringOrEmpty(fd.diagnosis_primary).trim()] : [],
+        ai_diagnosis_suggestions: toStringOrEmpty(aiDiagnosisResult),
+        ai_red_flags: aiRedFlags || [],
+        drugs_administered: selectedDrugs.map(d => ({ 
+          name: toStringOrEmpty(d.name), 
+          dose: toStringOrEmpty(d.dose), 
+          time: toStringOrEmpty(d.time) 
+        })),
+      },
+      
+      // ============ PROCEDURES ============
+      procedures: {
+        procedures_performed: selectedProcedures.map(pId => {
+          const proc = PROCEDURE_OPTIONS.find(p => p.id === pId);
+          return {
+            id: toStringOrEmpty(pId),
+            name: toStringOrEmpty(proc?.name || pId),
+            category: toStringOrEmpty(proc?.category) || "Other",
+            notes: toStringOrEmpty(procedureNotes[pId]),
+            timestamp: new Date().toISOString(),
+          };
+        }),
+      },
+      
+      // ============ NOTES TAB ============
+      addendum_notes: addendumNotes || [],
+      
+      // ============ INVESTIGATIONS ============
+      investigations: {
+        panels_selected: toStringOrEmpty(fd.labs_ordered).split(",").map(s => s.trim()).filter(Boolean),
+        imaging: toStringOrEmpty(fd.imaging_ordered).split(",").map(s => s.trim()).filter(Boolean),
+        results_notes: toStringOrEmpty(fd.investigation_results),
+      },
+      
+      // ============ ER OBSERVATION ============
+      er_observation: {
+        notes: toStringOrEmpty(fd.er_observation_notes),
+        duration: toStringOrEmpty(fd.er_duration),
+      },
+      
+      // ============ DISPOSITION TAB ============
+      disposition: {
+        type: mapDispositionType(fd.disposition_type),
+        destination: toStringOrEmpty(fd.disposition_ward || fd.disposition_refer_hospital),
+        discharge_vitals: null,
+      },
+      
+      em_resident: toStringOrEmpty(user?.name || fd.em_resident) || "EM Resident",
+    };
+
+    // Save using axios
+    let response;
+    if (caseId) {
+      // UPDATE existing case
+      response = await api.put(`/cases/${caseId}`, payload);
+    } else {
+      // CREATE new case
+      response = await api.post('/cases', payload);
+    }
+
+    const savedCase = response.data;
+    setCaseId(savedCase.id);
+    setLastSaved(new Date());
+    
+    if (!silent) {
+      Alert.alert("✅ Saved", "Case sheet saved!");
+    }
+    return savedCase.id;
+    
+  } catch (err) {
+    console.error("Save error:", err);
+    if (!silent) {
+      const errorMsg = err.response?.data?.detail 
+        || err.response?.data?.message 
+        || err.message 
+        || "Failed to save case";
+      Alert.alert("Save Error", typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
+    }
+    return null;
+  } finally {
+    if (!silent) setSaving(false);
+  }
+};
+📱 Tab Mapping:
+Tab	Fields Saved
+Patient	name, age, sex, phone, address, mode_of_arrival, mlc
+Primary	ABCDE assessment, vitals, airway/breathing/circulation/disability/exposure
+History	HPI, allergies, medications, past medical/surgical, family history
+Exam	General, CVS, Respiratory, Abdomen, CNS, Extremities
+Treatment	Diagnosis, medications, fluids, procedures, drugs administered
+Notes	Addendum notes, ER observation
+Disposition	Discharge type, destination
+Would you like me to provide the complete updated CaseSheetScreen.js file?
+
+Jan 12, 09:22 AM
+
+Scroll to bottom
+
+
+View Preview
+
+Message Agent
+Attach
+
+
+send
+Agent is waiting...

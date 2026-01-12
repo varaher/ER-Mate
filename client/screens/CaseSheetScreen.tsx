@@ -259,6 +259,40 @@ const getDefaultPsychFormData = (): PsychFormData => ({
   notes: "",
 });
 
+const toStringOrEmpty = (val: any): string => {
+  if (val === null || val === undefined) return "";
+  if (typeof val === "object") return JSON.stringify(val);
+  return String(val);
+};
+
+const toFloatOrNull = (val: any): number | null => {
+  if (!val) return null;
+  const num = parseFloat(val);
+  return isNaN(num) ? null : num;
+};
+
+const toIntOrNull = (val: any): number | null => {
+  if (!val) return null;
+  const num = parseInt(val, 10);
+  return isNaN(num) ? null : num;
+};
+
+const toBoolean = (val: any): boolean => {
+  return val === true || val === "true" || val === 1 || val === "1";
+};
+
+const mapDispositionType = (type: string): string => {
+  const map: Record<string, string> = {
+    "Discharge": "discharged",
+    "Admit": "admitted-ward",
+    "Refer": "referred",
+    "LAMA": "dama",
+    "Absconded": "absconded",
+    "Death": "death",
+  };
+  return map[type] || "discharged";
+};
+
 const CHIP_OPTIONS = {
   airwayMaintenance: [
     { label: "Self-maintained", value: "self_maintained" },

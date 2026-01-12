@@ -13,6 +13,28 @@ import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/the
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { getAgeGroupLabel, getAgeGroup } from "@/lib/pediatricVitals";
 
+const toStringOrEmpty = (val: any): string => {
+  if (val === null || val === undefined) return "";
+  if (typeof val === "object") return JSON.stringify(val);
+  return String(val);
+};
+
+const toFloatOrNull = (val: any): number | null => {
+  if (!val) return null;
+  const num = parseFloat(val);
+  return isNaN(num) ? null : num;
+};
+
+const toIntOrNull = (val: any): number | null => {
+  if (!val) return null;
+  const num = parseInt(val, 10);
+  return isNaN(num) ? null : num;
+};
+
+const toBoolean = (val: any): boolean => {
+  return val === true || val === "true" || val === 1 || val === "1";
+};
+
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type PediatricCaseSheetRouteProp = RouteProp<RootStackParamList, "PediatricCaseSheet">;
 
