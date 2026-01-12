@@ -784,13 +784,14 @@ export default function CaseSheetScreen() {
 
   const markAllExamNormal = () => {
     setExamData({
-      general: { pallor: false, icterus: false, cyanosis: false, clubbing: false, lymphadenopathy: false, edema: false, notes: "" },
-      cvs: { status: "Normal", s1s2: "Normal", pulse: "Regular", pulseRate: "", apexBeat: "Normal", precordialHeave: false, addedSounds: "", murmurs: "", notes: "" },
-      respiratory: { status: "Normal", expansion: "Equal", percussion: "Resonant", breathSounds: "Vesicular", vocalResonance: "Normal", addedSounds: "", notes: "" },
-      abdomen: { status: "Normal", umbilical: "Normal", organomegaly: "", percussion: "Tympanic", bowelSounds: "Present", externalGenitalia: "Normal", hernialOrifices: "Normal", perRectal: "", perVaginal: "", notes: "" },
-      cns: { status: "Normal", higherMentalFunctions: "Intact", cranialNerves: "Intact", sensorySystem: "Intact", motorSystem: "Normal", reflexes: "Normal", rombergSign: "Negative", cerebellarSigns: "Normal", notes: "" },
-      extremities: { status: "Normal", pulses: "Present", edema: false, deformity: false, notes: "" },
+      general: { pallor: false, icterus: false, cyanosis: false, clubbing: false, lymphadenopathy: false, edema: false, notes: "Patient is conscious, alert, and oriented. No pallor, icterus, cyanosis, clubbing, lymphadenopathy, or edema noted." },
+      cvs: { status: "Normal", s1s2: "Normal", pulse: "Regular", pulseRate: "", apexBeat: "Normal", precordialHeave: false, addedSounds: "", murmurs: "", notes: "S1 S2 heard, normal intensity. No murmurs, gallops, or rubs. JVP not elevated. Peripheral pulses well felt bilaterally." },
+      respiratory: { status: "Normal", expansion: "Equal", percussion: "Resonant", breathSounds: "Vesicular", vocalResonance: "Normal", addedSounds: "", notes: "Bilateral equal air entry. Vesicular breath sounds. No wheeze, crackles, or rhonchi. Normal percussion notes." },
+      abdomen: { status: "Normal", umbilical: "Normal", organomegaly: "", percussion: "Tympanic", bowelSounds: "Present", externalGenitalia: "Normal", hernialOrifices: "Normal", perRectal: "", perVaginal: "", notes: "Soft, non-distended, non-tender. No guarding or rigidity. No organomegaly. Bowel sounds present and normal." },
+      cns: { status: "Normal", higherMentalFunctions: "Intact", cranialNerves: "Intact", sensorySystem: "Intact", motorSystem: "Normal", reflexes: "Normal", rombergSign: "Negative", cerebellarSigns: "Normal", notes: "Conscious, oriented to time, place, and person. GCS 15/15. Cranial nerves intact. Pupils BERL. Motor power 5/5 in all limbs. Reflexes normal." },
+      extremities: { status: "Normal", pulses: "Present", edema: false, deformity: false, notes: "No edema, cyanosis, or clubbing. Peripheral pulses well felt. Full range of motion. No deformity or swelling." },
     });
+    Alert.alert("Done", "All examination sections marked as normal with detailed findings");
   };
 
   const handleNext = async () => {
