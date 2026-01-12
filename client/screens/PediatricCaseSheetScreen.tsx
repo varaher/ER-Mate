@@ -342,12 +342,54 @@ export default function PediatricCaseSheetScreen() {
     try {
       setSaving(true);
       const payload = {
-        primary_assessment: { pat: patData, airway: airwayData, breathing: breathingData, circulation: circulationData, disability: disabilityData, exposure: exposureData, efast: efastData },
+        vitals_at_arrival: {
+          hr: parseFloat(circulationData.heartRate) || null,
+          rr: parseFloat(breathingData.respiratoryRate) || null,
+          spo2: parseFloat(breathingData.spo2) || null,
+          temperature: parseFloat(exposureData.temperature) || null,
+          grbs: parseFloat(disabilityData.glucose) || null,
+        },
+        primary_assessment: {
+          pat: patData,
+          airway: airwayData,
+          breathing: breathingData,
+          circulation: circulationData,
+          disability: disabilityData,
+          exposure: exposureData,
+          efast: efastData,
+          airway_status: airwayData.status || "Patent",
+          breathing_rr: parseFloat(breathingData.respiratoryRate) || null,
+          breathing_spo2: parseFloat(breathingData.spo2) || null,
+          breathing_work: breathingData.workOfBreathing?.join(", ") || "Normal",
+          circulation_hr: parseFloat(circulationData.heartRate) || null,
+          circulation_crt: circulationData.crt === "Normal (<2s)" ? 2 : 3,
+          disability_avpu: disabilityData.avpuGcs || "Alert",
+          disability_pupils_size: disabilityData.pupils || "Normal",
+          exposure_temperature: parseFloat(exposureData.temperature) || null,
+        },
         history: {
           ...historyData,
+          hpi: historyData.events || "",
+          events_hopi: historyData.events || "",
           allergies: historyData.allergies ? historyData.allergies.split(',').map((s: string) => s.trim()).filter((s: string) => s) : [],
+          medications: historyData.currentMedications || "",
+          drug_history: historyData.currentMedications || "",
+          past_medical: historyData.healthHistory ? historyData.healthHistory.split(',').map((s: string) => s.trim()).filter((s: string) => s) : [],
+          last_meal_lmp: historyData.lastMeal || "",
         },
         physical_exam: examData,
+        examination: {
+          general_additional_notes: examData.heent?.head || "",
+          respiratory_status: "Normal",
+          respiratory_additional_notes: examData.respiratory || "",
+          cvs_status: "Normal",
+          cvs_additional_notes: examData.cardiovascular || "",
+          abdomen_status: "Normal",
+          abdomen_additional_notes: examData.abdomen || "",
+          extremities_status: "Normal",
+          extremities_findings: examData.extremities || "",
+        },
+        heent: examData.heent,
       };
       console.log("Saving pediatric case:", caseId, "payload keys:", Object.keys(payload));
       const res = await apiPut(`/cases/${caseId}`, payload);
