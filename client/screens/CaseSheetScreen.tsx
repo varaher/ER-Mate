@@ -525,6 +525,50 @@ export default function CaseSheetScreen() {
         if (res.data.examination) {
           setExamData({ ...getDefaultExamFormData(), ...res.data.examination });
         }
+        if (res.data.treatment) {
+          setTreatmentData((prev) => ({
+            ...prev,
+            primaryDiagnosis: Array.isArray(res.data.treatment.provisional_diagnoses) ? res.data.treatment.provisional_diagnoses.join(", ") : (res.data.treatment.provisional_diagnoses || ""),
+            differentialDiagnoses: Array.isArray(res.data.treatment.differential_diagnoses) ? res.data.treatment.differential_diagnoses.join(", ") : (res.data.treatment.differential_diagnoses || ""),
+            otherMedications: res.data.treatment.intervention_notes || res.data.treatment.medications || "",
+            ivFluids: res.data.treatment.fluids || "",
+          }));
+        }
+        if (res.data.investigations) {
+          setTreatmentData((prev) => ({
+            ...prev,
+            labsOrdered: Array.isArray(res.data.investigations.panels_selected) ? res.data.investigations.panels_selected.join(", ") : (res.data.investigations.panels_selected || ""),
+            imaging: Array.isArray(res.data.investigations.imaging) ? res.data.investigations.imaging.join(", ") : (res.data.investigations.imaging || ""),
+            resultsSummary: res.data.investigations.results_notes || "",
+          }));
+        }
+        if (res.data.procedures?.procedures_performed) {
+          setProceduresData((prev) => {
+            const updated = { ...prev };
+            res.data.procedures.procedures_performed.forEach((proc: any) => {
+              const cat = proc.category as keyof ProceduresData;
+              if (updated[cat]) {
+                if (!updated[cat].includes(proc.name)) {
+                  updated[cat] = [...updated[cat], proc.name];
+                }
+              }
+            });
+            return updated;
+          });
+        }
+        if (res.data.disposition) {
+          setDispositionData((prev) => ({
+            ...prev,
+            dispositionType: res.data.disposition.type || "",
+          }));
+        }
+        if (res.data.er_observation) {
+          setDispositionData((prev) => ({
+            ...prev,
+            erObservationNotes: res.data.er_observation.notes || "",
+            durationInER: res.data.er_observation.duration || "",
+          }));
+        }
         setFormData(newFormData);
 
         if (res.data.patient?.mode_of_arrival) {
