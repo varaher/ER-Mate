@@ -1231,6 +1231,14 @@ export default function CaseSheetScreen() {
                 </Pressable>
               </View>
 
+              {abcdeStatus.airway === "Normal" && (
+                <View style={[styles.normalDescriptionBox, { backgroundColor: "#E8F5E9", borderColor: TriageColors.green }]}>
+                  <Text style={[styles.normalDescriptionText, { color: TriageColors.green }]}>
+                    Patent airway, self-maintained, no obstruction, speech clear, no stridor
+                  </Text>
+                </View>
+              )}
+
               {abcdeStatus.airway === "Abnormal" && (
                 <View style={styles.abnormalSection}>
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Position</Text>
@@ -1308,6 +1316,14 @@ export default function CaseSheetScreen() {
                 <View style={styles.abcdeVitalInput}><TextInputField label="SpO2" value={formData.breathing.spo2} onChangeText={(v) => updateFormData("breathing", "spo2", v)} keyboardType="numeric" suffix="%" /></View>
                 <View style={styles.abcdeVitalInput}><TextInputField label="O2 Flow" value={formData.breathing.o2Flow} onChangeText={(v) => updateFormData("breathing", "o2Flow", v)} keyboardType="numeric" suffix="L/min" /></View>
               </View>
+
+              {abcdeStatus.breathing === "Normal" && (
+                <View style={[styles.normalDescriptionBox, { backgroundColor: "#FFF3E0", borderColor: TriageColors.orange }]}>
+                  <Text style={[styles.normalDescriptionText, { color: "#E65100" }]}>
+                    Effortless breathing, regular pattern, bilateral chest expansion, clear air entry, no added sounds, on room air
+                  </Text>
+                </View>
+              )}
 
               {abcdeStatus.breathing === "Abnormal" && (
                 <View style={styles.abnormalSection}>
@@ -1408,6 +1424,14 @@ export default function CaseSheetScreen() {
                 }} placeholder="Sys/Dia" /></View>
               </View>
 
+              {abcdeStatus.circulation === "Normal" && (
+                <View style={[styles.normalDescriptionBox, { backgroundColor: "#FFFDE7", borderColor: TriageColors.yellow }]}>
+                  <Text style={[styles.normalDescriptionText, { color: "#F57F17" }]}>
+                    Regular pulse, CRT {"<"}2 sec, warm extremities, normal skin color, adequate perfusion
+                  </Text>
+                </View>
+              )}
+
               {abcdeStatus.circulation === "Abnormal" && (
                 <View style={styles.abnormalSection}>
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Rhythm</Text>
@@ -1496,6 +1520,14 @@ export default function CaseSheetScreen() {
                 <View style={styles.abcdeVitalInput}><TextInputField label="GRBS" value={formData.disability.glucose} onChangeText={(v) => updateFormData("disability", "glucose", v)} keyboardType="numeric" suffix="mg/dL" /></View>
               </View>
 
+              {abcdeStatus.disability === "Normal" && (
+                <View style={[styles.normalDescriptionBox, { backgroundColor: "#E8F5E9", borderColor: TriageColors.green }]}>
+                  <Text style={[styles.normalDescriptionText, { color: TriageColors.green }]}>
+                    GCS 15/15, AVPU: Alert, pupils equal and reactive, no focal neurological deficits, euglycemic
+                  </Text>
+                </View>
+              )}
+
               {abcdeStatus.disability === "Abnormal" && (
                 <View style={styles.abnormalSection}>
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>AVPU</Text>
@@ -1572,6 +1604,14 @@ export default function CaseSheetScreen() {
               <View style={styles.abcdeVitalsRow}>
                 <View style={{ flex: 1 }}><TextInputField label="Temp" value={formData.exposure.temperature} onChangeText={(v) => updateFormData("exposure", "temperature", v)} keyboardType="decimal-pad" suffix="\u00B0C" /></View>
               </View>
+
+              {abcdeStatus.exposure === "Normal" && (
+                <View style={[styles.normalDescriptionBox, { backgroundColor: "#E3F2FD", borderColor: TriageColors.blue }]}>
+                  <Text style={[styles.normalDescriptionText, { color: TriageColors.blue }]}>
+                    Afebrile, no visible injuries/wounds, no rashes, no active bleeding, adequately covered
+                  </Text>
+                </View>
+              )}
 
               {abcdeStatus.exposure === "Abnormal" && (
                 <View style={styles.abnormalSection}>
@@ -2086,6 +2126,8 @@ const styles = StyleSheet.create({
   normalBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: Spacing.md, borderRadius: BorderRadius.md, gap: Spacing.xs, marginRight: Spacing.sm },
   abnormalBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: Spacing.md, borderRadius: BorderRadius.md, gap: Spacing.xs },
   abnormalSection: { backgroundColor: "#FFF5F5", padding: Spacing.md, borderRadius: BorderRadius.md, borderLeftWidth: 3, borderLeftColor: "#EF4444" },
+  normalDescriptionBox: { padding: Spacing.md, borderRadius: BorderRadius.md, borderLeftWidth: 3, marginTop: Spacing.sm, marginBottom: Spacing.sm },
+  normalDescriptionText: { ...Typography.body, fontSize: 13, fontStyle: "italic", lineHeight: 20 },
   abnormalSectionLabel: { ...Typography.bodyMedium, fontWeight: "600", marginBottom: Spacing.sm },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm, marginBottom: Spacing.md },
   chip: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.full, borderWidth: 1, borderColor: "#E5E7EB" },
