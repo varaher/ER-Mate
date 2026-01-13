@@ -1,0 +1,118 @@
+🧠 CORE IDEA
+We create ONE master object for the user/session and keep saving each tab into it.
+Copy code
+
+CASE_ID = 982341
+
+Tab 1 → Demographics → saved
+Tab 2 → Vitals → saved
+Tab 3 → History → saved
+Tab 4 → Exam → saved
+
+Finally → GET CASE → Generate summary
+🧱 1️⃣ Master Case Object (Frontend)
+This lives in your app memory while user is filling tabs.
+Copy code
+Js
+// caseStore.js
+export const caseData = {
+  caseId: null,
+  demographics: {},
+  vitals: {},
+  history: {},
+  exam: {},
+  investigations: {},
+  diagnosis: {},
+  treatment: {}
+};
+🧩 2️⃣ When App Starts → Create a Case
+Copy code
+Js
+async function createCase() {
+  const res = await fetch("https://api.ermate.ai/create-case", {
+    method: "POST"
+  });
+  const data = await res.json();
+  caseData.caseId = data.caseId;
+}
+📝 3️⃣ Saving a Tab (ANY Page)
+Every tab sends only its section.
+Example: Vitals Screen
+Copy code
+Js
+async function saveVitals(vitals) {
+  await fetch("https://api.ermate.ai/save-section", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      caseId: caseData.caseId,
+      section: "vitals",
+      data: vitals
+    })
+  });
+}
+🧩 4️⃣ Backend API (FastAPI Example)
+Copy code
+Python
+from fastapi import FastAPI
+from pymongo import MongoClient
+
+app = FastAPI()
+db = MongoClient().ermate
+
+@app.post("/create-case")
+def create_case():
+    case = {"demographics":{}, "vitals":{}, "history":{}, "exam":{}}
+    result = db.cases.insert_one(case)
+    return {"caseId": str(result.inserted_id)}
+🧩 Save Any Section
+Copy code
+Python
+from bson import ObjectId
+
+@app.post("/save-section")
+def save_section(payload: dict):
+    caseId = payload["caseId"]
+    section = payload["section"]
+    data = payload["data"]
+
+    db.cases.update_one(
+        {"_id": ObjectId(caseId)},
+        {"$set": {section: data}}
+    )
+    return {"status":"saved"}
+🧾 5️⃣ Final Page – Get Full Case
+Copy code
+Js
+async function loadFinalCase() {
+  const res = await fetch(
+    `https://api.ermate.ai/get-case/${caseData.caseId}`
+  );
+  return await res.json();
+}
+🧠 Backend
+Copy code
+Python
+@app.get("/get-case/{caseId}")
+def get_case(caseId:str):
+    case = db.cases.find_one({"_id":ObjectId(caseId)})
+    case["_id"] = str(case["_id"])
+    return case
+🖥️ 6️⃣ Final Summary Page
+Copy code
+Js
+<Text>Name: {case.demographics.name}</Text>
+<Text>BP: {case.vitals.bp}</Text>
+<Text>History: {case.history.complaint}</Text>
+<Text>Diagnosis: {case.diagnosis.final}</Text>
+🧩 Why this Architecture is GOLD
+This is the same logic used by:
+EPIC EMR
+Cerner
+ERmate
+Banking apps
+Insurance apps
+Because:
+Tabs can be in any order
+Data is never lost
+Works with voice → form → AI → PDF → discharge

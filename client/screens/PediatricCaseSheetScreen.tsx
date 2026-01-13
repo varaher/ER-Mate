@@ -420,13 +420,15 @@ export default function PediatricCaseSheetScreen() {
     }
   };
 
-  useEffect(() => {
-    if (!caseId || loading) return;
-    const autoSaveTimer = setTimeout(() => {
-      handleSave(true);
-    }, 5000);
-    return () => clearTimeout(autoSaveTimer);
-  }, [patData, airwayData, breathingData, circulationData, disabilityData, exposureData, efastData, historyData, examData]);
+  // Auto-save disabled due to backend's 2-edit limit on free plan
+  // Users should manually save using the Save button to avoid hitting the limit
+  // useEffect(() => {
+  //   if (!caseId || loading) return;
+  //   const autoSaveTimer = setTimeout(() => {
+  //     handleSave(true);
+  //   }, 5000);
+  //   return () => clearTimeout(autoSaveTimer);
+  // }, [patData, airwayData, breathingData, circulationData, disabilityData, exposureData, efastData, historyData, examData]);
 
   const handleNext = async () => {
     const currentIndex = TABS.findIndex((t) => t.key === activeTab);

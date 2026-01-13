@@ -857,13 +857,15 @@ export default function CaseSheetScreen() {
     }
   };
 
-  useEffect(() => {
-    if (!caseId || loading) return;
-    const autoSaveTimer = setTimeout(() => {
-      handleSave(true);
-    }, 5000);
-    return () => clearTimeout(autoSaveTimer);
-  }, [formData, examData, treatmentData, pastSurgicalHistory, otherHistory, abcdeStatus, modeOfArrival, isMLC, mlcDetails]);
+  // Auto-save disabled due to backend's 2-edit limit on free plan
+  // Users should manually save using the Save button to avoid hitting the limit
+  // useEffect(() => {
+  //   if (!caseId || loading) return;
+  //   const autoSaveTimer = setTimeout(() => {
+  //     handleSave(true);
+  //   }, 5000);
+  //   return () => clearTimeout(autoSaveTimer);
+  // }, [formData, examData, treatmentData, pastSurgicalHistory, otherHistory, abcdeStatus, modeOfArrival, isMLC, mlcDetails]);
 
   const startVoiceRecording = async (fieldKey: string) => {
     try {
