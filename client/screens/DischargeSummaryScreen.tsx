@@ -201,19 +201,19 @@ export default function DischargeSummaryScreen() {
         efast: data.adjuncts?.efast_notes || abcde.efast || "",
       },
       secondary_assessment: {
-        pallor: exam.general?.pallor || false,
-        icterus: exam.general?.icterus || false,
-        cyanosis: exam.general?.cyanosis || false,
-        clubbing: exam.general?.clubbing || false,
-        lymphadenopathy: exam.general?.lymphadenopathy || false,
-        edema: exam.general?.edema || false,
+        pallor: exam.general_pallor || exam.general?.pallor || false,
+        icterus: exam.general_icterus || exam.general?.icterus || false,
+        cyanosis: exam.general_cyanosis || exam.general?.cyanosis || false,
+        clubbing: exam.general_clubbing || exam.general?.clubbing || false,
+        lymphadenopathy: exam.general_lymphadenopathy || exam.general?.lymphadenopathy || false,
+        edema: exam.general_edema || exam.general?.edema || false,
       },
       systemic_exam: {
-        chest: exam.respiratory?.notes || exam.chest || "",
-        cvs: exam.cardiovascular?.notes || exam.cvs || "",
-        pa: exam.abdomen?.notes || exam.pa || "",
-        cns: exam.neurological?.notes || exam.cns || "",
-        extremities: exam.extremities?.notes || exam.extremities || "",
+        chest: formatSystemicExam("respiratory", exam),
+        cvs: formatSystemicExam("cvs", exam),
+        pa: formatSystemicExam("abdomen", exam),
+        cns: formatSystemicExam("cns", exam),
+        extremities: formatSystemicExam("extremities", exam),
       },
       course_in_hospital: data.discharge_summary?.course_in_hospital || "",
       investigations: formatInvestigations(treatment.investigations || data.investigations),
@@ -361,6 +361,77 @@ export default function DischargeSummaryScreen() {
       if (abcdeExposure?.notes) parts.push(abcdeExposure.notes);
     }
     return parts.join(", ");
+  };
+
+  const formatSystemicExam = (system: string, exam: any): string => {
+    if (!exam) return "";
+    
+    if (system === "respiratory") {
+      const notes = exam.respiratory_additional_notes || exam.respiratory?.notes || exam.chest || "";
+      if (notes) return notes;
+      const status = exam.respiratory_status || exam.respiratory?.status || "Normal";
+      if (status === "Normal") {
+        return "Bilateral equal air entry, vesicular breath sounds, no added sounds";
+      }
+      const parts = [];
+      if (exam.respiratory_expansion) parts.push(`Expansion: ${exam.respiratory_expansion}`);
+      if (exam.respiratory_breath_sounds) parts.push(`Breath Sounds: ${exam.respiratory_breath_sounds}`);
+      if (exam.respiratory_added_sounds) parts.push(`Added: ${exam.respiratory_added_sounds}`);
+      return parts.join(", ") || "";
+    }
+    
+    if (system === "cvs") {
+      const notes = exam.cvs_additional_notes || exam.cardiovascular?.notes || exam.cvs || "";
+      if (notes) return notes;
+      const status = exam.cvs_status || exam.cardiovascular?.status || "Normal";
+      if (status === "Normal") {
+        return "S1 S2 heard, no murmurs, JVP normal";
+      }
+      const parts = [];
+      if (exam.cvs_s1_s2) parts.push(`S1S2: ${exam.cvs_s1_s2}`);
+      if (exam.cvs_murmurs) parts.push(`Murmurs: ${exam.cvs_murmurs}`);
+      if (exam.cvs_added_sounds) parts.push(`Added: ${exam.cvs_added_sounds}`);
+      return parts.join(", ") || "";
+    }
+    
+    if (system === "abdomen") {
+      const notes = exam.abdomen_additional_notes || exam.abdomen?.notes || exam.pa || "";
+      if (notes) return notes;
+      const status = exam.abdomen_status || exam.abdomen?.status || "Normal";
+      if (status === "Normal") {
+        return "Soft, non-tender, no organomegaly, bowel sounds present";
+      }
+      const parts = [];
+      if (exam.abdomen_organomegaly) parts.push(`Organomegaly: ${exam.abdomen_organomegaly}`);
+      if (exam.abdomen_bowel_sounds) parts.push(`Bowel Sounds: ${exam.abdomen_bowel_sounds}`);
+      return parts.join(", ") || "";
+    }
+    
+    if (system === "cns") {
+      const notes = exam.cns_additional_notes || exam.neurological?.notes || exam.cns || "";
+      if (notes) return notes;
+      const status = exam.cns_status || exam.neurological?.status || "Normal";
+      if (status === "Normal") {
+        return "Higher functions intact, no focal deficits, reflexes normal";
+      }
+      const parts = [];
+      if (exam.cns_higher_mental) parts.push(`HMF: ${exam.cns_higher_mental}`);
+      if (exam.cns_motor_system) parts.push(`Motor: ${exam.cns_motor_system}`);
+      if (exam.cns_reflexes) parts.push(`Reflexes: ${exam.cns_reflexes}`);
+      return parts.join(", ") || "";
+    }
+    
+    if (system === "extremities") {
+      const notes = exam.extremities_findings || exam.extremities?.notes || "";
+      if (notes) return notes;
+      const status = exam.extremities_status || exam.extremities?.status || "Normal";
+      if (status === "Normal") {
+        return "Pulses present, no edema, no deformity";
+      }
+      return "";
+    }
+    
+    return "";
   };
 
   const formatInvestigations = (investigations: any): string => {
