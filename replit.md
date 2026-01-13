@@ -106,6 +106,30 @@ The app includes voice dictation capabilities:
 - `AIDiagnosisPanel` - Purple-themed AI assistant panel in Treatment tab
 - `server/services/aiDiagnosis.ts` - AI diagnosis service with medical knowledge base
 
+### Document Export System
+
+**Case Sheet & Discharge Summary Export**:
+- Download button appears for completed/discharged cases on Dashboard
+- Export options: PDF and Word (DOCX) formats
+- Supports both Case Sheet (full clinical documentation) and Discharge Summary export
+- Uses `pdfkit` for PDF generation and `docx` library for Word documents
+- Platform-aware file handling: Web uses blob download, mobile uses expo-file-system + expo-sharing
+
+**Export Endpoints** (server/routes.ts):
+- `POST /api/export/casesheet-pdf` - Generate Case Sheet PDF
+- `POST /api/export/casesheet-docx` - Generate Case Sheet Word document  
+- `POST /api/export/discharge-pdf` - Generate Discharge Summary PDF
+- `POST /api/export/discharge-docx` - Generate Discharge Summary Word document
+
+### Device Linking (Web App Access)
+
+**LinkDevicesScreen**:
+- WhatsApp-style web linking feature accessible from Profile menu
+- Generates temporary 6-character link codes for web access
+- Shows linked devices with unlink option
+- Secure: Only uses backend-generated codes, no client-side fallbacks
+- Timer shows code expiration countdown
+
 ## External Dependencies
 
 ### External Backend API
