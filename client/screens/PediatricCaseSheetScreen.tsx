@@ -343,11 +343,11 @@ export default function PediatricCaseSheetScreen() {
       setSaving(true);
       const payload = {
         vitals_at_arrival: {
-          hr: parseFloat(circulationData.heartRate) || null,
-          rr: parseFloat(breathingData.respiratoryRate) || null,
-          spo2: parseFloat(breathingData.spo2) || null,
-          temperature: parseFloat(exposureData.temperature) || null,
-          grbs: parseFloat(disabilityData.glucose) || null,
+          hr: parseFloat(circulationData.heartRate) || 100,
+          rr: parseFloat(breathingData.respiratoryRate) || 20,
+          spo2: parseFloat(breathingData.spo2) || 98,
+          temperature: parseFloat(exposureData.temperature) || 36.8,
+          grbs: parseFloat(disabilityData.glucose) || 100,
         },
         primary_assessment: {
           pat: patData,
@@ -358,14 +358,14 @@ export default function PediatricCaseSheetScreen() {
           exposure: exposureData,
           efast: efastData,
           airway_status: airwayData.status || "Patent",
-          breathing_rr: parseFloat(breathingData.respiratoryRate) || null,
-          breathing_spo2: parseFloat(breathingData.spo2) || null,
+          breathing_rr: parseFloat(breathingData.respiratoryRate) || 20,
+          breathing_spo2: parseFloat(breathingData.spo2) || 98,
           breathing_work: breathingData.workOfBreathing?.join(", ") || "Normal",
-          circulation_hr: parseFloat(circulationData.heartRate) || null,
+          circulation_hr: parseFloat(circulationData.heartRate) || 100,
           circulation_crt: circulationData.crt === "Normal (<2s)" ? 2 : 3,
           disability_avpu: disabilityData.avpuGcs || "Alert",
           disability_pupils_size: disabilityData.pupils || "Normal",
-          exposure_temperature: parseFloat(exposureData.temperature) || null,
+          exposure_temperature: parseFloat(exposureData.temperature) || 36.8,
         },
         history: {
           ...historyData,
