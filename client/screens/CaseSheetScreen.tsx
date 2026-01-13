@@ -126,12 +126,21 @@ interface ExamFormData {
   };
 }
 
+interface MedicationEntry {
+  id: string;
+  name: string;
+  dose: string;
+  route: string;
+  frequency: string;
+}
+
 interface TreatmentFormData {
   labsOrdered: string;
   imaging: string;
   resultsSummary: string;
   primaryDiagnosis: string;
   differentialDiagnoses: string;
+  medications: MedicationEntry[];
   otherMedications: string;
   ivFluids: string;
   addendumNotes: string;
@@ -213,6 +222,7 @@ const getDefaultTreatmentFormData = (): TreatmentFormData => ({
   resultsSummary: "",
   primaryDiagnosis: "",
   differentialDiagnoses: "",
+  medications: [],
   otherMedications: "",
   ivFluids: "",
   addendumNotes: "",
@@ -475,6 +485,7 @@ export default function CaseSheetScreen() {
   const [isMLC, setIsMLC] = useState(false);
   const [mlcDetails, setMLCDetails] = useState<MLCDetailsData>(getDefaultMLCDetails());
   const [abcdeStatus, setABCDEStatus] = useState<ABCDEStatusData>(getDefaultABCDEStatus());
+  const [newMedication, setNewMedication] = useState<Omit<MedicationEntry, 'id'>>({ name: "", dose: "", route: "", frequency: "" });
 
   useEffect(() => {
     loadCase();
@@ -526,11 +537,21 @@ export default function CaseSheetScreen() {
           setExamData({ ...getDefaultExamFormData(), ...res.data.examination });
         }
         if (res.data.treatment) {
+          const loadedMeds: MedicationEntry[] = Array.isArray(res.data.treatment.medications)
+            ? res.data.treatment.medications.map((m: any, idx: number) => ({
+                id: m.id || `loaded-${idx}`,
+                name: m.name || "",
+                dose: m.dose || "",
+                route: m.route || "",
+                frequency: m.frequency || "",
+              }))
+            : [];
           setTreatmentData((prev) => ({
             ...prev,
-            primaryDiagnosis: Array.isArray(res.data.treatment.provisional_diagnoses) ? res.data.treatment.provisional_diagnoses.join(", ") : (res.data.treatment.provisional_diagnoses || ""),
+            primaryDiagnosis: res.data.treatment.primary_diagnosis || (Array.isArray(res.data.treatment.provisional_diagnoses) ? res.data.treatment.provisional_diagnoses.join(", ") : (res.data.treatment.provisional_diagnoses || "")),
             differentialDiagnoses: Array.isArray(res.data.treatment.differential_diagnoses) ? res.data.treatment.differential_diagnoses.join(", ") : (res.data.treatment.differential_diagnoses || ""),
-            otherMedications: res.data.treatment.intervention_notes || res.data.treatment.medications || "",
+            medications: loadedMeds,
+            otherMedications: res.data.treatment.other_medications || res.data.treatment.intervention_notes || "",
             ivFluids: res.data.treatment.fluids || "",
           }));
         }
@@ -793,10 +814,17 @@ export default function CaseSheetScreen() {
         },
         treatment: {
           intervention_notes: treatmentData.otherMedications || "",
-          medications: treatmentData.otherMedications || "",
+          medications: treatmentData.medications.map((m) => ({
+            name: m.name,
+            dose: m.dose,
+            route: m.route,
+            frequency: m.frequency,
+          })),
+          other_medications: treatmentData.otherMedications || "",
           fluids: treatmentData.ivFluids || "",
           differential_diagnoses: treatmentData.differentialDiagnoses ? treatmentData.differentialDiagnoses.split(',').map((s: string) => s.trim()).filter((s: string) => s) : [],
           provisional_diagnoses: treatmentData.primaryDiagnosis ? [treatmentData.primaryDiagnosis.trim()] : [],
+          primary_diagnosis: treatmentData.primaryDiagnosis || "",
         },
         investigations: {
           panels_selected: treatmentData.labsOrdered ? treatmentData.labsOrdered.split(',').map((s: string) => s.trim()).filter((s: string) => s) : [],
@@ -934,6 +962,29 @@ export default function CaseSheetScreen() {
     } catch (err) {
       console.error("Transcription error:", err);
     }
+  };
+
+  const addMedication = () => {
+    if (!newMedication.name.trim()) return;
+    const newEntry: MedicationEntry = {
+      id: Date.now().toString(),
+      name: newMedication.name.trim(),
+      dose: newMedication.dose.trim(),
+      route: newMedication.route.trim(),
+      frequency: newMedication.frequency.trim(),
+    };
+    setTreatmentData((prev) => ({
+      ...prev,
+      medications: [...prev.medications, newEntry],
+    }));
+    setNewMedication({ name: "", dose: "", route: "", frequency: "" });
+  };
+
+  const removeMedication = (id: string) => {
+    setTreatmentData((prev) => ({
+      ...prev,
+      medications: prev.medications.filter((m) => m.id !== id),
+    }));
   };
 
   const markAllExamNormal = () => {
@@ -1927,17 +1978,60 @@ export default function CaseSheetScreen() {
             <View style={[styles.card, { backgroundColor: theme.card }]}>
               <Text style={[styles.cardTitle, { color: theme.text }]}>Treatment Given</Text>
               
-              <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Medications (Adult Formulary)</Text>
-              <Pressable style={[styles.addDrugBtn, { backgroundColor: TriageColors.green }]}>
+              <Text style={[styles.fieldLabel, { color: theme.text }]}>Medications</Text>
+              
+              <View style={styles.medicationInputRow}>
+                <TextInput
+                  style={[styles.medicationInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, flex: 2 }]}
+                  placeholder="Drug Name"
+                  placeholderTextColor={theme.textMuted}
+                  value={newMedication.name}
+                  onChangeText={(v) => setNewMedication((prev) => ({ ...prev, name: v }))}
+                />
+                <TextInput
+                  style={[styles.medicationInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, flex: 1 }]}
+                  placeholder="Dose"
+                  placeholderTextColor={theme.textMuted}
+                  value={newMedication.dose}
+                  onChangeText={(v) => setNewMedication((prev) => ({ ...prev, dose: v }))}
+                />
+              </View>
+              <View style={styles.medicationInputRow}>
+                <TextInput
+                  style={[styles.medicationInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, flex: 1 }]}
+                  placeholder="Route (PO, IV, IM)"
+                  placeholderTextColor={theme.textMuted}
+                  value={newMedication.route}
+                  onChangeText={(v) => setNewMedication((prev) => ({ ...prev, route: v }))}
+                />
+                <TextInput
+                  style={[styles.medicationInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, flex: 1 }]}
+                  placeholder="Frequency (BD, TDS)"
+                  placeholderTextColor={theme.textMuted}
+                  value={newMedication.frequency}
+                  onChangeText={(v) => setNewMedication((prev) => ({ ...prev, frequency: v }))}
+                />
+              </View>
+              <Pressable style={[styles.addDrugBtn, { backgroundColor: TriageColors.green }]} onPress={addMedication}>
                 <Feather name="plus" size={18} color="#FFFFFF" />
-                <Text style={styles.addDrugBtnText}>Add Drug from List</Text>
+                <Text style={styles.addDrugBtnText}>Add Medication</Text>
               </Pressable>
 
-              <View style={styles.fieldWithVoice}>
-                <Text style={[styles.fieldLabel, { color: theme.text }]}>Other Medications</Text>
-                <VoiceButton fieldKey="treatment.otherMedications" />
-              </View>
-              <TextInput style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Additional drugs not in list..." placeholderTextColor={theme.textMuted} value={treatmentData.otherMedications} onChangeText={(v) => setTreatmentData((prev) => ({ ...prev, otherMedications: v }))} multiline />
+              {treatmentData.medications.length > 0 && (
+                <View style={styles.medicationsList}>
+                  {treatmentData.medications.map((med) => (
+                    <View key={med.id} style={[styles.medicationItem, { backgroundColor: theme.backgroundSecondary }]}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.medicationName, { color: theme.text }]}>{med.name} {med.dose}</Text>
+                        <Text style={[styles.medicationDetails, { color: theme.textSecondary }]}>{med.route} — {med.frequency}</Text>
+                      </View>
+                      <Pressable onPress={() => removeMedication(med.id)} hitSlop={8}>
+                        <Feather name="x-circle" size={20} color={TriageColors.red} />
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+              )}
 
               <View style={styles.fieldWithVoice}>
                 <Text style={[styles.fieldLabel, { color: theme.text }]}>IV Fluids</Text>
@@ -2102,6 +2196,12 @@ const styles = StyleSheet.create({
   cardSubtitle: { ...Typography.body, marginBottom: Spacing.md, marginTop: -Spacing.sm },
   addDrugBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: Spacing.md, borderRadius: BorderRadius.md, gap: Spacing.sm, marginTop: Spacing.sm, marginBottom: Spacing.md },
   addDrugBtnText: { color: "#FFFFFF", ...Typography.bodyMedium, fontWeight: "600" },
+  medicationInputRow: { flexDirection: "row", gap: Spacing.sm, marginTop: Spacing.sm },
+  medicationInput: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.md, ...Typography.body },
+  medicationsList: { marginTop: Spacing.md, gap: Spacing.sm },
+  medicationItem: { flexDirection: "row", alignItems: "center", paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.md, gap: Spacing.sm },
+  medicationName: { ...Typography.bodyMedium, fontWeight: "600" },
+  medicationDetails: { fontSize: 13, fontWeight: "400" as const },
   addAddendumBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1, borderStyle: "dashed", gap: Spacing.sm, marginTop: Spacing.md },
   addAddendumBtnText: { ...Typography.bodyMedium, fontWeight: "500" },
   procedureHeader: { paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, marginTop: Spacing.md },
