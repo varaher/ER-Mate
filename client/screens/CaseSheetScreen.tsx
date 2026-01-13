@@ -833,6 +833,7 @@ export default function CaseSheetScreen() {
       if (res.success) {
         await invalidateCases();
         setLastSaved(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+        if (!silent) Alert.alert("Saved", "Case data saved successfully!");
       } else {
         console.error("Save failed:", res.error);
         const errorData = res.error as any;

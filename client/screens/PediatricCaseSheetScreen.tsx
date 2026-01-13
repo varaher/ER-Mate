@@ -396,6 +396,7 @@ export default function PediatricCaseSheetScreen() {
       console.log("Pediatric save response:", res);
       if (res && res.success !== false) {
         setLastSaved(new Date());
+        if (!silent) Alert.alert("Saved", "Case data saved successfully!");
       } else {
         console.error("Pediatric save failed:", res);
         const errorData = res.error as any;
@@ -433,7 +434,10 @@ export default function PediatricCaseSheetScreen() {
       setActiveTab(TABS[currentIndex + 1].key);
     } else {
       await handleSave(false);
-      navigation.goBack();
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "Main", params: { screen: "DashboardTab" } }],
+      });
     }
   };
 
@@ -1147,7 +1151,7 @@ export default function PediatricCaseSheetScreen() {
               <Text style={styles.generateSummaryBtnText}>Generate Discharge Summary</Text>
             </Pressable>
 
-            <Pressable style={[styles.saveDashboardBtn, { borderColor: theme.primary }]} onPress={async () => { await handleSave(false); navigation.goBack(); }}>
+            <Pressable style={[styles.saveDashboardBtn, { borderColor: theme.primary }]} onPress={async () => { await handleSave(false); navigation.reset({ index: 0, routes: [{ name: "Main", params: { screen: "DashboardTab" } }] }); }}>
               <Feather name="home" size={18} color={theme.primary} />
               <Text style={[styles.saveDashboardBtnText, { color: theme.primary }]}>Save & Go to Dashboard</Text>
             </Pressable>
