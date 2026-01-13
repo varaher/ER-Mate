@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -7,12 +7,17 @@ import {
   Pressable,
   RefreshControl,
   ActivityIndicator,
+  Modal,
+  Platform,
+  Alert,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
+import * as Sharing from "expo-sharing";
+import * as FileSystem from "expo-file-system/legacy";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { fetchFromApi } from "@/lib/api";
@@ -66,6 +71,9 @@ export default function DashboardScreen() {
   const { theme } = useTheme();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
+  const [downloadModalVisible, setDownloadModalVisible] = useState(false);
+  const [selectedCase, setSelectedCase] = useState<CaseItem | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const { data: cases = [], isLoading: loading, error: queryError, refetch, isRefetching } = useQuery<CaseItem[]>({
     queryKey: ["cases"],
@@ -119,6 +127,93 @@ export default function DashboardScreen() {
     };
   };
 
+  const openDownloadModal = (caseItem: CaseItem) => {
+    setSelectedCase(caseItem);
+    setDownloadModalVisible(true);
+  };
+
+  const getApiBaseUrl = () => {
+    return process.env.EXPO_PUBLIC_DOMAIN 
+      ? `https://${process.env.EXPO_PUBLIC_DOMAIN}/api`
+      : "https://er-emr-backend.onrender.com/api";
+  };
+
+  const blobToBase64 = (blob: Blob): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve((reader.result as string).split(",")[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  };
+
+  const downloadBlobFile = async (blob: Blob, filename: string) => {
+    if (Platform.OS === "web") {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } else {
+      const base64Data = await blobToBase64(blob);
+      const fileUri = (FileSystem.cacheDirectory || "") + filename;
+      await FileSystem.writeAsStringAsync(fileUri, base64Data, { encoding: "base64" as any });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(fileUri);
+      } else {
+        Alert.alert("Success", "File saved successfully");
+      }
+    }
+  };
+
+  const exportDocument = async (type: "casesheet" | "discharge", format: "pdf" | "word") => {
+    if (!selectedCase) return;
+    
+    setExporting(true);
+    try {
+      const caseResponse = await fetchFromApi<any>(`/cases/${selectedCase.id}`);
+      const caseData = caseResponse;
+      
+      const apiUrl = getApiBaseUrl();
+      const endpoint = type === "discharge"
+        ? (format === "pdf" ? "/export/discharge-pdf" : "/export/discharge-docx")
+        : (format === "pdf" ? "/export/casesheet-pdf" : "/export/casesheet-docx");
+      
+      const exportData = type === "discharge"
+        ? {
+            patient: caseData.patient,
+            discharge_summary: caseData.discharge_summary || {},
+            created_at: caseData.created_at,
+          }
+        : caseData;
+        
+      const response = await fetch(`${apiUrl}${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(exportData),
+      });
+      
+      if (!response.ok) throw new Error("Export failed");
+      
+      const blob = await response.blob();
+      const typePrefix = type === "discharge" ? "discharge" : "casesheet";
+      const extension = format === "pdf" ? "pdf" : "docx";
+      const filename = `${typePrefix}_${(selectedCase.patient?.name || "patient").replace(/\s+/g, "_")}_${Date.now()}.${extension}`;
+      
+      await downloadBlobFile(blob, filename);
+      setDownloadModalVisible(false);
+    } catch (err: any) {
+      Alert.alert("Export Failed", err.message || "Failed to export document");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const isCompleted = (status: string) => status === "completed" || status === "discharged";
+
   if (loading) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: theme.backgroundDefault }]}>
@@ -160,7 +255,7 @@ export default function DashboardScreen() {
           <View style={[styles.errorBanner, { backgroundColor: theme.dangerLight }]}>
             <Feather name="alert-circle" size={20} color={theme.danger} />
             <Text style={[styles.errorText, { color: theme.danger }]}>{error}</Text>
-            <Pressable onPress={loadData}>
+            <Pressable onPress={() => refetch()}>
               <Text style={[styles.retryText, { color: theme.primary }]}>Retry</Text>
             </Pressable>
           </View>
@@ -277,6 +372,14 @@ export default function DashboardScreen() {
                         >
                           <Feather name="file-text" size={16} color={theme.success} />
                         </Pressable>
+                        {isCompleted(caseItem.status) ? (
+                          <Pressable
+                            style={[styles.actionBtn, { backgroundColor: "#f3e8ff" }]}
+                            onPress={() => openDownloadModal(caseItem)}
+                          >
+                            <Feather name="download" size={16} color="#9333ea" />
+                          </Pressable>
+                        ) : null}
                       </View>
                     </View>
                   </View>
@@ -286,6 +389,82 @@ export default function DashboardScreen() {
           )}
         </View>
       </ScrollView>
+
+      <Modal
+        visible={downloadModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDownloadModalVisible(false)}
+      >
+        <Pressable 
+          style={styles.modalOverlay} 
+          onPress={() => setDownloadModalVisible(false)}
+        >
+          <View style={[styles.downloadModal, { backgroundColor: theme.card }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>Download Documents</Text>
+              <Pressable onPress={() => setDownloadModalVisible(false)}>
+                <Feather name="x" size={24} color={theme.textSecondary} />
+              </Pressable>
+            </View>
+            
+            {selectedCase ? (
+              <Text style={[styles.modalPatient, { color: theme.textSecondary }]}>
+                {selectedCase.patient?.name || "Patient"}
+              </Text>
+            ) : null}
+
+            {exporting ? (
+              <View style={styles.exportingContainer}>
+                <ActivityIndicator size="large" color={theme.primary} />
+                <Text style={[styles.exportingText, { color: theme.textSecondary }]}>
+                  Generating document...
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.downloadOptions}>
+                <Text style={[styles.downloadSectionTitle, { color: theme.text }]}>Case Sheet</Text>
+                <View style={styles.downloadRow}>
+                  <Pressable
+                    style={[styles.downloadBtn, { backgroundColor: "#fee2e2" }]}
+                    onPress={() => exportDocument("casesheet", "pdf")}
+                  >
+                    <Feather name="file" size={20} color="#dc2626" />
+                    <Text style={[styles.downloadBtnText, { color: "#dc2626" }]}>PDF</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.downloadBtn, { backgroundColor: "#dbeafe" }]}
+                    onPress={() => exportDocument("casesheet", "word")}
+                  >
+                    <Feather name="file-text" size={20} color="#2563eb" />
+                    <Text style={[styles.downloadBtnText, { color: "#2563eb" }]}>Word</Text>
+                  </Pressable>
+                </View>
+
+                <Text style={[styles.downloadSectionTitle, { color: theme.text, marginTop: Spacing.lg }]}>
+                  Discharge Summary
+                </Text>
+                <View style={styles.downloadRow}>
+                  <Pressable
+                    style={[styles.downloadBtn, { backgroundColor: "#fee2e2" }]}
+                    onPress={() => exportDocument("discharge", "pdf")}
+                  >
+                    <Feather name="file" size={20} color="#dc2626" />
+                    <Text style={[styles.downloadBtnText, { color: "#dc2626" }]}>PDF</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.downloadBtn, { backgroundColor: "#dbeafe" }]}
+                    onPress={() => exportDocument("discharge", "word")}
+                  >
+                    <Feather name="file-text" size={20} color="#2563eb" />
+                    <Text style={[styles.downloadBtnText, { color: "#2563eb" }]}>Word</Text>
+                  </Pressable>
+                </View>
+              </View>
+            )}
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -407,4 +586,46 @@ const styles = StyleSheet.create({
   warningText: { fontSize: 10, fontWeight: "600", color: "#d97706" },
   caseActions: { flexDirection: "row", gap: Spacing.sm },
   actionBtn: { padding: 6, borderRadius: BorderRadius.sm },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: Spacing.xl,
+  },
+  downloadModal: {
+    width: "100%",
+    maxWidth: 340,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.xl,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: Spacing.sm,
+  },
+  modalTitle: { ...Typography.h3 },
+  modalPatient: { ...Typography.body, marginBottom: Spacing.lg },
+  exportingContainer: {
+    alignItems: "center",
+    paddingVertical: Spacing["3xl"],
+  },
+  exportingText: { ...Typography.body, marginTop: Spacing.md },
+  downloadOptions: {},
+  downloadSectionTitle: { ...Typography.label, marginBottom: Spacing.sm },
+  downloadRow: {
+    flexDirection: "row",
+    gap: Spacing.md,
+  },
+  downloadBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.md,
+  },
+  downloadBtnText: { ...Typography.label },
 });

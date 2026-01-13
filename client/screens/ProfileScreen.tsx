@@ -32,6 +32,7 @@ export default function ProfileScreen() {
   };
 
   const menuItems = [
+    { icon: "monitor", label: "Link to Web", onPress: () => navigation.navigate("LinkDevices") },
     { icon: "star", label: "Upgrade Plan", onPress: () => navigation.navigate("Upgrade", {}) },
     { icon: "bell", label: "Notifications", onPress: () => {} },
     { icon: "shield", label: "Privacy", onPress: () => {} },

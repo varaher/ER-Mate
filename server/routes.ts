@@ -512,6 +512,207 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/export/casesheet-pdf", async (req: Request, res: Response) => {
+    try {
+      const data = req.body;
+      
+      if (!data.patient) {
+        return res.status(400).json({ error: "Missing patient data" });
+      }
+
+      const doc = new PDFDocument({ size: "A4", margin: 50 });
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="casesheet_${(data.patient?.name || "patient").replace(/\s+/g, "_")}.pdf"`);
+      doc.pipe(res);
+
+      doc.fontSize(18).font("Helvetica-Bold").text("EMERGENCY DEPARTMENT CASE SHEET", { align: "center" });
+      doc.moveDown(0.5);
+      doc.fontSize(10).font("Helvetica").text(`Generated: ${new Date().toLocaleDateString("en-IN")}`, { align: "center" });
+      doc.moveDown(1);
+      doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke();
+      doc.moveDown(0.5);
+
+      doc.fontSize(12).font("Helvetica-Bold").text("PATIENT INFORMATION");
+      doc.moveDown(0.3);
+      doc.fontSize(10).font("Helvetica");
+      doc.text(`Name: ${data.patient?.name || "N/A"}     Age/Sex: ${data.patient?.age || "N/A"} / ${data.patient?.sex || "N/A"}`);
+      doc.text(`MLC: ${data.mlc ? "Yes" : "No"}     Allergy: ${data.allergy || "No known allergies"}`);
+      doc.moveDown(0.5);
+
+      if (data.presenting_complaint?.text || data.triage?.chief_complaint) {
+        doc.font("Helvetica-Bold").text("Presenting Complaint:");
+        doc.font("Helvetica").text(data.presenting_complaint?.text || data.triage?.chief_complaint || "");
+        doc.moveDown(0.3);
+      }
+
+      if (data.vitals_at_arrival || data.triage?.vitals) {
+        const vitals = data.vitals_at_arrival || data.triage?.vitals || {};
+        doc.font("Helvetica-Bold").text("Vitals at Arrival:");
+        doc.font("Helvetica").text(formatVitals(vitals));
+        doc.moveDown(0.5);
+      }
+
+      const pa = data.primary_assessment || {};
+      if (Object.keys(pa).length > 0) {
+        doc.font("Helvetica-Bold").text("PRIMARY ASSESSMENT (ABCDE)");
+        doc.moveDown(0.3);
+        doc.font("Helvetica");
+        if (pa.airway_status) doc.text(`Airway: ${pa.airway_status}${pa.airway_intervention ? `, Intervention: ${pa.airway_intervention}` : ""}`);
+        if (pa.breathing_rr) doc.text(`Breathing: RR ${pa.breathing_rr}, SpO2 ${pa.breathing_spo2 || "N/A"}%`);
+        if (pa.circulation_hr) doc.text(`Circulation: HR ${pa.circulation_hr}, BP ${pa.circulation_bp_systolic || ""}/${pa.circulation_bp_diastolic || ""}`);
+        if (pa.disability_gcs_e) doc.text(`Disability: GCS E${pa.disability_gcs_e}V${pa.disability_gcs_v}M${pa.disability_gcs_m}`);
+        if (pa.exposure_temperature) doc.text(`Exposure: Temp ${pa.exposure_temperature}°C`);
+        doc.moveDown(0.5);
+      }
+
+      const sample = data.sample || {};
+      if (Object.keys(sample).length > 0) {
+        doc.font("Helvetica-Bold").text("SAMPLE HISTORY");
+        doc.moveDown(0.3);
+        doc.font("Helvetica");
+        if (sample.symptoms) doc.text(`Symptoms: ${sample.symptoms}`);
+        if (sample.allergies) doc.text(`Allergies: ${sample.allergies}`);
+        if (sample.medications) doc.text(`Medications: ${sample.medications}`);
+        if (sample.pastMedicalHistory) doc.text(`Past History: ${sample.pastMedicalHistory}`);
+        if (sample.lastMeal) doc.text(`Last Meal/LMP: ${sample.lastMeal}`);
+        if (sample.eventsHopi) doc.text(`Events/HOPI: ${sample.eventsHopi}`);
+        doc.moveDown(0.5);
+      }
+
+      const exam = data.examination || {};
+      if (Object.keys(exam).length > 0) {
+        doc.font("Helvetica-Bold").text("SYSTEMIC EXAMINATION");
+        doc.moveDown(0.3);
+        doc.font("Helvetica");
+        if (exam.cvs_status) doc.text(`CVS: ${exam.cvs_status}${exam.cvs_additional_notes ? ` - ${exam.cvs_additional_notes}` : ""}`);
+        if (exam.respiratory_status) doc.text(`Respiratory: ${exam.respiratory_status}${exam.respiratory_additional_notes ? ` - ${exam.respiratory_additional_notes}` : ""}`);
+        if (exam.abdomen_status) doc.text(`Abdomen: ${exam.abdomen_status}${exam.abdomen_additional_notes ? ` - ${exam.abdomen_additional_notes}` : ""}`);
+        if (exam.cns_status) doc.text(`CNS: ${exam.cns_status}${exam.cns_additional_notes ? ` - ${exam.cns_additional_notes}` : ""}`);
+        doc.moveDown(0.5);
+      }
+
+      const treatment = data.treatment || {};
+      if (treatment.primary_diagnosis || treatment.medications) {
+        doc.font("Helvetica-Bold").text("TREATMENT");
+        doc.moveDown(0.3);
+        doc.font("Helvetica");
+        if (treatment.primary_diagnosis) doc.text(`Diagnosis: ${treatment.primary_diagnosis}`);
+        if (Array.isArray(treatment.medications) && treatment.medications.length > 0) {
+          doc.font("Helvetica-Bold").text("Medications:");
+          doc.font("Helvetica");
+          treatment.medications.forEach((med: any) => {
+            doc.text(`  - ${med.name || ""} ${med.dose || ""} ${med.route || ""} ${med.frequency || ""}`);
+          });
+        }
+        if (treatment.iv_fluids) doc.text(`IV Fluids: ${treatment.iv_fluids}`);
+        doc.moveDown(0.5);
+      }
+
+      doc.end();
+    } catch (err) {
+      console.error("Case sheet PDF generation error:", err);
+      res.status(500).json({ error: "Failed to generate PDF" });
+    }
+  });
+
+  app.post("/api/export/casesheet-docx", async (req: Request, res: Response) => {
+    try {
+      const data = req.body;
+      
+      if (!data.patient) {
+        return res.status(400).json({ error: "Missing patient data" });
+      }
+
+      const children: Paragraph[] = [];
+
+      children.push(
+        new Paragraph({
+          text: "EMERGENCY DEPARTMENT CASE SHEET",
+          heading: HeadingLevel.TITLE,
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 300 },
+        })
+      );
+
+      children.push(
+        new Paragraph({
+          text: "PATIENT INFORMATION",
+          heading: HeadingLevel.HEADING_2,
+          spacing: { before: 200, after: 100 },
+        }),
+        new Paragraph({ text: `Name: ${data.patient?.name || "N/A"}        Age/Sex: ${data.patient?.age || "N/A"} / ${data.patient?.sex || "N/A"}` }),
+        new Paragraph({ text: `MLC: ${data.mlc ? "Yes" : "No"}        Allergy: ${data.allergy || "No known allergies"}`, spacing: { after: 200 } })
+      );
+
+      if (data.presenting_complaint?.text || data.triage?.chief_complaint) {
+        children.push(
+          new Paragraph({ children: [new TextRun({ text: "Presenting Complaint: ", bold: true }), new TextRun({ text: data.presenting_complaint?.text || data.triage?.chief_complaint || "" })] })
+        );
+      }
+
+      const pa = data.primary_assessment || {};
+      if (Object.keys(pa).length > 0) {
+        children.push(
+          new Paragraph({ text: "PRIMARY ASSESSMENT (ABCDE)", heading: HeadingLevel.HEADING_2, spacing: { before: 300, after: 100 } })
+        );
+        if (pa.airway_status) children.push(new Paragraph({ text: `Airway: ${pa.airway_status}` }));
+        if (pa.breathing_rr) children.push(new Paragraph({ text: `Breathing: RR ${pa.breathing_rr}, SpO2 ${pa.breathing_spo2 || "N/A"}%` }));
+        if (pa.circulation_hr) children.push(new Paragraph({ text: `Circulation: HR ${pa.circulation_hr}, BP ${pa.circulation_bp_systolic}/${pa.circulation_bp_diastolic}` }));
+        if (pa.disability_gcs_e) children.push(new Paragraph({ text: `Disability: GCS E${pa.disability_gcs_e}V${pa.disability_gcs_v}M${pa.disability_gcs_m}` }));
+      }
+
+      const sample = data.sample || {};
+      if (Object.keys(sample).length > 0) {
+        children.push(
+          new Paragraph({ text: "SAMPLE HISTORY", heading: HeadingLevel.HEADING_2, spacing: { before: 300, after: 100 } })
+        );
+        if (sample.symptoms) children.push(new Paragraph({ text: `Symptoms: ${sample.symptoms}` }));
+        if (sample.allergies) children.push(new Paragraph({ text: `Allergies: ${sample.allergies}` }));
+        if (sample.medications) children.push(new Paragraph({ text: `Medications: ${sample.medications}` }));
+        if (sample.pastMedicalHistory) children.push(new Paragraph({ text: `Past History: ${sample.pastMedicalHistory}` }));
+        if (sample.eventsHopi) children.push(new Paragraph({ text: `Events/HOPI: ${sample.eventsHopi}` }));
+      }
+
+      const exam = data.examination || {};
+      if (Object.keys(exam).length > 0) {
+        children.push(
+          new Paragraph({ text: "SYSTEMIC EXAMINATION", heading: HeadingLevel.HEADING_2, spacing: { before: 300, after: 100 } })
+        );
+        if (exam.cvs_status) children.push(new Paragraph({ text: `CVS: ${exam.cvs_status}` }));
+        if (exam.respiratory_status) children.push(new Paragraph({ text: `Respiratory: ${exam.respiratory_status}` }));
+        if (exam.abdomen_status) children.push(new Paragraph({ text: `Abdomen: ${exam.abdomen_status}` }));
+        if (exam.cns_status) children.push(new Paragraph({ text: `CNS: ${exam.cns_status}` }));
+      }
+
+      const treatment = data.treatment || {};
+      if (treatment.primary_diagnosis || treatment.medications) {
+        children.push(
+          new Paragraph({ text: "TREATMENT", heading: HeadingLevel.HEADING_2, spacing: { before: 300, after: 100 } })
+        );
+        if (treatment.primary_diagnosis) children.push(new Paragraph({ text: `Diagnosis: ${treatment.primary_diagnosis}` }));
+        if (Array.isArray(treatment.medications) && treatment.medications.length > 0) {
+          children.push(new Paragraph({ children: [new TextRun({ text: "Medications:", bold: true })] }));
+          treatment.medications.forEach((med: any) => {
+            children.push(new Paragraph({ text: `  - ${med.name || ""} ${med.dose || ""} ${med.route || ""} ${med.frequency || ""}` }));
+          });
+        }
+      }
+
+      const docxDoc = new Document({
+        sections: [{ properties: {}, children }],
+      });
+
+      const buffer = await Packer.toBuffer(docxDoc);
+      
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+      res.setHeader("Content-Disposition", `attachment; filename="casesheet_${(data.patient?.name || "patient").replace(/\s+/g, "_")}.docx"`);
+      res.send(Buffer.from(buffer));
+    } catch (err) {
+      console.error("Case sheet DOCX generation error:", err);
+      res.status(500).json({ error: "Failed to generate DOCX" });
+    }
+  });
+
   app.post("/api/ai/diagnose", async (req: Request, res: Response) => {
     try {
       const { chiefComplaint, vitals, history, examination, age, gender } = req.body;
