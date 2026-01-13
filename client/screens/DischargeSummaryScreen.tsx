@@ -157,40 +157,48 @@ export default function DischargeSummaryScreen() {
   };
 
   const populateFromCaseData = (data: any) => {
-    const vitals = data.vitals || {};
+    const vitals = data.vitals_at_arrival || data.vitals || {};
     const abcde = data.abcde || {};
     const patient = data.patient || {};
     const triage = data.triage || {};
     const treatment = data.treatment || {};
     const disposition = data.disposition || {};
     const exam = data.examination || {};
+    const sample = data.sample || {};
+    const history = data.history || {};
+    const primaryAssessment = data.primary_assessment || {};
+
+    const gcsE = vitals.gcs_e || primaryAssessment.disability_gcs_e || 4;
+    const gcsV = vitals.gcs_v || primaryAssessment.disability_gcs_v || 5;
+    const gcsM = vitals.gcs_m || primaryAssessment.disability_gcs_m || 6;
+    const gcsTotal = vitals.gcs_total || (gcsE + gcsV + gcsM);
 
     summaryRef.current = {
       ...defaultSummary,
       mlc: data.mlc || false,
-      allergy: patient.allergies || triage.allergies || "No known allergies",
+      allergy: sample.allergies || history.allergies?.join(", ") || patient.allergies || triage.allergies || "No known allergies",
       vitals_arrival: {
-        hr: vitals.heart_rate?.toString() || vitals.hr?.toString() || "",
-        bp: vitals.blood_pressure || vitals.bp || `${vitals.systolic || ""}/${vitals.diastolic || ""}`,
-        rr: vitals.respiratory_rate?.toString() || vitals.rr?.toString() || "",
-        spo2: vitals.spo2?.toString() || vitals.oxygen_saturation?.toString() || "",
-        gcs: vitals.gcs?.toString() || abcde.disability?.gcs?.toString() || "",
+        hr: vitals.hr?.toString() || vitals.heart_rate?.toString() || primaryAssessment.circulation_hr?.toString() || "",
+        bp: `${vitals.bp_systolic || primaryAssessment.circulation_bp_systolic || ""}/${vitals.bp_diastolic || primaryAssessment.circulation_bp_diastolic || ""}`,
+        rr: vitals.rr?.toString() || vitals.respiratory_rate?.toString() || primaryAssessment.breathing_rr?.toString() || "",
+        spo2: vitals.spo2?.toString() || vitals.oxygen_saturation?.toString() || primaryAssessment.breathing_spo2?.toString() || "",
+        gcs: gcsTotal.toString(),
         pain_score: vitals.pain_score?.toString() || "",
-        grbs: vitals.grbs?.toString() || vitals.blood_glucose?.toString() || "",
-        temp: vitals.temperature?.toString() || "",
+        grbs: vitals.grbs?.toString() || vitals.blood_glucose?.toString() || primaryAssessment.disability_grbs?.toString() || "",
+        temp: vitals.temperature?.toString() || primaryAssessment.exposure_temperature?.toString() || "",
       },
       presenting_complaint: data.presenting_complaint?.text || triage.chief_complaint || "",
-      history_of_present_illness: data.history_of_present_illness || triage.history || "",
-      past_medical_history: patient.past_medical_history || triage.past_medical_history || "",
+      history_of_present_illness: history.hpi || history.events_hopi || sample.eventsHopi || data.history_of_present_illness || triage.history || "",
+      past_medical_history: history.past_medical?.join(", ") || sample.pastMedicalHistory || patient.past_medical_history || triage.past_medical_history || "",
       family_history: patient.family_history || "",
-      lmp: patient.lmp || "",
+      lmp: history.last_meal_lmp || sample.lastMeal || patient.lmp || "",
       primary_assessment: {
-        airway: formatAirway(abcde.airway),
-        breathing: formatBreathing(abcde.breathing, vitals),
-        circulation: formatCirculation(abcde.circulation),
-        disability: formatDisability(abcde.disability),
-        exposure: formatExposure(abcde.exposure),
-        efast: abcde.efast || "",
+        airway: formatAirwayFromData(abcde.airway, primaryAssessment),
+        breathing: formatBreathingFromData(abcde.breathing, vitals, primaryAssessment),
+        circulation: formatCirculationFromData(abcde.circulation, primaryAssessment),
+        disability: formatDisabilityFromData(abcde.disability, primaryAssessment, gcsTotal),
+        exposure: formatExposureFromData(abcde.exposure, primaryAssessment),
+        efast: data.adjuncts?.efast_notes || abcde.efast || "",
       },
       secondary_assessment: {
         pallor: exam.general?.pallor || false,
@@ -209,13 +217,13 @@ export default function DischargeSummaryScreen() {
       },
       course_in_hospital: data.discharge_summary?.course_in_hospital || "",
       investigations: formatInvestigations(treatment.investigations || data.investigations),
-      diagnosis: treatment.ai_diagnosis || data.final_diagnosis || "",
+      diagnosis: treatment.primary_diagnosis || treatment.ai_diagnosis || data.final_diagnosis || "",
       discharge_medications: formatMedications(treatment.medications || data.medications),
-      disposition_type: disposition.type || "Normal Discharge",
-      condition_at_discharge: disposition.condition || "STABLE",
+      disposition_type: disposition.type || disposition.disposition_type || "Normal Discharge",
+      condition_at_discharge: disposition.condition || disposition.condition_at_discharge || "STABLE",
       vitals_discharge: { ...summaryRef.current.vitals_discharge },
-      follow_up_advice: disposition.follow_up || "",
-      ed_resident: data.discharge_summary?.ed_resident || "",
+      follow_up_advice: disposition.follow_up || disposition.follow_up_instructions || "",
+      ed_resident: data.em_resident || data.discharge_summary?.ed_resident || "",
       ed_consultant: data.discharge_summary?.ed_consultant || "",
       sign_time_resident: "",
       sign_time_consultant: "",
@@ -272,6 +280,86 @@ export default function DischargeSummaryScreen() {
     if (exposure.temperature) parts.push(`Temp: ${exposure.temperature}°C`);
     if (exposure.trauma) parts.push(`Trauma: ${exposure.trauma}`);
     if (exposure.logroll) parts.push(`Logroll: ${exposure.logroll}`);
+    return parts.join(", ");
+  };
+
+  const formatAirwayFromData = (abcdeAirway: any, primaryAssessment: any): string => {
+    const parts = [];
+    const status = abcdeAirway?.abcdeStatus || (abcdeAirway?.status ? "Abnormal" : "Normal");
+    if (status === "Normal") {
+      return "Patent, self-maintained, no obstruction";
+    }
+    if (abcdeAirway?.status) parts.push(abcdeAirway.status);
+    if (abcdeAirway?.maintenance) parts.push(abcdeAirway.maintenance);
+    if (primaryAssessment?.airway_status) parts.push(primaryAssessment.airway_status);
+    if (abcdeAirway?.interventions?.length) parts.push(`Interventions: ${abcdeAirway.interventions.join(", ")}`);
+    if (abcdeAirway?.notes) parts.push(abcdeAirway.notes);
+    return parts.length > 0 ? parts.join(", ") : "Patent";
+  };
+
+  const formatBreathingFromData = (abcdeBreathing: any, vitals: any, primaryAssessment: any): string => {
+    const parts = [];
+    const status = abcdeBreathing?.abcdeStatus || "Normal";
+    const rr = vitals?.rr || primaryAssessment?.breathing_rr || abcdeBreathing?.rr;
+    const spo2 = vitals?.spo2 || primaryAssessment?.breathing_spo2 || abcdeBreathing?.spo2;
+    if (rr) parts.push(`RR: ${rr}/min`);
+    if (spo2) parts.push(`SpO2: ${spo2}%`);
+    if (status === "Normal") {
+      parts.push("Effortless, bilateral air entry");
+    } else {
+      if (abcdeBreathing?.effort) parts.push(`WOB: ${abcdeBreathing.effort}`);
+      if (abcdeBreathing?.airEntry) parts.push(`Air Entry: ${abcdeBreathing.airEntry}`);
+      if (abcdeBreathing?.o2Device) parts.push(`O2: ${abcdeBreathing.o2Device}`);
+    }
+    return parts.join(", ");
+  };
+
+  const formatCirculationFromData = (abcdeCirculation: any, primaryAssessment: any): string => {
+    const parts = [];
+    const status = abcdeCirculation?.abcdeStatus || "Normal";
+    const hr = abcdeCirculation?.hr || primaryAssessment?.circulation_hr;
+    const bpSys = abcdeCirculation?.bpSystolic || primaryAssessment?.circulation_bp_systolic;
+    const bpDia = abcdeCirculation?.bpDiastolic || primaryAssessment?.circulation_bp_diastolic;
+    if (hr) parts.push(`HR: ${hr} bpm`);
+    if (bpSys && bpDia) parts.push(`BP: ${bpSys}/${bpDia} mmHg`);
+    if (status === "Normal") {
+      parts.push("Regular pulse, CRT <2s, warm");
+    } else {
+      if (abcdeCirculation?.pulseQuality) parts.push(`Rhythm: ${abcdeCirculation.pulseQuality}`);
+      if (abcdeCirculation?.capillaryRefill) parts.push(`CRT: ${abcdeCirculation.capillaryRefill}`);
+      if (abcdeCirculation?.skinTemperature) parts.push(`Skin: ${abcdeCirculation.skinTemperature}`);
+    }
+    return parts.join(", ");
+  };
+
+  const formatDisabilityFromData = (abcdeDisability: any, primaryAssessment: any, gcsTotal: number): string => {
+    const parts = [];
+    const status = abcdeDisability?.abcdeStatus || "Normal";
+    parts.push(`GCS: ${gcsTotal}/15`);
+    if (status === "Normal") {
+      parts.push("Alert, PERL, no focal deficits");
+    } else {
+      const avpu = abcdeDisability?.motorResponse || primaryAssessment?.disability_avpu;
+      if (avpu) parts.push(`AVPU: ${avpu}`);
+      if (abcdeDisability?.pupilSize) parts.push(`Pupils: ${abcdeDisability.pupilSize}`);
+      if (abcdeDisability?.pupilReaction) parts.push(abcdeDisability.pupilReaction);
+    }
+    const grbs = abcdeDisability?.glucose || primaryAssessment?.disability_grbs;
+    if (grbs) parts.push(`GRBS: ${grbs} mg/dL`);
+    return parts.join(", ");
+  };
+
+  const formatExposureFromData = (abcdeExposure: any, primaryAssessment: any): string => {
+    const parts = [];
+    const status = abcdeExposure?.abcdeStatus || "Normal";
+    const temp = abcdeExposure?.temperature || primaryAssessment?.exposure_temperature;
+    if (temp) parts.push(`Temp: ${temp}°C`);
+    if (status === "Normal") {
+      parts.push("No external injuries, no bleeding");
+    } else {
+      if (abcdeExposure?.findings) parts.push(abcdeExposure.findings);
+      if (abcdeExposure?.notes) parts.push(abcdeExposure.notes);
+    }
     return parts.join(", ");
   };
 
