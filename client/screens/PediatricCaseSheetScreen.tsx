@@ -539,7 +539,11 @@ export default function PediatricCaseSheetScreen() {
       setTreatmentData((prev) => ({ ...prev, primaryDiagnosis: (prev.primaryDiagnosis ? prev.primaryDiagnosis + ", " : "") + diagnosisText }));
     }
     if (data.treatmentNotes) {
-      setTreatmentData((prev) => ({ ...prev, differentialDiagnoses: (prev.differentialDiagnoses ? prev.differentialDiagnoses + " " : "") + data.treatmentNotes }));
+      setTreatmentData((prev) => ({ ...prev, resultsSummary: (prev.resultsSummary ? prev.resultsSummary + " " : "") + data.treatmentNotes }));
+    }
+    if (data.symptoms && data.symptoms.length > 0) {
+      const symptomsText = data.symptoms.join(", ");
+      setHistoryData((prev) => ({ ...prev, events: (prev.events ? prev.events + ", " : "") + symptomsText }));
     }
     handleSave(true);
   };

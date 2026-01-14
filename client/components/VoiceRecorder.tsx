@@ -167,7 +167,18 @@ export default function VoiceRecorder({
     }
   };
 
-  const discardRecording = () => {
+  const cleanupRecording = async (uri: string | null) => {
+    if (uri && Platform.OS !== 'web') {
+      try {
+        await FileSystem.deleteAsync(uri, { idempotent: true });
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+    }
+  };
+
+  const discardRecording = async () => {
+    await cleanupRecording(recordingUri);
     setHasRecording(false);
     setRecordingUri(null);
     setTranscription('');
@@ -190,11 +201,8 @@ export default function VoiceRecorder({
         const blob = await response.blob();
         formData.append('file', blob, 'voice.m4a');
       } else {
-        formData.append('file', {
-          uri: recordingUri,
-          name: 'voice.m4a',
-          type: 'audio/m4a',
-        } as any);
+        const file = new FileSystem.File(recordingUri);
+        formData.append('file', file as unknown as Blob, 'voice.m4a');
       }
       
       formData.append('engine', 'auto');
