@@ -22,6 +22,7 @@ import { CheckboxGroup } from "@/components/CheckboxGroup";
 import { TextInputField } from "@/components/TextInputField";
 import { AIDiagnosisPanel } from "@/components/AIDiagnosisPanel";
 import { useTheme } from "@/hooks/useTheme";
+import { useCase } from "@/context/CaseContext";
 import { apiGet, apiPatch, apiPut, apiUpload, invalidateCases } from "@/lib/api";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
