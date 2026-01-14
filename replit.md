@@ -74,11 +74,27 @@ Preferred communication style: Simple, everyday language.
 
 ### Voice Input System
 
-The app includes voice dictation capabilities:
-- Uses `expo-av` for audio recording
-- Streaming transcription via WebSocket connection
+The app includes two voice input approaches:
+
+**VoiceRecorder Component** (`client/components/VoiceRecorder.tsx`):
+- Uses `expo-audio` for audio recording (modern API)
+- Clear record → stop → save workflow with visual feedback
+- Pulsing animation during recording
+- Sends audio to external backend `/ai/voice-to-text` for transcription
+- AI-powered clinical data extraction via `/api/ai/extract-clinical` endpoint
+- Auto-populates extracted data (HPI, allergies, medications, exam findings, diagnoses) into case sheet fields
+- Proper resource cleanup after recording completes
+
+**Legacy Voice Buttons** (field-level):
+- Uses `expo-av` for audio recording (deprecated, migration pending)
+- WebSocket streaming transcription
 - Multi-language support (English, Hindi, Malayalam)
-- Real-time partial transcription updates
+
+**AI Clinical Data Extraction** (`server/services/aiDiagnosis.ts`):
+- `extractClinicalDataFromVoice()` function uses GPT-4o with temperature 0.2
+- Extracts structured clinical data: chief complaint, HPI, past history, allergies, medications, symptoms, exam findings, diagnoses, treatment notes
+- Respects patient context (age, sex, presenting complaint) for better accuracy
+- Only extracts information explicitly stated in transcript, no assumptions
 
 ### AI Diagnosis System (Self-Learning)
 
