@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -22,6 +22,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { fetchFromApi } from "@/lib/api";
 import { isPediatric } from "@/lib/pediatricVitals";
+import { getDraftByBackendId, type DraftCase } from "@/lib/draftManager";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -74,12 +75,29 @@ export default function DashboardScreen() {
   const [downloadModalVisible, setDownloadModalVisible] = useState(false);
   const [selectedCase, setSelectedCase] = useState<CaseItem | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [draftsMap, setDraftsMap] = useState<Record<string, DraftCase>>({});
 
   const { data: cases = [], isLoading: loading, error: queryError, refetch, isRefetching } = useQuery<CaseItem[]>({
     queryKey: ["cases"],
     queryFn: () => fetchFromApi<CaseItem[]>("/cases"),
     refetchOnMount: true,
   });
+
+  useEffect(() => {
+    const checkDrafts = async () => {
+      const draftsByCase: Record<string, DraftCase> = {};
+      for (const caseItem of cases) {
+        const draft = await getDraftByBackendId(caseItem.id);
+        if (draft && draft.status === "draft") {
+          draftsByCase[caseItem.id] = draft;
+        }
+      }
+      setDraftsMap(draftsByCase);
+    };
+    if (cases.length > 0) {
+      checkDrafts();
+    }
+  }, [cases]);
 
   const todayCases = useMemo(() => {
     const today = new Date();
@@ -336,8 +354,16 @@ export default function DashboardScreen() {
                           {caseItem.patient?.age || "?"} yrs | {caseItem.patient?.sex || "N/A"}
                         </Text>
                       </View>
-                      <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
-                        <Text style={[styles.statusText, { color: status.color }]}>{status.text}</Text>
+                      <View style={styles.badgesRow}>
+                        {draftsMap[caseItem.id] ? (
+                          <View style={[styles.draftBadge, { backgroundColor: "#fef3c7" }]}>
+                            <Feather name="edit-3" size={10} color="#d97706" />
+                            <Text style={styles.draftBadgeText}>Draft</Text>
+                          </View>
+                        ) : null}
+                        <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
+                          <Text style={[styles.statusText, { color: status.color }]}>{status.text}</Text>
+                        </View>
                       </View>
                     </View>
 
@@ -571,6 +597,9 @@ const styles = StyleSheet.create({
   caseInfo: { flex: 1 },
   patientName: { ...Typography.h4 },
   patientDetails: { ...Typography.small, marginTop: 2 },
+  badgesRow: { flexDirection: "row", alignItems: "center", gap: Spacing.xs },
+  draftBadge: { flexDirection: "row", alignItems: "center", paddingHorizontal: Spacing.xs, paddingVertical: 2, borderRadius: BorderRadius.full, gap: 2 },
+  draftBadgeText: { fontSize: 10, fontWeight: "600", color: "#d97706" },
   statusBadge: { paddingHorizontal: Spacing.sm, paddingVertical: 4, borderRadius: BorderRadius.full },
   statusText: { ...Typography.caption, fontWeight: "700" },
   complaint: { ...Typography.small, marginTop: Spacing.sm, fontStyle: "italic" },

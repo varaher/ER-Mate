@@ -269,6 +269,8 @@ export default function PediatricCaseSheetScreen() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingField, setRecordingField] = useState<string | null>(null);
   const recordingRef = useRef<Audio.Recording | null>(null);
+  
+  const { saveToDraft, currentDraftId, commitDraft, initDraftForCase } = useCase();
 
   useEffect(() => {
     loadCase();
@@ -327,14 +329,13 @@ export default function PediatricCaseSheetScreen() {
           });
         }
       }
+      await initDraftForCase(caseId);
     } catch (error) {
       console.error("Failed to load case:", error);
     } finally {
       setLoading(false);
     }
   };
-
-  const { saveToDraft, currentDraftId, commitDraft } = useCase();
 
   const buildPayload = () => {
     return {

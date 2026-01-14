@@ -487,6 +487,8 @@ export default function CaseSheetScreen() {
   const [mlcDetails, setMLCDetails] = useState<MLCDetailsData>(getDefaultMLCDetails());
   const [abcdeStatus, setABCDEStatus] = useState<ABCDEStatusData>(getDefaultABCDEStatus());
   const [newMedication, setNewMedication] = useState<Omit<MedicationEntry, 'id'>>({ name: "", dose: "", route: "", frequency: "" });
+  
+  const { saveToDraft, currentDraftId, commitDraft, initDraftForCase } = useCase();
 
   useEffect(() => {
     loadCase();
@@ -671,6 +673,7 @@ export default function CaseSheetScreen() {
         }
         setABCDEStatus(newABCDEStatus);
       }
+      await initDraftForCase(caseId);
     } catch (err) {
       console.error("Error loading case:", err);
     } finally {
@@ -691,8 +694,6 @@ export default function CaseSheetScreen() {
       [section]: { ...prev[section], [field]: value },
     }));
   };
-
-  const { saveToDraft, currentDraftId, commitDraft } = useCase();
 
   const buildPayload = () => {
     const gcsE = parseInt(formData.disability.gcsE) || 4;

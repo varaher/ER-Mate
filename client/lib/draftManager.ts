@@ -117,6 +117,40 @@ export async function markDraftAsCommitted(draftId: string, backendCaseId: strin
   }
 }
 
+export async function linkDraftToBackendCase(draftId: string, backendCaseId: string): Promise<void> {
+  const store = await loadStore();
+  
+  if (store.drafts[draftId]) {
+    store.drafts[draftId].backendCaseId = backendCaseId;
+    store.drafts[draftId].updatedAt = new Date().toISOString();
+    await saveStore(store);
+  }
+}
+
+export async function getOrCreateDraftForCase(backendCaseId: string, initialData?: any): Promise<string> {
+  const store = await loadStore();
+  const existingDraft = Object.values(store.drafts).find(d => d.backendCaseId === backendCaseId && d.status === "draft");
+  
+  if (existingDraft) {
+    store.activeDraftId = existingDraft.draftId;
+    await saveStore(store);
+    return existingDraft.draftId;
+  }
+  
+  const draftId = `draft_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+  store.drafts[draftId] = {
+    draftId,
+    backendCaseId,
+    status: "draft",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    data: initialData || {},
+  };
+  store.activeDraftId = draftId;
+  await saveStore(store);
+  return draftId;
+}
+
 export async function deleteDraft(draftId: string): Promise<void> {
   const store = await loadStore();
   delete store.drafts[draftId];

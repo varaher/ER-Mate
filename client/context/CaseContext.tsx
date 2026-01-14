@@ -10,6 +10,7 @@ import {
   saveCaseSheetToDraft,
   saveDischargeSummaryToDraft,
   markDraftAsCommitted,
+  getOrCreateDraftForCase,
   type DraftCase,
 } from "@/lib/draftManager";
 
@@ -85,6 +86,7 @@ interface CaseContextType {
   currentDraftId: string | null;
   setCurrentDraftId: (id: string | null) => void;
   startNewDraft: (triageData: any) => Promise<string>;
+  initDraftForCase: (backendCaseId: string) => Promise<string>;
   saveToDraft: (caseSheetData: any) => Promise<void>;
   saveDischargeToDraft: (summaryData: any) => Promise<void>;
   commitDraft: (backendCaseId: string) => Promise<void>;
@@ -150,6 +152,14 @@ export function CaseProvider({ children }: { children: ReactNode }) {
     return draftId;
   }, []);
 
+  const initDraftForCase = useCallback(async (backendCaseId: string): Promise<string> => {
+    const draftId = await getOrCreateDraftForCase(backendCaseId);
+    setCurrentDraftId(draftId);
+    setIsDraft(true);
+    await setActiveDraft(draftId);
+    return draftId;
+  }, []);
+
   const saveToDraft = useCallback(async (caseSheetData: any): Promise<void> => {
     if (currentDraftId) {
       await saveCaseSheetToDraft(currentDraftId, caseSheetData);
@@ -201,6 +211,7 @@ export function CaseProvider({ children }: { children: ReactNode }) {
         currentDraftId,
         setCurrentDraftId,
         startNewDraft,
+        initDraftForCase,
         saveToDraft,
         saveDischargeToDraft,
         commitDraft,
