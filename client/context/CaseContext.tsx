@@ -1,4 +1,17 @@
-import React, { createContext, useContext, useState, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
+import {
+  createDraft,
+  updateDraft,
+  getDraft,
+  getAllDrafts,
+  deleteDraft,
+  setActiveDraft,
+  getActiveDraft,
+  saveCaseSheetToDraft,
+  saveDischargeSummaryToDraft,
+  markDraftAsCommitted,
+  type DraftCase,
+} from "@/lib/draftManager";
 
 export interface Patient {
   name: string;
@@ -69,6 +82,16 @@ interface CaseContextType {
   setCurrentCase: (data: CaseData | null) => void;
   updateCase: (updates: Partial<CaseData>) => void;
   clearCase: () => void;
+  currentDraftId: string | null;
+  setCurrentDraftId: (id: string | null) => void;
+  startNewDraft: (triageData: any) => Promise<string>;
+  saveToDraft: (caseSheetData: any) => Promise<void>;
+  saveDischargeToDraft: (summaryData: any) => Promise<void>;
+  commitDraft: (backendCaseId: string) => Promise<void>;
+  loadDraft: (draftId: string) => Promise<DraftCase | null>;
+  getDrafts: () => Promise<DraftCase[]>;
+  removeDraft: (draftId: string) => Promise<void>;
+  isDraft: boolean;
 }
 
 const CaseContext = createContext<CaseContextType | undefined>(undefined);
@@ -91,6 +114,19 @@ const initialCase: CaseData = {
 
 export function CaseProvider({ children }: { children: ReactNode }) {
   const [currentCase, setCurrentCase] = useState<CaseData | null>(null);
+  const [currentDraftId, setCurrentDraftId] = useState<string | null>(null);
+  const [isDraft, setIsDraft] = useState<boolean>(false);
+
+  useEffect(() => {
+    const loadActiveDraft = async () => {
+      const activeDraft = await getActiveDraft();
+      if (activeDraft) {
+        setCurrentDraftId(activeDraft.draftId);
+        setIsDraft(activeDraft.status === "draft");
+      }
+    };
+    loadActiveDraft();
+  }, []);
 
   const updateCase = (updates: Partial<CaseData>) => {
     setCurrentCase((prev) => {
@@ -101,7 +137,59 @@ export function CaseProvider({ children }: { children: ReactNode }) {
 
   const clearCase = () => {
     setCurrentCase(null);
+    setCurrentDraftId(null);
+    setIsDraft(false);
+    setActiveDraft(null);
   };
+
+  const startNewDraft = useCallback(async (triageData: any): Promise<string> => {
+    const draftId = await createDraft(triageData);
+    setCurrentDraftId(draftId);
+    setIsDraft(true);
+    await setActiveDraft(draftId);
+    return draftId;
+  }, []);
+
+  const saveToDraft = useCallback(async (caseSheetData: any): Promise<void> => {
+    if (currentDraftId) {
+      await saveCaseSheetToDraft(currentDraftId, caseSheetData);
+    }
+  }, [currentDraftId]);
+
+  const saveDischargeToDraft = useCallback(async (summaryData: any): Promise<void> => {
+    if (currentDraftId) {
+      await saveDischargeSummaryToDraft(currentDraftId, summaryData);
+    }
+  }, [currentDraftId]);
+
+  const commitDraft = useCallback(async (backendCaseId: string): Promise<void> => {
+    if (currentDraftId) {
+      await markDraftAsCommitted(currentDraftId, backendCaseId);
+      setIsDraft(false);
+    }
+  }, [currentDraftId]);
+
+  const loadDraft = useCallback(async (draftId: string): Promise<DraftCase | null> => {
+    const draft = await getDraft(draftId);
+    if (draft) {
+      setCurrentDraftId(draftId);
+      setIsDraft(draft.status === "draft");
+      await setActiveDraft(draftId);
+    }
+    return draft;
+  }, []);
+
+  const getDrafts = useCallback(async (): Promise<DraftCase[]> => {
+    return getAllDrafts();
+  }, []);
+
+  const removeDraft = useCallback(async (draftId: string): Promise<void> => {
+    await deleteDraft(draftId);
+    if (currentDraftId === draftId) {
+      setCurrentDraftId(null);
+      setIsDraft(false);
+    }
+  }, [currentDraftId]);
 
   return (
     <CaseContext.Provider
@@ -110,6 +198,16 @@ export function CaseProvider({ children }: { children: ReactNode }) {
         setCurrentCase,
         updateCase,
         clearCase,
+        currentDraftId,
+        setCurrentDraftId,
+        startNewDraft,
+        saveToDraft,
+        saveDischargeToDraft,
+        commitDraft,
+        loadDraft,
+        getDrafts,
+        removeDraft,
+        isDraft,
       }}
     >
       {children}
