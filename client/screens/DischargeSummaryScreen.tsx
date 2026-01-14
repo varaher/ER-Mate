@@ -455,16 +455,31 @@ export default function DischargeSummaryScreen() {
   const generateCourseInHospital = async () => {
     setGenerating(true);
     try {
-      const res = await apiPost<{ summary: any }>("/ai/discharge-summary", { 
-        case_id: caseId,
-        summary_data: summaryRef.current
+      const baseUrl = getApiUrl();
+      const endpoint = new URL("/api/ai/discharge-summary", baseUrl);
+      
+      const response = await fetch(endpoint.toString(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          case_id: caseId,
+          summary_data: summaryRef.current
+        }),
       });
-      if (res.success && res.data?.summary) {
-        if (res.data.summary.course_in_hospital) {
-          summaryRef.current.course_in_hospital = res.data.summary.course_in_hospital;
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to generate summary");
+      }
+      
+      const res = await response.json();
+      
+      if (res.success && res.summary) {
+        if (res.summary.course_in_hospital) {
+          summaryRef.current.course_in_hospital = res.summary.course_in_hospital;
         }
-        if (res.data.summary.diagnosis) {
-          summaryRef.current.diagnosis = res.data.summary.diagnosis;
+        if (res.summary.diagnosis && !summaryRef.current.diagnosis) {
+          summaryRef.current.diagnosis = res.summary.diagnosis;
         }
         forceUpdate({});
         Alert.alert("Generated", "AI has generated the Course in Hospital section. Please review and edit as needed.");

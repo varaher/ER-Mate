@@ -2,7 +2,7 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "node:http";
 import PDFDocument from "pdfkit";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, BorderStyle } from "docx";
-import { generateDiagnosisSuggestions, recordFeedback, getFeedbackStats, getLearningInsights, type AIFeedback, type FeedbackResult } from "./services/aiDiagnosis";
+import { generateDiagnosisSuggestions, recordFeedback, getFeedbackStats, getLearningInsights, generateCourseInHospital, type AIFeedback, type FeedbackResult } from "./services/aiDiagnosis";
 
 interface VitalsData {
   hr?: string;
@@ -779,6 +779,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Stats error:", error);
       res.status(500).json({ error: "Failed to get AI stats" });
+    }
+  });
+
+  app.post("/api/ai/discharge-summary", async (req: Request, res: Response) => {
+    try {
+      const { case_id, summary_data } = req.body;
+      
+      if (!summary_data) {
+        return res.status(400).json({ error: "Summary data is required" });
+      }
+
+      const result = await generateCourseInHospital(summary_data);
+      
+      res.json({ 
+        success: true, 
+        summary: {
+          course_in_hospital: result.course_in_hospital,
+          diagnosis: result.diagnosis,
+        }
+      });
+    } catch (error) {
+      console.error("Discharge summary generation error:", error);
+      res.status(500).json({ error: (error as Error).message || "Failed to generate discharge summary" });
     }
   });
 

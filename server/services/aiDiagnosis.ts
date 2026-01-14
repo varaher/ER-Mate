@@ -369,3 +369,91 @@ export async function getLearningInsights(): Promise<string[]> {
   
   return insights;
 }
+
+export interface DischargeSummaryInput {
+  patient?: {
+    name?: string;
+    age?: number;
+    gender?: string;
+  };
+  chief_complaint?: string;
+  diagnosis?: string;
+  treatment_given?: string;
+  medications?: any[];
+  investigations?: any[];
+  vitals?: Record<string, string>;
+  examination?: Record<string, any>;
+  procedures?: string;
+}
+
+export async function generateCourseInHospital(summaryData: DischargeSummaryInput): Promise<{ course_in_hospital: string; diagnosis?: string }> {
+  const openai = getOpenAIClient();
+  
+  if (!openai) {
+    throw new Error("AI service not available - OpenAI not configured");
+  }
+
+  const patientInfo = summaryData.patient
+    ? `${summaryData.patient.age || "unknown age"} year old ${summaryData.patient.gender || "patient"}`
+    : "Patient";
+
+  const medicationsText = Array.isArray(summaryData.medications)
+    ? summaryData.medications.map((m: any) => `${m.name || ""} ${m.dose || ""} ${m.route || ""} ${m.frequency || ""}`).filter(Boolean).join(", ")
+    : summaryData.medications || "";
+
+  const investigationsText = Array.isArray(summaryData.investigations)
+    ? summaryData.investigations.map((i: any) => `${i.name || i.test || ""}: ${i.result || i.value || "pending"}`).filter(Boolean).join(", ")
+    : summaryData.investigations || "";
+
+  const prompt = `You are a senior emergency medicine physician writing a discharge summary. Generate a professional "Course in Hospital" section based on the following case details:
+
+Patient: ${patientInfo}
+Chief Complaint: ${summaryData.chief_complaint || "Not specified"}
+Working Diagnosis: ${summaryData.diagnosis || "To be determined"}
+Treatment Given: ${summaryData.treatment_given || "Not specified"}
+Medications Administered: ${medicationsText || "None documented"}
+Investigations: ${investigationsText || "None documented"}
+Procedures: ${summaryData.procedures || "None"}
+
+Write a concise, professional clinical narrative (2-4 paragraphs) describing:
+1. Presentation and initial assessment
+2. Investigations performed and key findings
+3. Treatment provided including medications
+4. Clinical response and current status
+5. Disposition plan
+
+Use professional medical terminology. Be factual and concise. Do not include speculative information.
+
+Respond in JSON format:
+{
+  "course_in_hospital": "The detailed course narrative...",
+  "diagnosis": "Refined diagnosis based on the case (if chief complaint suggests one)"
+}`;
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        { role: "system", content: "You are an experienced emergency medicine physician assistant helping with discharge documentation." },
+        { role: "user", content: prompt },
+      ],
+      temperature: 0.3,
+      max_tokens: 1000,
+      response_format: { type: "json_object" },
+    });
+
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      throw new Error("Empty response from AI");
+    }
+
+    const result = JSON.parse(content);
+    return {
+      course_in_hospital: result.course_in_hospital || "",
+      diagnosis: result.diagnosis,
+    };
+  } catch (error) {
+    console.error("Failed to generate course in hospital:", error);
+    throw new Error("Failed to generate discharge summary content");
+  }
+}
