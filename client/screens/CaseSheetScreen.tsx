@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { Audio } from "expo-av";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
+import VoiceRecorder, { ExtractedClinicalData } from "@/components/VoiceRecorder";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { DropdownField } from "@/components/DropdownField";
 import { CheckboxGroup } from "@/components/CheckboxGroup";
@@ -1028,6 +1029,51 @@ export default function CaseSheetScreen() {
       extremities: { status: "Normal", pulses: "Present", edema: false, deformity: false, notes: "No edema, cyanosis, or clubbing. Peripheral pulses well felt. Full range of motion. No deformity or swelling." },
     });
     Alert.alert("Done", "All examination sections marked as normal with detailed findings");
+  };
+
+  const handleVoiceExtraction = (data: ExtractedClinicalData) => {
+    if (data.historyOfPresentIllness) {
+      updateFormData("sample", "eventsHopi", (formData.sample.eventsHopi ? formData.sample.eventsHopi + " " : "") + data.historyOfPresentIllness);
+    }
+    if (data.pastMedicalHistory) {
+      const currentPast = formData.sample.pastMedicalHistory || "";
+      updateFormData("sample", "pastMedicalHistory", currentPast ? currentPast + ", " + data.pastMedicalHistory : data.pastMedicalHistory);
+    }
+    if (data.allergies) {
+      updateFormData("sample", "allergies", (formData.sample.allergies ? formData.sample.allergies + ", " : "") + data.allergies);
+    }
+    if (data.medications) {
+      updateFormData("sample", "medications", (formData.sample.medications ? formData.sample.medications + ", " : "") + data.medications);
+    }
+    if (data.symptoms && data.symptoms.length > 0) {
+      const symptomsText = data.symptoms.join(", ");
+      updateFormData("sample", "signsSymptoms", (formData.sample.signsSymptoms ? formData.sample.signsSymptoms + ", " : "") + symptomsText);
+    }
+    if (data.examFindings) {
+      if (data.examFindings.general) {
+        updateExamData("general", "notes", (examData.general.notes ? examData.general.notes + " " : "") + data.examFindings.general);
+      }
+      if (data.examFindings.cvs) {
+        updateExamData("cvs", "notes", (examData.cvs.notes ? examData.cvs.notes + " " : "") + data.examFindings.cvs);
+      }
+      if (data.examFindings.respiratory) {
+        updateExamData("respiratory", "notes", (examData.respiratory.notes ? examData.respiratory.notes + " " : "") + data.examFindings.respiratory);
+      }
+      if (data.examFindings.abdomen) {
+        updateExamData("abdomen", "notes", (examData.abdomen.notes ? examData.abdomen.notes + " " : "") + data.examFindings.abdomen);
+      }
+      if (data.examFindings.cns) {
+        updateExamData("cns", "notes", (examData.cns.notes ? examData.cns.notes + " " : "") + data.examFindings.cns);
+      }
+    }
+    if (data.diagnosis && data.diagnosis.length > 0) {
+      const diagnosisText = data.diagnosis.join(", ");
+      setTreatmentData((prev) => ({ ...prev, primaryDiagnosis: prev.primaryDiagnosis ? prev.primaryDiagnosis + ", " + diagnosisText : diagnosisText }));
+    }
+    if (data.treatmentNotes) {
+      setTreatmentData((prev) => ({ ...prev, addendumNotes: (prev.addendumNotes || "") + " " + data.treatmentNotes }));
+    }
+    handleSave(true);
   };
 
   const handleNext = async () => {
@@ -2082,6 +2128,16 @@ export default function CaseSheetScreen() {
 
         {activeTab === "notes" && (
           <>
+            <VoiceRecorder
+              onExtractedData={handleVoiceExtraction}
+              patientContext={{
+                age: caseData?.patient?.age ? parseFloat(caseData.patient.age) : undefined,
+                sex: caseData?.patient?.sex,
+                chiefComplaint: caseData?.presenting_complaint?.text,
+              }}
+              mode="full"
+            />
+
             <View style={[styles.card, { backgroundColor: theme.card }]}>
               <Text style={[styles.cardTitle, { color: theme.text }]}>Procedures Performed</Text>
               <Text style={[styles.cardSubtitle, { color: theme.textSecondary }]}>Select all procedures performed and add notes</Text>

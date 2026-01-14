@@ -2,7 +2,7 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "node:http";
 import PDFDocument from "pdfkit";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, BorderStyle } from "docx";
-import { generateDiagnosisSuggestions, recordFeedback, getFeedbackStats, getLearningInsights, generateCourseInHospital, type AIFeedback, type FeedbackResult } from "./services/aiDiagnosis";
+import { generateDiagnosisSuggestions, recordFeedback, getFeedbackStats, getLearningInsights, generateCourseInHospital, extractClinicalDataFromVoice, type AIFeedback, type FeedbackResult, type ExtractedClinicalData } from "./services/aiDiagnosis";
 
 interface VitalsData {
   hr?: string;
@@ -802,6 +802,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Discharge summary generation error:", error);
       res.status(500).json({ error: (error as Error).message || "Failed to generate discharge summary" });
+    }
+  });
+
+  app.post("/api/ai/extract-clinical", async (req: Request, res: Response) => {
+    try {
+      const { transcription, patientContext } = req.body;
+      
+      if (!transcription) {
+        return res.status(400).json({ error: "Transcription is required" });
+      }
+
+      const extracted = await extractClinicalDataFromVoice(transcription, patientContext);
+      
+      res.json({ 
+        success: true, 
+        extracted 
+      });
+    } catch (error) {
+      console.error("Clinical extraction error:", error);
+      res.status(500).json({ error: (error as Error).message || "Failed to extract clinical data" });
     }
   });
 

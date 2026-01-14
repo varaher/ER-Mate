@@ -457,3 +457,116 @@ Respond in JSON format:
     throw new Error("Failed to generate discharge summary content");
   }
 }
+
+export interface ExtractedClinicalData {
+  chiefComplaint?: string;
+  historyOfPresentIllness?: string;
+  pastMedicalHistory?: string;
+  allergies?: string;
+  medications?: string;
+  symptoms?: string[];
+  painDetails?: {
+    location?: string;
+    severity?: string;
+    character?: string;
+    onset?: string;
+    duration?: string;
+  };
+  vitalsSuggested?: {
+    bp?: string;
+    hr?: string;
+    rr?: string;
+    spo2?: string;
+    temperature?: string;
+  };
+  examFindings?: {
+    general?: string;
+    cvs?: string;
+    respiratory?: string;
+    abdomen?: string;
+    cns?: string;
+  };
+  diagnosis?: string[];
+  treatmentNotes?: string;
+  rawTranscription?: string;
+}
+
+export async function extractClinicalDataFromVoice(
+  transcription: string,
+  patientContext?: { age?: number; sex?: string; chiefComplaint?: string }
+): Promise<ExtractedClinicalData> {
+  const openai = getOpenAIClient();
+  if (!openai) {
+    console.warn("OpenAI not configured - returning raw transcription only");
+    return { rawTranscription: transcription };
+  }
+
+  const contextInfo = patientContext
+    ? `Patient context: ${patientContext.age || "unknown"} year old ${patientContext.sex || "patient"}, presenting with: ${patientContext.chiefComplaint || "not specified"}`
+    : "No patient context provided";
+
+  const prompt = `You are a clinical documentation assistant for an Emergency Room physician. Extract structured clinical information from the following voice dictation and organize it into appropriate case sheet fields.
+
+${contextInfo}
+
+Voice dictation transcript:
+"${transcription}"
+
+Extract and categorize any mentioned clinical information into the following structure. Only include fields that have relevant information mentioned in the transcript. Be accurate and use medical terminology appropriately.
+
+Respond in JSON format:
+{
+  "chiefComplaint": "Main presenting complaint if mentioned",
+  "historyOfPresentIllness": "Detailed HPI narrative if mentioned",
+  "pastMedicalHistory": "PMH if mentioned (diabetes, hypertension, etc.)",
+  "allergies": "Drug/food allergies if mentioned",
+  "medications": "Current medications if mentioned",
+  "symptoms": ["Array of symptoms mentioned"],
+  "painDetails": {
+    "location": "Where the pain is",
+    "severity": "Pain severity/score if mentioned",
+    "character": "Nature of pain (sharp, dull, etc.)",
+    "onset": "When it started",
+    "duration": "How long"
+  },
+  "examFindings": {
+    "general": "General examination findings if mentioned",
+    "cvs": "Cardiovascular findings if mentioned",
+    "respiratory": "Respiratory findings if mentioned",
+    "abdomen": "Abdominal findings if mentioned",
+    "cns": "Neurological findings if mentioned"
+  },
+  "diagnosis": ["Possible diagnoses mentioned"],
+  "treatmentNotes": "Any treatment plans or notes mentioned"
+}
+
+Only include fields that have actual content from the transcript. Omit empty or irrelevant fields.`;
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        { 
+          role: "system", 
+          content: "You are a precise clinical documentation assistant. Extract only the information that is explicitly stated or strongly implied in the voice transcript. Do not invent or assume information." 
+        },
+        { role: "user", content: prompt },
+      ],
+      temperature: 0.2,
+      max_tokens: 1500,
+      response_format: { type: "json_object" },
+    });
+
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      throw new Error("Empty response from AI");
+    }
+
+    const extracted = JSON.parse(content) as ExtractedClinicalData;
+    extracted.rawTranscription = transcription;
+    return extracted;
+  } catch (error) {
+    console.error("Failed to extract clinical data:", error);
+    return { rawTranscription: transcription };
+  }
+}

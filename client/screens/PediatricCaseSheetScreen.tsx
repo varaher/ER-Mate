@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { Audio } from "expo-av";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
+import VoiceRecorder, { ExtractedClinicalData } from "@/components/VoiceRecorder";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { useTheme } from "@/hooks/useTheme";
 import { apiGet, apiPatch, apiPut, invalidateCases } from "@/lib/api";
@@ -504,6 +505,43 @@ export default function PediatricCaseSheetScreen() {
       extremities: "No swelling, deformity or tenderness, full range of motion, pulses intact"
     });
     Alert.alert("Done", "All sections marked as normal");
+  };
+
+  const handleVoiceExtraction = (data: ExtractedClinicalData) => {
+    if (data.historyOfPresentIllness) {
+      setHistoryData((prev) => ({ ...prev, events: (prev.events ? prev.events + " " : "") + data.historyOfPresentIllness }));
+    }
+    if (data.pastMedicalHistory) {
+      setHistoryData((prev) => ({ ...prev, healthHistory: (prev.healthHistory ? prev.healthHistory + ", " : "") + data.pastMedicalHistory }));
+    }
+    if (data.allergies) {
+      setHistoryData((prev) => ({ ...prev, allergies: (prev.allergies ? prev.allergies + ", " : "") + data.allergies }));
+    }
+    if (data.medications) {
+      setHistoryData((prev) => ({ ...prev, currentMedications: (prev.currentMedications ? prev.currentMedications + ", " : "") + data.medications }));
+    }
+    if (data.examFindings) {
+      if (data.examFindings.general) {
+        setExamData((prev) => ({ ...prev, heent: { ...prev.heent, head: (prev.heent.head ? prev.heent.head + " " : "") + data.examFindings!.general } }));
+      }
+      if (data.examFindings.respiratory) {
+        setExamData((prev) => ({ ...prev, respiratory: (prev.respiratory ? prev.respiratory + " " : "") + data.examFindings!.respiratory }));
+      }
+      if (data.examFindings.cvs) {
+        setExamData((prev) => ({ ...prev, cardiovascular: (prev.cardiovascular ? prev.cardiovascular + " " : "") + data.examFindings!.cvs }));
+      }
+      if (data.examFindings.abdomen) {
+        setExamData((prev) => ({ ...prev, abdomen: (prev.abdomen ? prev.abdomen + " " : "") + data.examFindings!.abdomen }));
+      }
+    }
+    if (data.diagnosis && data.diagnosis.length > 0) {
+      const diagnosisText = data.diagnosis.join(", ");
+      setTreatmentData((prev) => ({ ...prev, primaryDiagnosis: (prev.primaryDiagnosis ? prev.primaryDiagnosis + ", " : "") + diagnosisText }));
+    }
+    if (data.treatmentNotes) {
+      setTreatmentData((prev) => ({ ...prev, differentialDiagnoses: (prev.differentialDiagnoses ? prev.differentialDiagnoses + " " : "") + data.treatmentNotes }));
+    }
+    handleSave(true);
   };
 
   const handlePrevious = () => {
@@ -1124,6 +1162,16 @@ export default function PediatricCaseSheetScreen() {
 
         {activeTab === "notes" && (
           <>
+            <VoiceRecorder
+              onExtractedData={handleVoiceExtraction}
+              patientContext={{
+                age: patient?.age,
+                sex: patient?.sex,
+                chiefComplaint: patient?.chief_complaint,
+              }}
+              mode="full"
+            />
+
             <View style={[styles.card, { backgroundColor: theme.card }]}>
               <Text style={[styles.cardTitle, { color: theme.text }]}>Procedures Performed</Text>
               <Text style={[styles.cardSubtitle, { color: theme.textSecondary }]}>Select all procedures performed and add notes</Text>
