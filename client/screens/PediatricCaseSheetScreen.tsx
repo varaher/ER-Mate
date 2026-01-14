@@ -8,7 +8,8 @@ import { Audio } from "expo-av";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { useTheme } from "@/hooks/useTheme";
-import { apiGet, apiPatch, apiPut } from "@/lib/api";
+import { apiGet, apiPatch, apiPut, invalidateCases } from "@/lib/api";
+import { useCase } from "@/context/CaseContext";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { getAgeGroupLabel, getAgeGroup } from "@/lib/pediatricVitals";
@@ -333,6 +334,61 @@ export default function PediatricCaseSheetScreen() {
     }
   };
 
+  const { saveToDraft, currentDraftId, commitDraft } = useCase();
+
+  const buildPayload = () => {
+    return {
+      vitals_at_arrival: {
+        hr: parseFloat(circulationData.heartRate) || 100,
+        rr: parseFloat(breathingData.respiratoryRate) || 20,
+        spo2: parseFloat(breathingData.spo2) || 98,
+        temperature: parseFloat(exposureData.temperature) || 36.8,
+        grbs: parseFloat(disabilityData.glucose) || 100,
+      },
+      primary_assessment: {
+        pat: patData,
+        airway: airwayData,
+        breathing: breathingData,
+        circulation: circulationData,
+        disability: disabilityData,
+        exposure: exposureData,
+        efast: efastData,
+        airway_status: airwayData.status || "Patent",
+        breathing_rr: parseFloat(breathingData.respiratoryRate) || 20,
+        breathing_spo2: parseFloat(breathingData.spo2) || 98,
+        breathing_work: breathingData.workOfBreathing?.join(", ") || "Normal",
+        circulation_hr: parseFloat(circulationData.heartRate) || 100,
+        circulation_crt: circulationData.crt === "Normal (<2s)" ? 2 : 3,
+        disability_avpu: disabilityData.avpuGcs || "Alert",
+        disability_pupils_size: disabilityData.pupils || "Normal",
+        exposure_temperature: parseFloat(exposureData.temperature) || 36.8,
+      },
+      history: {
+        ...historyData,
+        hpi: historyData.events || "",
+        events_hopi: historyData.events || "",
+        allergies: historyData.allergies ? historyData.allergies.split(',').map((s: string) => s.trim()).filter((s: string) => s) : [],
+        medications: historyData.currentMedications || "",
+        drug_history: historyData.currentMedications || "",
+        past_medical: historyData.healthHistory ? historyData.healthHistory.split(',').map((s: string) => s.trim()).filter((s: string) => s) : [],
+        last_meal_lmp: historyData.lastMeal || "",
+      },
+      physical_exam: examData,
+      examination: {
+        general_additional_notes: examData.heent?.head || "",
+        respiratory_status: "Normal",
+        respiratory_additional_notes: examData.respiratory || "",
+        cvs_status: "Normal",
+        cvs_additional_notes: examData.cardiovascular || "",
+        abdomen_status: "Normal",
+        abdomen_additional_notes: examData.abdomen || "",
+        extremities_status: "Normal",
+        extremities_findings: examData.extremities || "",
+      },
+      heent: examData.heent,
+    };
+  };
+
   const handleSave = async (silent: boolean = false) => {
     if (!caseId) {
       console.error("Cannot save: No case ID");
@@ -341,64 +397,37 @@ export default function PediatricCaseSheetScreen() {
     }
     try {
       setSaving(true);
-      const payload = {
-        vitals_at_arrival: {
-          hr: parseFloat(circulationData.heartRate) || 100,
-          rr: parseFloat(breathingData.respiratoryRate) || 20,
-          spo2: parseFloat(breathingData.spo2) || 98,
-          temperature: parseFloat(exposureData.temperature) || 36.8,
-          grbs: parseFloat(disabilityData.glucose) || 100,
-        },
-        primary_assessment: {
-          pat: patData,
-          airway: airwayData,
-          breathing: breathingData,
-          circulation: circulationData,
-          disability: disabilityData,
-          exposure: exposureData,
-          efast: efastData,
-          airway_status: airwayData.status || "Patent",
-          breathing_rr: parseFloat(breathingData.respiratoryRate) || 20,
-          breathing_spo2: parseFloat(breathingData.spo2) || 98,
-          breathing_work: breathingData.workOfBreathing?.join(", ") || "Normal",
-          circulation_hr: parseFloat(circulationData.heartRate) || 100,
-          circulation_crt: circulationData.crt === "Normal (<2s)" ? 2 : 3,
-          disability_avpu: disabilityData.avpuGcs || "Alert",
-          disability_pupils_size: disabilityData.pupils || "Normal",
-          exposure_temperature: parseFloat(exposureData.temperature) || 36.8,
-        },
-        history: {
-          ...historyData,
-          hpi: historyData.events || "",
-          events_hopi: historyData.events || "",
-          allergies: historyData.allergies ? historyData.allergies.split(',').map((s: string) => s.trim()).filter((s: string) => s) : [],
-          medications: historyData.currentMedications || "",
-          drug_history: historyData.currentMedications || "",
-          past_medical: historyData.healthHistory ? historyData.healthHistory.split(',').map((s: string) => s.trim()).filter((s: string) => s) : [],
-          last_meal_lmp: historyData.lastMeal || "",
-        },
-        physical_exam: examData,
-        examination: {
-          general_additional_notes: examData.heent?.head || "",
-          respiratory_status: "Normal",
-          respiratory_additional_notes: examData.respiratory || "",
-          cvs_status: "Normal",
-          cvs_additional_notes: examData.cardiovascular || "",
-          abdomen_status: "Normal",
-          abdomen_additional_notes: examData.abdomen || "",
-          extremities_status: "Normal",
-          extremities_findings: examData.extremities || "",
-        },
-        heent: examData.heent,
-      };
-      console.log("Saving pediatric case:", caseId, "payload keys:", Object.keys(payload));
+      const payload = buildPayload();
+      await saveToDraft(payload);
+      setLastSaved(new Date());
+      if (!silent) Alert.alert("Saved Locally", "Data saved locally. It will be submitted when you click Finish.");
+    } catch (error) {
+      console.error("Failed to save locally:", error);
+      if (!silent) Alert.alert("Error", "Failed to save case data");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const commitToBackend = async () => {
+    if (!caseId) {
+      Alert.alert("Error", "No case ID available");
+      return false;
+    }
+    try {
+      setSaving(true);
+      const payload = buildPayload();
+      console.log("Committing pediatric case to backend:", caseId);
       const res = await apiPut(`/cases/${caseId}`, payload);
-      console.log("Pediatric save response:", res);
+      console.log("Pediatric commit response:", res);
       if (res && res.success !== false) {
-        setLastSaved(new Date());
-        if (!silent) Alert.alert("Saved", "Case data saved successfully!");
+        await invalidateCases();
+        if (currentDraftId) {
+          await commitDraft(caseId);
+        }
+        return true;
       } else {
-        console.error("Pediatric save failed:", res);
+        console.error("Pediatric commit failed:", res);
         const errorData = res.error as any;
         let errorMessage = "Failed to save case data. Please try again.";
         if (errorData?.error === "edit_limit_reached") {
@@ -410,11 +439,13 @@ export default function PediatricCaseSheetScreen() {
         } else if (errorData?.message) {
           errorMessage = errorData.message;
         }
-        if (!silent) Alert.alert("Save Error", errorMessage);
+        Alert.alert("Save Error", errorMessage);
+        return false;
       }
     } catch (error) {
-      console.error("Failed to save:", error);
-      if (!silent) Alert.alert("Error", "Failed to save case data");
+      console.error("Failed to commit:", error);
+      Alert.alert("Error", "Failed to save case data");
+      return false;
     } finally {
       setSaving(false);
     }
@@ -435,11 +466,13 @@ export default function PediatricCaseSheetScreen() {
     if (currentIndex < TABS.length - 1) {
       setActiveTab(TABS[currentIndex + 1].key);
     } else {
-      await handleSave(false);
-      navigation.reset({
-        index: 0,
-        routes: [{ name: "Main", params: { screen: "DashboardTab" } }],
-      });
+      const success = await commitToBackend();
+      if (success) {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: "Main", params: { screen: "DashboardTab" } }],
+        });
+      }
     }
   };
 
@@ -1153,7 +1186,7 @@ export default function PediatricCaseSheetScreen() {
               <Text style={styles.generateSummaryBtnText}>Generate Discharge Summary</Text>
             </Pressable>
 
-            <Pressable style={[styles.saveDashboardBtn, { borderColor: theme.primary }]} onPress={async () => { await handleSave(false); navigation.reset({ index: 0, routes: [{ name: "Main", params: { screen: "DashboardTab" } }] }); }}>
+            <Pressable style={[styles.saveDashboardBtn, { borderColor: theme.primary }]} onPress={async () => { const success = await commitToBackend(); if (success) navigation.reset({ index: 0, routes: [{ name: "Main", params: { screen: "DashboardTab" } }] }); }}>
               <Feather name="home" size={18} color={theme.primary} />
               <Text style={[styles.saveDashboardBtnText, { color: theme.primary }]}>Save & Go to Dashboard</Text>
             </Pressable>

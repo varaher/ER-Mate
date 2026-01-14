@@ -692,6 +692,167 @@ export default function CaseSheetScreen() {
     }));
   };
 
+  const { saveToDraft, currentDraftId, commitDraft } = useCase();
+
+  const buildPayload = () => {
+    const gcsE = parseInt(formData.disability.gcsE) || 4;
+    const gcsV = parseInt(formData.disability.gcsV) || 5;
+    const gcsM = parseInt(formData.disability.gcsM) || 6;
+    const gcsTotal = gcsE + gcsV + gcsM;
+
+    return {
+      vitals_at_arrival: {
+        hr: parseFloat(formData.circulation.hr) || 80,
+        bp_systolic: parseFloat(formData.circulation.bpSystolic) || 120,
+        bp_diastolic: parseFloat(formData.circulation.bpDiastolic) || 80,
+        rr: parseFloat(formData.breathing.rr) || 16,
+        spo2: parseFloat(formData.breathing.spo2) || 98,
+        temperature: parseFloat(formData.exposure.temperature) || 36.8,
+        gcs_e: gcsE,
+        gcs_v: gcsV,
+        gcs_m: gcsM,
+        gcs_total: gcsTotal,
+        grbs: parseFloat(formData.disability.glucose) || 100,
+      },
+      primary_assessment: {
+        airway_status: formData.airway.status || "Patent",
+        airway_interventions: formData.airway.interventions || [],
+        airway_additional_notes: formData.airway.notes || "",
+        breathing_rr: parseFloat(formData.breathing.rr) || 16,
+        breathing_spo2: parseFloat(formData.breathing.spo2) || 98,
+        breathing_oxygen_device: formData.breathing.o2Device || "",
+        breathing_oxygen_flow: parseFloat(formData.breathing.o2Flow) || 0,
+        breathing_work: formData.breathing.effort || "Normal",
+        breathing_air_entry: formData.breathing.airEntry ? [formData.breathing.airEntry] : ["Equal"],
+        breathing_additional_notes: formData.breathing.notes || "",
+        circulation_hr: parseFloat(formData.circulation.hr) || 80,
+        circulation_bp_systolic: parseFloat(formData.circulation.bpSystolic) || 120,
+        circulation_bp_diastolic: parseFloat(formData.circulation.bpDiastolic) || 80,
+        circulation_crt: formData.circulation.capillaryRefill === "Delayed" ? 3 : 2,
+        circulation_adjuncts: formData.circulation.interventions || [],
+        circulation_additional_notes: formData.circulation.notes || "",
+        disability_avpu: formData.disability.motorResponse || "Alert",
+        disability_gcs_e: gcsE,
+        disability_gcs_v: gcsV,
+        disability_gcs_m: gcsM,
+        disability_grbs: parseFloat(formData.disability.glucose) || 100,
+        disability_pupils_size: formData.disability.pupilSize || "Normal",
+        disability_pupils_reaction: formData.disability.pupilReaction || "Reactive",
+        disability_additional_notes: formData.disability.notes || "",
+        exposure_temperature: parseFloat(formData.exposure.temperature) || 36.8,
+        exposure_additional_notes: formData.exposure.notes || "",
+      },
+      abcde: {
+        airway: { ...formData.airway, abcdeStatus: abcdeStatus.airway },
+        breathing: { ...formData.breathing, abcdeStatus: abcdeStatus.breathing },
+        circulation: { ...formData.circulation, abcdeStatus: abcdeStatus.circulation },
+        disability: { ...formData.disability, abcdeStatus: abcdeStatus.disability },
+        exposure: { ...formData.exposure, abcdeStatus: abcdeStatus.exposure },
+      },
+      adjuncts: {
+        ecg_findings: formData.adjuncts.ecgNotes || "",
+        bedside_echo: formData.adjuncts.echoNotes || "",
+        additional_notes: formData.adjuncts.abgNotes || "",
+        efast_status: formData.adjuncts.efastStatus || "",
+        efast_notes: formData.adjuncts.efastNotes || "",
+      },
+      sample: formData.sample,
+      history: {
+        hpi: formData.sample.eventsHopi || "",
+        events_hopi: formData.sample.eventsHopi || "",
+        signs_and_symptoms: formData.sample.signsSymptoms || "",
+        allergies: formData.sample.allergies ? formData.sample.allergies.split(',').map((s: string) => s.trim()).filter((s: string) => s) : [],
+        medications: formData.sample.medications || "",
+        drug_history: formData.sample.medications || "",
+        past_medical: formData.sample.pastMedicalHistory ? formData.sample.pastMedicalHistory.split(',').map((s: string) => s.trim()).filter((s: string) => s) : [],
+        past_surgical: pastSurgicalHistory || "",
+        last_meal_lmp: formData.sample.lastMeal || "",
+        additional_notes: otherHistory || "",
+      },
+      examination: {
+        general_pallor: examData.general.pallor,
+        general_icterus: examData.general.icterus,
+        general_cyanosis: examData.general.cyanosis,
+        general_clubbing: examData.general.clubbing,
+        general_lymphadenopathy: examData.general.lymphadenopathy,
+        general_edema: examData.general.edema,
+        general_additional_notes: examData.general.notes || "",
+        cvs_status: examData.cvs.status || "Normal",
+        cvs_s1_s2: examData.cvs.s1s2 || "Normal",
+        cvs_pulse: examData.cvs.pulse || "Regular",
+        cvs_pulse_rate: parseInt(examData.cvs.pulseRate) || 80,
+        cvs_apex_beat: examData.cvs.apexBeat || "Normal",
+        cvs_added_sounds: examData.cvs.addedSounds || "",
+        cvs_murmurs: examData.cvs.murmurs || "",
+        cvs_additional_notes: examData.cvs.notes || "",
+        respiratory_status: examData.respiratory.status || "Normal",
+        respiratory_expansion: examData.respiratory.expansion || "Equal",
+        respiratory_percussion: examData.respiratory.percussion || "Resonant",
+        respiratory_breath_sounds: examData.respiratory.breathSounds || "Vesicular",
+        respiratory_vocal_resonance: examData.respiratory.vocalResonance || "Normal",
+        respiratory_added_sounds: examData.respiratory.addedSounds || "",
+        respiratory_additional_notes: examData.respiratory.notes || "",
+        abdomen_status: examData.abdomen.status || "Normal",
+        abdomen_umbilical: examData.abdomen.umbilical || "Normal",
+        abdomen_organomegaly: examData.abdomen.organomegaly || "",
+        abdomen_percussion: examData.abdomen.percussion || "Tympanic",
+        abdomen_bowel_sounds: examData.abdomen.bowelSounds || "Present",
+        abdomen_additional_notes: examData.abdomen.notes || "",
+        cns_status: examData.cns.status || "Normal",
+        cns_higher_mental: examData.cns.higherMentalFunctions || "Intact",
+        cns_cranial_nerves: examData.cns.cranialNerves || "Intact",
+        cns_sensory_system: examData.cns.sensorySystem || "Intact",
+        cns_motor_system: examData.cns.motorSystem || "Normal",
+        cns_reflexes: examData.cns.reflexes || "Normal",
+        cns_additional_notes: examData.cns.notes || "",
+        extremities_status: examData.extremities.status || "Normal",
+        extremities_findings: examData.extremities.notes || "",
+      },
+      treatment: {
+        intervention_notes: treatmentData.otherMedications || "",
+        medications: treatmentData.medications.map((m) => ({
+          name: m.name,
+          dose: m.dose,
+          route: m.route,
+          frequency: m.frequency,
+        })),
+        other_medications: treatmentData.otherMedications || "",
+        fluids: treatmentData.ivFluids || "",
+        differential_diagnoses: treatmentData.differentialDiagnoses ? treatmentData.differentialDiagnoses.split(',').map((s: string) => s.trim()).filter((s: string) => s) : [],
+        provisional_diagnoses: treatmentData.primaryDiagnosis ? [treatmentData.primaryDiagnosis.trim()] : [],
+        primary_diagnosis: treatmentData.primaryDiagnosis || "",
+      },
+      investigations: {
+        panels_selected: treatmentData.labsOrdered ? treatmentData.labsOrdered.split(',').map((s: string) => s.trim()).filter((s: string) => s) : [],
+        imaging: treatmentData.imaging ? treatmentData.imaging.split(',').map((s: string) => s.trim()).filter((s: string) => s) : [],
+        results_notes: treatmentData.resultsSummary || "",
+      },
+      procedures: {
+        procedures_performed: Object.entries(proceduresData).flatMap(([category, items]) =>
+          (items as string[]).map((name: string) => ({ name, category, timestamp: new Date().toISOString() }))
+        ),
+      },
+      er_observation: {
+        notes: dispositionData.erObservationNotes || "",
+        duration: dispositionData.durationInER || "",
+      },
+      disposition: {
+        type: dispositionData.dispositionType || "",
+        destination: "",
+      },
+      addendum_notes: treatmentData.addendumNotes ? [{ text: treatmentData.addendumNotes, timestamp: new Date().toISOString() }] : [],
+      mode_of_arrival: modeOfArrival,
+      mlc: isMLC,
+      mlc_details: isMLC ? {
+        nature_of_incident: mlcDetails.natureOfIncident,
+        date_time: mlcDetails.dateTimeOfIncident,
+        place: mlcDetails.placeOfIncident,
+        identification_mark: mlcDetails.identificationMark,
+        informant: mlcDetails.informantBroughtBy,
+      } : null,
+    };
+  };
+
   const handleSave = async (silent: boolean = false) => {
     if (!caseId) {
       console.error("Cannot save: No case ID");
@@ -700,171 +861,37 @@ export default function CaseSheetScreen() {
     }
     setSaving(true);
     try {
-      const gcsE = parseInt(formData.disability.gcsE) || 4;
-      const gcsV = parseInt(formData.disability.gcsV) || 5;
-      const gcsM = parseInt(formData.disability.gcsM) || 6;
-      const gcsTotal = gcsE + gcsV + gcsM;
+      const payload = buildPayload();
+      await saveToDraft(payload);
+      setLastSaved(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+      if (!silent) Alert.alert("Saved Locally", "Data saved locally. It will be submitted when you click Finish in Disposition.");
+    } catch (err) {
+      console.error("Local save exception:", err);
+      if (!silent) Alert.alert("Error", (err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
 
-      const payload: any = {
-        vitals_at_arrival: {
-          hr: parseFloat(formData.circulation.hr) || 80,
-          bp_systolic: parseFloat(formData.circulation.bpSystolic) || 120,
-          bp_diastolic: parseFloat(formData.circulation.bpDiastolic) || 80,
-          rr: parseFloat(formData.breathing.rr) || 16,
-          spo2: parseFloat(formData.breathing.spo2) || 98,
-          temperature: parseFloat(formData.exposure.temperature) || 36.8,
-          gcs_e: gcsE,
-          gcs_v: gcsV,
-          gcs_m: gcsM,
-          gcs_total: gcsTotal,
-          grbs: parseFloat(formData.disability.glucose) || 100,
-        },
-        primary_assessment: {
-          airway_status: formData.airway.status || "Patent",
-          airway_interventions: formData.airway.interventions || [],
-          airway_additional_notes: formData.airway.notes || "",
-          breathing_rr: parseFloat(formData.breathing.rr) || 16,
-          breathing_spo2: parseFloat(formData.breathing.spo2) || 98,
-          breathing_oxygen_device: formData.breathing.o2Device || "",
-          breathing_oxygen_flow: parseFloat(formData.breathing.o2Flow) || 0,
-          breathing_work: formData.breathing.effort || "Normal",
-          breathing_air_entry: formData.breathing.airEntry ? [formData.breathing.airEntry] : ["Equal"],
-          breathing_additional_notes: formData.breathing.notes || "",
-          circulation_hr: parseFloat(formData.circulation.hr) || 80,
-          circulation_bp_systolic: parseFloat(formData.circulation.bpSystolic) || 120,
-          circulation_bp_diastolic: parseFloat(formData.circulation.bpDiastolic) || 80,
-          circulation_crt: formData.circulation.capillaryRefill === "Delayed" ? 3 : 2,
-          circulation_adjuncts: formData.circulation.interventions || [],
-          circulation_additional_notes: formData.circulation.notes || "",
-          disability_avpu: formData.disability.motorResponse || "Alert",
-          disability_gcs_e: gcsE,
-          disability_gcs_v: gcsV,
-          disability_gcs_m: gcsM,
-          disability_grbs: parseFloat(formData.disability.glucose) || 100,
-          disability_pupils_size: formData.disability.pupilSize || "Normal",
-          disability_pupils_reaction: formData.disability.pupilReaction || "Reactive",
-          disability_additional_notes: formData.disability.notes || "",
-          exposure_temperature: parseFloat(formData.exposure.temperature) || 36.8,
-          exposure_additional_notes: formData.exposure.notes || "",
-        },
-        abcde: {
-          airway: { ...formData.airway, abcdeStatus: abcdeStatus.airway },
-          breathing: { ...formData.breathing, abcdeStatus: abcdeStatus.breathing },
-          circulation: { ...formData.circulation, abcdeStatus: abcdeStatus.circulation },
-          disability: { ...formData.disability, abcdeStatus: abcdeStatus.disability },
-          exposure: { ...formData.exposure, abcdeStatus: abcdeStatus.exposure },
-        },
-        adjuncts: {
-          ecg_findings: formData.adjuncts.ecgNotes || "",
-          bedside_echo: formData.adjuncts.echoNotes || "",
-          additional_notes: formData.adjuncts.abgNotes || "",
-          efast_status: formData.adjuncts.efastStatus || "",
-          efast_notes: formData.adjuncts.efastNotes || "",
-        },
-        sample: formData.sample,
-        history: {
-          hpi: formData.sample.eventsHopi || "",
-          events_hopi: formData.sample.eventsHopi || "",
-          signs_and_symptoms: formData.sample.signsSymptoms || "",
-          allergies: formData.sample.allergies ? formData.sample.allergies.split(',').map((s: string) => s.trim()).filter((s: string) => s) : [],
-          medications: formData.sample.medications || "",
-          drug_history: formData.sample.medications || "",
-          past_medical: formData.sample.pastMedicalHistory ? formData.sample.pastMedicalHistory.split(',').map((s: string) => s.trim()).filter((s: string) => s) : [],
-          past_surgical: pastSurgicalHistory || "",
-          last_meal_lmp: formData.sample.lastMeal || "",
-          additional_notes: otherHistory || "",
-        },
-        examination: {
-          general_pallor: examData.general.pallor,
-          general_icterus: examData.general.icterus,
-          general_cyanosis: examData.general.cyanosis,
-          general_clubbing: examData.general.clubbing,
-          general_lymphadenopathy: examData.general.lymphadenopathy,
-          general_edema: examData.general.edema,
-          general_additional_notes: examData.general.notes || "",
-          cvs_status: examData.cvs.status || "Normal",
-          cvs_s1_s2: examData.cvs.s1s2 || "Normal",
-          cvs_pulse: examData.cvs.pulse || "Regular",
-          cvs_pulse_rate: parseInt(examData.cvs.pulseRate) || 80,
-          cvs_apex_beat: examData.cvs.apexBeat || "Normal",
-          cvs_added_sounds: examData.cvs.addedSounds || "",
-          cvs_murmurs: examData.cvs.murmurs || "",
-          cvs_additional_notes: examData.cvs.notes || "",
-          respiratory_status: examData.respiratory.status || "Normal",
-          respiratory_expansion: examData.respiratory.expansion || "Equal",
-          respiratory_percussion: examData.respiratory.percussion || "Resonant",
-          respiratory_breath_sounds: examData.respiratory.breathSounds || "Vesicular",
-          respiratory_vocal_resonance: examData.respiratory.vocalResonance || "Normal",
-          respiratory_added_sounds: examData.respiratory.addedSounds || "",
-          respiratory_additional_notes: examData.respiratory.notes || "",
-          abdomen_status: examData.abdomen.status || "Normal",
-          abdomen_umbilical: examData.abdomen.umbilical || "Normal",
-          abdomen_organomegaly: examData.abdomen.organomegaly || "",
-          abdomen_percussion: examData.abdomen.percussion || "Tympanic",
-          abdomen_bowel_sounds: examData.abdomen.bowelSounds || "Present",
-          abdomen_additional_notes: examData.abdomen.notes || "",
-          cns_status: examData.cns.status || "Normal",
-          cns_higher_mental: examData.cns.higherMentalFunctions || "Intact",
-          cns_cranial_nerves: examData.cns.cranialNerves || "Intact",
-          cns_sensory_system: examData.cns.sensorySystem || "Intact",
-          cns_motor_system: examData.cns.motorSystem || "Normal",
-          cns_reflexes: examData.cns.reflexes || "Normal",
-          cns_additional_notes: examData.cns.notes || "",
-          extremities_status: examData.extremities.status || "Normal",
-          extremities_findings: examData.extremities.notes || "",
-        },
-        treatment: {
-          intervention_notes: treatmentData.otherMedications || "",
-          medications: treatmentData.medications.map((m) => ({
-            name: m.name,
-            dose: m.dose,
-            route: m.route,
-            frequency: m.frequency,
-          })),
-          other_medications: treatmentData.otherMedications || "",
-          fluids: treatmentData.ivFluids || "",
-          differential_diagnoses: treatmentData.differentialDiagnoses ? treatmentData.differentialDiagnoses.split(',').map((s: string) => s.trim()).filter((s: string) => s) : [],
-          provisional_diagnoses: treatmentData.primaryDiagnosis ? [treatmentData.primaryDiagnosis.trim()] : [],
-          primary_diagnosis: treatmentData.primaryDiagnosis || "",
-        },
-        investigations: {
-          panels_selected: treatmentData.labsOrdered ? treatmentData.labsOrdered.split(',').map((s: string) => s.trim()).filter((s: string) => s) : [],
-          imaging: treatmentData.imaging ? treatmentData.imaging.split(',').map((s: string) => s.trim()).filter((s: string) => s) : [],
-          results_notes: treatmentData.resultsSummary || "",
-        },
-        procedures: {
-          procedures_performed: Object.entries(proceduresData).flatMap(([category, items]) =>
-            (items as string[]).map((name: string) => ({ name, category, timestamp: new Date().toISOString() }))
-          ),
-        },
-        er_observation: {
-          notes: dispositionData.erObservationNotes || "",
-          duration: dispositionData.durationInER || "",
-        },
-        disposition: {
-          type: dispositionData.dispositionType || "",
-          destination: "",
-        },
-        addendum_notes: treatmentData.addendumNotes ? [{ text: treatmentData.addendumNotes, timestamp: new Date().toISOString() }] : [],
-        mode_of_arrival: modeOfArrival,
-        mlc: isMLC,
-        mlc_details: isMLC ? {
-          nature_of_incident: mlcDetails.natureOfIncident,
-          date_time: mlcDetails.dateTimeOfIncident,
-          place: mlcDetails.placeOfIncident,
-          identification_mark: mlcDetails.identificationMark,
-          informant: mlcDetails.informantBroughtBy,
-        } : null,
-      };
-      console.log("Saving case:", caseId, "payload keys:", Object.keys(payload));
+  const commitToBackend = async () => {
+    if (!caseId) {
+      Alert.alert("Error", "No case ID available");
+      return false;
+    }
+    setSaving(true);
+    try {
+      const payload = buildPayload();
+      console.log("Committing case to backend:", caseId);
       const res = await apiPut(`/cases/${caseId}`, payload);
-      console.log("Save response:", res.success, res.error || "");
+      console.log("Commit response:", res.success, res.error || "");
       if (res.success) {
         await invalidateCases();
-        setLastSaved(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
-        if (!silent) Alert.alert("Saved", "Case data saved successfully!");
+        if (currentDraftId) {
+          await commitDraft(caseId);
+        }
+        return true;
       } else {
-        console.error("Save failed:", res.error);
+        console.error("Commit failed:", res.error);
         const errorData = res.error as any;
         let errorMessage = "Failed to save case. Please try again.";
         if (errorData?.error === "edit_limit_reached") {
@@ -876,11 +903,13 @@ export default function CaseSheetScreen() {
         } else if (errorData?.message) {
           errorMessage = errorData.message;
         }
-        if (!silent) Alert.alert("Save Error", errorMessage);
+        Alert.alert("Save Error", errorMessage);
+        return false;
       }
     } catch (err) {
-      console.error("Save exception:", err);
-      if (!silent) Alert.alert("Error", (err as Error).message);
+      console.error("Commit exception:", err);
+      Alert.alert("Error", (err as Error).message);
+      return false;
     } finally {
       setSaving(false);
     }
@@ -1006,11 +1035,13 @@ export default function CaseSheetScreen() {
     if (currentIndex < tabs.length - 1) {
       setActiveTab(tabs[currentIndex + 1]);
     } else {
-      await handleSave(false);
-      navigation.reset({
-        index: 0,
-        routes: [{ name: "Main", params: { screen: "DashboardTab" } }],
-      });
+      const success = await commitToBackend();
+      if (success) {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: "Main", params: { screen: "DashboardTab" } }],
+        });
+      }
     }
   };
 
@@ -2100,7 +2131,7 @@ export default function CaseSheetScreen() {
               <Text style={styles.generateSummaryBtnText}>Generate Discharge Summary</Text>
             </Pressable>
 
-            <Pressable style={[styles.saveDashboardBtn, { borderColor: theme.primary }]} onPress={async () => { await handleSave(false); navigation.reset({ index: 0, routes: [{ name: "Main", params: { screen: "DashboardTab" } }] }); }}>
+            <Pressable style={[styles.saveDashboardBtn, { borderColor: theme.primary }]} onPress={async () => { const success = await commitToBackend(); if (success) navigation.reset({ index: 0, routes: [{ name: "Main", params: { screen: "DashboardTab" } }] }); }}>
               <Feather name="home" size={18} color={theme.primary} />
               <Text style={[styles.saveDashboardBtnText, { color: theme.primary }]}>Save & Go to Dashboard</Text>
             </Pressable>
