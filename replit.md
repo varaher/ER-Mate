@@ -1,5 +1,22 @@
 # ErMate - Emergency Room EMR Application
 
+## Release Status: RC-1 (Code Freeze)
+
+**Status**: Release Candidate 1 - Production code freeze in effect  
+**Date**: January 15, 2026
+
+### Allowed Changes (Bug Fixes Only)
+- Save failures (draft saves, backend commits)
+- Voice → field mapping issues
+- Case sheet → discharge summary sync
+- Data persistence & API reliability
+
+### Not Allowed Without Approval
+- New features
+- UI changes
+- Code refactors
+- Structural changes
+
 ## Overview
 
 ErMate is a mobile-first Emergency Room Electronic Medical Records (EMR) application built with React Native and Expo. It provides emergency medicine physicians and residents with a streamlined workflow for patient triage, case management, physical examinations, investigations, treatment planning, and discharge documentation. The app supports voice dictation, AI-powered features, and follows a subscription-based model.
