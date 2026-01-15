@@ -201,12 +201,26 @@ interface ProceduresData {
 
 interface DispositionData {
   dispositionType: string;
+  admitTo: string;
+  admitToRoom: string;
+  referTo: string;
   erObservationNotes: string;
   durationInER: string;
   conditionAtShift: string;
   emResident: string;
   emConsultant: string;
 }
+
+const ADMIT_DESTINATIONS = [
+  "Pediatric Ward",
+  "Pediatric ICU",
+  "NICU",
+  "Medical ICU",
+  "Surgical ICU",
+  "HDU",
+  "Observation Ward",
+  "Other",
+];
 
 const WOB_SIGNS = ["Nasal Flaring", "Retractions", "Grunting", "Wheezing", "Stridor", "Snoring", "Gurgling"];
 const TRAUMA_ILLNESS_SIGNS = ["Rashes", "Petechiae", "Ecchymosis", "Bruises", "Burns", "Purpura"];
@@ -264,7 +278,7 @@ export default function PediatricCaseSheetScreen() {
     ortho: { splinting: false, jointReduction: false }
   });
   const [dispositionData, setDispositionData] = useState<DispositionData>({
-    dispositionType: "", erObservationNotes: "", durationInER: "", conditionAtShift: "", emResident: "", emConsultant: ""
+    dispositionType: "", admitTo: "", admitToRoom: "", referTo: "", erObservationNotes: "", durationInER: "", conditionAtShift: "", emResident: "", emConsultant: ""
   });
 
   const [isRecording, setIsRecording] = useState(false);
@@ -388,6 +402,31 @@ export default function PediatricCaseSheetScreen() {
         extremities_findings: examData.extremities || "",
       },
       heent: examData.heent,
+      treatment: {
+        primary_diagnosis: treatmentData.primaryDiagnosis || "",
+        provisional_diagnosis: treatmentData.primaryDiagnosis || "",
+        differential_diagnoses: treatmentData.differentialDiagnoses || "",
+        labs_ordered: treatmentData.labsOrdered || "",
+        imaging: treatmentData.imaging || "",
+        results_summary: treatmentData.resultsSummary || "",
+        medications: treatmentData.otherMedications || "",
+        iv_fluids: treatmentData.ivFluids || "",
+      },
+      er_observation: {
+        notes: dispositionData.erObservationNotes || "",
+        duration: dispositionData.durationInER || "",
+      },
+      disposition: {
+        type: dispositionData.dispositionType || "",
+        destination: dispositionData.admitTo || "",
+        admit_to: dispositionData.admitTo || "",
+        admit_to_room: dispositionData.admitToRoom || "",
+        refer_to: dispositionData.referTo || "",
+        condition: dispositionData.conditionAtShift || "",
+      },
+      em_resident: dispositionData.emResident || "",
+      em_consultant: dispositionData.emConsultant || "",
+      procedures: proceduresData,
     };
   };
 
@@ -1206,6 +1245,28 @@ export default function PediatricCaseSheetScreen() {
                   </Pressable>
                 ))}
               </View>
+
+              {dispositionData.dispositionType === "Admit" && (
+                <>
+                  <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.md }]}>Admit To</Text>
+                  <View style={styles.dispositionOptions}>
+                    {ADMIT_DESTINATIONS.map((dest) => (
+                      <Pressable key={dest} style={[styles.dispositionBtn, { backgroundColor: dispositionData.admitTo === dest ? TriageColors.blue : theme.backgroundSecondary }]} onPress={() => setDispositionData((prev) => ({ ...prev, admitTo: dest }))}>
+                        <Text style={{ color: dispositionData.admitTo === dest ? "#FFFFFF" : theme.text, fontWeight: "500", fontSize: 12 }}>{dest}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.md }]}>Room / Bed Number</Text>
+                  <TextInput style={[styles.inputField, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Ward/Room/Bed number..." placeholderTextColor={theme.textMuted} value={dispositionData.admitToRoom} onChangeText={(v) => setDispositionData((prev) => ({ ...prev, admitToRoom: v }))} />
+                </>
+              )}
+
+              {dispositionData.dispositionType === "Refer" && (
+                <>
+                  <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.md }]}>Refer To</Text>
+                  <TextInput style={[styles.inputField, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Hospital / Specialty / Physician..." placeholderTextColor={theme.textMuted} value={dispositionData.referTo} onChangeText={(v) => setDispositionData((prev) => ({ ...prev, referTo: v }))} />
+                </>
+              )}
 
               <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.md }]}>Condition at Time of Shift</Text>
               <OptionButtons options={["Stable", "Unstable"]} value={dispositionData.conditionAtShift} onChange={(v) => setDispositionData((p) => ({ ...p, conditionAtShift: v }))} />

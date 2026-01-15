@@ -398,8 +398,10 @@ export default function ViewCaseScreen() {
         {disposition.type && (
           <Section title="Disposition">
             <InfoRow label="Type" value={disposition.type} />
-            <InfoRow label="Destination" value={disposition.destination} />
-            <InfoRow label="Condition" value={disposition.condition_at_discharge} />
+            {(disposition.admit_to || disposition.destination) && <InfoRow label="Destination" value={disposition.admit_to || disposition.destination} />}
+            {disposition.admit_to_room && <InfoRow label="Room/Bed" value={disposition.admit_to_room} />}
+            {disposition.refer_to && <InfoRow label="Referred To" value={disposition.refer_to} />}
+            <InfoRow label="Condition" value={disposition.condition_at_discharge || disposition.condition} />
           </Section>
         )}
 
