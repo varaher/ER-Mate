@@ -286,7 +286,7 @@ export default function PediatricCaseSheetScreen() {
   const [recordingField, setRecordingField] = useState<string | null>(null);
   const recordingRef = useRef<Audio.Recording | null>(null);
   
-  const { saveToDraft, currentDraftId, commitDraft, initDraftForCase } = useCase();
+  const { saveToDraft, currentDraftId, commitDraft, initDraftForCase, loadDraft } = useCase();
 
   useEffect(() => {
     loadCase();
@@ -297,9 +297,77 @@ export default function PediatricCaseSheetScreen() {
     };
   }, [caseId]);
 
+  const loadFromCaseSheetData = (caseSheetData: any) => {
+    if (!caseSheetData) return false;
+    
+    if (caseSheetData.primary_assessment?.pat) {
+      setPatData(caseSheetData.primary_assessment.pat);
+    }
+    if (caseSheetData.primary_assessment?.airway) {
+      setAirwayData(caseSheetData.primary_assessment.airway);
+    }
+    if (caseSheetData.primary_assessment?.breathing) {
+      setBreathingData(caseSheetData.primary_assessment.breathing);
+    }
+    if (caseSheetData.primary_assessment?.circulation) {
+      setCirculationData(caseSheetData.primary_assessment.circulation);
+    }
+    if (caseSheetData.primary_assessment?.disability) {
+      setDisabilityData(caseSheetData.primary_assessment.disability);
+    }
+    if (caseSheetData.primary_assessment?.exposure) {
+      setExposureData(caseSheetData.primary_assessment.exposure);
+    }
+    if (caseSheetData.primary_assessment?.efast) {
+      setEfastData(caseSheetData.primary_assessment.efast);
+    }
+    if (caseSheetData.history) {
+      setHistoryData(caseSheetData.history);
+    }
+    if (caseSheetData.examination) {
+      setExamData(caseSheetData.examination);
+    }
+    if (caseSheetData.treatment) {
+      setTreatmentData({
+        labsOrdered: Array.isArray(caseSheetData.treatment.panels_selected) ? caseSheetData.treatment.panels_selected.join(", ") : "",
+        imaging: Array.isArray(caseSheetData.treatment.imaging) ? caseSheetData.treatment.imaging.join(", ") : "",
+        resultsSummary: caseSheetData.treatment.results_notes || "",
+        primaryDiagnosis: caseSheetData.treatment.primary_diagnosis || "",
+        differentialDiagnoses: Array.isArray(caseSheetData.treatment.differential_diagnoses) ? caseSheetData.treatment.differential_diagnoses.join(", ") : "",
+        otherMedications: caseSheetData.treatment.other_medications || "",
+        ivFluids: caseSheetData.treatment.fluids || "",
+      });
+    }
+    if (caseSheetData.disposition) {
+      setDispositionData((prev) => ({
+        ...prev,
+        dispositionType: caseSheetData.disposition.type || "",
+        admitTo: caseSheetData.disposition.admit_to || "",
+        admitToRoom: caseSheetData.disposition.admit_to_room || "",
+        referTo: caseSheetData.disposition.refer_to || "",
+      }));
+    }
+    if (caseSheetData.er_observation) {
+      setDispositionData((prev) => ({
+        ...prev,
+        erObservationNotes: caseSheetData.er_observation.notes || "",
+        durationInER: caseSheetData.er_observation.duration || "",
+      }));
+    }
+    return true;
+  };
+  
   const loadCase = async () => {
     try {
       setLoading(true);
+      
+      const draftId = await initDraftForCase(caseId);
+      const draft = await loadDraft(draftId);
+      const hasLocalDraft = draft?.caseSheetData && loadFromCaseSheetData(draft.caseSheetData);
+      if (hasLocalDraft) {
+        setLastSaved(new Date(draft!.updatedAt));
+      }
+      
       if (triageData) {
         setPatient({
           id: caseId,
@@ -345,7 +413,6 @@ export default function PediatricCaseSheetScreen() {
           });
         }
       }
-      await initDraftForCase(caseId);
     } catch (error) {
       console.error("Failed to load case:", error);
     } finally {
