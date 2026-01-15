@@ -860,7 +860,6 @@ export default function CaseSheetScreen() {
         }
         setABCDEStatus(newABCDEStatus);
         }
-      }
     } catch (err) {
       console.error("Error loading case:", err);
     } finally {
