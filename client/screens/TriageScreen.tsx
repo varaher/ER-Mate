@@ -731,35 +731,6 @@ export default function TriageScreen() {
         </View>
 
         <View style={[styles.section, { backgroundColor: theme.card }]}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Triage Category</Text>
-          <View style={styles.triagePriorityRow}>
-            {(["red", "orange", "yellow", "green", "blue"] as TriageCategory[]).map((color) => (
-              <Pressable
-                key={color}
-                style={[
-                  styles.triagePriorityBtn,
-                  { 
-                    backgroundColor: TriageColors[color],
-                    opacity: selectedTriageColor === color ? 1 : 0.4,
-                    borderWidth: selectedTriageColor === color ? 3 : 0,
-                    borderColor: theme.text,
-                  },
-                ]}
-                onPress={() => setSelectedTriageColor(color)}
-              >
-                <Text style={styles.triagePriorityText}>{TRIAGE_PRIORITY_MAP[color]}</Text>
-              </Pressable>
-            ))}
-          </View>
-          <Text style={[styles.triageCategoryLabel, { color: TriageColors[selectedTriageColor] }]}>
-            {selectedTriageColor === "red" ? "Critical (Immediate)" :
-             selectedTriageColor === "orange" ? "Urgent (< 10 min)" :
-             selectedTriageColor === "yellow" ? "Semi-Urgent (< 30 min)" :
-             selectedTriageColor === "green" ? "Non-Urgent (< 60 min)" : "Minor (< 120 min)"}
-          </Text>
-        </View>
-
-        <View style={[styles.section, { backgroundColor: theme.card }]}>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>Symptoms Assessment</Text>
           
           <Pressable
@@ -828,6 +799,35 @@ export default function TriageScreen() {
             numberOfLines={4}
             textAlignVertical="top"
           />
+        </View>
+
+        <View style={[styles.section, { backgroundColor: theme.card }]}>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Triage Category</Text>
+          <View style={styles.triagePriorityRow}>
+            {(["red", "orange", "yellow", "green", "blue"] as TriageCategory[]).map((color) => (
+              <Pressable
+                key={color}
+                style={[
+                  styles.triagePriorityBtn,
+                  { 
+                    backgroundColor: TriageColors[color],
+                    opacity: selectedTriageColor === color ? 1 : 0.4,
+                    borderWidth: selectedTriageColor === color ? 3 : 0,
+                    borderColor: theme.text,
+                  },
+                ]}
+                onPress={() => setSelectedTriageColor(color)}
+              >
+                <Text style={styles.triagePriorityText}>{TRIAGE_PRIORITY_MAP[color]}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <Text style={[styles.triageCategoryLabel, { color: TriageColors[selectedTriageColor] }]}>
+            {selectedTriageColor === "red" ? "Critical (Immediate)" :
+             selectedTriageColor === "orange" ? "Urgent (< 10 min)" :
+             selectedTriageColor === "yellow" ? "Semi-Urgent (< 30 min)" :
+             selectedTriageColor === "green" ? "Non-Urgent (< 60 min)" : "Minor (< 120 min)"}
+          </Text>
         </View>
 
         <Pressable

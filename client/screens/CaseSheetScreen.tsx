@@ -148,6 +148,8 @@ interface TreatmentFormData {
   addendumNotes: string;
 }
 
+type ProcedureCategory = "resuscitation" | "airway" | "vascular" | "chest" | "neuro" | "gu" | "gi" | "wound" | "ortho";
+
 interface ProceduresData {
   resuscitation: string[];
   airway: string[];
@@ -158,6 +160,7 @@ interface ProceduresData {
   gi: string[];
   wound: string[];
   ortho: string[];
+  generalNotes: string;
 }
 
 interface DispositionData {
@@ -243,6 +246,7 @@ const getDefaultProceduresData = (): ProceduresData => ({
   gi: [],
   wound: [],
   ortho: [],
+  generalNotes: "",
 });
 
 const getDefaultDispositionData = (): DispositionData => ({
@@ -269,7 +273,7 @@ const ADMIT_DESTINATIONS = [
 
 const PROCEDURES_OPTIONS = {
   resuscitation: ["CPR"],
-  airway: ["Endotracheal Intubation", "LMA Insertion", "Cricothyrotomy", "Bag-Valve-Mask Ventilation"],
+  airway: ["Endotracheal Intubation", "LMA Insertion", "Cricothyrotomy", "Bag-Valve-Mask Ventilation", "NIV (BiPAP/CPAP)"],
   vascular: ["Central Line Insertion", "Peripheral IV Access", "Intraosseous Access", "Arterial Line"],
   chest: ["Chest Tube Insertion", "Needle Decompression", "Pericardiocentesis", "Thoracentesis"],
   neuro: ["Lumbar Puncture"],
@@ -592,13 +596,16 @@ export default function CaseSheetScreen() {
           setProceduresData((prev) => {
             const updated = { ...prev };
             res.data.procedures.procedures_performed.forEach((proc: any) => {
-              const cat = proc.category as keyof ProceduresData;
-              if (updated[cat]) {
+              const cat = proc.category as ProcedureCategory;
+              if (cat && cat !== "generalNotes" as any && Array.isArray(updated[cat])) {
                 if (!updated[cat].includes(proc.name)) {
                   updated[cat] = [...updated[cat], proc.name];
                 }
               }
             });
+            if (res.data.procedures.general_notes) {
+              updated.generalNotes = res.data.procedures.general_notes;
+            }
             return updated;
           });
         }
@@ -856,9 +863,12 @@ export default function CaseSheetScreen() {
         results_notes: treatmentData.resultsSummary || "",
       },
       procedures: {
-        procedures_performed: Object.entries(proceduresData).flatMap(([category, items]) =>
-          (items as string[]).map((name: string) => ({ name, category, timestamp: new Date().toISOString() }))
-        ),
+        procedures_performed: Object.entries(proceduresData)
+          .filter(([category]) => category !== "generalNotes")
+          .flatMap(([category, items]) =>
+            (items as string[]).map((name: string) => ({ name, category, timestamp: new Date().toISOString() }))
+          ),
+        general_notes: proceduresData.generalNotes || "",
       },
       er_observation: {
         notes: dispositionData.erObservationNotes || "",
@@ -1129,18 +1139,18 @@ export default function CaseSheetScreen() {
     }
   };
 
-  const toggleProcedure = (category: keyof ProceduresData, procedure: string) => {
+  const toggleProcedure = (category: ProcedureCategory, procedure: string) => {
     setProceduresData((prev) => {
       const current = prev[category];
       if (current.includes(procedure)) {
-        return { ...prev, [category]: current.filter((p) => p !== procedure) };
+        return { ...prev, [category]: current.filter((p: string) => p !== procedure) };
       } else {
         return { ...prev, [category]: [...current, procedure] };
       }
     });
   };
 
-  const ProcedureCheckbox = ({ category, procedure }: { category: keyof ProceduresData; procedure: string }) => (
+  const ProcedureCheckbox = ({ category, procedure }: { category: ProcedureCategory; procedure: string }) => (
     <Pressable style={styles.procedureRow} onPress={() => toggleProcedure(category, procedure)}>
       <View style={[styles.checkbox, { borderColor: theme.border }, proceduresData[category].includes(procedure) && { backgroundColor: theme.primary, borderColor: theme.primary }]}>
         {proceduresData[category].includes(procedure) && <Feather name="check" size={14} color="#FFFFFF" />}
@@ -1149,7 +1159,7 @@ export default function CaseSheetScreen() {
     </Pressable>
   );
 
-  const ProcedureSection = ({ title, category }: { title: string; category: keyof ProceduresData }) => (
+  const ProcedureSection = ({ title, category }: { title: string; category: ProcedureCategory }) => (
     <View>
       <View style={[styles.procedureHeader, { backgroundColor: "#E0E7FF" }]}>
         <Text style={[styles.procedureHeaderText, { color: theme.primary }]}>{title}</Text>
@@ -2187,6 +2197,24 @@ export default function CaseSheetScreen() {
               <ProcedureSection title="GI" category="gi" />
               <ProcedureSection title="Wound" category="wound" />
               <ProcedureSection title="Ortho" category="ortho" />
+            </View>
+
+            <View style={[styles.card, { backgroundColor: theme.card }]}>
+              <Text style={[styles.cardTitle, { color: theme.text }]}>General Procedure Notes</Text>
+              <Text style={[styles.cardSubtitle, { color: theme.textSecondary }]}>Detailed procedure notes and observations (included in exports)</Text>
+              
+              <View style={styles.fieldWithVoice}>
+                <Text style={[styles.fieldLabel, { color: theme.text }]}>Procedure Details</Text>
+                <VoiceButton fieldKey="procedures.generalNotes" />
+              </View>
+              <TextInput
+                style={[styles.textAreaLarge, { backgroundColor: theme.backgroundSecondary, color: theme.text }]}
+                placeholder="Document detailed procedure notes, complications, outcomes, equipment used, etc..."
+                placeholderTextColor={theme.textMuted}
+                value={proceduresData.generalNotes}
+                onChangeText={(v) => setProceduresData((prev) => ({ ...prev, generalNotes: v }))}
+                multiline
+              />
             </View>
           </>
         )}
