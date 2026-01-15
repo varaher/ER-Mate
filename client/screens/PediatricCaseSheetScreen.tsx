@@ -148,6 +148,7 @@ interface PediatricHistoryFormData {
   underlyingConditions: string;
   immunizationStatus: string;
   lastMeal: string;
+  lmp: string;
   events: string;
   treatmentBeforeArrival: string;
   signsAndSymptoms: {
@@ -256,7 +257,7 @@ export default function PediatricCaseSheetScreen() {
   });
   const [efastData, setEfastData] = useState<EFASTFormData>({ heart: "", abdomen: "", lungs: "", pelvis: "" });
   const [historyData, setHistoryData] = useState<PediatricHistoryFormData>({
-    allergies: "", currentMedications: "", lastDoseMedications: "", medicationsInEnvironment: "", healthHistory: "", underlyingConditions: "", immunizationStatus: "", lastMeal: "", events: "", treatmentBeforeArrival: "",
+    allergies: "", currentMedications: "", lastDoseMedications: "", medicationsInEnvironment: "", healthHistory: "", underlyingConditions: "", immunizationStatus: "", lastMeal: "", lmp: "", events: "", treatmentBeforeArrival: "",
     signsAndSymptoms: { breathingDifficulty: false, fever: false, vomiting: false, timeCourse: "", decreasedOralIntake: false }
   });
   const [examData, setExamData] = useState<PediatricExamFormData>({
@@ -387,7 +388,9 @@ export default function PediatricCaseSheetScreen() {
         medications: historyData.currentMedications || "",
         drug_history: historyData.currentMedications || "",
         past_medical: historyData.healthHistory ? historyData.healthHistory.split(',').map((s: string) => s.trim()).filter((s: string) => s) : [],
-        last_meal_lmp: historyData.lastMeal || "",
+        last_meal: historyData.lastMeal || "",
+        lmp: historyData.lmp || "",
+        last_meal_lmp: `${historyData.lastMeal || ""}${historyData.lmp ? ` | LMP: ${historyData.lmp}` : ""}`,
       },
       physical_exam: examData,
       examination: {
@@ -1018,6 +1021,16 @@ export default function PediatricCaseSheetScreen() {
                   <VoiceButton fieldKey="history.lastMeal" />
                 </View>
                 <TextInput style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Time and nature of last intake (liquid/food), especially important for anesthesia or intubation..." placeholderTextColor={theme.textMuted} value={historyData.lastMeal} onChangeText={(v) => setHistoryData((p) => ({ ...p, lastMeal: v }))} multiline />
+
+                {patient?.sex?.toLowerCase() === "female" && (
+                  <>
+                    <View style={styles.fieldWithVoice}>
+                      <Text style={[styles.fieldLabel, { color: theme.text }]}>LMP (Last Menstrual Period)</Text>
+                      <VoiceButton fieldKey="history.lmp" />
+                    </View>
+                    <TextInput style={[styles.inputField, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="LMP date (e.g., 15 days back, 10/01/2025)" placeholderTextColor={theme.textMuted} value={historyData.lmp} onChangeText={(v) => setHistoryData((p) => ({ ...p, lmp: v }))} />
+                  </>
+                )}
               </CollapsibleSection>
 
               <CollapsibleSection title="Events" icon="clock" iconColor={TriageColors.orange}>

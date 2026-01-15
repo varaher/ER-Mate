@@ -341,6 +341,18 @@ export default function ViewCaseScreen() {
               <Text style={[styles.text, { color: theme.text }]}>{history.medications || history.drug_history || "None"}</Text>
             )}
           </SubSection>
+
+          {(history.last_meal || history.last_meal_lmp) && (
+            <SubSection title="Last Meal">
+              <Text style={[styles.text, { color: theme.text }]}>{history.last_meal || history.last_meal_lmp || "N/A"}</Text>
+            </SubSection>
+          )}
+
+          {history.lmp && (
+            <SubSection title="LMP (Last Menstrual Period)">
+              <Text style={[styles.text, { color: theme.text }]}>{history.lmp}</Text>
+            </SubSection>
+          )}
         </Section>
 
         <Section title="Physical Examination">

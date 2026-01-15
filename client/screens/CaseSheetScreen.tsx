@@ -550,6 +550,8 @@ export default function CaseSheetScreen() {
           newFormData.sample.allergies = res.data.history.allergies || "";
           newFormData.sample.medications = res.data.history.medications || "";
           newFormData.sample.pastMedicalHistory = res.data.history.past_medical || "";
+          newFormData.sample.lastMeal = res.data.history.last_meal || "";
+          newFormData.sample.lmp = res.data.history.lmp || "";
           setPastSurgicalHistory(res.data.history.past_surgical || "");
           setOtherHistory(res.data.history.other || "");
         }
@@ -790,7 +792,9 @@ export default function CaseSheetScreen() {
         drug_history: formData.sample.medications || "",
         past_medical: formData.sample.pastMedicalHistory ? formData.sample.pastMedicalHistory.split(',').map((s: string) => s.trim()).filter((s: string) => s) : [],
         past_surgical: pastSurgicalHistory || "",
-        last_meal_lmp: formData.sample.lastMeal || "",
+        last_meal: formData.sample.lastMeal || "",
+        lmp: formData.sample.lmp || "",
+        last_meal_lmp: `${formData.sample.lastMeal || ""}${formData.sample.lmp ? ` | LMP: ${formData.sample.lmp}` : ""}`,
         additional_notes: otherHistory || "",
       },
       examination: {
@@ -1859,8 +1863,15 @@ export default function CaseSheetScreen() {
               </View>
               <TextInput style={[styles.inputField, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Previous surgeries..." placeholderTextColor={theme.textMuted} value={pastSurgicalHistory} onChangeText={setPastSurgicalHistory} />
 
-              <Text style={[styles.fieldLabel, { color: theme.text }]}>Last Meal / LMP</Text>
-              <TextInput style={[styles.inputField, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Time of last meal/LMP date" placeholderTextColor={theme.textMuted} value={formData.sample.lastMeal} onChangeText={(v) => updateFormData("sample", "lastMeal", v)} />
+              <Text style={[styles.fieldLabel, { color: theme.text }]}>Last Meal</Text>
+              <TextInput style={[styles.inputField, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Time of last meal" placeholderTextColor={theme.textMuted} value={formData.sample.lastMeal} onChangeText={(v) => updateFormData("sample", "lastMeal", v)} />
+
+              {caseData?.patient?.sex?.toLowerCase() === "female" && (
+                <>
+                  <Text style={[styles.fieldLabel, { color: theme.text }]}>LMP (Last Menstrual Period)</Text>
+                  <TextInput style={[styles.inputField, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="LMP date (e.g., 15 days back, 10/01/2025)" placeholderTextColor={theme.textMuted} value={formData.sample.lmp} onChangeText={(v) => updateFormData("sample", "lmp", v)} />
+                </>
+              )}
 
               <View style={styles.fieldWithVoice}>
                 <View style={styles.fieldLabelWithBar}>
