@@ -217,7 +217,7 @@ export default function DischargeSummaryScreen() {
       },
       course_in_hospital: data.discharge_summary?.course_in_hospital || "",
       investigations: formatInvestigations(treatment.investigations || data.investigations),
-      diagnosis: treatment.primary_diagnosis || treatment.ai_diagnosis || data.final_diagnosis || "",
+      diagnosis: treatment.primary_diagnosis || treatment.provisional_diagnosis || treatment.ai_diagnosis || data.final_diagnosis || data.treatment?.primary_diagnosis || "",
       discharge_medications: formatMedications(treatment.medications || data.medications),
       disposition_type: disposition.type || disposition.disposition_type || "Normal Discharge",
       condition_at_discharge: disposition.condition || disposition.condition_at_discharge || "STABLE",
@@ -440,7 +440,28 @@ export default function DischargeSummaryScreen() {
     if (Array.isArray(investigations)) {
       return investigations.map((inv: any) => `${inv.name || inv.test}: ${inv.result || inv.value || "Pending"}`).join("\n");
     }
-    return JSON.stringify(investigations);
+    if (typeof investigations === "object") {
+      const parts: string[] = [];
+      if (investigations.panels_selected && Array.isArray(investigations.panels_selected) && investigations.panels_selected.length > 0) {
+        parts.push("Panels: " + investigations.panels_selected.join(", "));
+      }
+      if (investigations.individual_tests && Array.isArray(investigations.individual_tests) && investigations.individual_tests.length > 0) {
+        parts.push("Tests: " + investigations.individual_tests.join(", "));
+      }
+      if (investigations.results_notes && investigations.results_notes.trim()) {
+        parts.push("Results: " + investigations.results_notes);
+      }
+      if (investigations.labs_ordered) {
+        parts.push("Labs: " + investigations.labs_ordered);
+      }
+      if (investigations.imaging) {
+        parts.push("Imaging: " + investigations.imaging);
+      }
+      if (parts.length > 0) {
+        return parts.join("\n");
+      }
+    }
+    return "";
   };
 
   const formatMedications = (medications: any): string => {

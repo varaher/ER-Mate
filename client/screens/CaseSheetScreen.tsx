@@ -162,6 +162,9 @@ interface ProceduresData {
 
 interface DispositionData {
   dispositionType: string;
+  admitTo: string;
+  admitToRoom: string;
+  referTo: string;
   erObservationNotes: string;
   durationInER: string;
 }
@@ -244,9 +247,25 @@ const getDefaultProceduresData = (): ProceduresData => ({
 
 const getDefaultDispositionData = (): DispositionData => ({
   dispositionType: "",
+  admitTo: "",
+  admitToRoom: "",
+  referTo: "",
   erObservationNotes: "",
   durationInER: "",
 });
+
+const ADMIT_DESTINATIONS = [
+  "General Ward",
+  "Medical ICU",
+  "Cardiac ICU",
+  "Surgical ICU",
+  "Neuro ICU",
+  "Pediatric ICU",
+  "NICU",
+  "HDU",
+  "Observation Ward",
+  "Other",
+];
 
 const PROCEDURES_OPTIONS = {
   resuscitation: ["CPR"],
@@ -585,6 +604,9 @@ export default function CaseSheetScreen() {
           setDispositionData((prev) => ({
             ...prev,
             dispositionType: res.data.disposition.type || "",
+            admitTo: res.data.disposition.admit_to || res.data.disposition.destination || "",
+            admitToRoom: res.data.disposition.admit_to_room || "",
+            referTo: res.data.disposition.refer_to || "",
           }));
         }
         if (res.data.er_observation) {
@@ -840,7 +862,10 @@ export default function CaseSheetScreen() {
       },
       disposition: {
         type: dispositionData.dispositionType || "",
-        destination: "",
+        destination: dispositionData.admitTo || "",
+        admit_to: dispositionData.admitTo || "",
+        admit_to_room: dispositionData.admitToRoom || "",
+        refer_to: dispositionData.referTo || "",
       },
       addendum_notes: treatmentData.addendumNotes ? [{ text: treatmentData.addendumNotes, timestamp: new Date().toISOString() }] : [],
       mode_of_arrival: modeOfArrival,
@@ -2168,6 +2193,28 @@ export default function CaseSheetScreen() {
                   </Pressable>
                 ))}
               </View>
+
+              {dispositionData.dispositionType === "Admit" && (
+                <>
+                  <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.md }]}>Admit To</Text>
+                  <View style={styles.dispositionOptions}>
+                    {ADMIT_DESTINATIONS.map((dest) => (
+                      <Pressable key={dest} style={[styles.dispositionBtn, { backgroundColor: dispositionData.admitTo === dest ? TriageColors.blue : theme.backgroundSecondary }]} onPress={() => setDispositionData((prev) => ({ ...prev, admitTo: dest }))}>
+                        <Text style={{ color: dispositionData.admitTo === dest ? "#FFFFFF" : theme.text, fontWeight: "500", fontSize: 12 }}>{dest}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.md }]}>Room / Bed Number</Text>
+                  <TextInput style={[styles.inputField, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Ward/Room/Bed number..." placeholderTextColor={theme.textMuted} value={dispositionData.admitToRoom} onChangeText={(v) => setDispositionData((prev) => ({ ...prev, admitToRoom: v }))} />
+                </>
+              )}
+
+              {dispositionData.dispositionType === "Refer" && (
+                <>
+                  <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.md }]}>Refer To</Text>
+                  <TextInput style={[styles.inputField, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Hospital / Specialty / Physician..." placeholderTextColor={theme.textMuted} value={dispositionData.referTo} onChangeText={(v) => setDispositionData((prev) => ({ ...prev, referTo: v }))} />
+                </>
+              )}
             </View>
 
             <View style={[styles.card, { backgroundColor: theme.card }]}>
