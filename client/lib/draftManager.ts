@@ -73,11 +73,13 @@ export async function updateDraft(draftId: string, updates: Partial<DraftCase>):
 export async function saveCaseSheetToDraft(draftId: string, caseSheetData: any): Promise<void> {
   const store = await loadStore();
   
-  if (store.drafts[draftId]) {
-    store.drafts[draftId].caseSheetData = caseSheetData;
-    store.drafts[draftId].updatedAt = new Date().toISOString();
-    await saveStore(store);
+  if (!store.drafts[draftId]) {
+    throw new Error(`Draft not found: ${draftId}`);
   }
+  
+  store.drafts[draftId].caseSheetData = caseSheetData;
+  store.drafts[draftId].updatedAt = new Date().toISOString();
+  await saveStore(store);
 }
 
 export async function saveDischargeSummaryToDraft(draftId: string, summaryData: any): Promise<void> {

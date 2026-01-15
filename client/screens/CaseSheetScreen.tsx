@@ -512,7 +512,153 @@ export default function CaseSheetScreen() {
   const [abcdeStatus, setABCDEStatus] = useState<ABCDEStatusData>(getDefaultABCDEStatus());
   const [newMedication, setNewMedication] = useState<Omit<MedicationEntry, 'id'>>({ name: "", dose: "", route: "", frequency: "" });
   
-  const { saveToDraft, currentDraftId, commitDraft, initDraftForCase } = useCase();
+  const { saveToDraft, currentDraftId, commitDraft, initDraftForCase, loadDraft } = useCase();
+  
+  const loadFromCaseSheetData = (caseSheetData: any) => {
+    if (!caseSheetData) return;
+    
+    const newFormData = getDefaultATLSFormData();
+    
+    if (caseSheetData.vitals_at_arrival) {
+      newFormData.breathing.rr = String(caseSheetData.vitals_at_arrival.rr || "");
+      newFormData.breathing.spo2 = String(caseSheetData.vitals_at_arrival.spo2 || "");
+      newFormData.circulation.hr = String(caseSheetData.vitals_at_arrival.hr || "");
+      newFormData.circulation.bpSystolic = String(caseSheetData.vitals_at_arrival.bp_systolic || "");
+      newFormData.circulation.bpDiastolic = String(caseSheetData.vitals_at_arrival.bp_diastolic || "");
+      newFormData.disability.gcsE = String(caseSheetData.vitals_at_arrival.gcs_e || "4");
+      newFormData.disability.gcsV = String(caseSheetData.vitals_at_arrival.gcs_v || "5");
+      newFormData.disability.gcsM = String(caseSheetData.vitals_at_arrival.gcs_m || "6");
+      newFormData.disability.glucose = String(caseSheetData.vitals_at_arrival.grbs || "");
+      newFormData.exposure.temperature = String(caseSheetData.vitals_at_arrival.temperature || "");
+    }
+    if (caseSheetData.abcde) {
+      Object.assign(newFormData.airway, caseSheetData.abcde.airway || {});
+      Object.assign(newFormData.breathing, caseSheetData.abcde.breathing || {});
+      Object.assign(newFormData.circulation, caseSheetData.abcde.circulation || {});
+      Object.assign(newFormData.disability, caseSheetData.abcde.disability || {});
+      Object.assign(newFormData.exposure, caseSheetData.abcde.exposure || {});
+    }
+    if (caseSheetData.adjuncts) {
+      Object.assign(newFormData.adjuncts, caseSheetData.adjuncts);
+    }
+    if (caseSheetData.sample) {
+      Object.assign(newFormData.sample, caseSheetData.sample);
+    }
+    if (caseSheetData.history) {
+      newFormData.sample.eventsHopi = caseSheetData.history.hpi || "";
+      newFormData.sample.allergies = caseSheetData.history.allergies || "";
+      newFormData.sample.medications = caseSheetData.history.medications || "";
+      newFormData.sample.pastMedicalHistory = caseSheetData.history.past_medical || "";
+      newFormData.sample.lastMeal = caseSheetData.history.last_meal || "";
+      newFormData.sample.lmp = caseSheetData.history.lmp || "";
+      setPastSurgicalHistory(caseSheetData.history.past_surgical || "");
+      setOtherHistory(caseSheetData.history.other || "");
+    }
+    if (caseSheetData.psychological) {
+      setPsychData({ ...getDefaultPsychFormData(), ...caseSheetData.psychological });
+    }
+    if (caseSheetData.examination) {
+      setExamData({ ...getDefaultExamFormData(), ...caseSheetData.examination });
+    }
+    if (caseSheetData.treatment) {
+      const loadedMeds: MedicationEntry[] = Array.isArray(caseSheetData.treatment.medications)
+        ? caseSheetData.treatment.medications.map((m: any, idx: number) => ({
+            id: m.id || `loaded-${idx}`,
+            name: m.name || "",
+            dose: m.dose || "",
+            route: m.route || "",
+            frequency: m.frequency || "",
+          }))
+        : [];
+      setTreatmentData((prev) => ({
+        ...prev,
+        primaryDiagnosis: caseSheetData.treatment.primary_diagnosis || (Array.isArray(caseSheetData.treatment.provisional_diagnoses) ? caseSheetData.treatment.provisional_diagnoses.join(", ") : (caseSheetData.treatment.provisional_diagnoses || "")),
+        differentialDiagnoses: Array.isArray(caseSheetData.treatment.differential_diagnoses) ? caseSheetData.treatment.differential_diagnoses.join(", ") : (caseSheetData.treatment.differential_diagnoses || ""),
+        medications: loadedMeds,
+        otherMedications: caseSheetData.treatment.other_medications || caseSheetData.treatment.intervention_notes || "",
+        ivFluids: caseSheetData.treatment.fluids || "",
+      }));
+    }
+    if (caseSheetData.investigations) {
+      setTreatmentData((prev) => ({
+        ...prev,
+        labsOrdered: Array.isArray(caseSheetData.investigations.panels_selected) ? caseSheetData.investigations.panels_selected.join(", ") : (caseSheetData.investigations.panels_selected || ""),
+        imaging: Array.isArray(caseSheetData.investigations.imaging) ? caseSheetData.investigations.imaging.join(", ") : (caseSheetData.investigations.imaging || ""),
+        resultsSummary: caseSheetData.investigations.results_notes || "",
+      }));
+    }
+    if (caseSheetData.procedures?.procedures_performed) {
+      setProceduresData((prev) => {
+        const updated = { ...prev };
+        caseSheetData.procedures.procedures_performed.forEach((proc: any) => {
+          const cat = proc.category as ProcedureCategory;
+          if (cat && cat !== "generalNotes" as any && Array.isArray(updated[cat])) {
+            if (!updated[cat].includes(proc.name)) {
+              updated[cat] = [...updated[cat], proc.name];
+            }
+          }
+        });
+        if (caseSheetData.procedures.general_notes) {
+          updated.generalNotes = caseSheetData.procedures.general_notes;
+        }
+        return updated;
+      });
+    }
+    if (caseSheetData.disposition) {
+      setDispositionData((prev) => ({
+        ...prev,
+        dispositionType: caseSheetData.disposition.type || "",
+        admitTo: caseSheetData.disposition.admit_to || caseSheetData.disposition.destination || "",
+        admitToRoom: caseSheetData.disposition.admit_to_room || "",
+        referTo: caseSheetData.disposition.refer_to || "",
+      }));
+    }
+    if (caseSheetData.er_observation) {
+      setDispositionData((prev) => ({
+        ...prev,
+        erObservationNotes: caseSheetData.er_observation.notes || "",
+        durationInER: caseSheetData.er_observation.duration || "",
+      }));
+    }
+    setFormData(newFormData);
+    
+    if (caseSheetData.mode_of_arrival) {
+      setModeOfArrival(caseSheetData.mode_of_arrival);
+    }
+    if (caseSheetData.mlc !== undefined) {
+      setIsMLC(caseSheetData.mlc === true);
+    }
+    if (caseSheetData.mlc_details) {
+      setMLCDetails({
+        natureOfIncident: caseSheetData.mlc_details.nature_of_incident || "",
+        dateTimeOfIncident: caseSheetData.mlc_details.date_time || "",
+        placeOfIncident: caseSheetData.mlc_details.place || "",
+        identificationMark: caseSheetData.mlc_details.identification_mark || "",
+        informantBroughtBy: caseSheetData.mlc_details.informant || "",
+      });
+    }
+    
+    if (caseSheetData.abcde) {
+      const newABCDEStatus: ABCDEStatusData = { airway: "Normal", breathing: "Normal", circulation: "Normal", disability: "Normal", exposure: "Normal" };
+      
+      const a = caseSheetData.abcde.airway || {};
+      if (a.abcdeStatus) newABCDEStatus.airway = a.abcdeStatus;
+      
+      const b = caseSheetData.abcde.breathing || {};
+      if (b.abcdeStatus) newABCDEStatus.breathing = b.abcdeStatus;
+      
+      const c = caseSheetData.abcde.circulation || {};
+      if (c.abcdeStatus) newABCDEStatus.circulation = c.abcdeStatus;
+      
+      const d = caseSheetData.abcde.disability || {};
+      if (d.abcdeStatus) newABCDEStatus.disability = d.abcdeStatus;
+      
+      const e = caseSheetData.abcde.exposure || {};
+      if (e.abcdeStatus) newABCDEStatus.exposure = e.abcdeStatus;
+      
+      setABCDEStatus(newABCDEStatus);
+    }
+  };
 
   useEffect(() => {
     loadCase();
@@ -520,9 +666,18 @@ export default function CaseSheetScreen() {
 
   const loadCase = async () => {
     try {
+      const draftId = await initDraftForCase(caseId);
+      const draft = await loadDraft(draftId);
+      const hasLocalDraft = !!draft?.caseSheetData;
+      
       const res = await apiGet<any>(`/cases/${caseId}`);
       if (res.success && res.data) {
         setCaseData(res.data);
+        
+        if (hasLocalDraft) {
+          loadFromCaseSheetData(draft!.caseSheetData);
+          setLastSaved(new Date(draft!.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+        } else {
         const newFormData = getDefaultATLSFormData();
         if (res.data.vitals_at_arrival) {
           newFormData.breathing.rr = String(res.data.vitals_at_arrival.rr || "");
@@ -704,8 +859,8 @@ export default function CaseSheetScreen() {
           }
         }
         setABCDEStatus(newABCDEStatus);
+        }
       }
-      await initDraftForCase(caseId);
     } catch (err) {
       console.error("Error loading case:", err);
     } finally {

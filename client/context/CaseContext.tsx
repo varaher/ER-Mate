@@ -161,9 +161,10 @@ export function CaseProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const saveToDraft = useCallback(async (caseSheetData: any): Promise<void> => {
-    if (currentDraftId) {
-      await saveCaseSheetToDraft(currentDraftId, caseSheetData);
+    if (!currentDraftId) {
+      throw new Error("No draft initialized. Please wait for the case to load completely.");
     }
+    await saveCaseSheetToDraft(currentDraftId, caseSheetData);
   }, [currentDraftId]);
 
   const saveDischargeToDraft = useCallback(async (summaryData: any): Promise<void> => {
