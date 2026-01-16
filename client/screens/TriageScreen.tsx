@@ -150,6 +150,28 @@ export default function TriageScreen() {
     grbs: "",
   });
 
+  // Ref to hold form values for smooth typing without re-renders
+  const formDataRef = useRef({
+    name: "",
+    age: "",
+    phone: "",
+    address: "",
+    brought_by: "",
+    informant_name: "",
+    informant_reliability: "",
+    chief_complaint: "",
+    hr: "",
+    bp_systolic: "",
+    bp_diastolic: "",
+    rr: "",
+    spo2: "",
+    temperature: "",
+    gcs_e: "",
+    gcs_v: "",
+    gcs_m: "",
+    grbs: "",
+  });
+
   useEffect(() => {
     return () => {
       isContinuousRecordingRef.current = false;
@@ -175,14 +197,20 @@ export default function TriageScreen() {
   }, [isContinuousRecording]);
 
   const updateField = useCallback((field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    // Update ref for smooth typing (no re-renders)
+    (formDataRef.current as any)[field] = value;
     
+    // Only update state for fields that affect other UI elements
     if (field === "age") {
       const ageValue = parseFloat(value) || 0;
       const newPatientType = isPediatric(ageValue) ? "pediatric" : "adult";
       setPatientType(newPatientType);
       setVitalRanges(getVitalRanges(ageValue));
       setAgeGroupLabel(getAgeGroupLabel(getAgeGroup(ageValue)));
+      setFormData(prev => ({ ...prev, age: value }));
+    } else if (field === "chief_complaint") {
+      // chief_complaint needs state for symptom toggle logic
+      setFormData(prev => ({ ...prev, chief_complaint: value }));
     }
   }, []);
 
@@ -221,6 +249,7 @@ export default function TriageScreen() {
       if (symptomKey === "normal_no_symptoms") {
         next.clear();
         next.add("normal_no_symptoms");
+        formDataRef.current.chief_complaint = "";
         setFormData(prev => ({ ...prev, chief_complaint: "" }));
         setSelectedTriageColor("green");
         return next;
@@ -228,7 +257,7 @@ export default function TriageScreen() {
       
       next.delete("normal_no_symptoms");
       
-      let currentComplaint = formData.chief_complaint;
+      let currentComplaint = formDataRef.current.chief_complaint || formData.chief_complaint;
       
       if (next.has(symptomKey)) {
         next.delete(symptomKey);
@@ -237,15 +266,20 @@ export default function TriageScreen() {
         
         if (next.size === 0) {
           next.add("normal_no_symptoms");
+          formDataRef.current.chief_complaint = "";
           setFormData(prev => ({ ...prev, chief_complaint: "" }));
         } else {
+          formDataRef.current.chief_complaint = newComplaint;
           setFormData(prev => ({ ...prev, chief_complaint: newComplaint }));
         }
       } else {
         next.add(symptomKey);
         if (currentComplaint.trim()) {
-          setFormData(prev => ({ ...prev, chief_complaint: normalizeComplaint(`${currentComplaint}, ${symptomLabel}`) }));
+          const newComplaint = normalizeComplaint(`${currentComplaint}, ${symptomLabel}`);
+          formDataRef.current.chief_complaint = newComplaint;
+          setFormData(prev => ({ ...prev, chief_complaint: newComplaint }));
         } else {
+          formDataRef.current.chief_complaint = symptomLabel;
           setFormData(prev => ({ ...prev, chief_complaint: symptomLabel }));
         }
       }
@@ -381,6 +415,7 @@ export default function TriageScreen() {
 
       if (res.success && res.data?.transcription) {
         setVoiceText((prev) => (prev ? `${prev}\n${res.data!.transcription}` : res.data!.transcription));
+        formDataRef.current.chief_complaint = res.data!.transcription;
         setFormData(prev => ({ ...prev, chief_complaint: res.data!.transcription }));
       }
     } catch (err) {
@@ -391,39 +426,49 @@ export default function TriageScreen() {
   };
 
   const getFormWithDefaults = () => {
-    return {
+    // Merge ref values with state (ref has latest typed values)
+    const merged = {
       ...formData,
-      hr: formData.hr || DEFAULT_VITALS.hr,
-      bp_systolic: formData.bp_systolic || DEFAULT_VITALS.bp_systolic,
-      bp_diastolic: formData.bp_diastolic || DEFAULT_VITALS.bp_diastolic,
-      rr: formData.rr || DEFAULT_VITALS.rr,
-      spo2: formData.spo2 || DEFAULT_VITALS.spo2,
-      temperature: formData.temperature || DEFAULT_VITALS.temperature,
-      gcs_e: formData.gcs_e || DEFAULT_VITALS.gcs_e,
-      gcs_v: formData.gcs_v || DEFAULT_VITALS.gcs_v,
-      gcs_m: formData.gcs_m || DEFAULT_VITALS.gcs_m,
-      grbs: formData.grbs || DEFAULT_VITALS.grbs,
+      ...formDataRef.current,
+    };
+    return {
+      ...merged,
+      hr: merged.hr || DEFAULT_VITALS.hr,
+      bp_systolic: merged.bp_systolic || DEFAULT_VITALS.bp_systolic,
+      bp_diastolic: merged.bp_diastolic || DEFAULT_VITALS.bp_diastolic,
+      rr: merged.rr || DEFAULT_VITALS.rr,
+      spo2: merged.spo2 || DEFAULT_VITALS.spo2,
+      temperature: merged.temperature || DEFAULT_VITALS.temperature,
+      gcs_e: merged.gcs_e || DEFAULT_VITALS.gcs_e,
+      gcs_v: merged.gcs_v || DEFAULT_VITALS.gcs_v,
+      gcs_m: merged.gcs_m || DEFAULT_VITALS.gcs_m,
+      grbs: merged.grbs || DEFAULT_VITALS.grbs,
     };
   };
 
   const fillDefaults = () => {
+    // Update ref values with defaults
+    formDataRef.current.hr = formDataRef.current.hr || DEFAULT_VITALS.hr;
+    formDataRef.current.bp_systolic = formDataRef.current.bp_systolic || DEFAULT_VITALS.bp_systolic;
+    formDataRef.current.bp_diastolic = formDataRef.current.bp_diastolic || DEFAULT_VITALS.bp_diastolic;
+    formDataRef.current.rr = formDataRef.current.rr || DEFAULT_VITALS.rr;
+    formDataRef.current.spo2 = formDataRef.current.spo2 || DEFAULT_VITALS.spo2;
+    formDataRef.current.temperature = formDataRef.current.temperature || DEFAULT_VITALS.temperature;
+    formDataRef.current.gcs_e = formDataRef.current.gcs_e || DEFAULT_VITALS.gcs_e;
+    formDataRef.current.gcs_v = formDataRef.current.gcs_v || DEFAULT_VITALS.gcs_v;
+    formDataRef.current.gcs_m = formDataRef.current.gcs_m || DEFAULT_VITALS.gcs_m;
+    formDataRef.current.grbs = formDataRef.current.grbs || DEFAULT_VITALS.grbs;
+    // Sync to state for UI refresh
     setFormData(prev => ({
       ...prev,
-      hr: prev.hr || DEFAULT_VITALS.hr,
-      bp_systolic: prev.bp_systolic || DEFAULT_VITALS.bp_systolic,
-      bp_diastolic: prev.bp_diastolic || DEFAULT_VITALS.bp_diastolic,
-      rr: prev.rr || DEFAULT_VITALS.rr,
-      spo2: prev.spo2 || DEFAULT_VITALS.spo2,
-      temperature: prev.temperature || DEFAULT_VITALS.temperature,
-      gcs_e: prev.gcs_e || DEFAULT_VITALS.gcs_e,
-      gcs_v: prev.gcs_v || DEFAULT_VITALS.gcs_v,
-      gcs_m: prev.gcs_m || DEFAULT_VITALS.gcs_m,
-      grbs: prev.grbs || DEFAULT_VITALS.grbs,
+      ...formDataRef.current,
     }));
   };
 
   const handleSave = async () => {
-    if (!formData.name) {
+    // Check ref value for name (ref has latest typed values)
+    const currentName = formDataRef.current.name || formData.name;
+    if (!currentName) {
       Alert.alert("Required", "Please enter patient name");
       return;
     }
@@ -533,7 +578,7 @@ export default function TriageScreen() {
         style={[styles.input, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]}
         placeholder={placeholder}
         placeholderTextColor={theme.textMuted}
-        value={(formData as any)[field]}
+        defaultValue={(formDataRef.current as any)[field] || (formData as any)[field]}
         onChangeText={(v) => updateField(field, v)}
         keyboardType={keyboardType}
       />

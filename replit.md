@@ -15,6 +15,8 @@
 7. **Fixed web preview** - Server now serves static web build correctly
 8. **Fixed commit/save TypeError** - allergies, pastMedicalHistory, differentialDiagnoses, labsOrdered, and imaging fields now handle both string and array data types (prevents "split is not a function" error)
 9. **Fixed CollapsibleSection icons** - Icons in collapsible sections (PAT, ABCDE) now display as Feather icons instead of text characters
+10. **Fixed default drug frequency** - New medication entries in adult case sheet now default to "stat" frequency
+11. **Fixed TriageScreen typing lag** - Text inputs now use ref-based pattern for smooth continuous typing without re-renders
 
 ### RC-1 Supported Input Values
 - Text fields accept "nil", "none", "n/a", "not applicable", or any freeform text
