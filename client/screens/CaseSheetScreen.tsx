@@ -510,7 +510,7 @@ export default function CaseSheetScreen() {
   const [isMLC, setIsMLC] = useState(false);
   const [mlcDetails, setMLCDetails] = useState<MLCDetailsData>(getDefaultMLCDetails());
   const [abcdeStatus, setABCDEStatus] = useState<ABCDEStatusData>(getDefaultABCDEStatus());
-  const [newMedication, setNewMedication] = useState<Omit<MedicationEntry, 'id'>>({ name: "", dose: "", route: "", frequency: "" });
+  const [newMedication, setNewMedication] = useState<Omit<MedicationEntry, 'id'>>({ name: "", dose: "", route: "", frequency: "stat" });
   
   const { saveToDraft, currentDraftId, commitDraft, initDraftForCase, loadDraft } = useCase();
   
@@ -1203,7 +1203,7 @@ export default function CaseSheetScreen() {
       ...prev,
       medications: [...prev.medications, newEntry],
     }));
-    setNewMedication({ name: "", dose: "", route: "", frequency: "" });
+    setNewMedication({ name: "", dose: "", route: "", frequency: "stat" });
   };
 
   const removeMedication = (id: string) => {
