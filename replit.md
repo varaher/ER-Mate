@@ -15,6 +15,11 @@
 7. **Fixed web preview** - Server now serves static web build correctly
 8. **Fixed commit/save TypeError** - allergies, pastMedicalHistory, differentialDiagnoses, labsOrdered, and imaging fields now handle both string and array data types (prevents "split is not a function" error)
 
+### RC-1 Supported Input Values
+- Text fields accept "nil", "none", "n/a", "not applicable", or any freeform text
+- These values are valid clinical documentation entries and save normally
+- No input validation blocks these common medical notation shortcuts
+
 ### Allowed Changes (Bug Fixes Only)
 - Save failures (draft saves, backend commits)
 - Voice → field mapping issues
