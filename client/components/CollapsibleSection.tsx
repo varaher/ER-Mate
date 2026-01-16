@@ -63,7 +63,7 @@ export function CollapsibleSection({
                 { backgroundColor: iconColor || theme.primary },
               ]}
             >
-              <Text style={styles.iconText}>{icon}</Text>
+              <Feather name={icon as any} size={14} color="#FFFFFF" />
             </View>
           ) : null}
           <Text style={[styles.title, { color: iconColor || theme.primary }]}>

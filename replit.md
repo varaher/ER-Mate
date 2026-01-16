@@ -14,6 +14,7 @@
 6. **Fixed syntax error in CaseSheetScreen** - Corrected brace mismatch in loadCase function
 7. **Fixed web preview** - Server now serves static web build correctly
 8. **Fixed commit/save TypeError** - allergies, pastMedicalHistory, differentialDiagnoses, labsOrdered, and imaging fields now handle both string and array data types (prevents "split is not a function" error)
+9. **Fixed CollapsibleSection icons** - Icons in collapsible sections (PAT, ABCDE) now display as Feather icons instead of text characters
 
 ### RC-1 Supported Input Values
 - Text fields accept "nil", "none", "n/a", "not applicable", or any freeform text
