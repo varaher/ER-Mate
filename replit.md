@@ -13,6 +13,7 @@
 5. **Applied draft loading fix to PediatricCaseSheetScreen** - Consistent behavior for both adult and pediatric workflows
 6. **Fixed syntax error in CaseSheetScreen** - Corrected brace mismatch in loadCase function
 7. **Fixed web preview** - Server now serves static web build correctly
+8. **Fixed commit/save TypeError** - allergies, pastMedicalHistory, differentialDiagnoses, labsOrdered, and imaging fields now handle both string and array data types (prevents "split is not a function" error)
 
 ### Allowed Changes (Bug Fixes Only)
 - Save failures (draft saves, backend commits)
