@@ -5,6 +5,15 @@
 **Status**: Release Candidate 1 - Production code freeze in effect  
 **Date**: January 15, 2026
 
+### RC-1 Bug Fixes Applied (January 16, 2026)
+1. **Fixed Save as Draft functionality** - Added proper error handling when draft isn't initialized
+2. **Fixed data persistence** - Local draft data now takes priority over backend data when loading cases
+3. **Fixed abnormal sections capture** - ABCDE abnormal status checkboxes now save properly
+4. **Fixed procedures data structure** - Created ProcedureCategory type, properly handles generalNotes
+5. **Applied draft loading fix to PediatricCaseSheetScreen** - Consistent behavior for both adult and pediatric workflows
+6. **Fixed syntax error in CaseSheetScreen** - Corrected brace mismatch in loadCase function
+7. **Fixed web preview** - Server now serves static web build correctly
+
 ### Allowed Changes (Bug Fixes Only)
 - Save failures (draft saves, backend commits)
 - Voice → field mapping issues
