@@ -136,6 +136,15 @@ interface MedicationEntry {
   frequency: string;
 }
 
+interface InfusionEntry {
+  id: string;
+  name: string;
+  dose: string;
+  dilution: string;
+  rate: string;
+  notes: string;
+}
+
 interface TreatmentFormData {
   labsOrdered: string;
   imaging: string;
@@ -143,6 +152,7 @@ interface TreatmentFormData {
   primaryDiagnosis: string;
   differentialDiagnoses: string;
   medications: MedicationEntry[];
+  infusions: InfusionEntry[];
   otherMedications: string;
   ivFluids: string;
   addendumNotes: string;
@@ -231,6 +241,7 @@ const getDefaultTreatmentFormData = (): TreatmentFormData => ({
   primaryDiagnosis: "",
   differentialDiagnoses: "",
   medications: [],
+  infusions: [],
   otherMedications: "",
   ivFluids: "",
   addendumNotes: "",
@@ -511,6 +522,7 @@ export default function CaseSheetScreen() {
   const [mlcDetails, setMLCDetails] = useState<MLCDetailsData>(getDefaultMLCDetails());
   const [abcdeStatus, setABCDEStatus] = useState<ABCDEStatusData>(getDefaultABCDEStatus());
   const [newMedication, setNewMedication] = useState<Omit<MedicationEntry, 'id'>>({ name: "", dose: "", route: "", frequency: "stat" });
+  const [newInfusion, setNewInfusion] = useState<Omit<InfusionEntry, 'id'>>({ name: "", dose: "", dilution: "", rate: "", notes: "" });
   
   const { saveToDraft, currentDraftId, commitDraft, initDraftForCase, loadDraft } = useCase();
   
@@ -570,11 +582,22 @@ export default function CaseSheetScreen() {
             frequency: m.frequency || "",
           }))
         : [];
+      const loadedInfusions: InfusionEntry[] = Array.isArray(caseSheetData.treatment.infusions)
+        ? caseSheetData.treatment.infusions.map((inf: any, idx: number) => ({
+            id: inf.id || `inf-${idx}`,
+            name: inf.name || "",
+            dose: inf.dose || "",
+            dilution: inf.dilution || "",
+            rate: inf.rate || "",
+            notes: inf.notes || "",
+          }))
+        : [];
       setTreatmentData((prev) => ({
         ...prev,
         primaryDiagnosis: caseSheetData.treatment.primary_diagnosis || (Array.isArray(caseSheetData.treatment.provisional_diagnoses) ? caseSheetData.treatment.provisional_diagnoses.join(", ") : (caseSheetData.treatment.provisional_diagnoses || "")),
         differentialDiagnoses: Array.isArray(caseSheetData.treatment.differential_diagnoses) ? caseSheetData.treatment.differential_diagnoses.join(", ") : (caseSheetData.treatment.differential_diagnoses || ""),
         medications: loadedMeds,
+        infusions: loadedInfusions,
         otherMedications: caseSheetData.treatment.other_medications || caseSheetData.treatment.intervention_notes || "",
         ivFluids: caseSheetData.treatment.fluids || "",
       }));
@@ -730,11 +753,22 @@ export default function CaseSheetScreen() {
                 frequency: m.frequency || "",
               }))
             : [];
+          const loadedInfusions: InfusionEntry[] = Array.isArray(res.data.treatment.infusions)
+            ? res.data.treatment.infusions.map((inf: any, idx: number) => ({
+                id: inf.id || `inf-${idx}`,
+                name: inf.name || "",
+                dose: inf.dose || "",
+                dilution: inf.dilution || "",
+                rate: inf.rate || "",
+                notes: inf.notes || "",
+              }))
+            : [];
           setTreatmentData((prev) => ({
             ...prev,
             primaryDiagnosis: res.data.treatment.primary_diagnosis || (Array.isArray(res.data.treatment.provisional_diagnoses) ? res.data.treatment.provisional_diagnoses.join(", ") : (res.data.treatment.provisional_diagnoses || "")),
             differentialDiagnoses: Array.isArray(res.data.treatment.differential_diagnoses) ? res.data.treatment.differential_diagnoses.join(", ") : (res.data.treatment.differential_diagnoses || ""),
             medications: loadedMeds,
+            infusions: loadedInfusions,
             otherMedications: res.data.treatment.other_medications || res.data.treatment.intervention_notes || "",
             ivFluids: res.data.treatment.fluids || "",
           }));
@@ -1006,6 +1040,13 @@ export default function CaseSheetScreen() {
           route: m.route,
           frequency: m.frequency,
         })),
+        infusions: treatmentData.infusions.map((inf) => ({
+          name: inf.name,
+          dose: inf.dose,
+          dilution: inf.dilution,
+          rate: inf.rate,
+          notes: inf.notes,
+        })),
         other_medications: treatmentData.otherMedications || "",
         fluids: treatmentData.ivFluids || "",
         differential_diagnoses: Array.isArray(treatmentData.differentialDiagnoses) ? treatmentData.differentialDiagnoses : (typeof treatmentData.differentialDiagnoses === 'string' && treatmentData.differentialDiagnoses ? treatmentData.differentialDiagnoses.split(',').map((s: string) => s.trim()).filter((s: string) => s) : []),
@@ -1210,6 +1251,30 @@ export default function CaseSheetScreen() {
     setTreatmentData((prev) => ({
       ...prev,
       medications: prev.medications.filter((m) => m.id !== id),
+    }));
+  };
+
+  const addInfusion = () => {
+    if (!newInfusion.name.trim()) return;
+    const newEntry: InfusionEntry = {
+      id: Date.now().toString(),
+      name: newInfusion.name.trim(),
+      dose: newInfusion.dose.trim(),
+      dilution: newInfusion.dilution.trim(),
+      rate: newInfusion.rate.trim(),
+      notes: newInfusion.notes.trim(),
+    };
+    setTreatmentData((prev) => ({
+      ...prev,
+      infusions: [...prev.infusions, newEntry],
+    }));
+    setNewInfusion({ name: "", dose: "", dilution: "", rate: "", notes: "" });
+  };
+
+  const removeInfusion = (id: string) => {
+    setTreatmentData((prev) => ({
+      ...prev,
+      infusions: prev.infusions.filter((inf) => inf.id !== id),
     }));
   };
 
@@ -2306,6 +2371,61 @@ export default function CaseSheetScreen() {
                         <Text style={[styles.medicationDetails, { color: theme.textSecondary }]}>{med.route} — {med.frequency}</Text>
                       </View>
                       <Pressable onPress={() => removeMedication(med.id)} hitSlop={8}>
+                        <Feather name="x-circle" size={20} color={TriageColors.red} />
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.lg }]}>Infusions (Drips)</Text>
+              
+              <View style={styles.medicationInputRow}>
+                <TextInput
+                  style={[styles.medicationInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, flex: 2 }]}
+                  placeholder="Drug (e.g., Dopamine)"
+                  placeholderTextColor={theme.textMuted}
+                  value={newInfusion.name}
+                  onChangeText={(v) => setNewInfusion((prev) => ({ ...prev, name: v }))}
+                />
+                <TextInput
+                  style={[styles.medicationInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, flex: 1 }]}
+                  placeholder="Dose"
+                  placeholderTextColor={theme.textMuted}
+                  value={newInfusion.dose}
+                  onChangeText={(v) => setNewInfusion((prev) => ({ ...prev, dose: v }))}
+                />
+              </View>
+              <View style={styles.medicationInputRow}>
+                <TextInput
+                  style={[styles.medicationInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, flex: 1 }]}
+                  placeholder="Dilution (50ml NS)"
+                  placeholderTextColor={theme.textMuted}
+                  value={newInfusion.dilution}
+                  onChangeText={(v) => setNewInfusion((prev) => ({ ...prev, dilution: v }))}
+                />
+                <TextInput
+                  style={[styles.medicationInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, flex: 1 }]}
+                  placeholder="Rate (ml/hr)"
+                  placeholderTextColor={theme.textMuted}
+                  value={newInfusion.rate}
+                  onChangeText={(v) => setNewInfusion((prev) => ({ ...prev, rate: v }))}
+                />
+              </View>
+              <Pressable style={[styles.addDrugBtn, { backgroundColor: "#8B5CF6" }]} onPress={addInfusion}>
+                <Feather name="plus" size={18} color="#FFFFFF" />
+                <Text style={styles.addDrugBtnText}>Add Infusion</Text>
+              </Pressable>
+
+              {treatmentData.infusions.length > 0 && (
+                <View style={styles.medicationsList}>
+                  {treatmentData.infusions.map((inf) => (
+                    <View key={inf.id} style={[styles.medicationItem, { backgroundColor: "#EDE9FE" }]}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.medicationName, { color: "#5B21B6" }]}>{inf.name} {inf.dose}</Text>
+                        <Text style={[styles.medicationDetails, { color: "#7C3AED" }]}>In {inf.dilution} @ {inf.rate}</Text>
+                      </View>
+                      <Pressable onPress={() => removeInfusion(inf.id)} hitSlop={8}>
                         <Feather name="x-circle" size={20} color={TriageColors.red} />
                       </Pressable>
                     </View>
