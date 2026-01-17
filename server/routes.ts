@@ -825,6 +825,153 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/treatment-history/save", async (req: Request, res: Response) => {
+    try {
+      const { userId, diagnosis, medications, infusions, patientAge, patientSex, caseId } = req.body;
+      
+      if (!diagnosis || (!medications?.length && !infusions?.length)) {
+        return res.status(400).json({ error: "Diagnosis and at least one medication/infusion required" });
+      }
+
+      const { db } = await import("./db");
+      const { treatmentHistory } = await import("@shared/schema");
+      const { eq, and } = await import("drizzle-orm");
+
+      const ageGroup = parseInt(patientAge) <= 16 ? "pediatric" : "adult";
+      const savedItems: any[] = [];
+
+      for (const med of (medications || [])) {
+        const existing = await db.select().from(treatmentHistory)
+          .where(and(
+            eq(treatmentHistory.diagnosis, diagnosis),
+            eq(treatmentHistory.drugName, med.name),
+            eq(treatmentHistory.drugType, "medication")
+          ))
+          .limit(1);
+
+        if (existing.length > 0) {
+          await db.update(treatmentHistory)
+            .set({ 
+              usageCount: (existing[0].usageCount || 1) + 1,
+              updatedAt: new Date()
+            })
+            .where(eq(treatmentHistory.id, existing[0].id));
+          savedItems.push({ ...existing[0], updated: true });
+        } else {
+          const newRecord = await db.insert(treatmentHistory).values({
+            userId,
+            diagnosis,
+            drugName: med.name,
+            dose: med.dose,
+            route: med.route,
+            frequency: med.frequency,
+            drugType: "medication",
+            ageGroup,
+            patientAge: String(patientAge),
+            patientSex,
+            caseId,
+          }).returning();
+          savedItems.push(newRecord[0]);
+        }
+      }
+
+      for (const inf of (infusions || [])) {
+        const existing = await db.select().from(treatmentHistory)
+          .where(and(
+            eq(treatmentHistory.diagnosis, diagnosis),
+            eq(treatmentHistory.drugName, inf.name),
+            eq(treatmentHistory.drugType, "infusion")
+          ))
+          .limit(1);
+
+        if (existing.length > 0) {
+          await db.update(treatmentHistory)
+            .set({ 
+              usageCount: (existing[0].usageCount || 1) + 1,
+              updatedAt: new Date()
+            })
+            .where(eq(treatmentHistory.id, existing[0].id));
+          savedItems.push({ ...existing[0], updated: true });
+        } else {
+          const newRecord = await db.insert(treatmentHistory).values({
+            userId,
+            diagnosis,
+            drugName: inf.name,
+            dose: inf.dose,
+            dilution: inf.dilution,
+            rate: inf.rate,
+            drugType: "infusion",
+            ageGroup,
+            patientAge: String(patientAge),
+            patientSex,
+            caseId,
+          }).returning();
+          savedItems.push(newRecord[0]);
+        }
+      }
+
+      res.json({ success: true, savedCount: savedItems.length });
+    } catch (error) {
+      console.error("Treatment history save error:", error);
+      res.status(500).json({ error: "Failed to save treatment history" });
+    }
+  });
+
+  app.get("/api/treatment-history/recommendations", async (req: Request, res: Response) => {
+    try {
+      const { diagnosis, ageGroup, limit = "10" } = req.query;
+      
+      if (!diagnosis) {
+        return res.status(400).json({ error: "Diagnosis is required" });
+      }
+
+      const { db } = await import("./db");
+      const { treatmentHistory } = await import("@shared/schema");
+      const { eq, and, ilike, desc } = await import("drizzle-orm");
+
+      let query = db.select().from(treatmentHistory)
+        .where(ilike(treatmentHistory.diagnosis, `%${diagnosis}%`));
+      
+      if (ageGroup && (ageGroup === "pediatric" || ageGroup === "adult")) {
+        query = db.select().from(treatmentHistory)
+          .where(and(
+            ilike(treatmentHistory.diagnosis, `%${diagnosis}%`),
+            eq(treatmentHistory.ageGroup, ageGroup as string)
+          ));
+      }
+
+      const results = await query
+        .orderBy(desc(treatmentHistory.usageCount))
+        .limit(parseInt(limit as string));
+
+      const medications = results.filter(r => r.drugType === "medication");
+      const infusions = results.filter(r => r.drugType === "infusion");
+
+      res.json({ 
+        success: true, 
+        recommendations: {
+          medications: medications.map(m => ({
+            name: m.drugName,
+            dose: m.dose,
+            route: m.route,
+            frequency: m.frequency,
+            usageCount: m.usageCount,
+          })),
+          infusions: infusions.map(i => ({
+            name: i.drugName,
+            dose: i.dose,
+            dilution: i.dilution,
+            rate: i.rate,
+            usageCount: i.usageCount,
+          })),
+        }
+      });
+    } catch (error) {
+      console.error("Treatment recommendations error:", error);
+      res.status(500).json({ error: "Failed to get recommendations" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

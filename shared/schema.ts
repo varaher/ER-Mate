@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, serial } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, serial, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -37,3 +37,32 @@ export const insertAIFeedbackSchema = createInsertSchema(aiFeedback).omit({
 
 export type AIFeedbackRecord = typeof aiFeedback.$inferSelect;
 export type InsertAIFeedback = z.infer<typeof insertAIFeedbackSchema>;
+
+export const treatmentHistory = pgTable("treatment_history", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id"),
+  diagnosis: text("diagnosis").notNull(),
+  drugName: text("drug_name").notNull(),
+  dose: text("dose"),
+  route: text("route"),
+  frequency: text("frequency"),
+  drugType: text("drug_type").default("medication"),
+  dilution: text("dilution"),
+  rate: text("rate"),
+  ageGroup: text("age_group"),
+  patientAge: text("patient_age"),
+  patientSex: text("patient_sex"),
+  caseId: text("case_id"),
+  usageCount: integer("usage_count").default(1),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertTreatmentHistorySchema = createInsertSchema(treatmentHistory).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type TreatmentHistoryRecord = typeof treatmentHistory.$inferSelect;
+export type InsertTreatmentHistory = z.infer<typeof insertTreatmentHistorySchema>;
