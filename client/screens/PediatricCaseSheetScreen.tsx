@@ -178,6 +178,14 @@ interface PediatricExamFormData {
   extremities: string;
 }
 
+interface InfusionEntry {
+  id: string;
+  name: string;
+  dose: string;
+  dilution: string;
+  rate: string;
+}
+
 interface TreatmentFormData {
   labsOrdered: string;
   imaging: string;
@@ -186,6 +194,7 @@ interface TreatmentFormData {
   differentialDiagnoses: string;
   otherMedications: string;
   ivFluids: string;
+  infusions: InfusionEntry[];
 }
 
 interface ProceduresData {
@@ -265,7 +274,7 @@ export default function PediatricCaseSheetScreen() {
     respiratory: "", cardiovascular: "", abdomen: "", back: "", extremities: ""
   });
   const [treatmentData, setTreatmentData] = useState<TreatmentFormData>({
-    labsOrdered: "", imaging: "", resultsSummary: "", primaryDiagnosis: "", differentialDiagnoses: "", otherMedications: "", ivFluids: ""
+    labsOrdered: "", imaging: "", resultsSummary: "", primaryDiagnosis: "", differentialDiagnoses: "", otherMedications: "", ivFluids: "", infusions: []
   });
   const [proceduresData, setProceduresData] = useState<ProceduresData>({
     resuscitation: { cpr: false },
@@ -328,6 +337,15 @@ export default function PediatricCaseSheetScreen() {
       setExamData(caseSheetData.examination);
     }
     if (caseSheetData.treatment) {
+      const loadedInfusions = Array.isArray(caseSheetData.treatment.infusions) 
+        ? caseSheetData.treatment.infusions.map((inf: any) => ({
+            id: inf.id || Date.now().toString() + Math.random(),
+            name: inf.name || "",
+            dose: inf.dose || "",
+            dilution: inf.dilution || "",
+            rate: inf.rate || "",
+          }))
+        : [];
       setTreatmentData({
         labsOrdered: Array.isArray(caseSheetData.treatment.panels_selected) ? caseSheetData.treatment.panels_selected.join(", ") : "",
         imaging: Array.isArray(caseSheetData.treatment.imaging) ? caseSheetData.treatment.imaging.join(", ") : "",
@@ -336,6 +354,7 @@ export default function PediatricCaseSheetScreen() {
         differentialDiagnoses: Array.isArray(caseSheetData.treatment.differential_diagnoses) ? caseSheetData.treatment.differential_diagnoses.join(", ") : "",
         otherMedications: caseSheetData.treatment.other_medications || "",
         ivFluids: caseSheetData.treatment.fluids || "",
+        infusions: loadedInfusions,
       });
     }
     if (caseSheetData.disposition) {
@@ -481,6 +500,12 @@ export default function PediatricCaseSheetScreen() {
         results_summary: treatmentData.resultsSummary || "",
         medications: treatmentData.otherMedications || "",
         iv_fluids: treatmentData.ivFluids || "",
+        infusions: treatmentData.infusions.filter((i: InfusionEntry) => i.name.trim() !== "").map((i: InfusionEntry) => ({
+          name: i.name,
+          dose: i.dose,
+          dilution: i.dilution,
+          rate: i.rate,
+        })),
       },
       er_observation: {
         notes: dispositionData.erObservationNotes || "",
@@ -1274,6 +1299,85 @@ export default function PediatricCaseSheetScreen() {
                 <VoiceButton fieldKey="treatment.ivFluids" />
               </View>
               <TextInput style={[styles.inputField, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="NS, RL, etc..." placeholderTextColor={theme.textMuted} value={treatmentData.ivFluids} onChangeText={(v) => setTreatmentData((prev) => ({ ...prev, ivFluids: v }))} />
+            </View>
+
+            <View style={[styles.card, { backgroundColor: theme.card, borderLeftWidth: 4, borderLeftColor: "#9333EA" }]}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.md }}>
+                <View>
+                  <Text style={[styles.cardTitle, { color: theme.text, marginBottom: 2 }]}>Infusions / Drips</Text>
+                  <Text style={[styles.cardSubtitle, { color: theme.textSecondary }]}>IV medications with continuous rate</Text>
+                </View>
+                <Pressable
+                  style={[styles.addDrugBtn, { backgroundColor: "#9333EA", paddingHorizontal: 12, paddingVertical: 8 }]}
+                  onPress={() => {
+                    const newInfusion: InfusionEntry = { id: Date.now().toString(), name: "", dose: "", dilution: "", rate: "" };
+                    setTreatmentData((prev) => ({ ...prev, infusions: [...prev.infusions, newInfusion] }));
+                  }}
+                >
+                  <Feather name="plus" size={16} color="#FFFFFF" />
+                  <Text style={[styles.addDrugBtnText, { fontSize: 13 }]}>Add Infusion</Text>
+                </Pressable>
+              </View>
+
+              {treatmentData.infusions.map((infusion, index) => (
+                <View key={infusion.id} style={{ backgroundColor: theme.backgroundSecondary, borderRadius: 12, padding: Spacing.md, marginBottom: Spacing.sm }}>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.sm }}>
+                    <Text style={[styles.fieldLabel, { color: "#9333EA", fontWeight: "600" }]}>Infusion #{index + 1}</Text>
+                    <Pressable
+                      onPress={() => setTreatmentData((prev) => ({ ...prev, infusions: prev.infusions.filter((i) => i.id !== infusion.id) }))}
+                      style={{ padding: 6 }}
+                    >
+                      <Feather name="trash-2" size={18} color={TriageColors.red} />
+                    </Pressable>
+                  </View>
+                  <Text style={[styles.fieldLabel, { color: theme.text, marginBottom: 4 }]}>Drug Name</Text>
+                  <TextInput
+                    style={[styles.inputField, { backgroundColor: theme.card, color: theme.text, marginBottom: Spacing.sm }]}
+                    placeholder="e.g., Dopamine, Noradrenaline..."
+                    placeholderTextColor={theme.textMuted}
+                    value={infusion.name}
+                    onChangeText={(v) => setTreatmentData((prev) => ({ ...prev, infusions: prev.infusions.map((i) => i.id === infusion.id ? { ...i, name: v } : i) }))}
+                  />
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.fieldLabel, { color: theme.text, marginBottom: 4, fontSize: 12 }]}>Dose</Text>
+                      <TextInput
+                        style={[styles.inputField, { backgroundColor: theme.card, color: theme.text }]}
+                        placeholder="e.g., 5 mcg/kg/min"
+                        placeholderTextColor={theme.textMuted}
+                        value={infusion.dose}
+                        onChangeText={(v) => setTreatmentData((prev) => ({ ...prev, infusions: prev.infusions.map((i) => i.id === infusion.id ? { ...i, dose: v } : i) }))}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.fieldLabel, { color: theme.text, marginBottom: 4, fontSize: 12 }]}>Dilution</Text>
+                      <TextInput
+                        style={[styles.inputField, { backgroundColor: theme.card, color: theme.text }]}
+                        placeholder="e.g., in 50ml NS"
+                        placeholderTextColor={theme.textMuted}
+                        value={infusion.dilution}
+                        onChangeText={(v) => setTreatmentData((prev) => ({ ...prev, infusions: prev.infusions.map((i) => i.id === infusion.id ? { ...i, dilution: v } : i) }))}
+                      />
+                    </View>
+                  </View>
+                  <View style={{ marginTop: Spacing.sm }}>
+                    <Text style={[styles.fieldLabel, { color: theme.text, marginBottom: 4, fontSize: 12 }]}>Rate</Text>
+                    <TextInput
+                      style={[styles.inputField, { backgroundColor: theme.card, color: theme.text }]}
+                      placeholder="e.g., 5 ml/hr"
+                      placeholderTextColor={theme.textMuted}
+                      value={infusion.rate}
+                      onChangeText={(v) => setTreatmentData((prev) => ({ ...prev, infusions: prev.infusions.map((i) => i.id === infusion.id ? { ...i, rate: v } : i) }))}
+                    />
+                  </View>
+                </View>
+              ))}
+
+              {treatmentData.infusions.length === 0 && (
+                <View style={{ padding: Spacing.lg, alignItems: "center" }}>
+                  <Text style={{ color: theme.textMuted, fontStyle: "italic" }}>No infusions added yet</Text>
+                </View>
+              )}
             </View>
 
             <Pressable style={[styles.addAddendumBtn, { borderColor: theme.border }]}>
