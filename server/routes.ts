@@ -833,7 +833,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Diagnosis and at least one medication/infusion required" });
       }
 
-      const { db } = await import("./db");
+      const { getDb } = await import("./db");
+      const db = getDb();
+      if (!db) {
+        return res.status(503).json({ error: "Database not available" });
+      }
       const { treatmentHistory } = await import("@shared/schema");
       const { eq, and } = await import("drizzle-orm");
 
@@ -925,39 +929,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Diagnosis is required" });
       }
 
-      const { db } = await import("./db");
+      const { getDb } = await import("./db");
+      const db = getDb();
+      if (!db) {
+        return res.status(503).json({ error: "Database not available" });
+      }
       const { treatmentHistory } = await import("@shared/schema");
       const { eq, and, ilike, desc } = await import("drizzle-orm");
 
-      let query = db.select().from(treatmentHistory)
-        .where(ilike(treatmentHistory.diagnosis, `%${diagnosis}%`));
+      let results: any[] = [];
       
       if (ageGroup && (ageGroup === "pediatric" || ageGroup === "adult")) {
-        query = db.select().from(treatmentHistory)
+        results = await db.select().from(treatmentHistory)
           .where(and(
             ilike(treatmentHistory.diagnosis, `%${diagnosis}%`),
             eq(treatmentHistory.ageGroup, ageGroup as string)
-          ));
+          ))
+          .orderBy(desc(treatmentHistory.usageCount))
+          .limit(parseInt(limit as string));
+      } else {
+        results = await db.select().from(treatmentHistory)
+          .where(ilike(treatmentHistory.diagnosis, `%${diagnosis}%`))
+          .orderBy(desc(treatmentHistory.usageCount))
+          .limit(parseInt(limit as string));
       }
 
-      const results = await query
-        .orderBy(desc(treatmentHistory.usageCount))
-        .limit(parseInt(limit as string));
-
-      const medications = results.filter(r => r.drugType === "medication");
-      const infusions = results.filter(r => r.drugType === "infusion");
+      const medications = results.filter((r: any) => r.drugType === "medication");
+      const infusions = results.filter((r: any) => r.drugType === "infusion");
 
       res.json({ 
         success: true, 
         recommendations: {
-          medications: medications.map(m => ({
+          medications: medications.map((m: any) => ({
             name: m.drugName,
             dose: m.dose,
             route: m.route,
             frequency: m.frequency,
             usageCount: m.usageCount,
           })),
-          infusions: infusions.map(i => ({
+          infusions: infusions.map((i: any) => ({
             name: i.drugName,
             dose: i.dose,
             dilution: i.dilution,

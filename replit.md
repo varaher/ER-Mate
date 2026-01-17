@@ -1,9 +1,15 @@
 # ErMate - Emergency Room EMR Application
 
-## Release Status: RC-1 (Code Freeze)
+## Release Status: RC-2 (Post Code Freeze Features)
 
-**Status**: Release Candidate 1 - Production code freeze in effect  
-**Date**: January 15, 2026
+**Status**: Release Candidate 2 - Code freeze broken with user approval for new features  
+**Date**: January 17, 2026
+
+### RC-2 New Features (January 17, 2026)
+1. **Infusion Section** - Added dedicated section in Treatment tab for IV infusions/drips with drug name, dose, dilution, and rate fields
+2. **Treatment History System** - Auto-saves treatments to database for ML-based recommendations on future patients
+3. **Enhanced ViewCaseScreen** - Now displays medications list with dose/route/frequency, infusions, IV fluids, and primary diagnosis
+4. **Physical Exam Abnormal Findings** - ViewCaseScreen now properly displays all abnormal findings (pallor, icterus, cyanosis, etc.)
 
 ### RC-1 Bug Fixes Applied (January 16, 2026)
 1. **Fixed Save as Draft functionality** - Added proper error handling when draft isn't initialized
@@ -18,22 +24,10 @@
 10. **Fixed default drug frequency** - New medication entries in adult case sheet now default to "stat" frequency
 11. **Fixed TriageScreen typing lag** - Text inputs now use ref-based pattern for smooth continuous typing without re-renders
 
-### RC-1 Supported Input Values
+### Supported Input Values
 - Text fields accept "nil", "none", "n/a", "not applicable", or any freeform text
 - These values are valid clinical documentation entries and save normally
 - No input validation blocks these common medical notation shortcuts
-
-### Allowed Changes (Bug Fixes Only)
-- Save failures (draft saves, backend commits)
-- Voice → field mapping issues
-- Case sheet → discharge summary sync
-- Data persistence & API reliability
-
-### Not Allowed Without Approval
-- New features
-- UI changes
-- Code refactors
-- Structural changes
 
 ## Overview
 
