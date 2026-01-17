@@ -356,12 +356,67 @@ export default function ViewCaseScreen() {
         </Section>
 
         <Section title="Physical Examination">
-          <ExamSection title="General Examination" status={examination.general_appearance || "Normal"} notes={examination.general_additional_notes || examination.general_notes || (examination.cvs_status === "Normal" ? "Patient is conscious, alert, and oriented. No pallor, icterus, cyanosis, clubbing, lymphadenopathy, or edema noted." : `Pallor: ${examination.general_pallor ? "Present" : "Absent"}, Icterus: ${examination.general_icterus ? "Present" : "Absent"}`)} />
-          <ExamSection title="Cardiovascular System (CVS)" status={examination.cvs_status || "Normal"} notes={examination.cvs_additional_notes || (examination.cvs_status === "Normal" ? "S1 S2 heard, normal intensity. No murmurs, gallops, or rubs. JVP not elevated. Peripheral pulses well felt bilaterally." : `S1/S2: ${examination.cvs_s1_s2 || "Normal"}, Pulse: ${examination.cvs_pulse || "-"}`)} />
-          <ExamSection title="Respiratory System" status={examination.respiratory_status || "Normal"} notes={examination.respiratory_additional_notes || (examination.respiratory_status === "Normal" ? "Bilateral equal air entry. Vesicular breath sounds. No wheeze, crackles, or rhonchi. Normal percussion notes." : `Breath sounds: ${examination.respiratory_breath_sounds || "-"}`)} />
-          <ExamSection title="Abdomen" status={examination.abdomen_status || "Normal"} notes={examination.abdomen_additional_notes || (examination.abdomen_status === "Normal" ? "Soft, non-distended, non-tender. No guarding or rigidity. No organomegaly. Bowel sounds present and normal." : `Bowel sounds: ${examination.abdomen_bowel_sounds || "-"}`)} />
-          <ExamSection title="Central Nervous System" status={examination.cns_status || "Normal"} notes={examination.cns_additional_notes || (examination.cns_status === "Normal" ? "Conscious, oriented to time, place, and person. GCS 15/15. Cranial nerves intact. Pupils BERL. Motor power 5/5 in all limbs. Reflexes normal." : `Motor: ${examination.cns_motor_system || "-"}`)} />
-          <ExamSection title="Extremities" status={examination.extremities_status || "Normal"} notes={examination.extremities_additional_notes || examination.extremities_findings || (examination.extremities_status === "Normal" ? "No edema, cyanosis, or clubbing. Peripheral pulses well felt. Full range of motion. No deformity or swelling." : "Abnormal findings documented")} />
+          <ExamSection 
+            title="General Examination" 
+            status={(() => {
+              const hasAbnormal = examination.general_pallor || examination.general_icterus || examination.general_cyanosis || examination.general_clubbing || examination.general_lymphadenopathy || examination.general_edema;
+              return hasAbnormal ? "Abnormal" : (examination.general_appearance || "Normal");
+            })()}
+            notes={(() => {
+              const hasAbnormal = examination.general_pallor || examination.general_icterus || examination.general_cyanosis || examination.general_clubbing || examination.general_lymphadenopathy || examination.general_edema;
+              if (hasAbnormal) {
+                const findings = [];
+                if (examination.general_pallor) findings.push("Pallor present");
+                if (examination.general_icterus) findings.push("Icterus present");
+                if (examination.general_cyanosis) findings.push("Cyanosis present");
+                if (examination.general_clubbing) findings.push("Clubbing present");
+                if (examination.general_lymphadenopathy) findings.push("Lymphadenopathy present");
+                if (examination.general_edema) findings.push("Edema present");
+                return findings.join(". ") + (examination.general_additional_notes ? `. ${examination.general_additional_notes}` : "");
+              }
+              return examination.general_additional_notes || "Patient is conscious, alert, and oriented. No pallor, icterus, cyanosis, clubbing, lymphadenopathy, or edema noted.";
+            })()}
+          />
+          <ExamSection 
+            title="Cardiovascular System (CVS)" 
+            status={examination.cvs_status || "Normal"} 
+            notes={examination.cvs_status !== "Normal" 
+              ? `S1/S2: ${examination.cvs_s1_s2 || "-"}, Pulse: ${examination.cvs_pulse || "-"} @ ${examination.cvs_pulse_rate || "-"}bpm, Apex: ${examination.cvs_apexBeat || "-"}${examination.cvs_murmurs ? `, Murmurs: ${examination.cvs_murmurs}` : ""}${examination.cvs_added_sounds ? `, Added sounds: ${examination.cvs_added_sounds}` : ""}${examination.cvs_additional_notes ? `. ${examination.cvs_additional_notes}` : ""}`
+              : (examination.cvs_additional_notes || "S1 S2 heard, normal intensity. No murmurs, gallops, or rubs. JVP not elevated. Peripheral pulses well felt bilaterally.")
+            } 
+          />
+          <ExamSection 
+            title="Respiratory System" 
+            status={examination.respiratory_status || "Normal"} 
+            notes={examination.respiratory_status !== "Normal"
+              ? `Expansion: ${examination.respiratory_expansion || "-"}, Breath sounds: ${examination.respiratory_breath_sounds || "-"}, Percussion: ${examination.respiratory_percussion || "-"}${examination.respiratory_added_sounds ? `, Added sounds: ${examination.respiratory_added_sounds}` : ""}${examination.respiratory_additional_notes ? `. ${examination.respiratory_additional_notes}` : ""}`
+              : (examination.respiratory_additional_notes || "Bilateral equal air entry. Vesicular breath sounds. No wheeze, crackles, or rhonchi. Normal percussion notes.")
+            }
+          />
+          <ExamSection 
+            title="Abdomen" 
+            status={examination.abdomen_status || "Normal"} 
+            notes={examination.abdomen_status !== "Normal"
+              ? `Bowel sounds: ${examination.abdomen_bowel_sounds || "-"}, Percussion: ${examination.abdomen_percussion || "-"}${examination.abdomen_organomegaly ? `, Organomegaly: ${examination.abdomen_organomegaly}` : ""}${examination.abdomen_additional_notes ? `. ${examination.abdomen_additional_notes}` : ""}`
+              : (examination.abdomen_additional_notes || "Soft, non-distended, non-tender. No guarding or rigidity. No organomegaly. Bowel sounds present and normal.")
+            }
+          />
+          <ExamSection 
+            title="Central Nervous System" 
+            status={examination.cns_status || "Normal"} 
+            notes={examination.cns_status !== "Normal"
+              ? `Higher mental: ${examination.cns_higher_mental_functions || "-"}, Cranial nerves: ${examination.cns_cranial_nerves || "-"}, Motor: ${examination.cns_motor_system || "-"}, Sensory: ${examination.cns_sensory_system || "-"}, Reflexes: ${examination.cns_reflexes || "-"}${examination.cns_additional_notes ? `. ${examination.cns_additional_notes}` : ""}`
+              : (examination.cns_additional_notes || "Conscious, oriented to time, place, and person. GCS 15/15. Cranial nerves intact. Pupils BERL. Motor power 5/5 in all limbs. Reflexes normal.")
+            }
+          />
+          <ExamSection 
+            title="Extremities" 
+            status={examination.extremities_status || "Normal"} 
+            notes={examination.extremities_status !== "Normal"
+              ? (examination.extremities_findings || examination.extremities_additional_notes || "Abnormal findings documented")
+              : (examination.extremities_additional_notes || "No edema, cyanosis, or clubbing. Peripheral pulses well felt. Full range of motion. No deformity or swelling.")
+            }
+          />
         </Section>
 
         <Section title="Investigations">
@@ -373,18 +428,56 @@ export default function ViewCaseScreen() {
 
         <Section title="Treatment">
           {treatment.interventions?.length > 0 && <InfoRow label="Interventions" value={treatment.interventions.join(", ")} />}
+          
+          <SubSection title="Primary Diagnosis">
+            <Text style={[styles.text, { color: theme.text }]}>{treatment.primary_diagnosis || treatment.provisional_diagnoses?.[0] || "N/A"}</Text>
+          </SubSection>
+          
+          <SubSection title="Differential Diagnoses">
+            {editMode ? (
+              <TextInput style={[styles.editableInput, { backgroundColor: "#FEF9C3", color: theme.text }]} defaultValue={editableFieldsRef.current.differential_diagnoses} onChangeText={(text) => updateEditableField("differential_diagnoses", text)} placeholder="Differential diagnoses (comma separated)" placeholderTextColor={theme.textMuted} />
+            ) : (
+              <Text style={[styles.text, { color: theme.text }]}>{treatment.differential_diagnoses?.join(", ") || "N/A"}</Text>
+            )}
+          </SubSection>
+
+          {treatment.medications?.length > 0 && (
+            <SubSection title="Medications">
+              {treatment.medications.map((med: any, idx: number) => (
+                <View key={idx} style={styles.medicationItem}>
+                  <Text style={[styles.medicationName, { color: theme.text }]}>• {med.name || med.drug_name}</Text>
+                  <Text style={[styles.medicationDetails, { color: theme.textSecondary }]}>
+                    {med.dose} - {med.route} - {med.frequency}
+                  </Text>
+                </View>
+              ))}
+            </SubSection>
+          )}
+
+          {treatment.infusions?.length > 0 && (
+            <SubSection title="Infusions">
+              {treatment.infusions.map((inf: any, idx: number) => (
+                <View key={idx} style={styles.medicationItem}>
+                  <Text style={[styles.medicationName, { color: theme.text }]}>• {inf.name || inf.drug_name}</Text>
+                  <Text style={[styles.medicationDetails, { color: theme.textSecondary }]}>
+                    {inf.dose} in {inf.dilution} - Rate: {inf.rate}
+                  </Text>
+                </View>
+              ))}
+            </SubSection>
+          )}
+
+          {treatment.fluids && (
+            <SubSection title="IV Fluids">
+              <Text style={[styles.text, { color: theme.text }]}>{treatment.fluids}</Text>
+            </SubSection>
+          )}
+
           <SubSection title="Notes">
             {editMode ? (
               <TextInput style={[styles.editableTextArea, { backgroundColor: "#FEF9C3", color: theme.text }]} multiline numberOfLines={3} defaultValue={editableFieldsRef.current.intervention_notes} onChangeText={(text) => updateEditableField("intervention_notes", text)} placeholder="Treatment notes..." placeholderTextColor={theme.textMuted} />
             ) : (
-              <Text style={[styles.text, { color: theme.text }]}>{treatment.intervention_notes || "N/A"}</Text>
-            )}
-          </SubSection>
-          <SubSection title="Diagnosis">
-            {editMode ? (
-              <TextInput style={[styles.editableInput, { backgroundColor: "#FEF9C3", color: theme.text }]} defaultValue={editableFieldsRef.current.differential_diagnoses} onChangeText={(text) => updateEditableField("differential_diagnoses", text)} placeholder="Differential diagnoses (comma separated)" placeholderTextColor={theme.textMuted} />
-            ) : (
-              <Text style={[styles.text, { color: theme.text }]}>{treatment.differential_diagnoses?.join(", ") || treatment.provisional_diagnoses?.join(", ") || "N/A"}</Text>
+              <Text style={[styles.text, { color: theme.text }]}>{treatment.intervention_notes || treatment.other_medications || "N/A"}</Text>
             )}
           </SubSection>
         </Section>
@@ -487,6 +580,9 @@ const styles = StyleSheet.create({
   procedureItem: { marginBottom: Spacing.sm },
   procedureName: { ...Typography.bodyMedium },
   procedureNotes: { ...Typography.body, marginLeft: Spacing.md },
+  medicationItem: { marginBottom: Spacing.sm },
+  medicationName: { ...Typography.bodyMedium },
+  medicationDetails: { ...Typography.body, marginLeft: Spacing.md, fontSize: 13 },
   editableTextArea: { borderWidth: 1, borderColor: "#D1D5DB", borderRadius: BorderRadius.sm, padding: Spacing.md, minHeight: 80, textAlignVertical: "top", ...Typography.body },
   editableInput: { borderWidth: 1, borderColor: "#D1D5DB", borderRadius: BorderRadius.sm, padding: Spacing.md, ...Typography.body },
   editSection: { marginVertical: Spacing.lg, alignItems: "center" },
