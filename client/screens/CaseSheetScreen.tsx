@@ -2496,6 +2496,26 @@ export default function CaseSheetScreen() {
                 examination={`General: ${examData.general.notes}\nCVS: ${examData.cvs.notes}\nAbdomen: ${examData.abdomen.notes}`}
                 age={parseInt(caseData?.patient?.age?.toString() || "30")}
                 gender={caseData?.patient?.sex || "Unknown"}
+                abgData={{
+                  sampleType: formData.adjuncts.abgSampleType,
+                  ph: formData.adjuncts.abgPh,
+                  pco2: formData.adjuncts.abgPco2,
+                  po2: formData.adjuncts.abgPo2,
+                  hco3: formData.adjuncts.abgHco3,
+                  be: formData.adjuncts.abgBe,
+                  lactate: formData.adjuncts.abgLactate,
+                  sao2: formData.adjuncts.abgSao2,
+                  fio2: formData.adjuncts.abgFio2,
+                  na: formData.adjuncts.abgNa,
+                  k: formData.adjuncts.abgK,
+                  cl: formData.adjuncts.abgCl,
+                  anionGap: formData.adjuncts.abgAnionGap,
+                  glucose: formData.adjuncts.abgGlucose,
+                  hb: formData.adjuncts.abgHb,
+                  aaGradient: formData.adjuncts.abgAaGradient,
+                  interpretation: formData.adjuncts.abgInterpretation || abgInterpretation || "",
+                  status: formData.adjuncts.abgStatus,
+                }}
                 onDiagnosisSelect={(diagnosis) => setTreatmentData((prev) => ({ ...prev, primaryDiagnosis: diagnosis }))}
               />
             </View>

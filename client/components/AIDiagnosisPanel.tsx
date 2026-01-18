@@ -54,6 +54,27 @@ interface RedFlag {
   citations: Citation[];
 }
 
+interface ABGData {
+  sampleType?: string;
+  ph?: string;
+  pco2?: string;
+  po2?: string;
+  hco3?: string;
+  be?: string;
+  lactate?: string;
+  sao2?: string;
+  fio2?: string;
+  na?: string;
+  k?: string;
+  cl?: string;
+  anionGap?: string;
+  glucose?: string;
+  hb?: string;
+  aaGradient?: string;
+  interpretation?: string;
+  status?: string;
+}
+
 interface AIDiagnosisPanelProps {
   caseId: string;
   chiefComplaint: string;
@@ -62,6 +83,7 @@ interface AIDiagnosisPanelProps {
   examination: string;
   age: number;
   gender: string;
+  abgData?: ABGData;
   onDiagnosisSelect?: (diagnosis: string) => void;
 }
 
@@ -73,6 +95,7 @@ export function AIDiagnosisPanel({
   examination,
   age,
   gender,
+  abgData,
   onDiagnosisSelect,
 }: AIDiagnosisPanelProps) {
   const { theme } = useTheme();
@@ -106,6 +129,7 @@ export function AIDiagnosisPanel({
           examination,
           age,
           gender,
+          abgData,
         }),
       });
 
@@ -125,7 +149,7 @@ export function AIDiagnosisPanel({
     } finally {
       setIsLoading(false);
     }
-  }, [chiefComplaint, vitals, history, examination, age, gender]);
+  }, [chiefComplaint, vitals, history, examination, age, gender, abgData]);
 
   const submitFeedback = async (
     suggestionId: string,

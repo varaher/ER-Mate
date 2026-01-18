@@ -756,7 +756,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/ai/diagnose", async (req: Request, res: Response) => {
     try {
-      const { chiefComplaint, vitals, history, examination, age, gender } = req.body;
+      const { chiefComplaint, vitals, history, examination, age, gender, abgData } = req.body;
       
       if (!chiefComplaint) {
         return res.status(400).json({ error: "Chief complaint is required" });
@@ -769,6 +769,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         examination: examination || "",
         age: age || 30,
         gender: gender || "Unknown",
+        abgData: abgData || undefined,
       });
 
       res.json(result);

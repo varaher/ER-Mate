@@ -120,6 +120,51 @@ const MEDICAL_KNOWLEDGE_BASE = {
   },
 } as const;
 
+interface ABGData {
+  sampleType?: string;
+  ph?: string;
+  pco2?: string;
+  po2?: string;
+  hco3?: string;
+  be?: string;
+  lactate?: string;
+  sao2?: string;
+  fio2?: string;
+  na?: string;
+  k?: string;
+  cl?: string;
+  anionGap?: string;
+  glucose?: string;
+  hb?: string;
+  aaGradient?: string;
+  interpretation?: string;
+  status?: string;
+}
+
+function formatABGData(abgData?: ABGData): string {
+  if (!abgData) return "";
+  const parts: string[] = [];
+  if (abgData.sampleType) parts.push(`Sample: ${abgData.sampleType}`);
+  if (abgData.ph) parts.push(`pH: ${abgData.ph}`);
+  if (abgData.pco2) parts.push(`pCO2: ${abgData.pco2} mmHg`);
+  if (abgData.po2) parts.push(`pO2: ${abgData.po2} mmHg`);
+  if (abgData.hco3) parts.push(`HCO3: ${abgData.hco3} mEq/L`);
+  if (abgData.be) parts.push(`BE: ${abgData.be} mEq/L`);
+  if (abgData.lactate) parts.push(`Lactate: ${abgData.lactate} mmol/L`);
+  if (abgData.sao2) parts.push(`SaO2: ${abgData.sao2}%`);
+  if (abgData.fio2) parts.push(`FiO2: ${abgData.fio2}%`);
+  if (abgData.na) parts.push(`Na: ${abgData.na} mEq/L`);
+  if (abgData.k) parts.push(`K: ${abgData.k} mEq/L`);
+  if (abgData.cl) parts.push(`Cl: ${abgData.cl} mEq/L`);
+  if (abgData.anionGap) parts.push(`Anion Gap: ${abgData.anionGap}`);
+  if (abgData.glucose) parts.push(`Glucose: ${abgData.glucose} mg/dL`);
+  if (abgData.hb) parts.push(`Hb: ${abgData.hb} g/dL`);
+  if (abgData.aaGradient) parts.push(`A-a Gradient: ${abgData.aaGradient} mmHg`);
+  if (abgData.status && abgData.status !== "not_done") parts.push(`Interpretation: ${abgData.status.replace(/_/g, " ")}`);
+  if (abgData.interpretation) parts.push(`Clinical Note: ${abgData.interpretation}`);
+  return parts.length > 0 ? parts.join(", ") : "";
+}
+
 export async function generateDiagnosisSuggestions(caseData: {
   chiefComplaint: string;
   vitals: Record<string, string>;
@@ -127,8 +172,10 @@ export async function generateDiagnosisSuggestions(caseData: {
   examination: string;
   age: number;
   gender: string;
+  abgData?: ABGData;
 }): Promise<{ suggestions: DiagnosisSuggestion[]; redFlags: RedFlag[] }> {
   const isPediatric = caseData.age <= 16;
+  const abgInfo = formatABGData(caseData.abgData);
   
   const systemPrompt = `You are an expert emergency medicine physician assistant. Analyze the patient case and provide:
 1. Up to 3 differential diagnoses ranked by likelihood
@@ -186,9 +233,9 @@ Respond in JSON format:
 - Chief Complaint: ${caseData.chiefComplaint}
 - Vitals: ${JSON.stringify(caseData.vitals)}
 - History: ${caseData.history}
-- Examination: ${caseData.examination}
+- Examination: ${caseData.examination}${abgInfo ? `\n- ABG/VBG: ${abgInfo}` : ""}
 
-Provide differential diagnoses and identify any red flags.`;
+Provide differential diagnoses and identify any red flags.${abgInfo ? " Consider the ABG values in your assessment - look for acid-base disturbances, oxygenation issues, and electrolyte abnormalities that may suggest specific diagnoses or red flags." : ""}`;
 
   const openai = getOpenAIClient();
   if (!openai) {
