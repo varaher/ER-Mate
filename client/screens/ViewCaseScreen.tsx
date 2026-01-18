@@ -510,6 +510,20 @@ export default function ViewCaseScreen() {
           </Section>
         )}
 
+        {(() => {
+          const addendumNotes = caseData.treatment?.addendum_notes || caseData.addendum_notes || [];
+          const notesList = Array.isArray(addendumNotes) ? addendumNotes : (addendumNotes ? [addendumNotes] : []);
+          return notesList.length > 0 ? (
+            <Section title="Addendum Notes">
+              {notesList.map((note: string, idx: number) => (
+                <View key={idx} style={{ marginBottom: Spacing.sm }}>
+                  <Text style={[styles.text, { color: theme.text }]}>{note}</Text>
+                </View>
+              ))}
+            </Section>
+          ) : null;
+        })()}
+
         <Section title="Case Information">
           <InfoRow label="EM Resident" value={caseData.em_resident} />
           <InfoRow label="EM Consultant" value={caseData.em_consultant} />

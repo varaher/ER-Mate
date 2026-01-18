@@ -398,6 +398,12 @@ export default function DashboardScreen() {
                         >
                           <Feather name="file-text" size={16} color={theme.success} />
                         </Pressable>
+                        <Pressable
+                          style={[styles.actionBtn, { backgroundColor: "#fef3c7" }]}
+                          onPress={() => navigation.navigate("AddendumNotes", { caseId: caseItem.id })}
+                        >
+                          <Feather name="edit" size={16} color="#d97706" />
+                        </Pressable>
                         {isCompleted(caseItem.status) ? (
                           <Pressable
                             style={[styles.actionBtn, { backgroundColor: "#f3e8ff" }]}
