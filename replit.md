@@ -16,6 +16,9 @@
 8. **Nil Procedures Option** - Quick checkbox to mark "No procedures performed" in Notes tab
 9. **ABCDE Normal Options** - Individual findings can be marked as normal/patent/none even when overall section is abnormal
 10. **MLC Date/Time Default** - MLC incident date/time now defaults to current timestamp when starting case sheet
+11. **Adjuncts in ViewCaseScreen** - ABG, ECG, EFAST, and Bedside Echo now displayed in ViewCaseScreen and exports (PDF/DOCX)
+12. **ABG Normal Values Reference** - Added reference card showing normal ABG values (pH, pCO2, pO2, HCO3, BE, Lactate, SaO2, A-a Gradient)
+13. **AI ABG Interpretation** - New "AI Interpret ABG" button that uses GPT-4o to provide clinical interpretation of ABG values
 
 ### RC-1 Bug Fixes Applied (January 16, 2026)
 1. **Fixed Save as Draft functionality** - Added proper error handling when draft isn't initialized
