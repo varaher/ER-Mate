@@ -155,6 +155,7 @@ export default function ViewCaseScreen() {
   const patient = caseData.patient || {};
   const vitals = caseData.vitals_at_arrival || {};
   const primary = caseData.primary_assessment || caseData.abcde || {};
+  const adjuncts = caseData.adjuncts || {};
   const history = caseData.history || {};
   const examination = caseData.examination || {};
   const investigations = caseData.investigations || {};
@@ -300,6 +301,32 @@ export default function ViewCaseScreen() {
             {(exposure.notes || primary.exposure_additional_notes) && <InfoRow label="Notes" value={exposure.notes || primary.exposure_additional_notes} />}
           </SubSection>
         </Section>
+
+        {(adjuncts.ecg_findings || adjuncts.bedside_echo || adjuncts.additional_notes || adjuncts.efast_status || adjuncts.efast_notes) && (
+          <Section title="Adjuncts to Primary Survey">
+            {(adjuncts.additional_notes) && (
+              <SubSection title="ABG / VBG">
+                <Text style={[styles.text, { color: theme.text }]}>{adjuncts.additional_notes}</Text>
+              </SubSection>
+            )}
+            {(adjuncts.ecg_findings) && (
+              <SubSection title="ECG">
+                <Text style={[styles.text, { color: theme.text }]}>{adjuncts.ecg_findings}</Text>
+              </SubSection>
+            )}
+            {(adjuncts.efast_status || adjuncts.efast_notes) && (
+              <SubSection title="EFAST">
+                <InfoRow label="Status" value={adjuncts.efast_status} />
+                {adjuncts.efast_notes && <Text style={[styles.text, { color: theme.text }]}>{adjuncts.efast_notes}</Text>}
+              </SubSection>
+            )}
+            {(adjuncts.bedside_echo) && (
+              <SubSection title="Bedside Echo">
+                <Text style={[styles.text, { color: theme.text }]}>{adjuncts.bedside_echo}</Text>
+              </SubSection>
+            )}
+          </Section>
+        )}
 
         <Section title="History">
           <SubSection title="Events / HOPI">

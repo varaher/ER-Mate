@@ -570,3 +570,56 @@ Only include fields that have actual content from the transcript. Omit empty or 
     return { rawTranscription: transcription };
   }
 }
+
+export async function interpretABG(
+  abgValues: string,
+  patientContext?: { age?: string | number; sex?: string; presenting_complaint?: string }
+): Promise<string> {
+  const openai = getOpenAIClient();
+  if (!openai) {
+    return "AI interpretation unavailable - OpenAI API not configured. Manual interpretation required.";
+  }
+
+  const prompt = `You are an expert emergency medicine physician. Interpret the following ABG/VBG values and provide a clear clinical interpretation.
+
+ABG Values: ${abgValues}
+${patientContext?.age ? `Patient Age: ${patientContext.age}` : ""}
+${patientContext?.sex ? `Patient Sex: ${patientContext.sex}` : ""}
+${patientContext?.presenting_complaint ? `Presenting Complaint: ${patientContext.presenting_complaint}` : ""}
+
+Provide a concise interpretation including:
+1. Acid-base status (respiratory/metabolic acidosis/alkalosis, mixed disorder)
+2. Oxygenation assessment
+3. Compensation status (compensated, partially compensated, uncompensated)
+4. Clinical significance and likely causes
+5. Suggested actions if critical
+
+Use the stepwise approach:
+1. Check pH (acidemia <7.35, alkalemia >7.45)
+2. Check primary disorder (pCO2 for respiratory, HCO3 for metabolic)
+3. Check compensation (Winter's formula for metabolic, expected changes for respiratory)
+4. Check anion gap if metabolic acidosis
+5. Consider delta ratio if high anion gap
+
+Be concise but clinically relevant. Format as a clear, readable paragraph.`;
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        { 
+          role: "system", 
+          content: "You are an expert emergency medicine physician providing ABG interpretation. Be concise, clinically relevant, and actionable." 
+        },
+        { role: "user", content: prompt },
+      ],
+      temperature: 0.3,
+      max_tokens: 500,
+    });
+
+    return response.choices[0]?.message?.content || "Unable to interpret ABG values";
+  } catch (error) {
+    console.error("ABG interpretation error:", error);
+    return "Error interpreting ABG values. Please try again or interpret manually.";
+  }
+}

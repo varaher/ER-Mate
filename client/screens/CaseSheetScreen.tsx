@@ -513,6 +513,8 @@ export default function CaseSheetScreen() {
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
   const [caseData, setCaseData] = useState<any>(null);
+  const [abgInterpreting, setAbgInterpreting] = useState(false);
+  const [abgInterpretation, setAbgInterpretation] = useState<string | null>(null);
   const [formData, setFormData] = useState<ATLSFormData>(getDefaultATLSFormData());
   const [examData, setExamData] = useState<ExamFormData>(getDefaultExamFormData());
   const [psychData, setPsychData] = useState<PsychFormData>(getDefaultPsychFormData());
@@ -1285,6 +1287,45 @@ export default function CaseSheetScreen() {
     }));
   };
 
+  const handleABGInterpretation = async () => {
+    const abgValues = formData.adjuncts.abgNotes;
+    if (!abgValues || abgValues.trim().length < 5) {
+      Alert.alert("Missing Values", "Please enter ABG values first (pH, pCO2, pO2, HCO3, BE, Lactate)");
+      return;
+    }
+    
+    setAbgInterpreting(true);
+    setAbgInterpretation(null);
+    
+    try {
+      const { getApiUrl } = await import("@/lib/query-client");
+      const response = await fetch(`${getApiUrl()}/api/ai/interpret-abg`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          abg_values: abgValues,
+          patient_context: {
+            age: caseData?.patient?.age,
+            sex: caseData?.patient?.sex,
+            presenting_complaint: caseData?.presenting_complaint?.text,
+          },
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error("Failed to interpret ABG");
+      }
+      
+      const data = await response.json();
+      setAbgInterpretation(data.interpretation || "Unable to interpret ABG values");
+    } catch (error) {
+      console.error("ABG interpretation error:", error);
+      Alert.alert("Error", "Failed to get AI interpretation. Please try again.");
+    } finally {
+      setAbgInterpreting(false);
+    }
+  };
+
   const markAllExamNormal = () => {
     setExamData({
       general: { pallor: false, icterus: false, cyanosis: false, clubbing: false, lymphadenopathy: false, edema: false, notes: "Patient is conscious, alert, and oriented. No pallor, icterus, cyanosis, clubbing, lymphadenopathy, or edema noted." },
@@ -2048,7 +2089,42 @@ export default function CaseSheetScreen() {
             <Text style={[styles.sectionHeading, { color: theme.text }]}>Adjuncts to Primary Survey</Text>
             <CollapsibleSection title="ABG / VBG" icon="+" iconColor={theme.primary}>
               <DropdownField label="ABG Status" options={ABG_STATUS_OPTIONS} value={formData.adjuncts.abgStatus} onChange={(v) => updateFormData("adjuncts", "abgStatus", v)} />
-              <TextInputField label="ABG Notes / Values" value={formData.adjuncts.abgNotes} onChangeText={(v) => updateFormData("adjuncts", "abgNotes", v)} placeholder="pH, pCO2, pO2, HCO3, BE, Lactate..." multiline numberOfLines={2} />
+              
+              <View style={[styles.abgNormalValuesCard, { backgroundColor: theme.backgroundSecondary, borderColor: theme.border }]}>
+                <Text style={[styles.abgNormalTitle, { color: theme.primary }]}>Normal ABG Values (Reference)</Text>
+                <View style={styles.abgNormalGrid}>
+                  <View style={styles.abgNormalItem}><Text style={[styles.abgNormalLabel, { color: theme.textSecondary }]}>pH</Text><Text style={[styles.abgNormalValue, { color: theme.text }]}>7.35 - 7.45</Text></View>
+                  <View style={styles.abgNormalItem}><Text style={[styles.abgNormalLabel, { color: theme.textSecondary }]}>pCO₂</Text><Text style={[styles.abgNormalValue, { color: theme.text }]}>35 - 45 mmHg</Text></View>
+                  <View style={styles.abgNormalItem}><Text style={[styles.abgNormalLabel, { color: theme.textSecondary }]}>pO₂</Text><Text style={[styles.abgNormalValue, { color: theme.text }]}>80 - 100 mmHg</Text></View>
+                  <View style={styles.abgNormalItem}><Text style={[styles.abgNormalLabel, { color: theme.textSecondary }]}>HCO₃</Text><Text style={[styles.abgNormalValue, { color: theme.text }]}>22 - 26 mEq/L</Text></View>
+                  <View style={styles.abgNormalItem}><Text style={[styles.abgNormalLabel, { color: theme.textSecondary }]}>Base Excess</Text><Text style={[styles.abgNormalValue, { color: theme.text }]}>-2 to +2 mEq/L</Text></View>
+                  <View style={styles.abgNormalItem}><Text style={[styles.abgNormalLabel, { color: theme.textSecondary }]}>Lactate</Text><Text style={[styles.abgNormalValue, { color: theme.text }]}>0.5 - 2.0 mmol/L</Text></View>
+                  <View style={styles.abgNormalItem}><Text style={[styles.abgNormalLabel, { color: theme.textSecondary }]}>SaO₂</Text><Text style={[styles.abgNormalValue, { color: theme.text }]}>95 - 100%</Text></View>
+                  <View style={styles.abgNormalItem}><Text style={[styles.abgNormalLabel, { color: theme.textSecondary }]}>A-a Gradient</Text><Text style={[styles.abgNormalValue, { color: theme.text }]}>{"<"}10-15 mmHg</Text></View>
+                </View>
+              </View>
+
+              <TextInputField label="ABG Values" value={formData.adjuncts.abgNotes} onChangeText={(v) => updateFormData("adjuncts", "abgNotes", v)} placeholder="pH 7.35, pCO2 40, pO2 95, HCO3 24, BE 0, Lactate 1.2..." multiline numberOfLines={2} />
+              
+              <Pressable
+                style={[styles.aiInterpretBtn, { backgroundColor: "#8B5CF6", opacity: abgInterpreting ? 0.7 : 1 }]}
+                onPress={handleABGInterpretation}
+                disabled={abgInterpreting}
+              >
+                {abgInterpreting ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Feather name="cpu" size={16} color="#FFFFFF" />
+                )}
+                <Text style={styles.aiInterpretBtnText}>{abgInterpreting ? "Interpreting..." : "AI Interpret ABG"}</Text>
+              </Pressable>
+
+              {abgInterpretation && (
+                <View style={[styles.abgInterpretationCard, { backgroundColor: "#F3E8FF", borderColor: "#8B5CF6" }]}>
+                  <Text style={[styles.abgInterpretationTitle, { color: "#6B21A8" }]}>AI Interpretation</Text>
+                  <Text style={[styles.abgInterpretationText, { color: "#4C1D95" }]}>{abgInterpretation}</Text>
+                </View>
+              )}
             </CollapsibleSection>
             <CollapsibleSection title="ECG" icon="+" iconColor={theme.primary}>
               <DropdownField label="ECG Interpretation" options={ECG_STATUS_OPTIONS} value={formData.adjuncts.ecgStatus} onChange={(v) => updateFormData("adjuncts", "ecgStatus", v)} />
@@ -2689,6 +2765,17 @@ const styles = StyleSheet.create({
   procedureHeaderText: { ...Typography.bodyMedium, fontWeight: "600" },
   procedureRow: { flexDirection: "row", alignItems: "center", paddingVertical: Spacing.md, paddingHorizontal: Spacing.md, gap: Spacing.md },
   nilProcedureRow: { flexDirection: "row", alignItems: "center", paddingVertical: Spacing.md, paddingHorizontal: Spacing.md, gap: Spacing.md, borderWidth: 1, borderRadius: BorderRadius.md, marginTop: Spacing.md, marginBottom: Spacing.sm },
+  abgNormalValuesCard: { padding: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1, marginVertical: Spacing.sm },
+  abgNormalTitle: { ...Typography.bodyMedium, fontWeight: "600", marginBottom: Spacing.sm },
+  abgNormalGrid: { flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm },
+  abgNormalItem: { width: "48%", flexDirection: "row", justifyContent: "space-between", paddingVertical: 4 },
+  abgNormalLabel: { ...Typography.caption },
+  abgNormalValue: { ...Typography.caption, fontWeight: "600" },
+  aiInterpretBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, borderRadius: BorderRadius.md, gap: Spacing.sm, marginTop: Spacing.sm },
+  aiInterpretBtnText: { color: "#FFFFFF", fontWeight: "600", ...Typography.bodyMedium },
+  abgInterpretationCard: { padding: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1, marginTop: Spacing.md },
+  abgInterpretationTitle: { ...Typography.bodyMedium, fontWeight: "700", marginBottom: Spacing.xs },
+  abgInterpretationText: { ...Typography.body, lineHeight: 22 },
   checkbox: { width: 22, height: 22, borderWidth: 2, borderRadius: 4, justifyContent: "center", alignItems: "center" },
   procedureLabel: { ...Typography.body, flex: 1 },
   dispositionOptions: { flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm, marginTop: Spacing.sm },

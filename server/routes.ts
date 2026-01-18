@@ -565,6 +565,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         doc.moveDown(0.5);
       }
 
+      const adjuncts = data.adjuncts || {};
+      if (Object.keys(adjuncts).length > 0 && (adjuncts.ecg_findings || adjuncts.bedside_echo || adjuncts.additional_notes || adjuncts.efast_status || adjuncts.efast_notes)) {
+        doc.font("Helvetica-Bold").text("ADJUNCTS TO PRIMARY SURVEY");
+        doc.moveDown(0.3);
+        doc.font("Helvetica");
+        if (adjuncts.additional_notes) doc.text(`ABG/VBG: ${adjuncts.additional_notes}`);
+        if (adjuncts.ecg_findings) doc.text(`ECG: ${adjuncts.ecg_findings}`);
+        if (adjuncts.efast_status || adjuncts.efast_notes) doc.text(`EFAST: ${adjuncts.efast_status || ""}${adjuncts.efast_notes ? ` - ${adjuncts.efast_notes}` : ""}`);
+        if (adjuncts.bedside_echo) doc.text(`Bedside Echo: ${adjuncts.bedside_echo}`);
+        doc.moveDown(0.5);
+      }
+
       const sample = data.sample || {};
       if (Object.keys(sample).length > 0) {
         doc.font("Helvetica-Bold").text("SAMPLE HISTORY");
@@ -661,6 +673,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (pa.disability_gcs_e) children.push(new Paragraph({ text: `Disability: GCS E${pa.disability_gcs_e}V${pa.disability_gcs_v}M${pa.disability_gcs_m}` }));
       }
 
+      const adjunctsDocx = data.adjuncts || {};
+      if (Object.keys(adjunctsDocx).length > 0 && (adjunctsDocx.ecg_findings || adjunctsDocx.bedside_echo || adjunctsDocx.additional_notes || adjunctsDocx.efast_status || adjunctsDocx.efast_notes)) {
+        children.push(
+          new Paragraph({ text: "ADJUNCTS TO PRIMARY SURVEY", heading: HeadingLevel.HEADING_2, spacing: { before: 300, after: 100 } })
+        );
+        if (adjunctsDocx.additional_notes) children.push(new Paragraph({ text: `ABG/VBG: ${adjunctsDocx.additional_notes}` }));
+        if (adjunctsDocx.ecg_findings) children.push(new Paragraph({ text: `ECG: ${adjunctsDocx.ecg_findings}` }));
+        if (adjunctsDocx.efast_status || adjunctsDocx.efast_notes) children.push(new Paragraph({ text: `EFAST: ${adjunctsDocx.efast_status || ""}${adjunctsDocx.efast_notes ? ` - ${adjunctsDocx.efast_notes}` : ""}` }));
+        if (adjunctsDocx.bedside_echo) children.push(new Paragraph({ text: `Bedside Echo: ${adjunctsDocx.bedside_echo}` }));
+      }
+
       const sample = data.sample || {};
       if (Object.keys(sample).length > 0) {
         children.push(
@@ -710,6 +733,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err) {
       console.error("Case sheet DOCX generation error:", err);
       res.status(500).json({ error: "Failed to generate DOCX" });
+    }
+  });
+
+  app.post("/api/ai/interpret-abg", async (req: Request, res: Response) => {
+    try {
+      const { abg_values, patient_context } = req.body;
+      
+      if (!abg_values) {
+        return res.status(400).json({ error: "ABG values are required" });
+      }
+
+      const { interpretABG } = await import("./services/aiDiagnosis");
+      const interpretation = await interpretABG(abg_values, patient_context);
+      
+      res.json({ interpretation });
+    } catch (error) {
+      console.error("ABG interpretation error:", error);
+      res.status(500).json({ error: "Failed to interpret ABG values" });
     }
   });
 
