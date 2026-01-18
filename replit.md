@@ -19,6 +19,9 @@
 11. **Adjuncts in ViewCaseScreen** - ABG, ECG, EFAST, and Bedside Echo now displayed in ViewCaseScreen and exports (PDF/DOCX)
 12. **ABG Normal Values Reference** - Added reference card showing normal ABG values (pH, pCO2, pO2, HCO3, BE, Lactate, SaO2, A-a Gradient)
 13. **AI ABG Interpretation** - New "AI Interpret ABG" button that uses GPT-4o to provide clinical interpretation of ABG values
+14. **Comprehensive ABG Section** - Full ABG lab report format with individual fields: pH, pCO2, pO2, HCO3, BE, Lactate, SaO2, FiO2, Na, K, Cl, Anion Gap, Glucose, Hb, A-a Gradient - all fields optional
+15. **ABG in AI Diagnosis** - ABG values now integrated into AI differential diagnosis and red flags analysis for enhanced clinical assessment
+16. **Document Scanner** - Camera/image upload feature to scan clinical documents (lab reports, referral notes, prescriptions) with AI extraction to auto-populate relevant case sheet fields
 
 ### RC-1 Bug Fixes Applied (January 16, 2026)
 1. **Fixed Save as Draft functionality** - Added proper error handling when draft isn't initialized
