@@ -2470,34 +2470,58 @@ export default function CaseSheetScreen() {
               <Text style={[styles.cardTitle, { color: theme.text }]}>Procedures Performed</Text>
               <Text style={[styles.cardSubtitle, { color: theme.textSecondary }]}>Select all procedures performed and add notes</Text>
               
-              <ProcedureSection title="Resuscitation" category="resuscitation" />
-              <ProcedureSection title="Airway" category="airway" />
-              <ProcedureSection title="Vascular" category="vascular" />
-              <ProcedureSection title="Chest" category="chest" />
-              <ProcedureSection title="Neuro" category="neuro" />
-              <ProcedureSection title="GU" category="gu" />
-              <ProcedureSection title="GI" category="gi" />
-              <ProcedureSection title="Wound" category="wound" />
-              <ProcedureSection title="Ortho" category="ortho" />
+              <Pressable 
+                style={[styles.nilProcedureRow, { borderColor: proceduresData.generalNotes === "Nil" ? TriageColors.green : theme.border }]} 
+                onPress={() => {
+                  if (proceduresData.generalNotes === "Nil") {
+                    setProceduresData((prev) => ({ ...prev, generalNotes: "" }));
+                  } else {
+                    setProceduresData({
+                      resuscitation: [], airway: [], vascular: [], chest: [], neuro: [], gu: [], gi: [], wound: [], ortho: [], generalNotes: "Nil",
+                    });
+                  }
+                }}
+              >
+                <View style={[styles.checkbox, { borderColor: proceduresData.generalNotes === "Nil" ? TriageColors.green : theme.border }, proceduresData.generalNotes === "Nil" && { backgroundColor: TriageColors.green, borderColor: TriageColors.green }]}>
+                  {proceduresData.generalNotes === "Nil" && <Feather name="check" size={14} color="#FFFFFF" />}
+                </View>
+                <Text style={[styles.procedureLabel, { color: theme.text, fontWeight: "600" }]}>No procedures performed (Nil)</Text>
+              </Pressable>
+              
+              {proceduresData.generalNotes !== "Nil" && (
+                <>
+                  <ProcedureSection title="Resuscitation" category="resuscitation" />
+                  <ProcedureSection title="Airway" category="airway" />
+                  <ProcedureSection title="Vascular" category="vascular" />
+                  <ProcedureSection title="Chest" category="chest" />
+                  <ProcedureSection title="Neuro" category="neuro" />
+                  <ProcedureSection title="GU" category="gu" />
+                  <ProcedureSection title="GI" category="gi" />
+                  <ProcedureSection title="Wound" category="wound" />
+                  <ProcedureSection title="Ortho" category="ortho" />
+                </>
+              )}
             </View>
 
-            <View style={[styles.card, { backgroundColor: theme.card }]}>
-              <Text style={[styles.cardTitle, { color: theme.text }]}>General Procedure Notes</Text>
-              <Text style={[styles.cardSubtitle, { color: theme.textSecondary }]}>Detailed procedure notes and observations (included in exports)</Text>
-              
-              <View style={styles.fieldWithVoice}>
-                <Text style={[styles.fieldLabel, { color: theme.text }]}>Procedure Details</Text>
-                <VoiceButton fieldKey="procedures.generalNotes" />
+            {proceduresData.generalNotes !== "Nil" && (
+              <View style={[styles.card, { backgroundColor: theme.card }]}>
+                <Text style={[styles.cardTitle, { color: theme.text }]}>General Procedure Notes</Text>
+                <Text style={[styles.cardSubtitle, { color: theme.textSecondary }]}>Detailed procedure notes and observations (included in exports)</Text>
+                
+                <View style={styles.fieldWithVoice}>
+                  <Text style={[styles.fieldLabel, { color: theme.text }]}>Procedure Details</Text>
+                  <VoiceButton fieldKey="procedures.generalNotes" />
+                </View>
+                <TextInput
+                  style={[styles.textAreaLarge, { backgroundColor: theme.backgroundSecondary, color: theme.text }]}
+                  placeholder="Document detailed procedure notes, complications, outcomes, equipment used, etc..."
+                  placeholderTextColor={theme.textMuted}
+                  value={proceduresData.generalNotes}
+                  onChangeText={(v) => setProceduresData((prev) => ({ ...prev, generalNotes: v }))}
+                  multiline
+                />
               </View>
-              <TextInput
-                style={[styles.textAreaLarge, { backgroundColor: theme.backgroundSecondary, color: theme.text }]}
-                placeholder="Document detailed procedure notes, complications, outcomes, equipment used, etc..."
-                placeholderTextColor={theme.textMuted}
-                value={proceduresData.generalNotes}
-                onChangeText={(v) => setProceduresData((prev) => ({ ...prev, generalNotes: v }))}
-                multiline
-              />
-            </View>
+            )}
           </>
         )}
 
@@ -2664,6 +2688,7 @@ const styles = StyleSheet.create({
   procedureHeader: { paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, marginTop: Spacing.md },
   procedureHeaderText: { ...Typography.bodyMedium, fontWeight: "600" },
   procedureRow: { flexDirection: "row", alignItems: "center", paddingVertical: Spacing.md, paddingHorizontal: Spacing.md, gap: Spacing.md },
+  nilProcedureRow: { flexDirection: "row", alignItems: "center", paddingVertical: Spacing.md, paddingHorizontal: Spacing.md, gap: Spacing.md, borderWidth: 1, borderRadius: BorderRadius.md, marginTop: Spacing.md, marginBottom: Spacing.sm },
   checkbox: { width: 22, height: 22, borderWidth: 2, borderRadius: 4, justifyContent: "center", alignItems: "center" },
   procedureLabel: { ...Typography.body, flex: 1 },
   dispositionOptions: { flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm, marginTop: Spacing.sm },
