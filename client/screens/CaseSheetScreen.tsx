@@ -211,7 +211,7 @@ interface ABCDEStatusData {
 
 const getDefaultMLCDetails = (): MLCDetailsData => ({
   natureOfIncident: "",
-  dateTimeOfIncident: "",
+  dateTimeOfIncident: new Date().toISOString().slice(0, 16),
   placeOfIncident: "",
   identificationMark: "",
   informantBroughtBy: "Self",
@@ -346,10 +346,12 @@ const CHIP_OPTIONS = {
     { label: "Jaw thrust", value: "jaw_thrust" },
   ],
   airwayStatus: [
+    { label: "Patent", value: "patent" },
     { label: "Partially obstructed", value: "partially_obstructed" },
     { label: "Completely obstructed", value: "completely_obstructed" },
   ],
   airwayCause: [
+    { label: "None", value: "none" },
     { label: "Tongue fall", value: "tongue_fall" },
     { label: "Secretions", value: "secretions" },
     { label: "Blood/Vomitus", value: "blood_vomitus" },
@@ -357,6 +359,7 @@ const CHIP_OPTIONS = {
     { label: "Edema", value: "edema" },
   ],
   airwaySpeech: [
+    { label: "Clear", value: "clear" },
     { label: "Hoarse", value: "hoarse" },
     { label: "Stridor", value: "stridor" },
     { label: "Gurgling", value: "gurgling" },
@@ -371,6 +374,7 @@ const CHIP_OPTIONS = {
     { label: "Cricothyrotomy", value: "cricothyrotomy" },
   ],
   breathingEffort: [
+    { label: "Normal", value: "normal" },
     { label: "Mild \u2191", value: "mild" },
     { label: "Moderate \u2191", value: "moderate" },
     { label: "Severe \u2191", value: "severe" },
@@ -385,6 +389,7 @@ const CHIP_OPTIONS = {
     { label: "Ventilator", value: "mechanical_ventilation" },
   ],
   breathingPattern: [
+    { label: "Normal", value: "normal" },
     { label: "Tachypneic", value: "tachypneic" },
     { label: "Bradypneic", value: "bradypneic" },
     { label: "Kussmaul", value: "kussmaul" },
@@ -397,6 +402,7 @@ const CHIP_OPTIONS = {
     { label: "Reduced both", value: "reduced_bilateral" },
   ],
   breathingAirEntry: [
+    { label: "Equal bilateral", value: "equal_bilateral" },
     { label: "Reduced L", value: "reduced_left" },
     { label: "Reduced R", value: "reduced_right" },
     { label: "Reduced both", value: "reduced_bilateral" },
@@ -404,6 +410,7 @@ const CHIP_OPTIONS = {
     { label: "Absent R", value: "absent_right" },
   ],
   breathingAddedSounds: [
+    { label: "None", value: "none" },
     { label: "Wheeze", value: "wheeze" },
     { label: "Crackles", value: "crackles" },
     { label: "Rhonchi", value: "rhonchi" },

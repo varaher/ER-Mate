@@ -31,7 +31,7 @@ const DEFAULT_VITALS = {
   bp_diastolic: "80",
   rr: "16",
   spo2: "98",
-  temperature: "36.8",
+  temperature: "98.6",
   gcs_e: "4",
   gcs_v: "5",
   gcs_m: "6",
@@ -757,7 +757,7 @@ export default function TriageScreen() {
               <InputField label="SpO2 (%)" field="spo2" keyboardType="numeric" placeholder="98" />
             </View>
             <View style={{ flex: 1 }}>
-              <InputField label="Temp (C)" field="temperature" keyboardType="numeric" placeholder="36.8" />
+              <InputField label="Temp (F)" field="temperature" keyboardType="numeric" placeholder="98.6" />
             </View>
           </View>
           <View style={styles.row}>
@@ -766,8 +766,19 @@ export default function TriageScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.label, { color: theme.textSecondary }]}>
-                GCS: {parseInt(formData.gcs_e || "4") + parseInt(formData.gcs_v || "5") + parseInt(formData.gcs_m || "6")}/15
+                GCS Total: {parseInt(formData.gcs_e || "4") + parseInt(formData.gcs_v || "5") + parseInt(formData.gcs_m || "6")}/15
               </Text>
+            </View>
+          </View>
+          <View style={styles.row}>
+            <View style={{ flex: 1 }}>
+              <InputField label="GCS-E (1-4)" field="gcs_e" keyboardType="numeric" placeholder="4" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <InputField label="GCS-V (1-5)" field="gcs_v" keyboardType="numeric" placeholder="5" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <InputField label="GCS-M (1-6)" field="gcs_m" keyboardType="numeric" placeholder="6" />
             </View>
           </View>
           <Pressable style={[styles.defaultBtn, { backgroundColor: theme.backgroundSecondary }]} onPress={fillDefaults}>
