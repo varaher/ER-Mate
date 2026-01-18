@@ -17,6 +17,7 @@ import { Feather } from "@expo/vector-icons";
 import { Audio } from "expo-av";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import VoiceRecorder, { ExtractedClinicalData } from "@/components/VoiceRecorder";
+import { DocumentScanner } from "@/components/DocumentScanner";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { DropdownField } from "@/components/DropdownField";
 import { CheckboxGroup } from "@/components/CheckboxGroup";
@@ -1403,6 +1404,84 @@ export default function CaseSheetScreen() {
     handleSave(true);
   };
 
+  const handleDocumentScanExtraction = (data: {
+    chiefComplaint?: string;
+    hpiNotes?: string;
+    allergies?: string;
+    pastMedicalHistory?: string;
+    medications?: string;
+    vitals?: { hr?: string; bp?: string; rr?: string; spo2?: string; temp?: string; grbs?: string };
+    abgValues?: { ph?: string; pco2?: string; po2?: string; hco3?: string; be?: string; lactate?: string; sao2?: string; fio2?: string; na?: string; k?: string; cl?: string; anionGap?: string; glucose?: string; hb?: string };
+    labResults?: string;
+    imagingResults?: string;
+    diagnosis?: string;
+    treatmentNotes?: string;
+    generalNotes?: string;
+  }) => {
+    if (data.chiefComplaint) {
+      updateFormData("sample", "signsSymptoms", (formData.sample.signsSymptoms ? formData.sample.signsSymptoms + ", " : "") + data.chiefComplaint);
+    }
+    if (data.hpiNotes) {
+      updateFormData("sample", "eventsHopi", (formData.sample.eventsHopi ? formData.sample.eventsHopi + " " : "") + data.hpiNotes);
+    }
+    if (data.allergies) {
+      updateFormData("sample", "allergies", (formData.sample.allergies ? formData.sample.allergies + ", " : "") + data.allergies);
+    }
+    if (data.pastMedicalHistory) {
+      updateFormData("sample", "pastMedicalHistory", (formData.sample.pastMedicalHistory ? formData.sample.pastMedicalHistory + ", " : "") + data.pastMedicalHistory);
+    }
+    if (data.medications) {
+      updateFormData("sample", "medications", (formData.sample.medications ? formData.sample.medications + ", " : "") + data.medications);
+    }
+    if (data.vitals) {
+      if (data.vitals.hr) updateFormData("circulation", "hr", data.vitals.hr.replace(/[^\d]/g, ""));
+      if (data.vitals.bp) {
+        const bpParts = data.vitals.bp.split("/");
+        if (bpParts.length === 2) {
+          updateFormData("circulation", "bpSystolic", bpParts[0].replace(/[^\d]/g, ""));
+          updateFormData("circulation", "bpDiastolic", bpParts[1].replace(/[^\d]/g, ""));
+        }
+      }
+      if (data.vitals.rr) updateFormData("breathing", "rr", data.vitals.rr.replace(/[^\d]/g, ""));
+      if (data.vitals.spo2) updateFormData("breathing", "spo2", data.vitals.spo2.replace(/[^\d]/g, ""));
+      if (data.vitals.temp) updateFormData("exposure", "temperature", data.vitals.temp);
+      if (data.vitals.grbs) updateFormData("exposure", "grbs", data.vitals.grbs.replace(/[^\d]/g, ""));
+    }
+    if (data.abgValues) {
+      if (data.abgValues.ph) updateFormData("adjuncts", "abgPh", data.abgValues.ph);
+      if (data.abgValues.pco2) updateFormData("adjuncts", "abgPco2", data.abgValues.pco2);
+      if (data.abgValues.po2) updateFormData("adjuncts", "abgPo2", data.abgValues.po2);
+      if (data.abgValues.hco3) updateFormData("adjuncts", "abgHco3", data.abgValues.hco3);
+      if (data.abgValues.be) updateFormData("adjuncts", "abgBe", data.abgValues.be);
+      if (data.abgValues.lactate) updateFormData("adjuncts", "abgLactate", data.abgValues.lactate);
+      if (data.abgValues.sao2) updateFormData("adjuncts", "abgSao2", data.abgValues.sao2);
+      if (data.abgValues.fio2) updateFormData("adjuncts", "abgFio2", data.abgValues.fio2);
+      if (data.abgValues.na) updateFormData("adjuncts", "abgNa", data.abgValues.na);
+      if (data.abgValues.k) updateFormData("adjuncts", "abgK", data.abgValues.k);
+      if (data.abgValues.cl) updateFormData("adjuncts", "abgCl", data.abgValues.cl);
+      if (data.abgValues.anionGap) updateFormData("adjuncts", "abgAnionGap", data.abgValues.anionGap);
+      if (data.abgValues.glucose) updateFormData("adjuncts", "abgGlucose", data.abgValues.glucose);
+      if (data.abgValues.hb) updateFormData("adjuncts", "abgHb", data.abgValues.hb);
+      updateFormData("adjuncts", "abgStatus", "done");
+    }
+    if (data.labResults) {
+      setTreatmentData((prev) => ({ ...prev, labsOrdered: (prev.labsOrdered ? prev.labsOrdered + "; " : "") + data.labResults }));
+    }
+    if (data.imagingResults) {
+      setTreatmentData((prev) => ({ ...prev, imaging: (prev.imaging ? prev.imaging + "; " : "") + data.imagingResults }));
+    }
+    if (data.diagnosis) {
+      setTreatmentData((prev) => ({ ...prev, primaryDiagnosis: prev.primaryDiagnosis ? prev.primaryDiagnosis + ", " + data.diagnosis : data.diagnosis }));
+    }
+    if (data.treatmentNotes) {
+      setTreatmentData((prev) => ({ ...prev, addendumNotes: (prev.addendumNotes || "") + " " + data.treatmentNotes }));
+    }
+    if (data.generalNotes) {
+      setProceduresData((prev) => ({ ...prev, generalNotes: (prev.generalNotes === "Nil" ? "" : prev.generalNotes || "") + " " + data.generalNotes }));
+    }
+    handleSave(true);
+  };
+
   const handleNext = async () => {
     const tabs: TabType[] = ["patient", "primary", "history", "exam", "treatment", "notes", "disposition"];
     const currentIndex = tabs.indexOf(activeTab);
@@ -2649,15 +2728,33 @@ export default function CaseSheetScreen() {
 
         {activeTab === "notes" && (
           <>
-            <VoiceRecorder
-              onExtractedData={handleVoiceExtraction}
-              patientContext={{
-                age: caseData?.patient?.age ? parseFloat(caseData.patient.age) : undefined,
-                sex: caseData?.patient?.sex,
-                chiefComplaint: caseData?.presenting_complaint?.text,
-              }}
-              mode="full"
-            />
+            <View style={[styles.card, { backgroundColor: theme.card }]}>
+              <Text style={[styles.cardTitle, { color: theme.text }]}>Quick Data Entry</Text>
+              <Text style={[styles.cardSubtitle, { color: theme.textSecondary }]}>Use voice or camera to quickly capture clinical data</Text>
+              <View style={{ flexDirection: "row", gap: 12, marginTop: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <VoiceRecorder
+                    onExtractedData={handleVoiceExtraction}
+                    patientContext={{
+                      age: caseData?.patient?.age ? parseFloat(caseData.patient.age) : undefined,
+                      sex: caseData?.patient?.sex,
+                      chiefComplaint: caseData?.presenting_complaint?.text,
+                    }}
+                    mode="full"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <DocumentScanner
+                    onDataExtracted={handleDocumentScanExtraction}
+                    context={{
+                      patientAge: caseData?.patient?.age ? parseFloat(caseData.patient.age) : undefined,
+                      patientSex: caseData?.patient?.sex,
+                      presentingComplaint: caseData?.presenting_complaint?.text,
+                    }}
+                  />
+                </View>
+              </View>
+            </View>
 
             <View style={[styles.card, { backgroundColor: theme.card }]}>
               <Text style={[styles.cardTitle, { color: theme.text }]}>Procedures Performed</Text>

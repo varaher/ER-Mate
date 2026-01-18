@@ -754,6 +754,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/ai/extract-from-image", async (req: Request, res: Response) => {
+    try {
+      const { imageBase64, patientContext } = req.body;
+      
+      if (!imageBase64) {
+        return res.status(400).json({ error: "Image data is required" });
+      }
+
+      const { extractClinicalDataFromImage } = await import("./services/aiDiagnosis");
+      const extractedData = await extractClinicalDataFromImage(imageBase64, patientContext);
+      
+      res.json({ extractedData });
+    } catch (error) {
+      console.error("Image extraction error:", error);
+      res.status(500).json({ error: "Failed to extract data from image" });
+    }
+  });
+
   app.post("/api/ai/diagnose", async (req: Request, res: Response) => {
     try {
       const { chiefComplaint, vitals, history, examination, age, gender, abgData } = req.body;

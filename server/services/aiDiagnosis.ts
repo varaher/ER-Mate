@@ -670,3 +670,142 @@ Be concise but clinically relevant. Format as a clear, readable paragraph.`;
     return "Error interpreting ABG values. Please try again or interpret manually.";
   }
 }
+
+export interface ImageExtractedData {
+  chiefComplaint?: string;
+  hpiNotes?: string;
+  allergies?: string;
+  pastMedicalHistory?: string;
+  medications?: string;
+  vitals?: {
+    hr?: string;
+    bp?: string;
+    rr?: string;
+    spo2?: string;
+    temp?: string;
+    grbs?: string;
+  };
+  abgValues?: {
+    ph?: string;
+    pco2?: string;
+    po2?: string;
+    hco3?: string;
+    be?: string;
+    lactate?: string;
+    sao2?: string;
+    fio2?: string;
+    na?: string;
+    k?: string;
+    cl?: string;
+    anionGap?: string;
+    glucose?: string;
+    hb?: string;
+  };
+  labResults?: string;
+  imagingResults?: string;
+  diagnosis?: string;
+  treatmentNotes?: string;
+  generalNotes?: string;
+}
+
+export async function extractClinicalDataFromImage(
+  imageBase64: string,
+  patientContext?: { patientAge?: number; patientSex?: string; presentingComplaint?: string }
+): Promise<ImageExtractedData> {
+  const openai = getOpenAIClient();
+  if (!openai) {
+    throw new Error("AI service not available");
+  }
+
+  const contextInfo = patientContext
+    ? `Patient context: ${patientContext.patientAge ? `Age ${patientContext.patientAge}` : ""}${patientContext.patientSex ? `, ${patientContext.patientSex}` : ""}${patientContext.presentingComplaint ? `. Presenting complaint: ${patientContext.presentingComplaint}` : ""}`
+    : "";
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: `You are a clinical documentation assistant for an Emergency Room. Your task is to analyze images of clinical documents (lab reports, referral notes, prescriptions, ABG results, handwritten notes, discharge summaries) and extract structured clinical data.
+
+Extract ONLY information that is clearly visible and readable in the image. Do not guess or make up values. If a field is not present or not readable, omit it from the response.
+
+For ABG reports specifically, look for: pH, pCO2, pO2, HCO3, BE (Base Excess), Lactate, SaO2, FiO2, Na, K, Cl, Anion Gap, Glucose, Hb.
+
+For lab reports, look for: Complete blood count values, metabolic panel, liver function tests, renal function tests.
+
+For vitals, look for: Heart rate, blood pressure, respiratory rate, SpO2, temperature, blood glucose.
+
+${contextInfo}`
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: `Analyze this clinical document image and extract all relevant medical data. Respond in JSON format:
+{
+  "chiefComplaint": "Main presenting complaint if visible",
+  "hpiNotes": "History details if present",
+  "allergies": "Any allergies mentioned",
+  "pastMedicalHistory": "Past medical history if mentioned",
+  "medications": "Current medications if listed",
+  "vitals": {
+    "hr": "Heart rate value with units",
+    "bp": "Blood pressure (systolic/diastolic)",
+    "rr": "Respiratory rate",
+    "spo2": "Oxygen saturation percentage",
+    "temp": "Temperature with units",
+    "grbs": "Blood glucose value"
+  },
+  "abgValues": {
+    "ph": "pH value",
+    "pco2": "pCO2 value",
+    "po2": "pO2 value",
+    "hco3": "HCO3/Bicarbonate value",
+    "be": "Base excess value",
+    "lactate": "Lactate value",
+    "sao2": "SaO2 percentage",
+    "fio2": "FiO2 percentage",
+    "na": "Sodium value",
+    "k": "Potassium value",
+    "cl": "Chloride value",
+    "anionGap": "Anion gap value",
+    "glucose": "Glucose value",
+    "hb": "Hemoglobin value"
+  },
+  "labResults": "Summary of other lab results (CBC, metabolic panel, etc.)",
+  "imagingResults": "Any imaging findings mentioned",
+  "diagnosis": "Diagnosis or impression if stated",
+  "treatmentNotes": "Treatment recommendations if present",
+  "generalNotes": "Any other relevant clinical information"
+}
+
+Only include fields with actual values extracted from the image. Omit empty fields entirely.`
+            },
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:image/jpeg;base64,${imageBase64}`,
+                detail: "high"
+              }
+            }
+          ]
+        }
+      ],
+      max_tokens: 2000,
+      response_format: { type: "json_object" },
+    });
+
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      throw new Error("Empty response from AI");
+    }
+
+    return JSON.parse(content) as ImageExtractedData;
+  } catch (error) {
+    console.error("Image extraction error:", error);
+    throw new Error("Failed to extract data from image");
+  }
+}
