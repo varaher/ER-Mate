@@ -23,6 +23,9 @@
 15. **ABG in AI Diagnosis** - ABG values now integrated into AI differential diagnosis and red flags analysis for enhanced clinical assessment
 16. **Document Scanner** - Camera/image upload feature to scan clinical documents (lab reports, referral notes, prescriptions) with AI extraction to auto-populate relevant case sheet fields
 
+### RC-3 Bug Fixes Applied (January 18, 2026)
+1. **Fixed Pediatric Save Button Race Condition** - Added local ref to store draftId immediately when created, preventing race condition where React state update hasn't propagated yet when save is called
+
 ### RC-1 Bug Fixes Applied (January 16, 2026)
 1. **Fixed Save as Draft functionality** - Added proper error handling when draft isn't initialized
 2. **Fixed data persistence** - Local draft data now takes priority over backend data when loading cases

@@ -529,6 +529,7 @@ export default function CaseSheetScreen() {
   const [isRecording, setIsRecording] = useState(false);
   const [activeVoiceField, setActiveVoiceField] = useState<string | null>(null);
   const recordingRef = useRef<Audio.Recording | null>(null);
+  const localDraftIdRef = useRef<string | null>(null);
   const [modeOfArrival, setModeOfArrival] = useState("Walk-in");
   const [isMLC, setIsMLC] = useState(false);
   const [mlcDetails, setMLCDetails] = useState<MLCDetailsData>(getDefaultMLCDetails());
@@ -702,6 +703,7 @@ export default function CaseSheetScreen() {
   const loadCase = async () => {
     try {
       const draftId = await initDraftForCase(caseId);
+      localDraftIdRef.current = draftId;
       const draft = await loadDraft(draftId);
       const hasLocalDraft = !!draft?.caseSheetData;
       
@@ -1108,6 +1110,14 @@ export default function CaseSheetScreen() {
       if (!silent) Alert.alert("Error", "No case ID available");
       return;
     }
+    
+    const effectiveDraftId = currentDraftId || localDraftIdRef.current;
+    if (!effectiveDraftId) {
+      console.error("Cannot save: No draft initialized");
+      if (!silent) Alert.alert("Error", "Please wait for the case to load completely before saving.");
+      return;
+    }
+    
     setSaving(true);
     try {
       const payload = buildPayload();
@@ -1116,7 +1126,7 @@ export default function CaseSheetScreen() {
       if (!silent) Alert.alert("Saved Locally", "Data saved locally. It will be submitted when you click Finish in Disposition.");
     } catch (err) {
       console.error("Local save exception:", err);
-      if (!silent) Alert.alert("Error", (err as Error).message);
+      if (!silent) Alert.alert("Error", (err as Error).message || "Failed to save case data");
     } finally {
       setSaving(false);
     }
@@ -1135,7 +1145,8 @@ export default function CaseSheetScreen() {
       console.log("Commit response:", res.success, res.error || "");
       if (res.success) {
         await invalidateCases();
-        if (currentDraftId) {
+        const effectiveDraftId = currentDraftId || localDraftIdRef.current;
+        if (effectiveDraftId) {
           await commitDraft(caseId);
         }
         return true;
