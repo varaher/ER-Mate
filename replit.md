@@ -5,11 +5,17 @@
 **Status**: Release Candidate 2 - Code freeze broken with user approval for new features  
 **Date**: January 17, 2026
 
-### RC-2 New Features (January 17, 2026)
+### RC-2 New Features (January 17-18, 2026)
 1. **Infusion Section** - Added dedicated section in Treatment tab for IV infusions/drips with drug name, dose, dilution, and rate fields
 2. **Treatment History System** - Auto-saves treatments to database for ML-based recommendations on future patients
 3. **Enhanced ViewCaseScreen** - Now displays medications list with dose/route/frequency, infusions, IV fluids, and primary diagnosis
 4. **Physical Exam Abnormal Findings** - ViewCaseScreen now properly displays all abnormal findings (pallor, icterus, cyanosis, etc.)
+5. **Editable GCS in Triage** - GCS fields (E/V/M) are now individually editable during triage assessment
+6. **Temperature in Fahrenheit** - Changed from Celsius to Fahrenheit throughout the app (98.6°F default)
+7. **Addendum Notes System** - New button on Dashboard to add addendum notes, displayed in ViewCaseScreen with timestamps
+8. **Nil Procedures Option** - Quick checkbox to mark "No procedures performed" in Notes tab
+9. **ABCDE Normal Options** - Individual findings can be marked as normal/patent/none even when overall section is abnormal
+10. **MLC Date/Time Default** - MLC incident date/time now defaults to current timestamp when starting case sheet
 
 ### RC-1 Bug Fixes Applied (January 16, 2026)
 1. **Fixed Save as Draft functionality** - Added proper error handling when draft isn't initialized
