@@ -17,7 +17,8 @@ import { Feather } from "@expo/vector-icons";
 import { Audio } from "expo-av";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import VoiceRecorder, { ExtractedClinicalData } from "@/components/VoiceRecorder";
-import { DocumentScanner } from "@/components/DocumentScanner";
+// DocumentScanner temporarily disabled - requires static build regeneration
+// import { DocumentScanner } from "@/components/DocumentScanner";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { DropdownField } from "@/components/DropdownField";
 import { CheckboxGroup } from "@/components/CheckboxGroup";
@@ -1471,7 +1472,8 @@ export default function CaseSheetScreen() {
       setTreatmentData((prev) => ({ ...prev, imaging: (prev.imaging ? prev.imaging + "; " : "") + data.imagingResults }));
     }
     if (data.diagnosis) {
-      setTreatmentData((prev) => ({ ...prev, primaryDiagnosis: prev.primaryDiagnosis ? prev.primaryDiagnosis + ", " + data.diagnosis : data.diagnosis }));
+      const diagnosis = data.diagnosis;
+      setTreatmentData((prev) => ({ ...prev, primaryDiagnosis: prev.primaryDiagnosis ? prev.primaryDiagnosis + ", " + diagnosis : diagnosis }));
     }
     if (data.treatmentNotes) {
       setTreatmentData((prev) => ({ ...prev, addendumNotes: (prev.addendumNotes || "") + " " + data.treatmentNotes }));
@@ -2728,33 +2730,15 @@ export default function CaseSheetScreen() {
 
         {activeTab === "notes" && (
           <>
-            <View style={[styles.card, { backgroundColor: theme.card }]}>
-              <Text style={[styles.cardTitle, { color: theme.text }]}>Quick Data Entry</Text>
-              <Text style={[styles.cardSubtitle, { color: theme.textSecondary }]}>Use voice or camera to quickly capture clinical data</Text>
-              <View style={{ flexDirection: "row", gap: 12, marginTop: 12 }}>
-                <View style={{ flex: 1 }}>
-                  <VoiceRecorder
-                    onExtractedData={handleVoiceExtraction}
-                    patientContext={{
-                      age: caseData?.patient?.age ? parseFloat(caseData.patient.age) : undefined,
-                      sex: caseData?.patient?.sex,
-                      chiefComplaint: caseData?.presenting_complaint?.text,
-                    }}
-                    mode="full"
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <DocumentScanner
-                    onDataExtracted={handleDocumentScanExtraction}
-                    context={{
-                      patientAge: caseData?.patient?.age ? parseFloat(caseData.patient.age) : undefined,
-                      patientSex: caseData?.patient?.sex,
-                      presentingComplaint: caseData?.presenting_complaint?.text,
-                    }}
-                  />
-                </View>
-              </View>
-            </View>
+            <VoiceRecorder
+              onExtractedData={handleVoiceExtraction}
+              patientContext={{
+                age: caseData?.patient?.age ? parseFloat(caseData.patient.age) : undefined,
+                sex: caseData?.patient?.sex,
+                chiefComplaint: caseData?.presenting_complaint?.text,
+              }}
+              mode="full"
+            />
 
             <View style={[styles.card, { backgroundColor: theme.card }]}>
               <Text style={[styles.cardTitle, { color: theme.text }]}>Procedures Performed</Text>

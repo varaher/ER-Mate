@@ -1,10 +1,9 @@
 # ErMate - Emergency Room EMR Application
 
-## Release Status: CODE FROZEN - RC-3
+## Release Status: RC-3 (Bug Fix Mode)
 
-**Status**: Release Candidate 3 - CODE FREEZE IN EFFECT  
-**Date**: January 18, 2026  
-**Freeze Date**: January 18, 2026 - No further code changes permitted
+**Status**: Release Candidate 3 - Bug fixes permitted  
+**Date**: January 18, 2026
 
 ### RC-2 New Features (January 17-18, 2026)
 1. **Infusion Section** - Added dedicated section in Treatment tab for IV infusions/drips with drug name, dose, dilution, and rate fields
