@@ -241,6 +241,12 @@ export const ABG_STATUS_OPTIONS = [
   { label: "Mixed disorder", value: "mixed" },
 ];
 
+export const ABG_SAMPLE_TYPE_OPTIONS = [
+  { label: "Arterial (ABG)", value: "arterial" },
+  { label: "Venous (VBG)", value: "venous" },
+  { label: "Capillary", value: "capillary" },
+];
+
 export const ECG_STATUS_OPTIONS = [
   { label: "-- Select --", value: "" },
   { label: "Not done", value: "not_done" },
@@ -343,6 +349,23 @@ export type ATLSFormData = {
   adjuncts: {
     abgStatus: string;
     abgNotes: string;
+    abgSampleType: string;
+    abgPh: string;
+    abgPco2: string;
+    abgPo2: string;
+    abgHco3: string;
+    abgBe: string;
+    abgLactate: string;
+    abgSao2: string;
+    abgFio2: string;
+    abgAaGradient: string;
+    abgNa: string;
+    abgK: string;
+    abgCl: string;
+    abgAnionGap: string;
+    abgGlucose: string;
+    abgHb: string;
+    abgInterpretation: string;
     ecgStatus: string;
     ecgNotes: string;
     efastStatus: string;
@@ -418,6 +441,23 @@ export const getDefaultATLSFormData = (): ATLSFormData => ({
   adjuncts: {
     abgStatus: "not_done",
     abgNotes: "",
+    abgSampleType: "arterial",
+    abgPh: "",
+    abgPco2: "",
+    abgPo2: "",
+    abgHco3: "",
+    abgBe: "",
+    abgLactate: "",
+    abgSao2: "",
+    abgFio2: "",
+    abgAaGradient: "",
+    abgNa: "",
+    abgK: "",
+    abgCl: "",
+    abgAnionGap: "",
+    abgGlucose: "",
+    abgHb: "",
+    abgInterpretation: "",
     ecgStatus: "not_done",
     ecgNotes: "",
     efastStatus: "not_done",

@@ -54,6 +54,7 @@ import {
   EXPOSURE_FINDINGS_OPTIONS,
   EXPOSURE_INTERVENTIONS,
   ABG_STATUS_OPTIONS,
+  ABG_SAMPLE_TYPE_OPTIONS,
   ECG_STATUS_OPTIONS,
   EFAST_OPTIONS,
   BEDSIDE_ECHO_OPTIONS,
@@ -1288,9 +1289,28 @@ export default function CaseSheetScreen() {
   };
 
   const handleABGInterpretation = async () => {
-    const abgValues = formData.adjuncts.abgNotes;
-    if (!abgValues || abgValues.trim().length < 5) {
-      Alert.alert("Missing Values", "Please enter ABG values first (pH, pCO2, pO2, HCO3, BE, Lactate)");
+    const abgFields = formData.adjuncts;
+    const abgValuesArr: string[] = [];
+    if (abgFields.abgPh) abgValuesArr.push(`pH: ${abgFields.abgPh}`);
+    if (abgFields.abgPco2) abgValuesArr.push(`pCO2: ${abgFields.abgPco2} mmHg`);
+    if (abgFields.abgPo2) abgValuesArr.push(`pO2: ${abgFields.abgPo2} mmHg`);
+    if (abgFields.abgHco3) abgValuesArr.push(`HCO3: ${abgFields.abgHco3} mEq/L`);
+    if (abgFields.abgBe) abgValuesArr.push(`BE: ${abgFields.abgBe} mEq/L`);
+    if (abgFields.abgLactate) abgValuesArr.push(`Lactate: ${abgFields.abgLactate} mmol/L`);
+    if (abgFields.abgSao2) abgValuesArr.push(`SaO2: ${abgFields.abgSao2}%`);
+    if (abgFields.abgFio2) abgValuesArr.push(`FiO2: ${abgFields.abgFio2}%`);
+    if (abgFields.abgNa) abgValuesArr.push(`Na: ${abgFields.abgNa} mEq/L`);
+    if (abgFields.abgK) abgValuesArr.push(`K: ${abgFields.abgK} mEq/L`);
+    if (abgFields.abgCl) abgValuesArr.push(`Cl: ${abgFields.abgCl} mEq/L`);
+    if (abgFields.abgAnionGap) abgValuesArr.push(`AG: ${abgFields.abgAnionGap}`);
+    if (abgFields.abgGlucose) abgValuesArr.push(`Glucose: ${abgFields.abgGlucose} mg/dL`);
+    if (abgFields.abgHb) abgValuesArr.push(`Hb: ${abgFields.abgHb} g/dL`);
+    if (abgFields.abgAaGradient) abgValuesArr.push(`A-a gradient: ${abgFields.abgAaGradient} mmHg`);
+    if (abgFields.abgNotes) abgValuesArr.push(`Notes: ${abgFields.abgNotes}`);
+    
+    const abgValues = abgValuesArr.join(", ");
+    if (abgValuesArr.length < 2) {
+      Alert.alert("Missing Values", "Please enter at least 2 ABG values (pH, pCO2, pO2, HCO3, BE, Lactate, etc.)");
       return;
     }
     
@@ -2088,23 +2108,98 @@ export default function CaseSheetScreen() {
 
             <Text style={[styles.sectionHeading, { color: theme.text }]}>Adjuncts to Primary Survey</Text>
             <CollapsibleSection title="ABG / VBG" icon="+" iconColor={theme.primary}>
-              <DropdownField label="ABG Status" options={ABG_STATUS_OPTIONS} value={formData.adjuncts.abgStatus} onChange={(v) => updateFormData("adjuncts", "abgStatus", v)} />
+              <View style={styles.abgRow}>
+                <View style={styles.abgHalfField}>
+                  <DropdownField label="Sample Type" options={ABG_SAMPLE_TYPE_OPTIONS} value={formData.adjuncts.abgSampleType} onChange={(v) => updateFormData("adjuncts", "abgSampleType", v)} />
+                </View>
+                <View style={styles.abgHalfField}>
+                  <DropdownField label="Interpretation" options={ABG_STATUS_OPTIONS} value={formData.adjuncts.abgStatus} onChange={(v) => updateFormData("adjuncts", "abgStatus", v)} />
+                </View>
+              </View>
               
               <View style={[styles.abgNormalValuesCard, { backgroundColor: theme.backgroundSecondary, borderColor: theme.border }]}>
-                <Text style={[styles.abgNormalTitle, { color: theme.primary }]}>Normal ABG Values (Reference)</Text>
+                <Text style={[styles.abgNormalTitle, { color: theme.primary }]}>Normal Values Reference</Text>
                 <View style={styles.abgNormalGrid}>
                   <View style={styles.abgNormalItem}><Text style={[styles.abgNormalLabel, { color: theme.textSecondary }]}>pH</Text><Text style={[styles.abgNormalValue, { color: theme.text }]}>7.35 - 7.45</Text></View>
                   <View style={styles.abgNormalItem}><Text style={[styles.abgNormalLabel, { color: theme.textSecondary }]}>pCO₂</Text><Text style={[styles.abgNormalValue, { color: theme.text }]}>35 - 45 mmHg</Text></View>
                   <View style={styles.abgNormalItem}><Text style={[styles.abgNormalLabel, { color: theme.textSecondary }]}>pO₂</Text><Text style={[styles.abgNormalValue, { color: theme.text }]}>80 - 100 mmHg</Text></View>
                   <View style={styles.abgNormalItem}><Text style={[styles.abgNormalLabel, { color: theme.textSecondary }]}>HCO₃</Text><Text style={[styles.abgNormalValue, { color: theme.text }]}>22 - 26 mEq/L</Text></View>
-                  <View style={styles.abgNormalItem}><Text style={[styles.abgNormalLabel, { color: theme.textSecondary }]}>Base Excess</Text><Text style={[styles.abgNormalValue, { color: theme.text }]}>-2 to +2 mEq/L</Text></View>
-                  <View style={styles.abgNormalItem}><Text style={[styles.abgNormalLabel, { color: theme.textSecondary }]}>Lactate</Text><Text style={[styles.abgNormalValue, { color: theme.text }]}>0.5 - 2.0 mmol/L</Text></View>
+                  <View style={styles.abgNormalItem}><Text style={[styles.abgNormalLabel, { color: theme.textSecondary }]}>BE</Text><Text style={[styles.abgNormalValue, { color: theme.text }]}>-2 to +2</Text></View>
+                  <View style={styles.abgNormalItem}><Text style={[styles.abgNormalLabel, { color: theme.textSecondary }]}>Lactate</Text><Text style={[styles.abgNormalValue, { color: theme.text }]}>0.5 - 2.0</Text></View>
                   <View style={styles.abgNormalItem}><Text style={[styles.abgNormalLabel, { color: theme.textSecondary }]}>SaO₂</Text><Text style={[styles.abgNormalValue, { color: theme.text }]}>95 - 100%</Text></View>
-                  <View style={styles.abgNormalItem}><Text style={[styles.abgNormalLabel, { color: theme.textSecondary }]}>A-a Gradient</Text><Text style={[styles.abgNormalValue, { color: theme.text }]}>{"<"}10-15 mmHg</Text></View>
+                  <View style={styles.abgNormalItem}><Text style={[styles.abgNormalLabel, { color: theme.textSecondary }]}>A-a</Text><Text style={[styles.abgNormalValue, { color: theme.text }]}>{"<"}10-15</Text></View>
                 </View>
               </View>
 
-              <TextInputField label="ABG Values" value={formData.adjuncts.abgNotes} onChangeText={(v) => updateFormData("adjuncts", "abgNotes", v)} placeholder="pH 7.35, pCO2 40, pO2 95, HCO3 24, BE 0, Lactate 1.2..." multiline numberOfLines={2} />
+              <Text style={[styles.abgSectionLabel, { color: theme.text }]}>Blood Gas Values (Optional)</Text>
+              <View style={styles.abgGrid}>
+                <View style={styles.abgSmallField}>
+                  <Text style={[styles.abgFieldLabel, { color: theme.textSecondary }]}>pH</Text>
+                  <TextInput style={[styles.abgInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]} placeholder="7.40" placeholderTextColor={theme.textMuted} value={formData.adjuncts.abgPh} onChangeText={(v) => updateFormData("adjuncts", "abgPh", v)} keyboardType="decimal-pad" />
+                </View>
+                <View style={styles.abgSmallField}>
+                  <Text style={[styles.abgFieldLabel, { color: theme.textSecondary }]}>pCO₂</Text>
+                  <TextInput style={[styles.abgInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]} placeholder="40" placeholderTextColor={theme.textMuted} value={formData.adjuncts.abgPco2} onChangeText={(v) => updateFormData("adjuncts", "abgPco2", v)} keyboardType="decimal-pad" />
+                </View>
+                <View style={styles.abgSmallField}>
+                  <Text style={[styles.abgFieldLabel, { color: theme.textSecondary }]}>pO₂</Text>
+                  <TextInput style={[styles.abgInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]} placeholder="95" placeholderTextColor={theme.textMuted} value={formData.adjuncts.abgPo2} onChangeText={(v) => updateFormData("adjuncts", "abgPo2", v)} keyboardType="decimal-pad" />
+                </View>
+                <View style={styles.abgSmallField}>
+                  <Text style={[styles.abgFieldLabel, { color: theme.textSecondary }]}>HCO₃</Text>
+                  <TextInput style={[styles.abgInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]} placeholder="24" placeholderTextColor={theme.textMuted} value={formData.adjuncts.abgHco3} onChangeText={(v) => updateFormData("adjuncts", "abgHco3", v)} keyboardType="decimal-pad" />
+                </View>
+                <View style={styles.abgSmallField}>
+                  <Text style={[styles.abgFieldLabel, { color: theme.textSecondary }]}>BE</Text>
+                  <TextInput style={[styles.abgInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]} placeholder="0" placeholderTextColor={theme.textMuted} value={formData.adjuncts.abgBe} onChangeText={(v) => updateFormData("adjuncts", "abgBe", v)} keyboardType="numbers-and-punctuation" />
+                </View>
+                <View style={styles.abgSmallField}>
+                  <Text style={[styles.abgFieldLabel, { color: theme.textSecondary }]}>Lactate</Text>
+                  <TextInput style={[styles.abgInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]} placeholder="1.0" placeholderTextColor={theme.textMuted} value={formData.adjuncts.abgLactate} onChangeText={(v) => updateFormData("adjuncts", "abgLactate", v)} keyboardType="decimal-pad" />
+                </View>
+                <View style={styles.abgSmallField}>
+                  <Text style={[styles.abgFieldLabel, { color: theme.textSecondary }]}>SaO₂%</Text>
+                  <TextInput style={[styles.abgInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]} placeholder="98" placeholderTextColor={theme.textMuted} value={formData.adjuncts.abgSao2} onChangeText={(v) => updateFormData("adjuncts", "abgSao2", v)} keyboardType="decimal-pad" />
+                </View>
+                <View style={styles.abgSmallField}>
+                  <Text style={[styles.abgFieldLabel, { color: theme.textSecondary }]}>FiO₂%</Text>
+                  <TextInput style={[styles.abgInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]} placeholder="21" placeholderTextColor={theme.textMuted} value={formData.adjuncts.abgFio2} onChangeText={(v) => updateFormData("adjuncts", "abgFio2", v)} keyboardType="decimal-pad" />
+                </View>
+              </View>
+
+              <Text style={[styles.abgSectionLabel, { color: theme.text }]}>Electrolytes (Optional)</Text>
+              <View style={styles.abgGrid}>
+                <View style={styles.abgSmallField}>
+                  <Text style={[styles.abgFieldLabel, { color: theme.textSecondary }]}>Na⁺</Text>
+                  <TextInput style={[styles.abgInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]} placeholder="140" placeholderTextColor={theme.textMuted} value={formData.adjuncts.abgNa} onChangeText={(v) => updateFormData("adjuncts", "abgNa", v)} keyboardType="decimal-pad" />
+                </View>
+                <View style={styles.abgSmallField}>
+                  <Text style={[styles.abgFieldLabel, { color: theme.textSecondary }]}>K⁺</Text>
+                  <TextInput style={[styles.abgInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]} placeholder="4.0" placeholderTextColor={theme.textMuted} value={formData.adjuncts.abgK} onChangeText={(v) => updateFormData("adjuncts", "abgK", v)} keyboardType="decimal-pad" />
+                </View>
+                <View style={styles.abgSmallField}>
+                  <Text style={[styles.abgFieldLabel, { color: theme.textSecondary }]}>Cl⁻</Text>
+                  <TextInput style={[styles.abgInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]} placeholder="100" placeholderTextColor={theme.textMuted} value={formData.adjuncts.abgCl} onChangeText={(v) => updateFormData("adjuncts", "abgCl", v)} keyboardType="decimal-pad" />
+                </View>
+                <View style={styles.abgSmallField}>
+                  <Text style={[styles.abgFieldLabel, { color: theme.textSecondary }]}>AG</Text>
+                  <TextInput style={[styles.abgInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]} placeholder="12" placeholderTextColor={theme.textMuted} value={formData.adjuncts.abgAnionGap} onChangeText={(v) => updateFormData("adjuncts", "abgAnionGap", v)} keyboardType="decimal-pad" />
+                </View>
+                <View style={styles.abgSmallField}>
+                  <Text style={[styles.abgFieldLabel, { color: theme.textSecondary }]}>Glucose</Text>
+                  <TextInput style={[styles.abgInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]} placeholder="100" placeholderTextColor={theme.textMuted} value={formData.adjuncts.abgGlucose} onChangeText={(v) => updateFormData("adjuncts", "abgGlucose", v)} keyboardType="decimal-pad" />
+                </View>
+                <View style={styles.abgSmallField}>
+                  <Text style={[styles.abgFieldLabel, { color: theme.textSecondary }]}>Hb</Text>
+                  <TextInput style={[styles.abgInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]} placeholder="14" placeholderTextColor={theme.textMuted} value={formData.adjuncts.abgHb} onChangeText={(v) => updateFormData("adjuncts", "abgHb", v)} keyboardType="decimal-pad" />
+                </View>
+                <View style={styles.abgSmallField}>
+                  <Text style={[styles.abgFieldLabel, { color: theme.textSecondary }]}>A-a</Text>
+                  <TextInput style={[styles.abgInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]} placeholder="10" placeholderTextColor={theme.textMuted} value={formData.adjuncts.abgAaGradient} onChangeText={(v) => updateFormData("adjuncts", "abgAaGradient", v)} keyboardType="decimal-pad" />
+                </View>
+              </View>
+
+              <TextInputField label="Additional Notes" value={formData.adjuncts.abgNotes} onChangeText={(v) => updateFormData("adjuncts", "abgNotes", v)} placeholder="Sample time, clinical context, etc..." multiline numberOfLines={2} />
               
               <Pressable
                 style={[styles.aiInterpretBtn, { backgroundColor: "#8B5CF6", opacity: abgInterpreting ? 0.7 : 1 }]}
@@ -2125,6 +2220,8 @@ export default function CaseSheetScreen() {
                   <Text style={[styles.abgInterpretationText, { color: "#4C1D95" }]}>{abgInterpretation}</Text>
                 </View>
               )}
+
+              <TextInputField label="Your Interpretation (Optional)" value={formData.adjuncts.abgInterpretation} onChangeText={(v) => updateFormData("adjuncts", "abgInterpretation", v)} placeholder="Your clinical interpretation of the ABG..." multiline numberOfLines={2} />
             </CollapsibleSection>
             <CollapsibleSection title="ECG" icon="+" iconColor={theme.primary}>
               <DropdownField label="ECG Interpretation" options={ECG_STATUS_OPTIONS} value={formData.adjuncts.ecgStatus} onChange={(v) => updateFormData("adjuncts", "ecgStatus", v)} />
@@ -2808,4 +2905,11 @@ const styles = StyleSheet.create({
   interventionLabel: { ...Typography.body, flex: 1 },
   abcdeVitalsRow: { flexDirection: "row", gap: Spacing.md, marginBottom: Spacing.md },
   abcdeVitalInput: { flex: 1 },
+  abgRow: { flexDirection: "row", gap: Spacing.md, marginBottom: Spacing.sm },
+  abgHalfField: { flex: 1 },
+  abgSectionLabel: { ...Typography.bodyMedium, fontWeight: "600", marginTop: Spacing.md, marginBottom: Spacing.sm },
+  abgGrid: { flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm, marginBottom: Spacing.md },
+  abgSmallField: { width: "23%", minWidth: 70 },
+  abgFieldLabel: { ...Typography.caption, marginBottom: 4 },
+  abgInput: { height: 40, paddingHorizontal: Spacing.sm, borderRadius: BorderRadius.sm, borderWidth: 1, fontSize: 14, textAlign: "center" },
 });
