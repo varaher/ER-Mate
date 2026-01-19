@@ -24,7 +24,7 @@ const PLANS = [
     price: "0",
     period: "forever",
     features: [
-      "5 cases per month",
+      "15 cases per month",
       "Basic triage",
       "Manual data entry",
       "Standard support",
