@@ -1267,10 +1267,20 @@ export default function CaseSheetScreen() {
           setTreatmentData((prev) => ({ ...prev, [field]: current ? `${current} ${text}` : text }));
         } else if (fieldKey === "erObservationNotes") {
           setDispositionData((prev) => ({ ...prev, erObservationNotes: prev.erObservationNotes ? `${prev.erObservationNotes} ${text}` : text }));
+        } else if (fieldKey === "procedures.generalNotes") {
+          setProceduresData((prev) => ({ ...prev, generalNotes: prev.generalNotes ? `${prev.generalNotes} ${text}` : text }));
+        } else if (fieldKey.startsWith("airway.") || fieldKey.startsWith("breathing.") || 
+                   fieldKey.startsWith("circulation.") || fieldKey.startsWith("disability.") || 
+                   fieldKey.startsWith("exposure.")) {
+          const [section, field] = fieldKey.split(".");
+          const sectionKey = section as keyof ATLSFormData;
+          const current = (formData[sectionKey] as any)?.[field] || "";
+          updateFormData(sectionKey, field, current ? `${current} ${text}` : text);
         }
       }
     } catch (err) {
       console.error("Transcription error:", err);
+      Alert.alert("Error", "Failed to transcribe audio. Please try again.");
     }
   };
 
