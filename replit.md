@@ -28,6 +28,7 @@
 2. **Fixed Medication Frequency Selection** - Replaced TextInput with a proper dropdown picker showing common frequencies (stat, OD, BD, TDS, QID, Q4H, Q6H, Q8H, Q12H, PRN, HS, AC, PC, SOS)
 3. **Fixed Voice Recording in ABCDE Sections** - Added handlers for voice transcription in airway, breathing, circulation, disability, exposure notes fields and procedures.generalNotes
 4. **Fixed Discharge Summary Method Not Allowed** - Changed API method from PATCH to PUT for saving discharge summary, matching the backend's expected method
+5. **Fixed Gender Selection in Triage** - Sex field (Male/Female/Other) now properly updates the UI when tapped by adding state update for button highlight
 
 ### RC-1 Bug Fixes Applied (January 16, 2026)
 1. **Fixed Save as Draft functionality** - Added proper error handling when draft isn't initialized

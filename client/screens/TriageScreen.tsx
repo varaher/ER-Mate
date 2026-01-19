@@ -211,6 +211,9 @@ export default function TriageScreen() {
     } else if (field === "chief_complaint") {
       // chief_complaint needs state for symptom toggle logic
       setFormData(prev => ({ ...prev, chief_complaint: value }));
+    } else if (field === "sex") {
+      // sex needs state update for button highlight
+      setFormData(prev => ({ ...prev, sex: value }));
     }
   }, []);
 
