@@ -21,7 +21,7 @@ import * as Sharing from "expo-sharing";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { useTheme } from "@/hooks/useTheme";
-import { apiGet, apiPatch, apiPost, invalidateCases } from "@/lib/api";
+import { apiGet, apiPatch, apiPost, apiPut, invalidateCases } from "@/lib/api";
 import { getApiUrl } from "@/lib/query-client";
 import { isPediatric } from "@/lib/pediatricVitals";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
@@ -517,7 +517,7 @@ export default function DischargeSummaryScreen() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const res = await apiPatch(`/cases/${caseId}`, {
+      const res = await apiPut(`/cases/${caseId}`, {
         discharge_summary: summaryRef.current,
         status: "completed",
       });

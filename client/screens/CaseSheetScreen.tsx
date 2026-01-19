@@ -9,6 +9,8 @@ import {
   Pressable,
   Switch,
   ScrollView,
+  Modal,
+  FlatList,
 } from "react-native";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -536,6 +538,24 @@ export default function CaseSheetScreen() {
   const [abcdeStatus, setABCDEStatus] = useState<ABCDEStatusData>(getDefaultABCDEStatus());
   const [newMedication, setNewMedication] = useState<Omit<MedicationEntry, 'id'>>({ name: "", dose: "", route: "", frequency: "stat" });
   const [newInfusion, setNewInfusion] = useState<Omit<InfusionEntry, 'id'>>({ name: "", dose: "", dilution: "", rate: "", notes: "" });
+  const [showFrequencyPicker, setShowFrequencyPicker] = useState(false);
+  
+  const FREQUENCY_OPTIONS = [
+    { label: "Stat (Single dose now)", value: "stat" },
+    { label: "OD (Once daily)", value: "OD" },
+    { label: "BD (Twice daily)", value: "BD" },
+    { label: "TDS (Three times daily)", value: "TDS" },
+    { label: "QID (Four times daily)", value: "QID" },
+    { label: "Q4H (Every 4 hours)", value: "Q4H" },
+    { label: "Q6H (Every 6 hours)", value: "Q6H" },
+    { label: "Q8H (Every 8 hours)", value: "Q8H" },
+    { label: "Q12H (Every 12 hours)", value: "Q12H" },
+    { label: "PRN (As needed)", value: "PRN" },
+    { label: "HS (At bedtime)", value: "HS" },
+    { label: "AC (Before meals)", value: "AC" },
+    { label: "PC (After meals)", value: "PC" },
+    { label: "SOS (If needed)", value: "SOS" },
+  ];
   
   const { saveToDraft, currentDraftId, commitDraft, initDraftForCase, loadDraft } = useCase();
   
@@ -2641,13 +2661,15 @@ export default function CaseSheetScreen() {
                   value={newMedication.route}
                   onChangeText={(v) => setNewMedication((prev) => ({ ...prev, route: v }))}
                 />
-                <TextInput
-                  style={[styles.medicationInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, flex: 1 }]}
-                  placeholder="Frequency (BD, TDS)"
-                  placeholderTextColor={theme.textMuted}
-                  value={newMedication.frequency}
-                  onChangeText={(v) => setNewMedication((prev) => ({ ...prev, frequency: v }))}
-                />
+                <Pressable
+                  style={[styles.medicationInput, styles.frequencyPicker, { backgroundColor: theme.backgroundSecondary, flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
+                  onPress={() => setShowFrequencyPicker(true)}
+                >
+                  <Text style={{ color: newMedication.frequency ? theme.text : theme.textMuted }}>
+                    {newMedication.frequency || "Frequency"}
+                  </Text>
+                  <Feather name="chevron-down" size={16} color={theme.textMuted} />
+                </Pressable>
               </View>
               <Pressable style={[styles.addDrugBtn, { backgroundColor: TriageColors.green }]} onPress={addMedication}>
                 <Feather name="plus" size={18} color="#FFFFFF" />
@@ -2886,6 +2908,49 @@ export default function CaseSheetScreen() {
           {activeTab === "disposition" ? <Feather name="check" size={18} color="#FFFFFF" /> : <Feather name="arrow-right" size={18} color="#FFFFFF" />}
         </Pressable>
       </View>
+
+      <Modal
+        visible={showFrequencyPicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowFrequencyPicker(false)}
+      >
+        <Pressable
+          style={styles.frequencyModalOverlay}
+          onPress={() => setShowFrequencyPicker(false)}
+        >
+          <View style={[styles.frequencyModalContent, { backgroundColor: theme.card }]}>
+            <Text style={[styles.frequencyModalTitle, { color: theme.text }]}>Select Frequency</Text>
+            <FlatList
+              data={FREQUENCY_OPTIONS}
+              keyExtractor={(item) => item.value}
+              renderItem={({ item }) => (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.frequencyOption,
+                    {
+                      backgroundColor: pressed ? theme.backgroundSecondary : "transparent",
+                      borderBottomWidth: 1,
+                      borderBottomColor: theme.border,
+                    },
+                  ]}
+                  onPress={() => {
+                    setNewMedication((prev) => ({ ...prev, frequency: item.value }));
+                    setShowFrequencyPicker(false);
+                  }}
+                >
+                  <Text style={[styles.frequencyOptionText, { color: theme.text }]}>
+                    {item.label}
+                  </Text>
+                  {newMedication.frequency === item.value && (
+                    <Feather name="check" size={18} color={TriageColors.green} />
+                  )}
+                </Pressable>
+              )}
+            />
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -3024,4 +3089,10 @@ const styles = StyleSheet.create({
   abgSmallField: { width: "23%", minWidth: 70 },
   abgFieldLabel: { ...Typography.caption, marginBottom: 4 },
   abgInput: { height: 40, paddingHorizontal: Spacing.sm, borderRadius: BorderRadius.sm, borderWidth: 1, fontSize: 14, textAlign: "center" },
+  frequencyPicker: { height: 40, justifyContent: "center" },
+  frequencyModalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", padding: Spacing.lg },
+  frequencyModalContent: { width: "90%", maxHeight: "70%", borderRadius: BorderRadius.lg, overflow: "hidden" },
+  frequencyModalTitle: { ...Typography.h4, padding: Spacing.lg, borderBottomWidth: 1, borderBottomColor: "#E5E7EB" },
+  frequencyOption: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: Spacing.md, paddingHorizontal: Spacing.lg },
+  frequencyOptionText: { ...Typography.body },
 });
