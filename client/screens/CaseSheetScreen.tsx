@@ -19,8 +19,7 @@ import { Feather } from "@expo/vector-icons";
 import { Audio } from "expo-av";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import VoiceRecorder, { ExtractedClinicalData } from "@/components/VoiceRecorder";
-// DocumentScanner temporarily disabled - requires static build regeneration
-// import { DocumentScanner } from "@/components/DocumentScanner";
+import { DocumentScanner } from "@/components/DocumentScanner";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { DropdownField } from "@/components/DropdownField";
 import { CheckboxGroup } from "@/components/CheckboxGroup";
@@ -2773,15 +2772,25 @@ export default function CaseSheetScreen() {
 
         {activeTab === "notes" && (
           <>
-            <VoiceRecorder
-              onExtractedData={handleVoiceExtraction}
-              patientContext={{
-                age: caseData?.patient?.age ? parseFloat(caseData.patient.age) : undefined,
-                sex: caseData?.patient?.sex,
-                chiefComplaint: caseData?.presenting_complaint?.text,
-              }}
-              mode="full"
-            />
+            <View style={styles.inputToolsRow}>
+              <VoiceRecorder
+                onExtractedData={handleVoiceExtraction}
+                patientContext={{
+                  age: caseData?.patient?.age ? parseFloat(caseData.patient.age) : undefined,
+                  sex: caseData?.patient?.sex,
+                  chiefComplaint: caseData?.presenting_complaint?.text,
+                }}
+                mode="full"
+              />
+              <DocumentScanner
+                onDataExtracted={handleDocumentScanExtraction}
+                context={{
+                  patientAge: caseData?.patient?.age ? parseFloat(caseData.patient.age) : undefined,
+                  patientSex: caseData?.patient?.sex,
+                  presentingComplaint: caseData?.presenting_complaint?.text,
+                }}
+              />
+            </View>
 
             <View style={[styles.card, { backgroundColor: theme.card }]}>
               <Text style={[styles.cardTitle, { color: theme.text }]}>Procedures Performed</Text>
@@ -2982,6 +2991,7 @@ const styles = StyleSheet.create({
   swipeHint: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingBottom: Spacing.sm, gap: Spacing.xs },
   swipeHintText: { ...Typography.small },
   content: { padding: Spacing.lg },
+  inputToolsRow: { flexDirection: "row", gap: Spacing.md, marginBottom: Spacing.lg },
   card: { padding: Spacing.lg, borderRadius: BorderRadius.lg, marginBottom: Spacing.lg },
   cardTitle: { ...Typography.h4, marginBottom: Spacing.lg },
   patientHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
