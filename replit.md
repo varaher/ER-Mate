@@ -29,6 +29,7 @@
 3. **Fixed Voice Recording in ABCDE Sections** - Added handlers for voice transcription in airway, breathing, circulation, disability, exposure notes fields and procedures.generalNotes
 4. **Fixed Discharge Summary Method Not Allowed** - Changed API method from PATCH to PUT for saving discharge summary, matching the backend's expected method
 5. **Fixed Gender Selection in Triage** - Sex field (Male/Female/Other) now properly updates the UI when tapped by adding state update for button highlight
+6. **Fixed Age Field Typing Lag** - Added debounce (300ms) to age field updates in Triage to prevent re-render interruptions during continuous typing
 
 ### RC-1 Bug Fixes Applied (January 16, 2026)
 1. **Fixed Save as Draft functionality** - Added proper error handling when draft isn't initialized

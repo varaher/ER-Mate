@@ -172,12 +172,19 @@ export default function TriageScreen() {
     grbs: "",
   });
 
+  // Debounce timer ref for age field
+  const ageDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
   useEffect(() => {
     return () => {
       isContinuousRecordingRef.current = false;
       if (transcriptionIntervalRef.current) {
         clearTimeout(transcriptionIntervalRef.current);
         transcriptionIntervalRef.current = null;
+      }
+      if (ageDebounceRef.current) {
+        clearTimeout(ageDebounceRef.current);
+        ageDebounceRef.current = null;
       }
       const recording = recordingRef.current;
       if (recording) {
@@ -202,12 +209,18 @@ export default function TriageScreen() {
     
     // Only update state for fields that affect other UI elements
     if (field === "age") {
-      const ageValue = parseFloat(value) || 0;
-      const newPatientType = isPediatric(ageValue) ? "pediatric" : "adult";
-      setPatientType(newPatientType);
-      setVitalRanges(getVitalRanges(ageValue));
-      setAgeGroupLabel(getAgeGroupLabel(getAgeGroup(ageValue)));
-      setFormData(prev => ({ ...prev, age: value }));
+      // Debounce age updates to prevent typing lag from re-renders
+      if (ageDebounceRef.current) {
+        clearTimeout(ageDebounceRef.current);
+      }
+      ageDebounceRef.current = setTimeout(() => {
+        const ageValue = parseFloat(value) || 0;
+        const newPatientType = isPediatric(ageValue) ? "pediatric" : "adult";
+        setPatientType(newPatientType);
+        setVitalRanges(getVitalRanges(ageValue));
+        setAgeGroupLabel(getAgeGroupLabel(getAgeGroup(ageValue)));
+        setFormData(prev => ({ ...prev, age: value }));
+      }, 300);
     } else if (field === "chief_complaint") {
       // chief_complaint needs state for symptom toggle logic
       setFormData(prev => ({ ...prev, chief_complaint: value }));
