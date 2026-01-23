@@ -809,3 +809,50 @@ Only include fields with actual values extracted from the image. Omit empty fiel
     throw new Error("Failed to extract data from image");
   }
 }
+
+export interface VoiceTranscriptionResult {
+  transcript: string;
+  structured?: ExtractedClinicalData;
+}
+
+export async function transcribeAndExtractVoice(
+  audioBuffer: Buffer,
+  filename: string,
+  patientContext?: { age?: number; sex?: string; chiefComplaint?: string },
+  mode: string = 'full'
+): Promise<VoiceTranscriptionResult> {
+  const openai = getOpenAIClient();
+  if (!openai) {
+    throw new Error("AI service not available - OpenAI not configured");
+  }
+
+  try {
+    const uint8Array = new Uint8Array(audioBuffer);
+    const file = new File([uint8Array], filename, { type: 'audio/m4a' });
+    
+    const transcriptionResponse = await openai.audio.transcriptions.create({
+      file: file,
+      model: 'whisper-1',
+      language: 'en',
+      response_format: 'text',
+    });
+
+    const transcript = typeof transcriptionResponse === 'string' 
+      ? transcriptionResponse 
+      : (transcriptionResponse as unknown as { text: string }).text || '';
+
+    if (!transcript || transcript.trim().length === 0) {
+      return { transcript: 'No speech detected in the recording.' };
+    }
+
+    if (mode === 'full') {
+      const structured = await extractClinicalDataFromVoice(transcript, patientContext);
+      return { transcript, structured };
+    }
+
+    return { transcript };
+  } catch (error) {
+    console.error("Voice transcription error:", error);
+    throw new Error("Failed to transcribe audio");
+  }
+}

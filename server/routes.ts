@@ -2,7 +2,13 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "node:http";
 import PDFDocument from "pdfkit";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, BorderStyle } from "docx";
-import { generateDiagnosisSuggestions, recordFeedback, getFeedbackStats, getLearningInsights, generateCourseInHospital, extractClinicalDataFromVoice, type AIFeedback, type FeedbackResult, type ExtractedClinicalData } from "./services/aiDiagnosis";
+import multer from "multer";
+import { generateDiagnosisSuggestions, recordFeedback, getFeedbackStats, getLearningInsights, generateCourseInHospital, extractClinicalDataFromVoice, transcribeAndExtractVoice, type AIFeedback, type FeedbackResult, type ExtractedClinicalData } from "./services/aiDiagnosis";
+
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 }
+});
 
 interface VitalsData {
   hr?: string;
@@ -995,6 +1001,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Clinical extraction error:", error);
       res.status(500).json({ error: (error as Error).message || "Failed to extract clinical data" });
+    }
+  });
+
+  app.post("/api/voice/transcribe", upload.single('audio'), async (req: Request, res: Response) => {
+    try {
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ error: "No audio file provided" });
+      }
+
+      let patientContext;
+      if (req.body.patientContext) {
+        try {
+          patientContext = JSON.parse(req.body.patientContext);
+        } catch {
+          patientContext = undefined;
+        }
+      }
+      
+      const mode = req.body.mode || 'full';
+      const filename = file.originalname || 'voice.m4a';
+
+      const result = await transcribeAndExtractVoice(
+        file.buffer,
+        filename,
+        patientContext,
+        mode
+      );
+
+      res.json(result);
+    } catch (error) {
+      console.error("Voice transcription error:", error);
+      res.status(500).json({ error: (error as Error).message || "Failed to transcribe audio" });
     }
   });
 
