@@ -162,6 +162,16 @@ export default function ViewCaseScreen() {
   const treatment = caseData.treatment || {};
   const disposition = caseData.disposition || {};
 
+  // Helper to filter out unwanted placeholder text from external backend
+  const cleanText = (text: string | undefined | null): string => {
+    if (!text) return "";
+    return text
+      .replace(/For more information,?\s*visit\s*www\.FEMA\.gov\.?/gi, "")
+      .replace(/For further information regarding laboratory results,?\s*visit\s*www\.FEMA\.gov\.?/gi, "")
+      .replace(/www\.FEMA\.gov/gi, "")
+      .trim();
+  };
+
   const gcsTotal = (vitals.gcs_e || 0) + (vitals.gcs_v || 0) + (vitals.gcs_m || 0);
 
   const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
@@ -450,7 +460,9 @@ export default function ViewCaseScreen() {
           {investigations.panels_selected?.length > 0 && <InfoRow label="Ordered" value={investigations.panels_selected.join(", ")} />}
           {investigations.individual_tests?.length > 0 && <InfoRow label="Tests" value={investigations.individual_tests.join(", ")} />}
           {investigations.imaging?.length > 0 && <InfoRow label="Imaging" value={Array.isArray(investigations.imaging) ? investigations.imaging.join(", ") : investigations.imaging} />}
-          <Text style={[styles.text, { color: theme.text }]}>{investigations.results_notes || "Pending"}</Text>
+          {cleanText(investigations.results_notes) ? (
+            <Text style={[styles.text, { color: theme.text }]}>{cleanText(investigations.results_notes)}</Text>
+          ) : null}
         </Section>
 
         <Section title="Treatment">
