@@ -104,6 +104,45 @@ const TRIAGE_PRIORITY_MAP: Record<TriageCategory, number> = {
   blue: 5,
 };
 
+interface StableInputFieldProps {
+  label: string;
+  field: string;
+  keyboardType?: "default" | "numeric" | "phone-pad";
+  placeholder?: string;
+  defaultValue: string;
+  onChangeText: (value: string) => void;
+  theme: any;
+}
+
+const StableInputField = React.memo(({
+  label,
+  field,
+  keyboardType = "default",
+  placeholder = "",
+  defaultValue,
+  onChangeText,
+  theme,
+}: StableInputFieldProps) => (
+  <View style={inputStyles.inputGroup}>
+    <Text style={[inputStyles.label, { color: theme.textSecondary }]}>{label}</Text>
+    <TextInput
+      style={[inputStyles.input, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]}
+      placeholder={placeholder}
+      placeholderTextColor={theme.textMuted}
+      defaultValue={defaultValue}
+      onChangeText={onChangeText}
+      keyboardType={keyboardType}
+      blurOnSubmit={false}
+    />
+  </View>
+));
+
+const inputStyles = StyleSheet.create({
+  inputGroup: { marginBottom: Spacing.md },
+  label: { ...Typography.caption, marginBottom: Spacing.xs },
+  input: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.sm, borderWidth: 1, ...Typography.body },
+});
+
 export default function TriageScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
@@ -577,29 +616,23 @@ export default function TriageScreen() {
     }
   };
 
-  const InputField = ({
-    label,
-    field,
-    keyboardType = "default",
-    placeholder = "",
-  }: {
-    label: string;
-    field: string;
-    keyboardType?: "default" | "numeric" | "phone-pad";
-    placeholder?: string;
-  }) => (
-    <View style={styles.inputGroup}>
-      <Text style={[styles.label, { color: theme.textSecondary }]}>{label}</Text>
-      <TextInput
-        style={[styles.input, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]}
-        placeholder={placeholder}
-        placeholderTextColor={theme.textMuted}
-        defaultValue={(formDataRef.current as any)[field] || (formData as any)[field]}
-        onChangeText={(v) => updateField(field, v)}
-        keyboardType={keyboardType}
-      />
-    </View>
-  );
+  const renderInputField = useCallback((
+    label: string,
+    field: string,
+    keyboardType: "default" | "numeric" | "phone-pad" = "default",
+    placeholder: string = ""
+  ) => (
+    <StableInputField
+      key={field}
+      label={label}
+      field={field}
+      keyboardType={keyboardType}
+      placeholder={placeholder}
+      defaultValue={(formDataRef.current as any)[field] || (formData as any)[field]}
+      onChangeText={(v) => updateField(field, v)}
+      theme={theme}
+    />
+  ), [theme, updateField]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundDefault }]}>
@@ -670,10 +703,10 @@ export default function TriageScreen() {
 
         <View style={[styles.section, { backgroundColor: theme.card }]}>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>Patient Information</Text>
-          <InputField label="Name *" field="name" placeholder="Patient name" />
+          {renderInputField("Name *", "name", "default", "Patient name")}
           <View style={styles.row}>
             <View style={{ flex: 1 }}>
-              <InputField label="Age" field="age" keyboardType="numeric" placeholder="Age" />
+              {renderInputField("Age", "age", "numeric", "Age")}
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.label, { color: theme.textSecondary }]}>Sex</Text>
@@ -703,7 +736,7 @@ export default function TriageScreen() {
               </View>
             </View>
           </View>
-          <InputField label="Phone" field="phone" keyboardType="phone-pad" placeholder="Phone number" />
+          {renderInputField("Phone", "phone", "phone-pad", "Phone number")}
           <View style={styles.mlcRow}>
             <Text style={[styles.label, { color: theme.textSecondary }]}>MLC Case</Text>
             <Switch value={mlc} onValueChange={setMlc} trackColor={{ true: theme.primary }} />
@@ -754,31 +787,31 @@ export default function TriageScreen() {
 
           <View style={styles.row}>
             <View style={{ flex: 1 }}>
-              <InputField label="HR (bpm)" field="hr" keyboardType="numeric" placeholder="80" />
+              {renderInputField("HR (bpm)", "hr", "numeric", "80")}
             </View>
             <View style={{ flex: 1 }}>
-              <InputField label="RR (/min)" field="rr" keyboardType="numeric" placeholder="16" />
-            </View>
-          </View>
-          <View style={styles.row}>
-            <View style={{ flex: 1 }}>
-              <InputField label="BP Sys" field="bp_systolic" keyboardType="numeric" placeholder="120" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <InputField label="BP Dia" field="bp_diastolic" keyboardType="numeric" placeholder="80" />
+              {renderInputField("RR (/min)", "rr", "numeric", "16")}
             </View>
           </View>
           <View style={styles.row}>
             <View style={{ flex: 1 }}>
-              <InputField label="SpO2 (%)" field="spo2" keyboardType="numeric" placeholder="98" />
+              {renderInputField("BP Sys", "bp_systolic", "numeric", "120")}
             </View>
             <View style={{ flex: 1 }}>
-              <InputField label="Temp (F)" field="temperature" keyboardType="numeric" placeholder="98.6" />
+              {renderInputField("BP Dia", "bp_diastolic", "numeric", "80")}
             </View>
           </View>
           <View style={styles.row}>
             <View style={{ flex: 1 }}>
-              <InputField label="GRBS" field="grbs" keyboardType="numeric" placeholder="100" />
+              {renderInputField("SpO2 (%)", "spo2", "numeric", "98")}
+            </View>
+            <View style={{ flex: 1 }}>
+              {renderInputField("Temp (F)", "temperature", "numeric", "98.6")}
+            </View>
+          </View>
+          <View style={styles.row}>
+            <View style={{ flex: 1 }}>
+              {renderInputField("GRBS", "grbs", "numeric", "100")}
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.label, { color: theme.textSecondary }]}>
@@ -788,13 +821,13 @@ export default function TriageScreen() {
           </View>
           <View style={styles.row}>
             <View style={{ flex: 1 }}>
-              <InputField label="GCS-E (1-4)" field="gcs_e" keyboardType="numeric" placeholder="4" />
+              {renderInputField("GCS-E (1-4)", "gcs_e", "numeric", "4")}
             </View>
             <View style={{ flex: 1 }}>
-              <InputField label="GCS-V (1-5)" field="gcs_v" keyboardType="numeric" placeholder="5" />
+              {renderInputField("GCS-V (1-5)", "gcs_v", "numeric", "5")}
             </View>
             <View style={{ flex: 1 }}>
-              <InputField label="GCS-M (1-6)" field="gcs_m" keyboardType="numeric" placeholder="6" />
+              {renderInputField("GCS-M (1-6)", "gcs_m", "numeric", "6")}
             </View>
           </View>
           <Pressable style={[styles.defaultBtn, { backgroundColor: theme.backgroundSecondary }]} onPress={fillDefaults}>
