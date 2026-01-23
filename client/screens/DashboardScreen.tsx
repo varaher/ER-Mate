@@ -231,6 +231,7 @@ export default function DashboardScreen() {
   };
 
   const isCompleted = (status: string) => status === "completed" || status === "discharged";
+  const canDownload = (status: string) => status === "completed" || status === "discharged" || status === "in_progress";
 
   if (loading) {
     return (
@@ -404,7 +405,7 @@ export default function DashboardScreen() {
                         >
                           <Feather name="edit" size={16} color="#d97706" />
                         </Pressable>
-                        {isCompleted(caseItem.status) ? (
+                        {canDownload(caseItem.status) ? (
                           <Pressable
                             style={[styles.actionBtn, { backgroundColor: "#f3e8ff" }]}
                             onPress={() => openDownloadModal(caseItem)}
@@ -473,25 +474,33 @@ export default function DashboardScreen() {
                   </Pressable>
                 </View>
 
-                <Text style={[styles.downloadSectionTitle, { color: theme.text, marginTop: Spacing.lg }]}>
-                  Discharge Summary
-                </Text>
-                <View style={styles.downloadRow}>
-                  <Pressable
-                    style={[styles.downloadBtn, { backgroundColor: "#fee2e2" }]}
-                    onPress={() => exportDocument("discharge", "pdf")}
-                  >
-                    <Feather name="file" size={20} color="#dc2626" />
-                    <Text style={[styles.downloadBtnText, { color: "#dc2626" }]}>PDF</Text>
-                  </Pressable>
-                  <Pressable
-                    style={[styles.downloadBtn, { backgroundColor: "#dbeafe" }]}
-                    onPress={() => exportDocument("discharge", "word")}
-                  >
-                    <Feather name="file-text" size={20} color="#2563eb" />
-                    <Text style={[styles.downloadBtnText, { color: "#2563eb" }]}>Word</Text>
-                  </Pressable>
-                </View>
+                {selectedCase && isCompleted(selectedCase.status) ? (
+                  <>
+                    <Text style={[styles.downloadSectionTitle, { color: theme.text, marginTop: Spacing.lg }]}>
+                      Discharge Summary
+                    </Text>
+                    <View style={styles.downloadRow}>
+                      <Pressable
+                        style={[styles.downloadBtn, { backgroundColor: "#fee2e2" }]}
+                        onPress={() => exportDocument("discharge", "pdf")}
+                      >
+                        <Feather name="file" size={20} color="#dc2626" />
+                        <Text style={[styles.downloadBtnText, { color: "#dc2626" }]}>PDF</Text>
+                      </Pressable>
+                      <Pressable
+                        style={[styles.downloadBtn, { backgroundColor: "#dbeafe" }]}
+                        onPress={() => exportDocument("discharge", "word")}
+                      >
+                        <Feather name="file-text" size={20} color="#2563eb" />
+                        <Text style={[styles.downloadBtnText, { color: "#2563eb" }]}>Word</Text>
+                      </Pressable>
+                    </View>
+                  </>
+                ) : (
+                  <Text style={[styles.downloadNote, { color: theme.textSecondary, marginTop: Spacing.lg }]}>
+                    Discharge summary available after case is completed
+                  </Text>
+                )}
               </View>
             )}
           </View>
@@ -663,4 +672,5 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
   },
   downloadBtnText: { ...Typography.label },
+  downloadNote: { ...Typography.small, textAlign: "center" as const },
 });
