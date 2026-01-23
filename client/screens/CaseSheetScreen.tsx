@@ -2361,6 +2361,25 @@ export default function CaseSheetScreen() {
 
         {activeTab === "history" && (
           <>
+            <View style={styles.inputToolsRow}>
+              <VoiceRecorder
+                onExtractedData={handleVoiceExtraction}
+                patientContext={{
+                  age: caseData?.patient?.age ? parseFloat(caseData.patient.age) : undefined,
+                  sex: caseData?.patient?.sex,
+                  chiefComplaint: caseData?.presenting_complaint?.text,
+                }}
+                mode="full"
+              />
+              <DocumentScanner
+                onDataExtracted={handleDocumentScanExtraction}
+                context={{
+                  patientAge: caseData?.patient?.age ? parseFloat(caseData.patient.age) : undefined,
+                  patientSex: caseData?.patient?.sex,
+                  presentingComplaint: caseData?.presenting_complaint?.text,
+                }}
+              />
+            </View>
             <View style={[styles.card, { backgroundColor: theme.card }]}>
               <Text style={[styles.cardTitle, { color: theme.text }]}>History</Text>
               
@@ -3066,7 +3085,7 @@ const styles = StyleSheet.create({
   abgNormalLabel: { ...Typography.caption },
   abgNormalValue: { ...Typography.caption, fontWeight: "600" },
   aiInterpretBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, borderRadius: BorderRadius.md, gap: Spacing.sm, marginTop: Spacing.sm },
-  aiInterpretBtnText: { color: "#FFFFFF", fontWeight: "600", ...Typography.bodyMedium },
+  aiInterpretBtnText: { ...Typography.bodyMedium, color: "#FFFFFF", fontWeight: "600" },
   abgInterpretationCard: { padding: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1, marginTop: Spacing.md },
   abgInterpretationTitle: { ...Typography.bodyMedium, fontWeight: "700", marginBottom: Spacing.xs },
   abgInterpretationText: { ...Typography.body, lineHeight: 22 },
