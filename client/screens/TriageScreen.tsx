@@ -22,6 +22,7 @@ import { apiPost, apiUpload, invalidateCases } from "@/lib/api";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { getVitalRanges, getAgeGroup, getAgeGroupLabel, isPediatric, type VitalRanges } from "@/lib/pediatricVitals";
+import VoiceRecorder, { ExtractedClinicalData } from "@/components/VoiceRecorder";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -501,6 +502,51 @@ export default function TriageScreen() {
     };
   };
 
+  const handleVoiceExtraction = (data: ExtractedClinicalData) => {
+    if (data.chiefComplaint) {
+      const current = formDataRef.current.chief_complaint;
+      const newValue = current ? current + " " + data.chiefComplaint : data.chiefComplaint;
+      formDataRef.current.chief_complaint = newValue;
+      setFormData(prev => ({ ...prev, chief_complaint: newValue }));
+    }
+    if (data.triageData?.chiefComplaint) {
+      const current = formDataRef.current.chief_complaint;
+      if (!current) {
+        formDataRef.current.chief_complaint = data.triageData.chiefComplaint;
+        setFormData(prev => ({ ...prev, chief_complaint: data.triageData!.chiefComplaint! }));
+      }
+    }
+    if (data.vitalsSuggested) {
+      const vs = data.vitalsSuggested;
+      if (vs.hr) {
+        formDataRef.current.hr = vs.hr;
+        setFormData(prev => ({ ...prev, hr: vs.hr! }));
+      }
+      if (vs.spo2) {
+        formDataRef.current.spo2 = vs.spo2;
+        setFormData(prev => ({ ...prev, spo2: vs.spo2! }));
+      }
+      if (vs.rr) {
+        formDataRef.current.rr = vs.rr;
+        setFormData(prev => ({ ...prev, rr: vs.rr! }));
+      }
+      if (vs.temperature) {
+        formDataRef.current.temperature = vs.temperature;
+        setFormData(prev => ({ ...prev, temperature: vs.temperature! }));
+      }
+      if (vs.grbs) {
+        formDataRef.current.grbs = vs.grbs;
+        setFormData(prev => ({ ...prev, grbs: vs.grbs! }));
+      }
+    }
+    if (data.rawTranscription && !data.chiefComplaint && !data.triageData?.chiefComplaint) {
+      const current = formDataRef.current.chief_complaint;
+      const newValue = current ? current + " " + data.rawTranscription : data.rawTranscription;
+      formDataRef.current.chief_complaint = newValue;
+      setFormData(prev => ({ ...prev, chief_complaint: newValue }));
+    }
+  };
+
   const fillDefaults = () => {
     // Update ref values with defaults
     formDataRef.current.hr = formDataRef.current.hr || DEFAULT_VITALS.hr;
@@ -903,6 +949,15 @@ export default function TriageScreen() {
             multiline
             numberOfLines={4}
             textAlignVertical="top"
+          />
+          <VoiceRecorder
+            onExtractedData={handleVoiceExtraction}
+            patientContext={{
+              age: parseFloat(formDataRef.current.age) || undefined,
+              sex: formData.sex,
+              chiefComplaint: formData.chief_complaint,
+            }}
+            mode="full"
           />
         </View>
 
