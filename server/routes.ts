@@ -603,12 +603,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
         doc.moveDown(0.5);
       }
 
+      const investigations = data.investigations || {};
+      if (Object.keys(investigations).length > 0 && (investigations.panels_selected?.length > 0 || investigations.individual_tests?.length > 0 || investigations.imaging?.length > 0 || investigations.results_notes)) {
+        doc.font("Helvetica-Bold").text("INVESTIGATIONS");
+        doc.moveDown(0.3);
+        doc.font("Helvetica");
+        if (Array.isArray(investigations.panels_selected) && investigations.panels_selected.length > 0) {
+          doc.text(`Lab Panels: ${investigations.panels_selected.join(", ")}`);
+        }
+        if (Array.isArray(investigations.individual_tests) && investigations.individual_tests.length > 0) {
+          doc.text(`Individual Tests: ${investigations.individual_tests.join(", ")}`);
+        }
+        if (investigations.imaging) {
+          const imagingText = Array.isArray(investigations.imaging) ? investigations.imaging.join(", ") : investigations.imaging;
+          doc.text(`Imaging: ${imagingText}`);
+        }
+        if (investigations.results_notes) {
+          doc.text(`Results Notes: ${investigations.results_notes}`);
+        }
+        doc.moveDown(0.5);
+      }
+
       const treatment = data.treatment || {};
-      if (treatment.primary_diagnosis || treatment.medications) {
+      if (treatment.primary_diagnosis || treatment.medications || treatment.infusions || treatment.iv_fluids || treatment.interventions) {
         doc.font("Helvetica-Bold").text("TREATMENT");
         doc.moveDown(0.3);
         doc.font("Helvetica");
         if (treatment.primary_diagnosis) doc.text(`Diagnosis: ${treatment.primary_diagnosis}`);
+        if (treatment.differential_diagnoses) {
+          const diffs = Array.isArray(treatment.differential_diagnoses) ? treatment.differential_diagnoses.join(", ") : treatment.differential_diagnoses;
+          doc.text(`Differential Diagnoses: ${diffs}`);
+        }
+        if (Array.isArray(treatment.interventions) && treatment.interventions.length > 0) {
+          doc.text(`Interventions: ${treatment.interventions.join(", ")}`);
+        }
         if (Array.isArray(treatment.medications) && treatment.medications.length > 0) {
           doc.font("Helvetica-Bold").text("Medications:");
           doc.font("Helvetica");
@@ -616,7 +644,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
             doc.text(`  - ${med.name || ""} ${med.dose || ""} ${med.route || ""} ${med.frequency || ""}`);
           });
         }
+        if (Array.isArray(treatment.infusions) && treatment.infusions.length > 0) {
+          doc.font("Helvetica-Bold").text("Infusions:");
+          doc.font("Helvetica");
+          treatment.infusions.forEach((inf: any) => {
+            doc.text(`  - ${inf.drug || inf.name || ""} ${inf.dose || ""} in ${inf.dilution || ""} at ${inf.rate || ""}`);
+          });
+        }
         if (treatment.iv_fluids) doc.text(`IV Fluids: ${treatment.iv_fluids}`);
+        doc.moveDown(0.5);
+      }
+
+      const procedures = data.procedures || {};
+      if (Object.keys(procedures).length > 0 && (procedures.performed?.length > 0 || procedures.generalNotes)) {
+        doc.font("Helvetica-Bold").text("PROCEDURES");
+        doc.moveDown(0.3);
+        doc.font("Helvetica");
+        if (Array.isArray(procedures.performed) && procedures.performed.length > 0) {
+          doc.text(`Performed: ${procedures.performed.join(", ")}`);
+        }
+        if (procedures.generalNotes) doc.text(`Notes: ${procedures.generalNotes}`);
+        doc.moveDown(0.5);
+      }
+
+      const disposition = data.disposition || {};
+      if (Object.keys(disposition).length > 0) {
+        doc.font("Helvetica-Bold").text("DISPOSITION");
+        doc.moveDown(0.3);
+        doc.font("Helvetica");
+        if (disposition.type) doc.text(`Disposition: ${disposition.type}`);
+        if (disposition.department) doc.text(`Department/Facility: ${disposition.department}`);
+        if (disposition.notes) doc.text(`Notes: ${disposition.notes}`);
         doc.moveDown(0.5);
       }
 
@@ -707,18 +765,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (exam.cns_status) children.push(new Paragraph({ text: `CNS: ${exam.cns_status}` }));
       }
 
+      const investigations = data.investigations || {};
+      if (Object.keys(investigations).length > 0 && (investigations.panels_selected?.length > 0 || investigations.individual_tests?.length > 0 || investigations.imaging?.length > 0 || investigations.results_notes)) {
+        children.push(
+          new Paragraph({ text: "INVESTIGATIONS", heading: HeadingLevel.HEADING_2, spacing: { before: 300, after: 100 } })
+        );
+        if (Array.isArray(investigations.panels_selected) && investigations.panels_selected.length > 0) {
+          children.push(new Paragraph({ text: `Lab Panels: ${investigations.panels_selected.join(", ")}` }));
+        }
+        if (Array.isArray(investigations.individual_tests) && investigations.individual_tests.length > 0) {
+          children.push(new Paragraph({ text: `Individual Tests: ${investigations.individual_tests.join(", ")}` }));
+        }
+        if (investigations.imaging) {
+          const imagingText = Array.isArray(investigations.imaging) ? investigations.imaging.join(", ") : investigations.imaging;
+          children.push(new Paragraph({ text: `Imaging: ${imagingText}` }));
+        }
+        if (investigations.results_notes) {
+          children.push(new Paragraph({ text: `Results Notes: ${investigations.results_notes}` }));
+        }
+      }
+
       const treatment = data.treatment || {};
-      if (treatment.primary_diagnosis || treatment.medications) {
+      if (treatment.primary_diagnosis || treatment.medications || treatment.infusions || treatment.iv_fluids || treatment.interventions) {
         children.push(
           new Paragraph({ text: "TREATMENT", heading: HeadingLevel.HEADING_2, spacing: { before: 300, after: 100 } })
         );
         if (treatment.primary_diagnosis) children.push(new Paragraph({ text: `Diagnosis: ${treatment.primary_diagnosis}` }));
+        if (treatment.differential_diagnoses) {
+          const diffs = Array.isArray(treatment.differential_diagnoses) ? treatment.differential_diagnoses.join(", ") : treatment.differential_diagnoses;
+          children.push(new Paragraph({ text: `Differential Diagnoses: ${diffs}` }));
+        }
+        if (Array.isArray(treatment.interventions) && treatment.interventions.length > 0) {
+          children.push(new Paragraph({ text: `Interventions: ${treatment.interventions.join(", ")}` }));
+        }
         if (Array.isArray(treatment.medications) && treatment.medications.length > 0) {
           children.push(new Paragraph({ children: [new TextRun({ text: "Medications:", bold: true })] }));
           treatment.medications.forEach((med: any) => {
             children.push(new Paragraph({ text: `  - ${med.name || ""} ${med.dose || ""} ${med.route || ""} ${med.frequency || ""}` }));
           });
         }
+        if (Array.isArray(treatment.infusions) && treatment.infusions.length > 0) {
+          children.push(new Paragraph({ children: [new TextRun({ text: "Infusions:", bold: true })] }));
+          treatment.infusions.forEach((inf: any) => {
+            children.push(new Paragraph({ text: `  - ${inf.drug || inf.name || ""} ${inf.dose || ""} in ${inf.dilution || ""} at ${inf.rate || ""}` }));
+          });
+        }
+        if (treatment.iv_fluids) children.push(new Paragraph({ text: `IV Fluids: ${treatment.iv_fluids}` }));
+      }
+
+      const procedures = data.procedures || {};
+      if (Object.keys(procedures).length > 0 && (procedures.performed?.length > 0 || procedures.generalNotes)) {
+        children.push(
+          new Paragraph({ text: "PROCEDURES", heading: HeadingLevel.HEADING_2, spacing: { before: 300, after: 100 } })
+        );
+        if (Array.isArray(procedures.performed) && procedures.performed.length > 0) {
+          children.push(new Paragraph({ text: `Performed: ${procedures.performed.join(", ")}` }));
+        }
+        if (procedures.generalNotes) children.push(new Paragraph({ text: `Notes: ${procedures.generalNotes}` }));
+      }
+
+      const disposition = data.disposition || {};
+      if (Object.keys(disposition).length > 0 && (disposition.type || disposition.department || disposition.notes)) {
+        children.push(
+          new Paragraph({ text: "DISPOSITION", heading: HeadingLevel.HEADING_2, spacing: { before: 300, after: 100 } })
+        );
+        if (disposition.type) children.push(new Paragraph({ text: `Disposition: ${disposition.type}` }));
+        if (disposition.department) children.push(new Paragraph({ text: `Department/Facility: ${disposition.department}` }));
+        if (disposition.notes) children.push(new Paragraph({ text: `Notes: ${disposition.notes}` }));
       }
 
       const docxDoc = new Document({
