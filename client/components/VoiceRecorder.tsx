@@ -10,17 +10,22 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useAudioRecorder, AudioModule, RecordingPresets } from 'expo-audio';
+import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/useTheme';
 import { apiUpload, apiPost } from '@/lib/api';
+import { getApiUrl } from '@/lib/query-client';
 
 export interface ExtractedClinicalData {
   chiefComplaint?: string;
   historyOfPresentIllness?: string;
   pastMedicalHistory?: string;
+  pastSurgicalHistory?: string;
   allergies?: string;
   medications?: string;
+  familyHistory?: string;
+  socialHistory?: string;
   symptoms?: string[];
   painDetails?: {
     location?: string;
@@ -28,6 +33,9 @@ export interface ExtractedClinicalData {
     character?: string;
     onset?: string;
     duration?: string;
+    aggravatingFactors?: string;
+    relievingFactors?: string;
+    associatedSymptoms?: string;
   };
   vitalsSuggested?: {
     bp?: string;
@@ -35,6 +43,20 @@ export interface ExtractedClinicalData {
     rr?: string;
     spo2?: string;
     temperature?: string;
+    grbs?: string;
+  };
+  reviewOfSystems?: {
+    general?: string;
+    constitutional?: string;
+    skin?: string;
+    heent?: string;
+    respiratory?: string;
+    cardiovascular?: string;
+    gastrointestinal?: string;
+    genitourinary?: string;
+    musculoskeletal?: string;
+    neurological?: string;
+    psychiatric?: string;
   };
   examFindings?: {
     general?: string;
@@ -42,9 +64,21 @@ export interface ExtractedClinicalData {
     respiratory?: string;
     abdomen?: string;
     cns?: string;
+    musculoskeletal?: string;
+    skin?: string;
   };
   diagnosis?: string[];
+  differentialDiagnosis?: string[];
+  assessmentPlan?: string;
   treatmentNotes?: string;
+  redFlags?: string[];
+  triageData?: {
+    chiefComplaint?: string;
+    onset?: string;
+    severity?: string;
+    redFlags?: string[];
+    suggestedTriageLevel?: string;
+  };
   rawTranscription?: string;
 }
 
@@ -135,6 +169,15 @@ export default function VoiceRecorder({
         return;
       }
 
+      if (Platform.OS !== 'web') {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: false,
+          shouldDuckAndroid: true,
+        });
+      }
+
       setRecordingDuration(0);
       setTranscription('');
       setHasRecording(false);
@@ -199,42 +242,45 @@ export default function VoiceRecorder({
       if (Platform.OS === 'web') {
         const response = await fetch(recordingUri);
         const blob = await response.blob();
-        formData.append('file', blob, 'voice.m4a');
+        formData.append('audio', blob, 'voice.m4a');
       } else {
         const file = new FileSystem.File(recordingUri);
-        formData.append('file', file as unknown as Blob, 'voice.m4a');
+        formData.append('audio', file as unknown as Blob, 'voice.m4a');
       }
       
-      formData.append('engine', 'auto');
-      formData.append('language', 'en');
+      if (patientContext) {
+        formData.append('patientContext', JSON.stringify(patientContext));
+      }
+      formData.append('mode', mode);
 
-      const transcribeRes = await apiUpload<{ transcription: string }>('/ai/voice-to-text', formData);
+      const apiUrl = getApiUrl();
+      const transcribeUrl = new URL('/api/voice/transcribe', apiUrl).toString();
       
-      if (!transcribeRes.success || !transcribeRes.data?.transcription) {
-        throw new Error('Transcription failed');
+      const response = await fetch(transcribeUrl, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Transcription failed');
       }
 
-      const text = transcribeRes.data.transcription;
-      setTranscription(text);
-      onTranscriptionComplete?.(text);
+      const result = await response.json();
+      const { transcript, structured } = result;
 
-      if (mode === 'full') {
-        const extractRes = await apiPost<{ extracted: ExtractedClinicalData }>('/ai/extract-clinical', {
-          transcription: text,
-          patientContext: patientContext,
-        });
+      setTranscription(transcript || '');
+      onTranscriptionComplete?.(transcript || '');
 
-        if (extractRes.success && extractRes.data?.extracted) {
-          const extracted = extractRes.data.extracted;
-          extracted.rawTranscription = text;
-          onExtractedData?.(extracted);
-          Alert.alert('Success', 'Voice note saved and clinical data extracted to case sheet');
-        } else {
-          onExtractedData?.({ rawTranscription: text });
-          Alert.alert('Saved', 'Voice transcription saved. Auto-extraction not available.');
-        }
+      if (mode === 'full' && structured) {
+        const extracted: ExtractedClinicalData = {
+          ...structured,
+          rawTranscription: transcript,
+        };
+        onExtractedData?.(extracted);
+        Alert.alert('Success', 'Voice note saved and clinical data extracted to case sheet');
       } else {
-        onExtractedData?.({ rawTranscription: text });
+        onExtractedData?.({ rawTranscription: transcript });
         Alert.alert('Saved', 'Voice note transcribed and saved');
       }
 
