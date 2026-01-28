@@ -17,6 +17,13 @@ import { useTheme } from '@/hooks/useTheme';
 import { apiUpload, apiPost } from '@/lib/api';
 import { getApiUrl } from '@/lib/query-client';
 
+// Web MediaRecorder types
+interface WebRecorderState {
+  mediaRecorder: MediaRecorder | null;
+  audioChunks: Blob[];
+  stream: MediaStream | null;
+}
+
 export interface ExtractedClinicalData {
   chiefComplaint?: string;
   historyOfPresentIllness?: string;
@@ -113,12 +120,21 @@ export default function VoiceRecorder({
   const [isProcessing, setIsProcessing] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [recordingUri, setRecordingUri] = useState<string | null>(null);
+  const [webRecordingBlob, setWebRecordingBlob] = useState<Blob | null>(null);
   const [transcription, setTranscription] = useState<string>('');
   
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const durationInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   
-  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  // Web recorder state
+  const webRecorderRef = useRef<WebRecorderState>({
+    mediaRecorder: null,
+    audioChunks: [],
+    stream: null,
+  });
+  
+  // Native recorder (only used on non-web platforms)
+  const audioRecorder = Platform.OS !== 'web' ? useAudioRecorder(RecordingPresets.HIGH_QUALITY) : null;
 
   useEffect(() => {
     if (isRecording) {
@@ -163,28 +179,67 @@ export default function VoiceRecorder({
 
   const startRecording = async () => {
     try {
-      const status = await AudioModule.requestRecordingPermissionsAsync();
-      if (!status.granted) {
-        Alert.alert('Permission Required', 'Microphone access is needed for voice recording');
-        return;
-      }
+      setRecordingDuration(0);
+      setTranscription('');
+      setHasRecording(false);
+      setRecordingUri(null);
+      setWebRecordingBlob(null);
 
-      if (Platform.OS !== 'web') {
+      if (Platform.OS === 'web') {
+        // Web: Use MediaRecorder API
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          Alert.alert('Not Supported', 'Voice recording is not supported in this browser');
+          return;
+        }
+
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        webRecorderRef.current.stream = stream;
+        webRecorderRef.current.audioChunks = [];
+
+        const mediaRecorder = new MediaRecorder(stream, {
+          mimeType: MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4',
+        });
+
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            webRecorderRef.current.audioChunks.push(event.data);
+          }
+        };
+
+        mediaRecorder.onstop = () => {
+          const audioBlob = new Blob(webRecorderRef.current.audioChunks, { 
+            type: mediaRecorder.mimeType 
+          });
+          setWebRecordingBlob(audioBlob);
+          setHasRecording(true);
+
+          // Stop all tracks
+          if (webRecorderRef.current.stream) {
+            webRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+          }
+        };
+
+        webRecorderRef.current.mediaRecorder = mediaRecorder;
+        mediaRecorder.start(100); // Collect data every 100ms
+        setIsRecording(true);
+      } else {
+        // Native: Use expo-audio
+        const status = await AudioModule.requestRecordingPermissionsAsync();
+        if (!status.granted) {
+          Alert.alert('Permission Required', 'Microphone access is needed for voice recording');
+          return;
+        }
+
         await Audio.setAudioModeAsync({
           allowsRecordingIOS: true,
           playsInSilentModeIOS: true,
           staysActiveInBackground: false,
           shouldDuckAndroid: true,
         });
-      }
 
-      setRecordingDuration(0);
-      setTranscription('');
-      setHasRecording(false);
-      setRecordingUri(null);
-      
-      audioRecorder.record();
-      setIsRecording(true);
+        audioRecorder?.record();
+        setIsRecording(true);
+      }
     } catch (err) {
       console.error('Failed to start recording:', err);
       Alert.alert('Error', 'Failed to start recording. Please try again.');
@@ -196,13 +251,22 @@ export default function VoiceRecorder({
     if (!isRecording) return;
     
     try {
-      await audioRecorder.stop();
       setIsRecording(false);
-      
-      const uri = audioRecorder.uri;
-      if (uri) {
-        setRecordingUri(uri);
-        setHasRecording(true);
+
+      if (Platform.OS === 'web') {
+        // Web: Stop MediaRecorder
+        const mediaRecorder = webRecorderRef.current.mediaRecorder;
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+          mediaRecorder.stop();
+        }
+      } else {
+        // Native: Stop expo-audio recorder
+        await audioRecorder?.stop();
+        const uri = audioRecorder?.uri;
+        if (uri) {
+          setRecordingUri(uri);
+          setHasRecording(true);
+        }
       }
     } catch (err) {
       console.error('Failed to stop recording:', err);
@@ -224,12 +288,18 @@ export default function VoiceRecorder({
     await cleanupRecording(recordingUri);
     setHasRecording(false);
     setRecordingUri(null);
+    setWebRecordingBlob(null);
     setTranscription('');
     setRecordingDuration(0);
+    webRecorderRef.current.audioChunks = [];
   };
 
   const saveToCase = async () => {
-    if (!recordingUri) {
+    if (Platform.OS === 'web' && !webRecordingBlob) {
+      Alert.alert('Error', 'No recording available');
+      return;
+    }
+    if (Platform.OS !== 'web' && !recordingUri) {
       Alert.alert('Error', 'No recording available');
       return;
     }
@@ -240,11 +310,12 @@ export default function VoiceRecorder({
       const formData = new FormData();
       
       if (Platform.OS === 'web') {
-        const response = await fetch(recordingUri);
-        const blob = await response.blob();
-        formData.append('audio', blob, 'voice.m4a');
+        // Web: Use the blob directly
+        const extension = webRecordingBlob!.type.includes('webm') ? 'webm' : 'm4a';
+        formData.append('audio', webRecordingBlob!, `voice.${extension}`);
       } else {
-        const file = new FileSystem.File(recordingUri);
+        // Native: Use expo-file-system File class
+        const file = new FileSystem.File(recordingUri!);
         formData.append('audio', file as unknown as Blob, 'voice.m4a');
       }
       
