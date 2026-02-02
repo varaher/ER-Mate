@@ -1145,7 +1145,8 @@ export default function CaseSheetScreen() {
       if (!silent) Alert.alert("Saved Locally", "Data saved locally. It will be submitted when you click Finish in Disposition.");
     } catch (err) {
       console.error("Local save exception:", err);
-      if (!silent) Alert.alert("Error", (err as Error).message || "Failed to save case data");
+      const errMsg = err instanceof Error ? err.message : String(err || "Failed to save case data");
+      if (!silent) Alert.alert("Error", errMsg);
     } finally {
       setSaving(false);
     }
@@ -1187,7 +1188,8 @@ export default function CaseSheetScreen() {
       }
     } catch (err) {
       console.error("Commit exception:", err);
-      Alert.alert("Error", (err as Error).message);
+      const errMsg = err instanceof Error ? err.message : String(err || "Failed to save case");
+      Alert.alert("Error", errMsg);
       return false;
     } finally {
       setSaving(false);

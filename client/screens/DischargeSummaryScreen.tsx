@@ -505,10 +505,12 @@ export default function DischargeSummaryScreen() {
         forceUpdate({});
         Alert.alert("Generated", "AI has generated the Course in Hospital section. Please review and edit as needed.");
       } else {
-        Alert.alert("Error", res.error || "Failed to generate summary");
+        const errMsg = typeof res.error === 'string' ? res.error : JSON.stringify(res.error || "Failed to generate summary");
+        Alert.alert("Error", errMsg);
       }
     } catch (err) {
-      Alert.alert("Error", (err as Error).message);
+      const errMsg = err instanceof Error ? err.message : String(err || "Failed to generate summary");
+      Alert.alert("Error", errMsg);
     } finally {
       setGenerating(false);
     }

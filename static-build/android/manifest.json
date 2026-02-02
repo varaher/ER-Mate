@@ -1,11 +1,11 @@
 {
-  "id": "1dafa6d6-d7df-4e46-ab3e-5d3d872c48eb",
-  "createdAt": "2026-02-02T07:26:57.938Z",
+  "id": "9653195a-7b20-4589-aaf2-0e1bb6cd4bea",
+  "createdAt": "2026-02-02T07:45:53.668Z",
   "runtimeVersion": "exposdk:54.0.0",
   "launchAsset": {
-    "key": "bundle-1770017217938-2839",
+    "key": "bundle-1770018353668-5270",
     "contentType": "application/javascript",
-    "url": "https://cc70901c-5ae8-4394-a8d0-9961ae7b57dc-00-1obtc7pzxu7ls.picard.replit.dev/1770017217938-2839/_expo/static/js/android/bundle.js"
+    "url": "https://cc70901c-5ae8-4394-a8d0-9961ae7b57dc-00-1obtc7pzxu7ls.picard.replit.dev/1770018353668-5270/_expo/static/js/android/bundle.js"
   },
   "assets": [],
   "metadata": {},

@@ -549,7 +549,8 @@ export default function PediatricCaseSheetScreen() {
       if (!silent) Alert.alert("Saved Locally", "Data saved locally. It will be submitted when you click Finish.");
     } catch (error) {
       console.error("Failed to save locally:", error);
-      if (!silent) Alert.alert("Error", (error as Error).message || "Failed to save case data");
+      const errMsg = error instanceof Error ? error.message : String(error || "Failed to save case data");
+      if (!silent) Alert.alert("Error", errMsg);
     } finally {
       setSaving(false);
     }
