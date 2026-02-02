@@ -133,8 +133,9 @@ export default function VoiceRecorder({
     stream: null,
   });
   
-  // Native recorder (only used on non-web platforms)
-  const audioRecorder = Platform.OS !== 'web' ? useAudioRecorder(RecordingPresets.HIGH_QUALITY) : null;
+  // Native recorder - always call the hook to follow React's rules of hooks
+  // The hook is a no-op on web, but we still call it unconditionally
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
 
   useEffect(() => {
     if (isRecording) {
