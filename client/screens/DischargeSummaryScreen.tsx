@@ -774,21 +774,6 @@ export default function DischargeSummaryScreen() {
           </View>
         </View>
 
-        <Pressable
-          style={({ pressed }) => [styles.aiBtn, { backgroundColor: theme.primaryLight, opacity: pressed || generating ? 0.8 : 1 }]}
-          onPress={generateCourseInHospital}
-          disabled={generating}
-        >
-          {generating ? (
-            <ActivityIndicator color={theme.primary} />
-          ) : (
-            <>
-              <Feather name="cpu" size={20} color={theme.primary} />
-              <Text style={[styles.aiBtnText, { color: theme.primary }]}>Generate Course in Hospital</Text>
-            </>
-          )}
-        </Pressable>
-
         <View style={[styles.section, { backgroundColor: theme.card }]}>
           <CollapsibleSection title="Patient Information & Arrival" icon="user" iconColor={theme.primary}>
             <View style={styles.field}>
@@ -938,6 +923,21 @@ export default function DischargeSummaryScreen() {
 
         <View style={[styles.section, { backgroundColor: theme.card }]}>
           <CollapsibleSection title="Hospital Course & Treatment" icon="file-text" iconColor={TriageColors.blue}>
+            <Pressable
+              style={({ pressed }) => [styles.aiBtn, { backgroundColor: theme.primaryLight, opacity: pressed || generating ? 0.8 : 1, marginBottom: Spacing.md }]}
+              onPress={generateCourseInHospital}
+              disabled={generating}
+            >
+              {generating ? (
+                <ActivityIndicator color={theme.primary} />
+              ) : (
+                <>
+                  <Feather name="cpu" size={20} color={theme.primary} />
+                  <Text style={[styles.aiBtnText, { color: theme.primary }]}>Generate Course in Hospital</Text>
+                </>
+              )}
+            </Pressable>
+
             <View style={styles.field}>
               <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Course in Hospital with Medications and Procedures</Text>
               <TextInput
