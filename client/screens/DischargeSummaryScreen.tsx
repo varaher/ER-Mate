@@ -136,7 +136,8 @@ export default function DischargeSummaryScreen() {
   const [exportingDocx, setExportingDocx] = useState(false);
   const [caseData, setCaseData] = useState<any>(null);
   const summaryRef = useRef<DischargeSummaryData>({ ...defaultSummary });
-  const [, forceUpdate] = useState({});
+  const [updateCounter, setUpdateCounter] = useState(0);
+  const forceUpdate = () => setUpdateCounter(c => c + 1);
 
   useEffect(() => {
     loadCase();
@@ -234,7 +235,7 @@ export default function DischargeSummaryScreen() {
       summaryRef.current = { ...summaryRef.current, ...data.discharge_summary };
     }
 
-    forceUpdate({});
+    forceUpdate();
   };
 
   const formatAirway = (airway: any): string => {
@@ -475,9 +476,12 @@ export default function DischargeSummaryScreen() {
 
   const generateCourseInHospital = async () => {
     setGenerating(true);
+    console.log("[AI] Generating course in hospital...");
     try {
       const baseUrl = getApiUrl();
       const endpoint = new URL("/api/ai/discharge-summary", baseUrl);
+      console.log("[AI] Endpoint:", endpoint.toString());
+      console.log("[AI] Summary data:", JSON.stringify(summaryRef.current, null, 2));
       
       const response = await fetch(endpoint.toString(), {
         method: "POST",
@@ -488,27 +492,36 @@ export default function DischargeSummaryScreen() {
         }),
       });
       
+      console.log("[AI] Response status:", response.status);
+      
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        console.log("[AI] Error data:", errorData);
         throw new Error(errorData.error || "Failed to generate summary");
       }
       
       const res = await response.json();
+      console.log("[AI] Response:", JSON.stringify(res, null, 2));
       
       if (res.success && res.summary) {
         if (res.summary.course_in_hospital) {
+          console.log("[AI] Setting course_in_hospital:", res.summary.course_in_hospital.substring(0, 100) + "...");
           summaryRef.current.course_in_hospital = res.summary.course_in_hospital;
         }
         if (res.summary.diagnosis && !summaryRef.current.diagnosis) {
+          console.log("[AI] Setting diagnosis:", res.summary.diagnosis);
           summaryRef.current.diagnosis = res.summary.diagnosis;
         }
-        forceUpdate({});
+        console.log("[AI] Calling forceUpdate...");
+        forceUpdate();
         Alert.alert("Generated", "AI has generated the Course in Hospital section. Please review and edit as needed.");
       } else {
         const errMsg = typeof res.error === 'string' ? res.error : JSON.stringify(res.error || "Failed to generate summary");
+        console.log("[AI] Error response:", errMsg);
         Alert.alert("Error", errMsg);
       }
     } catch (err) {
+      console.error("[AI] Catch error:", err);
       const errMsg = err instanceof Error ? err.message : String(err || "Failed to generate summary");
       Alert.alert("Error", errMsg);
     } finally {
@@ -664,7 +677,7 @@ export default function DischargeSummaryScreen() {
       obj = obj[keys[i]];
     }
     obj[keys[keys.length - 1]] = value;
-    forceUpdate({});
+    forceUpdate();
   };
 
   const DebouncedVitalInput = React.memo(({ 
