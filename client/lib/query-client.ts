@@ -11,6 +11,9 @@ export function getApiUrl(): string {
     throw new Error("EXPO_PUBLIC_DOMAIN is not set");
   }
 
+  // Strip any port number - Replit proxy handles routing
+  host = host.replace(/:5000$/, '').replace(/:443$/, '');
+  
   let url = new URL(`https://${host}`);
 
   return url.href;
