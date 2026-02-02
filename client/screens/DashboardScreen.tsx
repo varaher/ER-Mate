@@ -187,6 +187,184 @@ export default function DashboardScreen() {
     }
   };
 
+  const buildDischargeSummaryFromCase = (caseData: any) => {
+    const vitals = caseData.vitals_at_arrival || caseData.vitals || {};
+    const abcde = caseData.abcde || {};
+    const treatment = caseData.treatment || {};
+    const disposition = caseData.disposition || {};
+    const exam = caseData.examination || {};
+    const sample = caseData.sample || {};
+    const history = caseData.history || {};
+    const patient = caseData.patient || {};
+    const primaryAssessment = caseData.primary_assessment || {};
+
+    const gcsE = vitals.gcs_e || primaryAssessment.disability_gcs_e || 4;
+    const gcsV = vitals.gcs_v || primaryAssessment.disability_gcs_v || 5;
+    const gcsM = vitals.gcs_m || primaryAssessment.disability_gcs_m || 6;
+    const gcsTotal = gcsE + gcsV + gcsM;
+
+    const formatAirway = () => {
+      const status = abcde.airway?.abcdeStatus || "Normal";
+      if (status === "Normal") return "Patent, self-maintained, no obstruction";
+      const parts = [];
+      if (abcde.airway?.status) parts.push(abcde.airway.status);
+      if (abcde.airway?.maintenance) parts.push(abcde.airway.maintenance);
+      if (abcde.airway?.interventions?.length) parts.push(`Interventions: ${abcde.airway.interventions.join(", ")}`);
+      return parts.length > 0 ? parts.join(", ") : "Patent";
+    };
+
+    const formatBreathing = () => {
+      const parts = [];
+      const rr = vitals.rr || primaryAssessment.breathing_rr;
+      const spo2 = vitals.spo2 || primaryAssessment.breathing_spo2;
+      if (rr) parts.push(`RR: ${rr}/min`);
+      if (spo2) parts.push(`SpO2: ${spo2}%`);
+      const status = abcde.breathing?.abcdeStatus || "Normal";
+      if (status === "Normal") {
+        parts.push("Effortless, bilateral air entry");
+      } else {
+        if (abcde.breathing?.effort) parts.push(`WOB: ${abcde.breathing.effort}`);
+        if (abcde.breathing?.airEntry) parts.push(`Air Entry: ${abcde.breathing.airEntry}`);
+      }
+      return parts.join(", ");
+    };
+
+    const formatCirculation = () => {
+      const parts = [];
+      const hr = vitals.hr || primaryAssessment.circulation_hr;
+      const bpSys = vitals.bp_systolic || primaryAssessment.circulation_bp_systolic;
+      const bpDia = vitals.bp_diastolic || primaryAssessment.circulation_bp_diastolic;
+      if (hr) parts.push(`HR: ${hr} bpm`);
+      if (bpSys && bpDia) parts.push(`BP: ${bpSys}/${bpDia} mmHg`);
+      const status = abcde.circulation?.abcdeStatus || "Normal";
+      if (status === "Normal") {
+        parts.push("Regular pulse, CRT <2s, warm");
+      } else {
+        if (abcde.circulation?.pulseQuality) parts.push(`Rhythm: ${abcde.circulation.pulseQuality}`);
+        if (abcde.circulation?.capillaryRefill) parts.push(`CRT: ${abcde.circulation.capillaryRefill}`);
+      }
+      return parts.join(", ");
+    };
+
+    const formatDisability = () => {
+      const parts = [];
+      parts.push(`GCS: E${gcsE}V${gcsV}M${gcsM} (${gcsTotal}/15)`);
+      const status = abcde.disability?.abcdeStatus || "Normal";
+      if (status === "Normal") {
+        parts.push("Alert, PERL, no focal deficits");
+      } else {
+        if (abcde.disability?.motorResponse) parts.push(`AVPU: ${abcde.disability.motorResponse}`);
+        if (abcde.disability?.pupilSize) parts.push(`Pupils: ${abcde.disability.pupilSize}`);
+      }
+      const grbs = vitals.grbs || abcde.disability?.glucose;
+      if (grbs) parts.push(`GRBS: ${grbs} mg/dL`);
+      return parts.join(", ");
+    };
+
+    const formatExposure = () => {
+      const parts = [];
+      const temp = vitals.temperature || abcde.exposure?.temperature;
+      if (temp) parts.push(`Temp: ${temp}°F`);
+      const status = abcde.exposure?.abcdeStatus || "Normal";
+      if (status === "Normal") {
+        parts.push("No external injuries, no bleeding");
+      } else {
+        if (abcde.exposure?.findings) parts.push(abcde.exposure.findings);
+      }
+      return parts.join(", ");
+    };
+
+    const formatSystemicExam = (system: string) => {
+      if (system === "respiratory") {
+        const notes = exam.respiratory_additional_notes || exam.respiratory?.notes;
+        if (notes) return notes;
+        const status = exam.respiratory_status || "Normal";
+        if (status === "Normal") return "Bilateral equal air entry. Vesicular breath sounds. No wheeze, crackles, or rhonchi. Normal percussion notes.";
+        return "";
+      }
+      if (system === "cvs") {
+        const notes = exam.cvs_additional_notes || exam.cardiovascular?.notes;
+        if (notes) return notes;
+        const status = exam.cvs_status || "Normal";
+        if (status === "Normal") return "S1 S2 heard, normal intensity. No murmurs, gallops, or rubs. JVP not elevated. Peripheral pulses well felt bilaterally.";
+        return "";
+      }
+      if (system === "abdomen") {
+        const notes = exam.abdomen_additional_notes || exam.abdominal?.notes;
+        if (notes) return notes;
+        const status = exam.abdomen_status || "Normal";
+        if (status === "Normal") return "Soft, non-distended, non-tender. No guarding or rigidity. No organomegaly. Bowel sounds present and normal.";
+        return "";
+      }
+      if (system === "cns") {
+        const notes = exam.cns_additional_notes || exam.neurological?.notes;
+        if (notes) return notes;
+        const status = exam.cns_status || "Normal";
+        if (status === "Normal") return `Conscious, oriented to time, place, and person. GCS ${gcsTotal}/15. Cranial nerves intact. Pupils BERL. Motor power 5/5 in all limbs. Reflexes normal.`;
+        return "";
+      }
+      return "";
+    };
+
+    return {
+      mlc: caseData.mlc || patient.mlc || false,
+      allergy: sample.allergies || history.allergies?.join(", ") || patient.allergies || "No known allergies",
+      vitals_arrival: {
+        hr: vitals.hr?.toString() || "",
+        bp: `${vitals.bp_systolic || ""}/${vitals.bp_diastolic || ""}`,
+        rr: vitals.rr?.toString() || "",
+        spo2: vitals.spo2?.toString() || "",
+        gcs: gcsTotal.toString(),
+        pain_score: vitals.pain_score?.toString() || "",
+        grbs: vitals.grbs?.toString() || "",
+        temp: vitals.temperature?.toString() || "",
+      },
+      presenting_complaint: caseData.presenting_complaint?.text || "",
+      history_of_present_illness: history.hpi || history.events_hopi || sample.eventsHopi || "",
+      past_medical_history: history.past_medical?.join(", ") || sample.pastMedicalHistory || "",
+      family_history: patient.family_history || "",
+      lmp: history.last_meal_lmp || sample.lastMeal || "",
+      primary_assessment: {
+        airway: formatAirway(),
+        breathing: formatBreathing(),
+        circulation: formatCirculation(),
+        disability: formatDisability(),
+        exposure: formatExposure(),
+        efast: caseData.adjuncts?.efast_notes || abcde.efast || "",
+      },
+      secondary_assessment: {
+        pallor: exam.general_pallor || false,
+        icterus: exam.general_icterus || false,
+        cyanosis: exam.general_cyanosis || false,
+        clubbing: exam.general_clubbing || false,
+        lymphadenopathy: exam.general_lymphadenopathy || false,
+        edema: exam.general_edema || false,
+      },
+      systemic_exam: {
+        chest: formatSystemicExam("respiratory"),
+        cvs: formatSystemicExam("cvs"),
+        pa: formatSystemicExam("abdomen"),
+        cns: formatSystemicExam("cns"),
+        extremities: "",
+      },
+      course_in_hospital: caseData.discharge_summary?.course_in_hospital || "",
+      investigations: treatment.investigations || "",
+      diagnosis: treatment.primary_diagnosis || treatment.provisional_diagnosis || "",
+      discharge_medications: treatment.medications?.map((m: any) => `${m.name} ${m.dose} ${m.route} ${m.frequency}`).join(", ") || "",
+      disposition_type: disposition.type || disposition.disposition_type || "Normal Discharge",
+      condition_at_discharge: disposition.condition || disposition.condition_at_discharge || "STABLE",
+      vitals_discharge: {
+        hr: "", bp: "", rr: "", spo2: "", gcs: "", pain_score: "", grbs: "", temp: "",
+      },
+      follow_up_advice: disposition.follow_up || disposition.follow_up_instructions || "",
+      ed_resident: caseData.em_resident || "",
+      ed_consultant: caseData.discharge_summary?.ed_consultant || "",
+      sign_time_resident: "",
+      sign_time_consultant: "",
+      discharge_date: new Date().toLocaleDateString(),
+    };
+  };
+
   const exportDocument = async (type: "casesheet" | "discharge", format: "pdf" | "word") => {
     if (!selectedCase) return;
     
@@ -203,7 +381,9 @@ export default function DashboardScreen() {
       const exportData = type === "discharge"
         ? {
             patient: caseData.patient,
-            discharge_summary: caseData.discharge_summary || {},
+            discharge_summary: caseData.discharge_summary && Object.keys(caseData.discharge_summary).length > 0
+              ? caseData.discharge_summary
+              : buildDischargeSummaryFromCase(caseData),
             created_at: caseData.created_at,
           }
         : caseData;
