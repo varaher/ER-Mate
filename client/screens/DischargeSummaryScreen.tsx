@@ -524,18 +524,21 @@ export default function DischargeSummaryScreen() {
 
       if (res.success) {
         await invalidateCases();
-        Alert.alert("Saved", "Discharge summary saved successfully", [
-          { text: "Export", onPress: () => {} },
-          { text: "Go to Dashboard", onPress: () => navigation.popToTop() },
-        ]);
+        Alert.alert("Success", "Discharge summary saved successfully");
       } else {
-        Alert.alert("Error", res.error || "Failed to save");
+        const errMsg = typeof res.error === 'string' ? res.error : JSON.stringify(res.error) || "Failed to save";
+        Alert.alert("Error", errMsg);
       }
     } catch (err) {
-      Alert.alert("Error", (err as Error).message);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      Alert.alert("Error", errMsg);
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleGoToDashboard = () => {
+    navigation.popToTop();
   };
 
   const exportPDF = async () => {
@@ -662,6 +665,38 @@ export default function DischargeSummaryScreen() {
     forceUpdate({});
   };
 
+  const DebouncedVitalInput = React.memo(({ 
+    fieldPath, 
+    initialValue, 
+    placeholder = "-" 
+  }: { 
+    fieldPath: string; 
+    initialValue: string; 
+    placeholder?: string;
+  }) => {
+    const localRef = useRef(initialValue);
+    const debounceRef = useRef<NodeJS.Timeout | null>(null);
+    
+    const handleChange = (text: string) => {
+      localRef.current = text;
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        updateField(fieldPath, text);
+      }, 300);
+    };
+    
+    return (
+      <TextInput
+        style={[styles.vitalInput, { backgroundColor: theme.backgroundSecondary, color: theme.text }]}
+        defaultValue={initialValue}
+        onChangeText={handleChange}
+        placeholder={placeholder}
+        placeholderTextColor={theme.textMuted}
+        keyboardType="default"
+      />
+    );
+  });
+
   const VitalsGrid = ({ prefix, data }: { prefix: string; data: any }) => (
     <View style={styles.vitalsGrid}>
       {[
@@ -672,16 +707,13 @@ export default function DischargeSummaryScreen() {
         { key: "gcs", label: "GCS" },
         { key: "pain_score", label: "Pain" },
         { key: "grbs", label: "GRBS" },
-        { key: "temp", label: "Temp" },
+        { key: "temp", label: "Temp (°F)" },
       ].map(({ key, label }) => (
-        <View key={key} style={styles.vitalItem}>
+        <View key={`${prefix}-${key}`} style={styles.vitalItem}>
           <Text style={[styles.vitalLabel, { color: theme.textSecondary }]}>{label}</Text>
-          <TextInput
-            style={[styles.vitalInput, { backgroundColor: theme.backgroundSecondary, color: theme.text }]}
-            value={data[key]}
-            onChangeText={(v) => updateField(`${prefix}.${key}`, v)}
-            placeholder="-"
-            placeholderTextColor={theme.textMuted}
+          <DebouncedVitalInput
+            fieldPath={`${prefix}.${key}`}
+            initialValue={data[key] || ""}
           />
         </View>
       ))}
@@ -1124,20 +1156,30 @@ export default function DischargeSummaryScreen() {
           </Pressable>
         </View>
 
-        <Pressable
-          style={({ pressed }) => [styles.saveBtn, { backgroundColor: theme.success, opacity: pressed || saving ? 0.8 : 1 }]}
-          onPress={handleSave}
-          disabled={saving}
-        >
-          {saving ? (
-            <ActivityIndicator color="#FFFFFF" />
-          ) : (
-            <>
-              <Feather name="check-circle" size={20} color="#FFFFFF" />
-              <Text style={styles.saveBtnText}>Complete & Save Discharge</Text>
-            </>
-          )}
-        </Pressable>
+        <View style={styles.actionBtnsRow}>
+          <Pressable
+            style={({ pressed }) => [styles.saveBtn, styles.saveBtnHalf, { backgroundColor: theme.success, opacity: pressed || saving ? 0.8 : 1 }]}
+            onPress={handleSave}
+            disabled={saving}
+          >
+            {saving ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <>
+                <Feather name="save" size={18} color="#FFFFFF" />
+                <Text style={styles.saveBtnText}>Save</Text>
+              </>
+            )}
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [styles.saveBtn, styles.saveBtnHalf, { backgroundColor: theme.primary, opacity: pressed ? 0.8 : 1 }]}
+            onPress={handleGoToDashboard}
+          >
+            <Feather name="home" size={18} color="#FFFFFF" />
+            <Text style={styles.saveBtnText}>Dashboard</Text>
+          </Pressable>
+        </View>
       </KeyboardAwareScrollViewCompat>
     </View>
   );
@@ -1236,6 +1278,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   exportBtnText: { ...Typography.bodyMedium, fontWeight: "600" },
+  actionBtnsRow: {
+    flexDirection: "row",
+    gap: Spacing.md,
+    marginTop: Spacing.md,
+  },
   saveBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -1244,5 +1291,8 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
     gap: Spacing.sm,
   },
-  saveBtnText: { color: "#FFFFFF", ...Typography.h4 },
+  saveBtnHalf: {
+    flex: 1,
+  },
+  saveBtnText: { color: "#FFFFFF", ...Typography.bodyMedium },
 });
