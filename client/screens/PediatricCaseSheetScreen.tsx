@@ -442,13 +442,39 @@ export default function PediatricCaseSheetScreen() {
   };
 
   const buildPayload = () => {
+    // Use triage vitals from patient state, falling back to ABCDE assessment values
+    const triageVitals: any = patient?.vitals || {};
+    const gcsE = parseInt(triageVitals.gcs_e) || 4;
+    const gcsV = parseInt(triageVitals.gcs_v) || 5;
+    const gcsM = parseInt(triageVitals.gcs_m) || 6;
+    const gcsTotal = gcsE + gcsV + gcsM;
+    
     return {
+      // Include patient info from triage
+      patient: patient ? {
+        name: patient.name,
+        age: patient.age,
+        sex: patient.sex,
+        phone: patient.phone,
+        address: patient.address,
+        brought_by: patient.brought_by,
+        informant_name: patient.informant_name,
+        informant_reliability: patient.informant_reliability,
+      } : undefined,
+      presenting_complaint: { text: patient?.chief_complaint || "" },
+      triage_color: patient?.triage_category || "green",
       vitals_at_arrival: {
-        hr: parseFloat(circulationData.heartRate) || 100,
-        rr: parseFloat(breathingData.respiratoryRate) || 20,
-        spo2: parseFloat(breathingData.spo2) || 98,
-        temperature: parseFloat(exposureData.temperature) || 36.8,
-        grbs: parseFloat(disabilityData.glucose) || 100,
+        hr: parseFloat(triageVitals.hr) || parseFloat(circulationData.heartRate) || 100,
+        bp_systolic: parseFloat(triageVitals.bp_systolic) || 0,
+        bp_diastolic: parseFloat(triageVitals.bp_diastolic) || 0,
+        rr: parseFloat(triageVitals.rr) || parseFloat(breathingData.respiratoryRate) || 20,
+        spo2: parseFloat(triageVitals.spo2) || parseFloat(breathingData.spo2) || 98,
+        temperature: parseFloat(triageVitals.temperature) || parseFloat(exposureData.temperature) || 98.6,
+        gcs_e: gcsE,
+        gcs_v: gcsV,
+        gcs_m: gcsM,
+        gcs_total: gcsTotal,
+        grbs: parseFloat(triageVitals.grbs) || parseFloat(disabilityData.glucose) || 100,
       },
       primary_assessment: {
         pat: patData,
