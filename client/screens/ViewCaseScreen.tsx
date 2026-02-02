@@ -126,7 +126,8 @@ export default function ViewCaseScreen() {
         throw new Error((res.error as any)?.message || "Failed to save");
       }
     } catch (err) {
-      Alert.alert("Error", (err as Error).message || "Failed to save case sheet");
+      const errMsg = err instanceof Error ? err.message : String(err || "Failed to save case sheet");
+      Alert.alert("Error", errMsg);
     } finally {
       setSaving(false);
     }

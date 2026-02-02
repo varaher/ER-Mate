@@ -110,10 +110,12 @@ export default function TreatmentScreen() {
         setAiSuggestion(res.data.diagnosis);
         setRedFlags(res.data.red_flags || []);
       } else {
-        Alert.alert("Error", res.error || "Failed to get AI diagnosis");
+        const errMsg = typeof res.error === 'string' ? res.error : JSON.stringify(res.error || "Failed to get AI diagnosis");
+        Alert.alert("Error", errMsg);
       }
     } catch (err) {
-      Alert.alert("Error", (err as Error).message);
+      const errMsg = err instanceof Error ? err.message : String(err || "Failed to get AI diagnosis");
+      Alert.alert("Error", errMsg);
     } finally {
       setAiLoading(false);
     }
@@ -160,10 +162,12 @@ export default function TreatmentScreen() {
           { text: "Stay Here", style: "cancel" },
         ]);
       } else {
-        Alert.alert("Error", res.error || "Failed to save");
+        const errMsg = typeof res.error === 'string' ? res.error : JSON.stringify(res.error || "Failed to save");
+        Alert.alert("Error", errMsg);
       }
     } catch (err) {
-      Alert.alert("Error", (err as Error).message);
+      const errMsg = err instanceof Error ? err.message : String(err || "Failed to save");
+      Alert.alert("Error", errMsg);
     } finally {
       setSaving(false);
     }

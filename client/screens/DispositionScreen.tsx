@@ -103,10 +103,12 @@ export default function DispositionScreen() {
           ]);
         }
       } else {
-        Alert.alert("Error", res.error || "Failed to save");
+        const errMsg = typeof res.error === 'string' ? res.error : JSON.stringify(res.error || "Failed to save");
+        Alert.alert("Error", errMsg);
       }
     } catch (err) {
-      Alert.alert("Error", (err as Error).message);
+      const errMsg = err instanceof Error ? err.message : String(err || "Failed to save");
+      Alert.alert("Error", errMsg);
     } finally {
       setSaving(false);
     }

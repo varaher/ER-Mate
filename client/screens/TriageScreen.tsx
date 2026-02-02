@@ -656,7 +656,8 @@ export default function TriageScreen() {
         Alert.alert("Error", errorMsg);
       }
     } catch (err) {
-      Alert.alert("Error", (err as Error).message);
+      const errMsg = err instanceof Error ? err.message : String(err || "Failed to save");
+      Alert.alert("Error", errMsg);
     } finally {
       setLoading(false);
     }
