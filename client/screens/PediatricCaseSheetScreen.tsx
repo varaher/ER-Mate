@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { View, Text, TextInput, StyleSheet, Pressable, ActivityIndicator, ScrollView, Switch, Alert } from "react-native";
+import { View, Text, TextInput, StyleSheet, Pressable, ActivityIndicator, ScrollView, Switch, Alert, Modal, FlatList } from "react-native";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -187,6 +187,14 @@ interface InfusionEntry {
   rate: string;
 }
 
+interface MedicationEntry {
+  id: string;
+  name: string;
+  dose: string;
+  route: string;
+  frequency: string;
+}
+
 interface TreatmentFormData {
   labsOrdered: string;
   imaging: string;
@@ -196,7 +204,36 @@ interface TreatmentFormData {
   otherMedications: string;
   ivFluids: string;
   infusions: InfusionEntry[];
+  medications: MedicationEntry[];
 }
+
+// Common pediatric drugs with weight-based dosing suggestions
+const PEDIATRIC_DRUG_LIST = [
+  { name: "Paracetamol", dose: "15 mg/kg", route: "PO/IV/PR", frequency: "Q6H PRN" },
+  { name: "Ibuprofen", dose: "10 mg/kg", route: "PO", frequency: "Q8H PRN" },
+  { name: "Amoxicillin", dose: "25-50 mg/kg/day", route: "PO", frequency: "TDS" },
+  { name: "Ceftriaxone", dose: "50-100 mg/kg/day", route: "IV", frequency: "OD/BD" },
+  { name: "Ondansetron", dose: "0.15 mg/kg", route: "IV/PO", frequency: "Q8H PRN" },
+  { name: "Salbutamol Nebulization", dose: "2.5-5 mg", route: "NEB", frequency: "Q4-6H PRN" },
+  { name: "Ipratropium Nebulization", dose: "250-500 mcg", route: "NEB", frequency: "Q6H PRN" },
+  { name: "Prednisolone", dose: "1-2 mg/kg", route: "PO", frequency: "OD" },
+  { name: "Dexamethasone", dose: "0.15-0.6 mg/kg", route: "IV/PO", frequency: "OD" },
+  { name: "Normal Saline Bolus", dose: "20 ml/kg", route: "IV", frequency: "stat" },
+  { name: "Epinephrine", dose: "0.01 mg/kg (1:10,000)", route: "IV/IO", frequency: "Q3-5min" },
+  { name: "Atropine", dose: "0.02 mg/kg", route: "IV", frequency: "stat" },
+  { name: "Midazolam", dose: "0.1-0.2 mg/kg", route: "IV/IN", frequency: "stat" },
+  { name: "Diazepam", dose: "0.2-0.3 mg/kg", route: "IV/PR", frequency: "stat" },
+  { name: "Phenytoin", dose: "20 mg/kg", route: "IV", frequency: "Loading" },
+  { name: "Levetiracetam", dose: "20-40 mg/kg", route: "IV", frequency: "Loading" },
+  { name: "Ranitidine", dose: "1-2 mg/kg", route: "IV/PO", frequency: "BD" },
+  { name: "Omeprazole", dose: "1 mg/kg", route: "IV/PO", frequency: "OD" },
+  { name: "Metoclopramide", dose: "0.1-0.15 mg/kg", route: "IV/PO", frequency: "TDS" },
+  { name: "Chlorpheniramine", dose: "0.35 mg/kg/day", route: "PO", frequency: "TDS" },
+  { name: "Azithromycin", dose: "10 mg/kg", route: "PO", frequency: "OD x 5 days" },
+  { name: "Gentamicin", dose: "5-7 mg/kg", route: "IV", frequency: "OD" },
+  { name: "Ampicillin", dose: "50-100 mg/kg/day", route: "IV", frequency: "Q6H" },
+  { name: "Vancomycin", dose: "15 mg/kg", route: "IV", frequency: "Q6H" },
+];
 
 interface ProceduresData {
   resuscitation: { cpr: boolean };
@@ -275,8 +312,10 @@ export default function PediatricCaseSheetScreen() {
     respiratory: "", cardiovascular: "", abdomen: "", back: "", extremities: ""
   });
   const [treatmentData, setTreatmentData] = useState<TreatmentFormData>({
-    labsOrdered: "", imaging: "", resultsSummary: "", primaryDiagnosis: "", differentialDiagnoses: "", otherMedications: "", ivFluids: "", infusions: []
+    labsOrdered: "", imaging: "", resultsSummary: "", primaryDiagnosis: "", differentialDiagnoses: "", otherMedications: "", ivFluids: "", infusions: [], medications: []
   });
+  const [showDrugPicker, setShowDrugPicker] = useState(false);
+  const [drugSearchText, setDrugSearchText] = useState("");
   const [proceduresData, setProceduresData] = useState<ProceduresData>({
     resuscitation: { cpr: false },
     airway: { intubation: false, lma: false, cricothyrotomy: false, bvm: false },
@@ -348,6 +387,15 @@ export default function PediatricCaseSheetScreen() {
             rate: inf.rate || "",
           }))
         : [];
+      const loadedMeds: MedicationEntry[] = Array.isArray(caseSheetData.treatment.medications)
+        ? caseSheetData.treatment.medications.map((m: any, idx: number) => ({
+            id: m.id || `med-${idx}`,
+            name: m.name || "",
+            dose: m.dose || "",
+            route: m.route || "",
+            frequency: m.frequency || "stat",
+          }))
+        : [];
       setTreatmentData({
         labsOrdered: Array.isArray(caseSheetData.treatment.panels_selected) ? caseSheetData.treatment.panels_selected.join(", ") : "",
         imaging: Array.isArray(caseSheetData.treatment.imaging) ? caseSheetData.treatment.imaging.join(", ") : "",
@@ -357,6 +405,7 @@ export default function PediatricCaseSheetScreen() {
         otherMedications: caseSheetData.treatment.other_medications || "",
         ivFluids: caseSheetData.treatment.fluids || "",
         infusions: loadedInfusions,
+        medications: loadedMeds,
       });
     }
     if (caseSheetData.disposition) {
@@ -554,7 +603,13 @@ export default function PediatricCaseSheetScreen() {
         labs_ordered: treatmentData.labsOrdered || "",
         imaging: treatmentData.imaging || "",
         results_summary: treatmentData.resultsSummary || "",
-        medications: treatmentData.otherMedications || "",
+        other_medications: treatmentData.otherMedications || "",
+        medications: treatmentData.medications.filter((m: MedicationEntry) => m.name.trim() !== "").map((m: MedicationEntry) => ({
+          name: m.name,
+          dose: m.dose,
+          route: m.route,
+          frequency: m.frequency,
+        })),
         iv_fluids: treatmentData.ivFluids || "",
         infusions: treatmentData.infusions.filter((i: InfusionEntry) => i.name.trim() !== "").map((i: InfusionEntry) => ({
           name: i.name,
@@ -645,13 +700,31 @@ export default function PediatricCaseSheetScreen() {
         return false;
       }
     } catch (error) {
-      console.error("Failed to commit:", error);
-      Alert.alert("Error", "Failed to save case data");
+      console.error("Failed to commit:", error instanceof Error ? error.message : JSON.stringify(error));
+      Alert.alert("Error", error instanceof Error ? error.message : "Failed to save case data");
       return false;
     } finally {
       setSaving(false);
     }
   };
+
+  const addDrugFromList = (drug: typeof PEDIATRIC_DRUG_LIST[0]) => {
+    const patientWeight = patient?.age ? (patient.age < 1 ? 5 : patient.age * 2 + 8) : 10; // Rough weight estimate
+    const newMed: MedicationEntry = {
+      id: Date.now().toString(),
+      name: drug.name,
+      dose: `${drug.dose} (Est. wt: ${patientWeight}kg)`,
+      route: drug.route,
+      frequency: drug.frequency,
+    };
+    setTreatmentData((prev) => ({ ...prev, medications: [...prev.medications, newMed] }));
+    setShowDrugPicker(false);
+    setDrugSearchText("");
+  };
+
+  const filteredDrugs = PEDIATRIC_DRUG_LIST.filter((d) =>
+    d.name.toLowerCase().includes(drugSearchText.toLowerCase())
+  );
 
   // Auto-save disabled due to backend's 2-edit limit on free plan
   // Users should manually save using the Save button to avoid hitting the limit
@@ -1355,10 +1428,26 @@ export default function PediatricCaseSheetScreen() {
               <Text style={[styles.cardTitle, { color: theme.text }]}>Treatment Given</Text>
               
               <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Medications (Pediatric Formulary)</Text>
-              <Pressable style={[styles.addDrugBtn, { backgroundColor: TriageColors.green }]}>
+              <Pressable style={[styles.addDrugBtn, { backgroundColor: TriageColors.green }]} onPress={() => setShowDrugPicker(true)}>
                 <Feather name="plus" size={18} color="#FFFFFF" />
                 <Text style={styles.addDrugBtnText}>Add Drug from List</Text>
               </Pressable>
+
+              {treatmentData.medications.length > 0 && (
+                <View style={{ marginBottom: Spacing.md }}>
+                  {treatmentData.medications.map((med, index) => (
+                    <View key={med.id} style={{ backgroundColor: theme.backgroundSecondary, borderRadius: 8, padding: Spacing.sm, marginBottom: Spacing.xs, flexDirection: "row", alignItems: "center" }}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.fieldLabel, { color: theme.text, fontWeight: "600" }]}>{med.name}</Text>
+                        <Text style={{ color: theme.textSecondary, fontSize: 13 }}>{med.dose} | {med.route} | {med.frequency}</Text>
+                      </View>
+                      <Pressable onPress={() => setTreatmentData((prev) => ({ ...prev, medications: prev.medications.filter((m) => m.id !== med.id) }))} style={{ padding: 6 }}>
+                        <Feather name="trash-2" size={16} color={TriageColors.red} />
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+              )}
 
               <View style={styles.fieldWithVoice}>
                 <Text style={[styles.fieldLabel, { color: theme.text }]}>Other Medications</Text>
@@ -1551,7 +1640,15 @@ export default function PediatricCaseSheetScreen() {
               <TextInput style={[styles.inputField, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Consultant name" placeholderTextColor={theme.textMuted} value={dispositionData.emConsultant} onChangeText={(v) => setDispositionData((prev) => ({ ...prev, emConsultant: v }))} />
             </View>
 
-            <Pressable style={[styles.generateSummaryBtn, { backgroundColor: theme.primary }]}>
+            <Pressable 
+              style={[styles.generateSummaryBtn, { backgroundColor: theme.primary }]} 
+              onPress={async () => {
+                const success = await commitToBackend();
+                if (success) {
+                  navigation.navigate("DischargeSummary", { caseId });
+                }
+              }}
+            >
               <Feather name="file-text" size={18} color="#FFFFFF" />
               <Text style={styles.generateSummaryBtnText}>Generate Discharge Summary</Text>
             </Pressable>
@@ -1577,6 +1674,41 @@ export default function PediatricCaseSheetScreen() {
           {activeTab === "disposition" ? <Feather name="check" size={18} color="#FFFFFF" /> : <Feather name="arrow-right" size={18} color="#FFFFFF" />}
         </Pressable>
       </View>
+
+      <Modal visible={showDrugPicker} animationType="slide" transparent>
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }}>
+          <View style={{ backgroundColor: theme.card, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "70%", padding: Spacing.lg }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.md }}>
+              <Text style={[styles.cardTitle, { color: theme.text, marginBottom: 0 }]}>Pediatric Drug Formulary</Text>
+              <Pressable onPress={() => { setShowDrugPicker(false); setDrugSearchText(""); }} style={{ padding: 8 }}>
+                <Feather name="x" size={24} color={theme.text} />
+              </Pressable>
+            </View>
+            <TextInput
+              style={[styles.inputField, { backgroundColor: theme.backgroundSecondary, color: theme.text, marginBottom: Spacing.md }]}
+              placeholder="Search drugs..."
+              placeholderTextColor={theme.textMuted}
+              value={drugSearchText}
+              onChangeText={setDrugSearchText}
+            />
+            <FlatList
+              data={filteredDrugs}
+              keyExtractor={(item) => item.name}
+              renderItem={({ item }) => (
+                <Pressable
+                  style={{ padding: Spacing.md, backgroundColor: theme.backgroundSecondary, borderRadius: 8, marginBottom: Spacing.xs }}
+                  onPress={() => addDrugFromList(item)}
+                >
+                  <Text style={[styles.fieldLabel, { color: theme.text, fontWeight: "600" }]}>{item.name}</Text>
+                  <Text style={{ color: TriageColors.green, fontSize: 13, marginTop: 2 }}>Dose: {item.dose}</Text>
+                  <Text style={{ color: theme.textSecondary, fontSize: 12 }}>{item.route} | {item.frequency}</Text>
+                </Pressable>
+              )}
+              ListEmptyComponent={<Text style={{ color: theme.textMuted, textAlign: "center", padding: Spacing.lg }}>No drugs found</Text>}
+            />
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
