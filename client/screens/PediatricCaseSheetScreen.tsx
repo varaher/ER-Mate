@@ -390,47 +390,69 @@ export default function PediatricCaseSheetScreen() {
       }
       
       if (triageData) {
+        // triageData from TriageScreen has nested structure: patient.name, vitals_at_arrival.hr, etc.
+        const patientData = triageData.patient || triageData;
+        const vitalsData = triageData.vitals_at_arrival || triageData.vitals || {};
+        const complaintData = triageData.presenting_complaint || {};
+        
         setPatient({
           id: caseId,
-          name: triageData.name || "Unknown",
-          age: parseFloat(triageData.age) || 0,
-          sex: triageData.sex || "Unknown",
-          phone: triageData.phone || "",
-          address: triageData.address || "",
-          brought_by: triageData.brought_by || "",
-          informant_name: triageData.informant_name || "",
-          informant_reliability: triageData.informant_reliability || "",
-          chief_complaint: triageData.chief_complaint || "",
-          triage_category: triageData.triage_category || "green",
+          name: patientData.name || triageData.name || "Unknown",
+          age: parseFloat(patientData.age || triageData.age) || 0,
+          sex: patientData.sex || triageData.sex || "Unknown",
+          phone: patientData.phone || triageData.phone || "",
+          address: patientData.address || triageData.address || "",
+          brought_by: patientData.brought_by || triageData.brought_by || "",
+          informant_name: patientData.informant_name || triageData.informant_name || "",
+          informant_reliability: patientData.informant_reliability || triageData.informant_reliability || "",
+          chief_complaint: complaintData.text || triageData.chief_complaint || "",
+          triage_category: triageData.triage_color || triageData.triage_category || "green",
           vitals: {
-            hr: triageData.hr || "",
-            bp_systolic: triageData.bp_systolic || "",
-            bp_diastolic: triageData.bp_diastolic || "",
-            rr: triageData.rr || "",
-            spo2: triageData.spo2 || "",
-            temperature: triageData.temperature || "",
-            gcs_e: triageData.gcs_e || "4",
-            gcs_v: triageData.gcs_v || "5",
-            gcs_m: triageData.gcs_m || "6",
-            grbs: triageData.grbs || "",
+            hr: String(vitalsData.hr || triageData.hr || ""),
+            bp_systolic: String(vitalsData.bp_systolic || triageData.bp_systolic || ""),
+            bp_diastolic: String(vitalsData.bp_diastolic || triageData.bp_diastolic || ""),
+            rr: String(vitalsData.rr || triageData.rr || ""),
+            spo2: String(vitalsData.spo2 || triageData.spo2 || ""),
+            temperature: String(vitalsData.temperature || triageData.temperature || ""),
+            gcs_e: String(vitalsData.gcs_e || triageData.gcs_e || "4"),
+            gcs_v: String(vitalsData.gcs_v || triageData.gcs_v || "5"),
+            gcs_m: String(vitalsData.gcs_m || triageData.gcs_m || "6"),
+            grbs: String(vitalsData.grbs || triageData.grbs || ""),
           },
         });
       } else {
-        const data = await apiGet(`/cases/${caseId}`) as any;
+        const res = await apiGet(`/cases/${caseId}`) as any;
+        const data = res?.data || res;
         if (data) {
+          // API response has nested structure: data.patient.name, data.vitals_at_arrival.hr, etc.
+          const patientData = data.patient || data;
+          const vitalsData = data.vitals_at_arrival || data.vitals || {};
+          const complaintData = data.presenting_complaint || {};
+          
           setPatient({
             id: data.id || caseId,
-            name: data.name || "Unknown",
-            age: parseFloat(data.age) || 0,
-            sex: data.sex || "Unknown",
-            phone: data.phone || "",
-            address: data.address || "",
-            brought_by: data.brought_by || "",
-            informant_name: data.informant_name || "",
-            informant_reliability: data.informant_reliability || "",
-            chief_complaint: data.chief_complaint || "",
-            triage_category: data.triage_category || "green",
-            vitals: data.vitals || {},
+            name: patientData.name || data.name || "Unknown",
+            age: parseFloat(patientData.age || data.age) || 0,
+            sex: patientData.sex || data.sex || "Unknown",
+            phone: patientData.phone || data.phone || "",
+            address: patientData.address || data.address || "",
+            brought_by: patientData.brought_by || data.brought_by || "",
+            informant_name: patientData.informant_name || data.informant_name || "",
+            informant_reliability: patientData.informant_reliability || data.informant_reliability || "",
+            chief_complaint: complaintData.text || data.chief_complaint || "",
+            triage_category: data.triage_color || data.triage_category || "green",
+            vitals: {
+              hr: String(vitalsData.hr || ""),
+              bp_systolic: String(vitalsData.bp_systolic || ""),
+              bp_diastolic: String(vitalsData.bp_diastolic || ""),
+              rr: String(vitalsData.rr || ""),
+              spo2: String(vitalsData.spo2 || ""),
+              temperature: String(vitalsData.temperature || ""),
+              gcs_e: String(vitalsData.gcs_e || "4"),
+              gcs_v: String(vitalsData.gcs_v || "5"),
+              gcs_m: String(vitalsData.gcs_m || "6"),
+              grbs: String(vitalsData.grbs || ""),
+            },
           });
         }
       }
