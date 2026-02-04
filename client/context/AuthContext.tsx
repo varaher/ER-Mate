@@ -68,13 +68,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     try {
+      // Clear any old tokens first
+      await AsyncStorage.removeItem("token");
+      await AsyncStorage.removeItem("user");
+      
       const res = await apiPost<{ access_token: string; user: User }>("/auth/login", {
         email,
         password,
       });
 
+      console.log("[AuthContext] Login response:", res.success, res.error);
+
       if (res.success && res.data) {
         const { access_token, user: userData } = res.data;
+        console.log("[AuthContext] Got new token, length:", access_token?.length);
         await AsyncStorage.setItem("token", access_token);
         await AsyncStorage.setItem("user", JSON.stringify(userData));
         setToken(access_token);

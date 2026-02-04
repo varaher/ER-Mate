@@ -123,6 +123,7 @@ export async function apiPost<T>(
   try {
     const apiUrl = getExternalApiUrl();
     const token = await getToken();
+    console.log(`[API] POST ${endpoint}, has token: ${!!token}, token length: ${token?.length || 0}`);
     const res = await fetch(`${apiUrl}${endpoint}`, {
       method: "POST",
       headers: {
@@ -131,7 +132,9 @@ export async function apiPost<T>(
       },
       body: data ? JSON.stringify(data) : undefined,
     });
-    return handleResponse<T>(res);
+    const result = await handleResponse<T>(res);
+    console.log(`[API] POST ${endpoint} response:`, result.success, result.error || '');
+    return result;
   } catch (err) {
     return { success: false, error: (err as Error).message };
   }
