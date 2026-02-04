@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { apiPost, apiGet } from "@/lib/api";
+import { apiPost, apiGet, setOnTokenExpiredCallback } from "@/lib/api";
 
 export interface User {
   id: string;
@@ -37,9 +37,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    loadStoredAuth();
+  // Handle token expiry callback from API layer
+  const handleTokenExpired = useCallback(() => {
+    console.log("[AuthContext] Token expired, logging out user");
+    setToken(null);
+    setUser(null);
   }, []);
+
+  useEffect(() => {
+    // Register the token expired callback
+    setOnTokenExpiredCallback(handleTokenExpired);
+    loadStoredAuth();
+  }, [handleTokenExpired]);
 
   const loadStoredAuth = async () => {
     try {

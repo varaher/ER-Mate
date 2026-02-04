@@ -10,10 +10,34 @@ export interface ApiResponse<T> {
   success: boolean;
   data?: T;
   error?: string;
+  tokenExpired?: boolean;
+}
+
+// Callback for when token expires - will be set by AuthContext
+let onTokenExpiredCallback: (() => void) | null = null;
+
+export function setOnTokenExpiredCallback(callback: () => void) {
+  onTokenExpiredCallback = callback;
 }
 
 async function getToken(): Promise<string | null> {
   return await AsyncStorage.getItem("token");
+}
+
+function isTokenExpiredError(errorMessage: string, statusCode: number): boolean {
+  const expiredMessages = ["token expired", "jwt expired", "token invalid", "unauthorized", "not authenticated"];
+  const lowerError = errorMessage.toLowerCase();
+  return statusCode === 401 || expiredMessages.some(msg => lowerError.includes(msg));
+}
+
+async function handleTokenExpiry() {
+  console.log("[API] Token expired, clearing auth state");
+  await AsyncStorage.removeItem("token");
+  await AsyncStorage.removeItem("user");
+  queryClient.clear();
+  if (onTokenExpiredCallback) {
+    onTokenExpiredCallback();
+  }
 }
 
 async function handleResponse<T>(res: Response): Promise<ApiResponse<T>> {
@@ -22,13 +46,30 @@ async function handleResponse<T>(res: Response): Promise<ApiResponse<T>> {
     let errorMessage = "Request failed";
     try {
       const errorJson = JSON.parse(errorText);
-      errorMessage = errorJson.detail || errorJson.message || errorText;
+      errorMessage = errorJson.detail || errorJson.message || errorJson.error || errorText;
     } catch {
       errorMessage = errorText || res.statusText;
     }
+    
+    // Check for token expiry
+    if (isTokenExpiredError(errorMessage, res.status)) {
+      await handleTokenExpiry();
+      return { success: false, error: "Your session has expired. Please log in again.", tokenExpired: true };
+    }
+    
     return { success: false, error: errorMessage };
   }
   const data = await res.json();
+  
+  // Also check for token expired in successful response body (some APIs do this)
+  if (data && typeof data === 'object' && data.error) {
+    const errorStr = typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
+    if (isTokenExpiredError(errorStr, 200)) {
+      await handleTokenExpiry();
+      return { success: false, error: "Your session has expired. Please log in again.", tokenExpired: true };
+    }
+  }
+  
   return { success: true, data };
 }
 
