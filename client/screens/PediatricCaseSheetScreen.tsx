@@ -157,6 +157,7 @@ interface PediatricHistoryFormData {
     vomiting: boolean;
     timeCourse: string;
     decreasedOralIntake: boolean;
+    notes: string;
   };
 }
 
@@ -267,7 +268,7 @@ export default function PediatricCaseSheetScreen() {
   const [efastData, setEfastData] = useState<EFASTFormData>({ heart: "", abdomen: "", lungs: "", pelvis: "" });
   const [historyData, setHistoryData] = useState<PediatricHistoryFormData>({
     allergies: "", currentMedications: "", lastDoseMedications: "", medicationsInEnvironment: "", healthHistory: "", underlyingConditions: "", immunizationStatus: "", lastMeal: "", lmp: "", events: "", treatmentBeforeArrival: "",
-    signsAndSymptoms: { breathingDifficulty: false, fever: false, vomiting: false, timeCourse: "", decreasedOralIntake: false }
+    signsAndSymptoms: { breathingDifficulty: false, fever: false, vomiting: false, timeCourse: "", decreasedOralIntake: false, notes: "" }
   });
   const [examData, setExamData] = useState<PediatricExamFormData>({
     heent: { head: "", eyes: "", ears: "", nose: "", throat: "", lymphNodes: "" },
@@ -472,16 +473,20 @@ export default function PediatricCaseSheetScreen() {
     const gcsTotal = gcsE + gcsV + gcsM;
     
     return {
-      // Include patient info from triage
+      // Include patient info from triage with all required fields
       patient: patient ? {
-        name: patient.name,
-        age: patient.age,
-        sex: patient.sex,
-        phone: patient.phone,
-        address: patient.address,
-        brought_by: patient.brought_by,
-        informant_name: patient.informant_name,
-        informant_reliability: patient.informant_reliability,
+        name: patient.name || "Unknown",
+        age: String(patient.age || 0),
+        sex: patient.sex || "Unknown",
+        phone: patient.phone || "",
+        address: patient.address || "Not provided",
+        brought_by: patient.brought_by || "Self",
+        informant_name: patient.informant_name || patient.name || "Unknown",
+        informant_reliability: patient.informant_reliability || "Reliable",
+        identification_mark: "None noted",
+        mode_of_arrival: "Walk-in",
+        arrival_datetime: new Date().toISOString(),
+        mlc: false,
       } : undefined,
       presenting_complaint: { text: patient?.chief_complaint || "" },
       triage_color: patient?.triage_category || "green",
@@ -520,6 +525,7 @@ export default function PediatricCaseSheetScreen() {
         ...historyData,
         hpi: historyData.events || "",
         events_hopi: historyData.events || "",
+        signs_and_symptoms: historyData.signsAndSymptoms?.notes || "",
         allergies: Array.isArray(historyData.allergies) ? historyData.allergies : (typeof historyData.allergies === 'string' && historyData.allergies ? historyData.allergies.split(',').map((s: string) => s.trim()).filter((s: string) => s) : []),
         medications: historyData.currentMedications || "",
         drug_history: historyData.currentMedications || "",
@@ -1111,6 +1117,12 @@ export default function PediatricCaseSheetScreen() {
                 <ToggleRow label="Fever, headache, fatigue, abdominal pain" value={historyData.signsAndSymptoms.fever} onValueChange={(v) => setHistoryData((p) => ({ ...p, signsAndSymptoms: { ...p.signsAndSymptoms, fever: v } }))} />
                 <ToggleRow label="Vomiting, diarrhea, bleeding, agitation" value={historyData.signsAndSymptoms.vomiting} onValueChange={(v) => setHistoryData((p) => ({ ...p, signsAndSymptoms: { ...p.signsAndSymptoms, vomiting: v } }))} />
                 <ToggleRow label="Decreased oral intake, fatigue, irritability" value={historyData.signsAndSymptoms.decreasedOralIntake} onValueChange={(v) => setHistoryData((p) => ({ ...p, signsAndSymptoms: { ...p.signsAndSymptoms, decreasedOralIntake: v } }))} />
+                
+                <View style={styles.fieldWithVoice}>
+                  <Text style={[styles.fieldLabel, { color: theme.text }]}>Other Symptoms (type or dictate)</Text>
+                  <VoiceButton fieldKey="history.signsSymptoms" />
+                </View>
+                <TextInput style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Describe other symptoms: rash, swelling, pain location, etc..." placeholderTextColor={theme.textMuted} value={historyData.signsAndSymptoms.notes} onChangeText={(v) => setHistoryData((p) => ({ ...p, signsAndSymptoms: { ...p.signsAndSymptoms, notes: v } }))} multiline />
                 
                 <View style={styles.fieldWithVoice}>
                   <Text style={[styles.fieldLabel, { color: theme.text }]}>Time Course of Symptoms</Text>
