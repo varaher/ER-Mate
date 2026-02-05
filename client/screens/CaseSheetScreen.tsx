@@ -1161,6 +1161,7 @@ export default function CaseSheetScreen() {
     try {
       const payload = buildPayload();
       console.log("Committing case to backend:", caseId);
+      console.log("Treatment medications being sent:", JSON.stringify(payload.treatment?.medications, null, 2));
       const res = await apiPut(`/cases/${caseId}`, payload);
       console.log("Commit response:", res.success, res.error || "");
       if (res.success) {

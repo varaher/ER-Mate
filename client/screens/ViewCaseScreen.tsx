@@ -67,6 +67,7 @@ export default function ViewCaseScreen() {
       setLoading(true);
       const res = await apiGet<any>(`/cases/${caseId}`);
       if (res.success && res.data) {
+        console.log("ViewCaseScreen: treatment.medications:", JSON.stringify(res.data.treatment?.medications, null, 2));
         setCaseData(res.data);
         editableFieldsRef.current = {
           presenting_complaint: res.data.presenting_complaint?.text || "",
