@@ -567,6 +567,8 @@ export default function DischargeSummaryScreen() {
 
       const baseUrl = getApiUrl();
       const exportUrl = new URL("/api/export/discharge-pdf", baseUrl);
+      console.log("[PDF Export] URL:", exportUrl.toString());
+      console.log("[PDF Export] Data:", JSON.stringify(exportData, null, 2));
       
       const response = await fetch(exportUrl.toString(), {
         method: "POST",
@@ -574,6 +576,7 @@ export default function DischargeSummaryScreen() {
         body: JSON.stringify(exportData),
       });
 
+      console.log("[PDF Export] Response status:", response.status, response.headers.get("content-type"));
       if (!response.ok) throw new Error("Failed to generate PDF");
 
       const blob = await response.blob();
@@ -630,6 +633,8 @@ export default function DischargeSummaryScreen() {
 
       const baseUrl = getApiUrl();
       const exportUrl = new URL("/api/export/discharge-docx", baseUrl);
+      console.log("[DOCX Export] URL:", exportUrl.toString());
+      console.log("[DOCX Export] Data:", JSON.stringify(exportData, null, 2));
       
       const response = await fetch(exportUrl.toString(), {
         method: "POST",
@@ -637,6 +642,7 @@ export default function DischargeSummaryScreen() {
         body: JSON.stringify(exportData),
       });
 
+      console.log("[DOCX Export] Response status:", response.status, response.headers.get("content-type"));
       if (!response.ok) throw new Error("Failed to generate DOCX");
 
       const blob = await response.blob();
