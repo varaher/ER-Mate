@@ -537,7 +537,12 @@ export default function PediatricCaseSheetScreen() {
         arrival_datetime: new Date().toISOString(),
         mlc: false,
       } : undefined,
-      presenting_complaint: { text: patient?.chief_complaint || "" },
+      presenting_complaint: {
+        text: patient?.chief_complaint || triageData?.presenting_complaint?.text || "",
+        duration: triageData?.presenting_complaint?.duration || "Recent onset",
+        onset_type: triageData?.presenting_complaint?.onset_type || "Sudden",
+        course: triageData?.presenting_complaint?.course || "Progressive",
+      },
       triage_color: patient?.triage_category || "green",
       vitals_at_arrival: {
         hr: parseFloat(triageVitals.hr) || parseFloat(circulationData.heartRate) || 100,
@@ -599,9 +604,21 @@ export default function PediatricCaseSheetScreen() {
       treatment: {
         primary_diagnosis: treatmentData.primaryDiagnosis || "",
         provisional_diagnosis: treatmentData.primaryDiagnosis || "",
-        differential_diagnoses: treatmentData.differentialDiagnoses || "",
-        labs_ordered: treatmentData.labsOrdered || "",
-        imaging: treatmentData.imaging || "",
+        differential_diagnoses: Array.isArray(treatmentData.differentialDiagnoses) 
+          ? treatmentData.differentialDiagnoses 
+          : (typeof treatmentData.differentialDiagnoses === 'string' && treatmentData.differentialDiagnoses 
+              ? treatmentData.differentialDiagnoses.split(',').map((s: string) => s.trim()).filter((s: string) => s) 
+              : []),
+        panels_selected: Array.isArray(treatmentData.labsOrdered) 
+          ? treatmentData.labsOrdered 
+          : (typeof treatmentData.labsOrdered === 'string' && treatmentData.labsOrdered 
+              ? treatmentData.labsOrdered.split(',').map((s: string) => s.trim()).filter((s: string) => s) 
+              : []),
+        imaging: Array.isArray(treatmentData.imaging) 
+          ? treatmentData.imaging 
+          : (typeof treatmentData.imaging === 'string' && treatmentData.imaging 
+              ? treatmentData.imaging.split(',').map((s: string) => s.trim()).filter((s: string) => s) 
+              : []),
         results_summary: treatmentData.resultsSummary || "",
         other_medications: treatmentData.otherMedications || "",
         medications: treatmentData.medications.filter((m: MedicationEntry) => m.name.trim() !== "").map((m: MedicationEntry) => ({
