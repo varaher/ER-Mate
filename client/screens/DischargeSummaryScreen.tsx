@@ -169,17 +169,20 @@ export default function DischargeSummaryScreen() {
     const sample = data.sample || {};
     const history = data.history || {};
     const primaryAssessment = data.primary_assessment || {};
+    const savedSummary = data.discharge_summary || {};
 
     const gcsE = vitals.gcs_e || primaryAssessment.disability_gcs_e || 4;
     const gcsV = vitals.gcs_v || primaryAssessment.disability_gcs_v || 5;
     const gcsM = vitals.gcs_m || primaryAssessment.disability_gcs_m || 6;
     const gcsTotal = vitals.gcs_total || (gcsE + gcsV + gcsM);
 
+    const autoMeds = formatMedications(treatment.medications || data.medications);
+
     summaryRef.current = {
       ...defaultSummary,
-      mlc: data.mlc || false,
-      allergy: sample.allergies || history.allergies?.join(", ") || patient.allergies || triage.allergies || "No known allergies",
-      vitals_arrival: {
+      mlc: savedSummary.mlc ?? data.mlc ?? false,
+      allergy: savedSummary.allergy || sample.allergies || history.allergies?.join(", ") || patient.allergies || triage.allergies || "No known allergies",
+      vitals_arrival: savedSummary.vitals_arrival || {
         hr: vitals.hr?.toString() || vitals.heart_rate?.toString() || primaryAssessment.circulation_hr?.toString() || "",
         bp: `${vitals.bp_systolic || primaryAssessment.circulation_bp_systolic || ""}/${vitals.bp_diastolic || primaryAssessment.circulation_bp_diastolic || ""}`,
         rr: vitals.rr?.toString() || vitals.respiratory_rate?.toString() || primaryAssessment.breathing_rr?.toString() || "",
@@ -189,12 +192,12 @@ export default function DischargeSummaryScreen() {
         grbs: vitals.grbs?.toString() || vitals.blood_glucose?.toString() || primaryAssessment.disability_grbs?.toString() || "",
         temp: vitals.temperature?.toString() || primaryAssessment.exposure_temperature?.toString() || "",
       },
-      presenting_complaint: data.presenting_complaint?.text || triage.chief_complaint || "",
-      history_of_present_illness: history.hpi || history.events_hopi || sample.eventsHopi || data.history_of_present_illness || triage.history || "",
-      past_medical_history: history.past_medical?.join(", ") || sample.pastMedicalHistory || patient.past_medical_history || triage.past_medical_history || "",
-      family_history: patient.family_history || "",
-      lmp: history.last_meal_lmp || sample.lastMeal || patient.lmp || "",
-      primary_assessment: {
+      presenting_complaint: savedSummary.presenting_complaint || data.presenting_complaint?.text || triage.chief_complaint || "",
+      history_of_present_illness: savedSummary.history_of_present_illness || history.hpi || history.events_hopi || sample.eventsHopi || data.history_of_present_illness || triage.history || "",
+      past_medical_history: savedSummary.past_medical_history || history.past_medical?.join(", ") || sample.pastMedicalHistory || patient.past_medical_history || triage.past_medical_history || "",
+      family_history: savedSummary.family_history || patient.family_history || "",
+      lmp: savedSummary.lmp || history.last_meal_lmp || sample.lastMeal || patient.lmp || "",
+      primary_assessment: savedSummary.primary_assessment || {
         airway: formatAirwayFromData(abcde.airway, primaryAssessment),
         breathing: formatBreathingFromData(abcde.breathing, vitals, primaryAssessment),
         circulation: formatCirculationFromData(abcde.circulation, primaryAssessment),
@@ -202,7 +205,7 @@ export default function DischargeSummaryScreen() {
         exposure: formatExposureFromData(abcde.exposure, primaryAssessment),
         efast: data.adjuncts?.efast_notes || abcde.efast || "",
       },
-      secondary_assessment: {
+      secondary_assessment: savedSummary.secondary_assessment || {
         pallor: exam.general_pallor || exam.general?.pallor || false,
         icterus: exam.general_icterus || exam.general?.icterus || false,
         cyanosis: exam.general_cyanosis || exam.general?.cyanosis || false,
@@ -210,30 +213,30 @@ export default function DischargeSummaryScreen() {
         lymphadenopathy: exam.general_lymphadenopathy || exam.general?.lymphadenopathy || false,
         edema: exam.general_edema || exam.general?.edema || false,
       },
-      systemic_exam: {
+      systemic_exam: savedSummary.systemic_exam || {
         chest: formatSystemicExam("respiratory", exam),
         cvs: formatSystemicExam("cvs", exam),
         pa: formatSystemicExam("abdomen", exam),
         cns: formatSystemicExam("cns", exam),
         extremities: formatSystemicExam("extremities", exam),
       },
-      course_in_hospital: data.discharge_summary?.course_in_hospital || "",
-      investigations: formatInvestigations(treatment.investigations || data.investigations),
-      diagnosis: treatment.primary_diagnosis || treatment.provisional_diagnosis || treatment.ai_diagnosis || data.final_diagnosis || data.treatment?.primary_diagnosis || "",
-      discharge_medications: formatMedications(treatment.medications || data.medications),
-      disposition_type: disposition.type || disposition.disposition_type || "Normal Discharge",
-      condition_at_discharge: disposition.condition || disposition.condition_at_discharge || "STABLE",
-      vitals_discharge: { ...summaryRef.current.vitals_discharge },
-      follow_up_advice: disposition.follow_up || disposition.follow_up_instructions || "",
-      ed_resident: data.em_resident || data.discharge_summary?.ed_resident || "",
-      ed_consultant: data.discharge_summary?.ed_consultant || "",
-      sign_time_resident: "",
-      sign_time_consultant: "",
-      discharge_date: new Date().toLocaleDateString(),
+      course_in_hospital: savedSummary.course_in_hospital || "",
+      investigations: savedSummary.investigations || formatInvestigations(treatment.investigations || data.investigations),
+      diagnosis: savedSummary.diagnosis || treatment.primary_diagnosis || treatment.provisional_diagnosis || treatment.ai_diagnosis || data.final_diagnosis || data.treatment?.primary_diagnosis || "",
+      discharge_medications: savedSummary.discharge_medications || autoMeds,
+      disposition_type: savedSummary.disposition_type || disposition.type || disposition.disposition_type || "Normal Discharge",
+      condition_at_discharge: savedSummary.condition_at_discharge || disposition.condition || disposition.condition_at_discharge || "STABLE",
+      vitals_discharge: savedSummary.vitals_discharge || { hr: "", bp: "", rr: "", spo2: "", gcs: "", pain_score: "", grbs: "", temp: "" },
+      follow_up_advice: savedSummary.follow_up_advice || disposition.follow_up || disposition.follow_up_instructions || "",
+      ed_resident: savedSummary.ed_resident || data.em_resident || "",
+      ed_consultant: savedSummary.ed_consultant || "",
+      sign_time_resident: savedSummary.sign_time_resident || "",
+      sign_time_consultant: savedSummary.sign_time_consultant || "",
+      discharge_date: savedSummary.discharge_date || new Date().toLocaleDateString(),
     };
 
-    if (data.discharge_summary) {
-      summaryRef.current = { ...summaryRef.current, ...data.discharge_summary };
+    if (savedSummary.course_in_hospital) {
+      setCourseInHospitalKey(k => k + 1);
     }
 
     forceUpdate();
@@ -562,6 +565,11 @@ export default function DischargeSummaryScreen() {
   const exportPDF = async () => {
     setExporting(true);
     try {
+      await apiPut(`/cases/${caseId}`, {
+        discharge_summary: summaryRef.current,
+        status: "completed",
+      });
+
       const exportData = {
         patient: caseData?.patient || {},
         discharge_summary: summaryRef.current,
@@ -628,6 +636,11 @@ export default function DischargeSummaryScreen() {
   const exportDOCX = async () => {
     setExportingDocx(true);
     try {
+      await apiPut(`/cases/${caseId}`, {
+        discharge_summary: summaryRef.current,
+        status: "completed",
+      });
+
       const exportData = {
         patient: caseData?.patient || {},
         discharge_summary: summaryRef.current,
@@ -721,7 +734,7 @@ export default function DischargeSummaryScreen() {
     );
   });
 
-  const VitalsGrid = ({ prefix, data }: { prefix: string; data: any }) => (
+  const VitalsGrid = ({ prefix, data, keyPrefix }: { prefix: string; data: any; keyPrefix?: number }) => (
     <View style={styles.vitalsGrid}>
       {[
         { key: "hr", label: "HR" },
@@ -733,9 +746,10 @@ export default function DischargeSummaryScreen() {
         { key: "grbs", label: "GRBS" },
         { key: "temp", label: "Temp (°F)" },
       ].map(({ key, label }) => (
-        <View key={`${prefix}-${key}`} style={styles.vitalItem}>
+        <View key={`${prefix}-${key}-${keyPrefix || 0}`} style={styles.vitalItem}>
           <Text style={[styles.vitalLabel, { color: theme.textSecondary }]}>{label}</Text>
           <DebouncedVitalInput
+            key={`${prefix}-${key}-input-${keyPrefix || 0}`}
             fieldPath={`${prefix}.${key}`}
             initialValue={data[key] || ""}
           />
@@ -812,7 +826,7 @@ export default function DischargeSummaryScreen() {
             </View>
 
             <Text style={[styles.subheading, { color: theme.text }]}>Vitals at Time of Arrival</Text>
-            <VitalsGrid prefix="vitals_arrival" data={summaryRef.current.vitals_arrival} />
+            <VitalsGrid prefix="vitals_arrival" data={summaryRef.current.vitals_arrival} keyPrefix={updateCounter} />
 
             <View style={styles.field}>
               <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Presenting Complaints</Text>
@@ -1066,7 +1080,7 @@ export default function DischargeSummaryScreen() {
             </View>
 
             <Text style={[styles.subheading, { color: theme.text }]}>Vitals at Time of Discharge</Text>
-            <VitalsGrid prefix="vitals_discharge" data={summaryRef.current.vitals_discharge} />
+            <VitalsGrid prefix="vitals_discharge" data={summaryRef.current.vitals_discharge} keyPrefix={updateCounter} />
 
             <View style={styles.field}>
               <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Follow-Up Advice</Text>

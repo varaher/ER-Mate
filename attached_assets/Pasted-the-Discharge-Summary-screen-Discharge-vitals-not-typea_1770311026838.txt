@@ -1,0 +1,81 @@
+the Discharge Summary screen:
+Discharge vitals not typeable
+Course-in-hospital + discharge meds appear on screen but don’t persist after Save
+PDF/Word export is incomplete (not full summary)
+I’ll give you the most likely causes + exact fixes.
+1) “Not able to type discharge vitals”
+This is almost never backend. It’s UI:
+Most common reasons
+A) TextInput is being rendered as non-editable
+editable={false} (explicitly or inherited)
+pointerEvents="none" on a parent container
+It’s using the same “readonly field component” you use for auto-copied case-sheet fields
+✅ Fix In the DischargeVitals component, ensure:
+You are using TextInput (not Text)
+It has:
+editable={true}
+value={state.dischargeVitals.<field>}
+onChangeText={(t)=> setState(prev=>({...prev, dischargeVitals:{...prev.dischargeVitals, field:t}}))}
+B) Keyboard closes immediately (ScrollView/Accordion issue) If the vitals input is inside a ScrollView/Accordion:
+add keyboardShouldPersistTaps="handled" (or "always") to ScrollView
+wrap screen with KeyboardAvoidingView and set proper behavior
+✅ Fix (fastest) On the main ScrollView of Discharge Summary:
+Copy code
+Js
+keyboardShouldPersistTaps="handled"
+2) “Course in hospital + discharge meds not saved”
+This is the classic state overwrite problem.
+What’s probably happening
+When the Discharge Summary screen loads, you “auto-copy” everything from Case Sheet into dischargeSummaryState.
+Then after you type course / discharge meds:
+you see it on UI ✅
+but when you press Save, the save payload is built from a fresh copy (or old state), so your new edits never reach backend ❌
+Fix rule
+Auto-copy should happen only once (on first load), and never again overwrite user edits.
+✅ Fix patterns A) Copy only if field is empty
+Copy code
+Js
+setDischarge(prev => ({
+  ...prev,
+  courseInHospital: prev.courseInHospital || caseSheet.courseInHospital || "",
+}));
+B) Save must send the same object user edited In Save button handler:
+Copy code
+Js
+console.log("Saving course:", discharge.courseInHospital);
+console.log("Saving discharge meds:", discharge.dischargeMedications);
+console.log("Saving discharge vitals:", discharge.dischargeVitals);
+If logs show correct values but backend still loses them → backend schema mismatch. If logs show blank/old values → your Save is using stale state / overwriting before save.
+C) Stale state closure If Save uses a function created earlier (common with React hooks), it may read old state. Fix by passing the current state into save:
+Copy code
+Js
+const onSave = async () => {
+  const payload = discharge; // current state
+  await saveDischargeSummary(payload);
+};
+3) “PDF/Word download incomplete”
+This is very likely because your export method is capturing only what is currently visible (viewport / collapsed accordion), instead of rendering the entire report server-side.
+Typical failure patterns
+Export uses view-shot / screenshot-like capture → only visible portion comes
+Accordion sections are collapsed → export template gets blank/missing sections
+Export is built from UI HTML that contains only rendered parts
+✅ Correct approach (most reliable) Export should NOT depend on what is visible on screen.
+Export should use:
+the saved discharge summary JSON (all fields),
+render a full HTML/doc template on backend,
+then generate PDF/DOCX from that template.
+Also: export should always “Save → then Export”
+Right now you may be exporting before your newly typed course/meds are persisted.
+✅ Fix the button flow:
+PDF button:
+await onSave()
+call /export/pdf?caseId=...
+Word button:
+await onSave()
+call /export/docx?caseId=...
+Mobile-specific download issue
+Even if backend returns full file, Expo/React Native often fails unless you handle it properly.
+Best practice:
+Use expo-file-system to download
+Then expo-sharing to open/share
+If you’re currently using Linking.openURL(fileUrl) sometimes it opens but downloads partial.
