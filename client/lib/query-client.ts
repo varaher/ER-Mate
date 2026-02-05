@@ -11,8 +11,11 @@ export function getApiUrl(): string {
     throw new Error("EXPO_PUBLIC_DOMAIN is not set");
   }
 
-  // Strip any port number - Replit proxy handles routing
-  host = host.replace(/:5000$/, '').replace(/:443$/, '');
+  // Keep port 5000 for API routing - Replit maps external:5000 to local:5000 (Express API)
+  // Default HTTPS (port 443/80) routes to local:8081 (Expo web) which doesn't have API routes
+  if (!host.includes(':')) {
+    host = `${host}:5000`;
+  }
   
   let url = new URL(`https://${host}`);
 
