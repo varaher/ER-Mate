@@ -43,10 +43,13 @@ async function handleTokenExpiry() {
 async function handleResponse<T>(res: Response): Promise<ApiResponse<T>> {
   if (!res.ok) {
     const errorText = await res.text();
-    let errorMessage = "Request failed";
+    let errorMessage: string = "Request failed";
+    let errorData: any = null;
     try {
       const errorJson = JSON.parse(errorText);
-      errorMessage = errorJson.detail || errorJson.message || errorJson.error || errorText;
+      errorData = errorJson;
+      const rawError = errorJson.detail || errorJson.message || errorJson.error || errorText;
+      errorMessage = typeof rawError === 'string' ? rawError : JSON.stringify(rawError);
     } catch {
       errorMessage = errorText || res.statusText;
     }
@@ -57,7 +60,8 @@ async function handleResponse<T>(res: Response): Promise<ApiResponse<T>> {
       return { success: false, error: "Your session has expired. Please log in again.", tokenExpired: true };
     }
     
-    return { success: false, error: errorMessage };
+    // Return full error data if available for better debugging
+    return { success: false, error: errorData || errorMessage };
   }
   const data = await res.json();
   

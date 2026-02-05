@@ -2922,7 +2922,12 @@ export default function CaseSheetScreen() {
               <TextInput style={[styles.inputField, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="e.g., 4 hours" placeholderTextColor={theme.textMuted} value={dispositionData.durationInER} onChangeText={(v) => setDispositionData((prev) => ({ ...prev, durationInER: v }))} />
             </View>
 
-            <Pressable style={[styles.generateSummaryBtn, { backgroundColor: theme.primary }]}>
+            <Pressable style={[styles.generateSummaryBtn, { backgroundColor: theme.primary }]} onPress={async () => {
+              const success = await commitToBackend();
+              if (success && caseId) {
+                navigation.navigate("DischargeSummary", { caseId });
+              }
+            }}>
               <Feather name="file-text" size={18} color="#FFFFFF" />
               <Text style={styles.generateSummaryBtnText}>Generate Discharge Summary</Text>
             </Pressable>
