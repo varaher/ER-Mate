@@ -68,17 +68,26 @@ export default function ViewCaseScreen() {
       const res = await apiGet<any>(`/cases/${caseId}`);
       if (res.success && res.data) {
         console.log("ViewCaseScreen: full treatment object:", JSON.stringify(res.data.treatment, null, 2));
+        console.log("ViewCaseScreen: checking all medication paths...");
         
-        // Check for medications under different possible field names
+        // Check for medications under ALL possible field paths (UI should be tolerant)
         const medications = res.data.treatment?.medications 
           || res.data.treatment?.medications_given 
+          || res.data.treatment?.given_medications
           || res.data.treatment?.meds
+          || res.data.medications
+          || res.data.discharge?.medications
+          || res.data.disposition?.discharge_medications
           || [];
         
-        // Ensure treatment object has medications
-        if (res.data.treatment && !res.data.treatment.medications && medications.length > 0) {
+        console.log("ViewCaseScreen: found medications:", JSON.stringify(medications, null, 2));
+        
+        // Ensure treatment object exists and has medications
+        if (!res.data.treatment) {
+          res.data.treatment = {};
+        }
+        if (medications.length > 0) {
           res.data.treatment.medications = medications;
-          console.log("ViewCaseScreen: Mapped medications from alternative field:", JSON.stringify(medications, null, 2));
         }
         
         setCaseData(res.data);

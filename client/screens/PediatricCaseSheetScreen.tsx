@@ -396,7 +396,8 @@ export default function PediatricCaseSheetScreen() {
             frequency: m.frequency || "stat",
           }))
         : [];
-      setTreatmentData({
+      setTreatmentData((prev) => ({
+        ...prev,
         labsOrdered: Array.isArray(caseSheetData.treatment.panels_selected) ? caseSheetData.treatment.panels_selected.join(", ") : "",
         imaging: Array.isArray(caseSheetData.treatment.imaging) ? caseSheetData.treatment.imaging.join(", ") : "",
         resultsSummary: caseSheetData.treatment.results_notes || "",
@@ -406,7 +407,7 @@ export default function PediatricCaseSheetScreen() {
         ivFluids: caseSheetData.treatment.fluids || "",
         infusions: loadedInfusions,
         medications: loadedMeds,
-      });
+      }));
     }
     if (caseSheetData.disposition) {
       setDispositionData((prev) => ({
