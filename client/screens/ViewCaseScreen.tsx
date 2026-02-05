@@ -67,7 +67,20 @@ export default function ViewCaseScreen() {
       setLoading(true);
       const res = await apiGet<any>(`/cases/${caseId}`);
       if (res.success && res.data) {
-        console.log("ViewCaseScreen: treatment.medications:", JSON.stringify(res.data.treatment?.medications, null, 2));
+        console.log("ViewCaseScreen: full treatment object:", JSON.stringify(res.data.treatment, null, 2));
+        
+        // Check for medications under different possible field names
+        const medications = res.data.treatment?.medications 
+          || res.data.treatment?.medications_given 
+          || res.data.treatment?.meds
+          || [];
+        
+        // Ensure treatment object has medications
+        if (res.data.treatment && !res.data.treatment.medications && medications.length > 0) {
+          res.data.treatment.medications = medications;
+          console.log("ViewCaseScreen: Mapped medications from alternative field:", JSON.stringify(medications, null, 2));
+        }
+        
         setCaseData(res.data);
         editableFieldsRef.current = {
           presenting_complaint: res.data.presenting_complaint?.text || "",

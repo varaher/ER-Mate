@@ -137,6 +137,7 @@ export default function DischargeSummaryScreen() {
   const [caseData, setCaseData] = useState<any>(null);
   const summaryRef = useRef<DischargeSummaryData>({ ...defaultSummary });
   const [updateCounter, setUpdateCounter] = useState(0);
+  const [courseInHospitalKey, setCourseInHospitalKey] = useState(0);
   const forceUpdate = () => setUpdateCounter(c => c + 1);
 
   useEffect(() => {
@@ -507,6 +508,8 @@ export default function DischargeSummaryScreen() {
         if (res.summary.course_in_hospital) {
           console.log("[AI] Setting course_in_hospital:", res.summary.course_in_hospital.substring(0, 100) + "...");
           summaryRef.current.course_in_hospital = res.summary.course_in_hospital;
+          // Force TextInput to remount with new value by changing its key
+          setCourseInHospitalKey(k => k + 1);
         }
         if (res.summary.diagnosis && !summaryRef.current.diagnosis) {
           console.log("[AI] Setting diagnosis:", res.summary.diagnosis);
@@ -962,8 +965,9 @@ export default function DischargeSummaryScreen() {
             <View style={styles.field}>
               <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Course in Hospital with Medications and Procedures</Text>
               <TextInput
+                key={`course_in_hospital_${courseInHospitalKey}`}
                 style={[styles.textAreaLarge, { backgroundColor: theme.backgroundSecondary, color: theme.text }]}
-                value={summaryRef.current.course_in_hospital}
+                defaultValue={summaryRef.current.course_in_hospital}
                 onChangeText={(v) => updateField("course_in_hospital", v)}
                 placeholder="Detailed course in hospital (AI will generate this)..."
                 placeholderTextColor={theme.textMuted}
