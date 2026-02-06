@@ -166,6 +166,18 @@ export default function DashboardScreen() {
     });
   };
 
+  const getMimeType = (filename: string) => {
+    if (filename.endsWith(".pdf")) return "application/pdf";
+    if (filename.endsWith(".docx")) return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    return "application/octet-stream";
+  };
+
+  const getUTI = (filename: string) => {
+    if (filename.endsWith(".pdf")) return "com.adobe.pdf";
+    if (filename.endsWith(".docx")) return "org.openxmlformats.wordprocessingml.document";
+    return "public.data";
+  };
+
   const downloadBlobFile = async (blob: Blob, filename: string) => {
     if (Platform.OS === "web") {
       const url = URL.createObjectURL(blob);
@@ -176,15 +188,50 @@ export default function DashboardScreen() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-    } else {
-      const base64Data = await blobToBase64(blob);
-      const fileUri = (FileSystem.cacheDirectory || "") + filename;
-      await FileSystem.writeAsStringAsync(fileUri, base64Data, { encoding: "base64" as any });
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(fileUri);
-      } else {
-        Alert.alert("Success", "File saved successfully");
+      return;
+    }
+
+    const base64Data = await blobToBase64(blob);
+    const mimeType = getMimeType(filename);
+    const uti = getUTI(filename);
+
+    if (Platform.OS === "android") {
+      try {
+        const { StorageAccessFramework } = FileSystem;
+        const permissions = await StorageAccessFramework.requestDirectoryPermissionsAsync();
+        if (permissions.granted) {
+          const safUri = await StorageAccessFramework.createFileAsync(
+            permissions.directoryUri,
+            filename,
+            mimeType
+          );
+          await FileSystem.writeAsStringAsync(safUri, base64Data, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+          Alert.alert(
+            "Download Complete",
+            `"${filename}" has been saved to your selected folder.`
+          );
+          return;
+        }
+      } catch (_e) {
+        // SAF not available or user cancelled - fall through to share sheet
       }
+    }
+
+    const fileUri = (FileSystem.documentDirectory || "") + filename;
+    await FileSystem.writeAsStringAsync(fileUri, base64Data, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(fileUri, {
+        mimeType,
+        dialogTitle: `Save ${filename}`,
+        UTI: uti,
+      });
+    } else {
+      Alert.alert("Download Complete", `"${filename}" has been saved.`);
     }
   };
 
