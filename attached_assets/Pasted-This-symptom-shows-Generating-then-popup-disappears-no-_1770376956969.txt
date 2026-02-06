@@ -1,0 +1,113 @@
+This symptom (shows “Generating…” → then popup disappears → no file saved) almost always means the export call failed or returned something unexpected, and your UI closes the modal in a finally { setGenerating(false); closeModal(); } without handling the error.
+Here’s the fastest way to catch + fix it.
+1) First confirm: Web (desktop) or Mobile (phone)?
+Because the download method differs:
+Desktop Web (Expo web / Replit preview): you must download via browser (a tag / window.open)
+Mobile (Expo Go / APK): you must download via expo-file-system + expo-sharing (browser download won’t save)
+If you use web-style download on mobile → exactly your bug happens (nothing downloads).
+2) Add 3 logs (this will immediately reveal the cause)
+In your PDF/Word button handler, add:
+Copy code
+Ts
+try {
+  setGenerating(true);
+
+  console.log("EXPORT: start", { caseId, type });
+
+  const res = await fetch(exportUrl, { method: "GET" });
+  console.log("EXPORT: status", res.status);
+
+  const ct = res.headers.get("content-type");
+  console.log("EXPORT: content-type", ct);
+
+  const textPeek = await res.clone().text();
+  console.log("EXPORT: first 200 chars", textPeek.slice(0, 200));
+
+  // continue actual download...
+} catch (e) {
+  console.log("EXPORT ERROR", e);
+  alert("Download failed: " + String(e));
+} finally {
+  setGenerating(false);
+}
+What you’re looking for
+status is 200?
+content-type is something like:
+application/pdf OR
+application/vnd.openxmlformats-officedocument.wordprocessingml.document
+If you see text/html or JSON error → your backend returned an error page / not a file.
+3) Most common root causes (and exact fix)
+Cause A: You’re calling the wrong URL on Replit (port/domain issue)
+You already had a port-routing issue earlier (8081 vs 5000). Export often breaks for the same reason.
+✅ Fix Make sure export calls the Express API base, not the Expo web base.
+If export endpoint is on Express (port 5000), on Replit it must be reached correctly (often via the same “replit.dev” domain but correct path).
+Don’t “strip ports” in your helper.
+Quick test: open the export URL directly in browser:
+If it downloads → URL is fine.
+If it shows HTML page → wrong route.
+Cause B: You are using “web download” logic on mobile
+If your code does something like:
+Copy code
+Ts
+window.open(url)
+or
+Copy code
+Ts
+Linking.openURL(url)
+on mobile → it may open a blank tab and close = no file saved.
+✅ Fix (Mobile/Expo way) Use expo-file-system:
+Copy code
+Ts
+import * as FileSystem from "expo-file-system";
+import * as Sharing from "expo-sharing";
+
+async function downloadFile(url: string, filename: string) {
+  const localUri = FileSystem.documentDirectory + filename;
+
+  const { uri, status } = await FileSystem.downloadAsync(url, localUri);
+  if (status !== 200) throw new Error("Download failed: " + status);
+
+  // Open/share to user
+  if (await Sharing.isAvailableAsync()) {
+    await Sharing.shareAsync(uri);
+  } else {
+    alert("Saved to: " + uri);
+  }
+}
+Then call:
+Copy code
+Ts
+await downloadFile(exportUrl, `discharge_${caseId}.pdf`);
+Cause C: Backend is returning JSON/HTML error, your UI hides it
+You likely close the popup even when export fails.
+✅ Fix Only close popup on success:
+Copy code
+Ts
+try {
+  setGenerating(true);
+  await doExport();
+  closeModal(); // ✅ only here
+} catch (e) {
+  alert("Export failed: " + String(e));
+} finally {
+  setGenerating(false);
+}
+Cause D: Export endpoint returns a file, but without proper headers
+If backend doesn’t set Content-Disposition, some clients won’t download.
+✅ Fix (Express) For PDF:
+Copy code
+Js
+res.setHeader("Content-Type", "application/pdf");
+res.setHeader("Content-Disposition", `attachment; filename="discharge_${caseId}.pdf"`);
+res.send(pdfBuffer);
+For DOCX:
+Copy code
+Js
+res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+res.setHeader("Content-Disposition", `attachment; filename="discharge_${caseId}.docx"`);
+res.send(docxBuffer);
+4) One simple “decision tree” to finish this today
+Click PDF on desktop web → does it download?
+YES: your backend is OK; your mobile download code is wrong → use expo-file-system.
+NO: backend/URL is wrong → check status/content-type + fix routing or endpoint.
+If status is 200 but nothing saved on mobile → again, use expo-file-system.

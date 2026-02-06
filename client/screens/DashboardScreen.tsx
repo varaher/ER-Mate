@@ -22,6 +22,7 @@ import * as IntentLauncher from "expo-intent-launcher";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { fetchFromApi } from "@/lib/api";
+import { getApiUrl } from "@/lib/query-client";
 import { isPediatric } from "@/lib/pediatricVitals";
 import { getCachedCaseData, mergeCaseWithCache } from "@/lib/caseCache";
 import { getDraftByBackendId, type DraftCase } from "@/lib/draftManager";
@@ -152,21 +153,6 @@ export default function DashboardScreen() {
     setDownloadModalVisible(true);
   };
 
-  const getApiBaseUrl = () => {
-    return process.env.EXPO_PUBLIC_DOMAIN 
-      ? `https://${process.env.EXPO_PUBLIC_DOMAIN}/api`
-      : "https://er-emr-backend.onrender.com/api";
-  };
-
-  const blobToBase64 = (blob: Blob): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve((reader.result as string).split(",")[1]);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  };
-
   const getMimeType = (filename: string) => {
     if (filename.endsWith(".pdf")) return "application/pdf";
     if (filename.endsWith(".docx")) return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -179,26 +165,9 @@ export default function DashboardScreen() {
     return "public.data";
   };
 
-  const downloadBlobFile = async (blob: Blob, filename: string) => {
-    if (Platform.OS === "web") {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      return;
-    }
-
-    const base64Data = await blobToBase64(blob);
+  const openOrShareFile = async (fileUri: string, filename: string) => {
     const mimeType = getMimeType(filename);
     const uti = getUTI(filename);
-    const fileUri = (FileSystem.documentDirectory || "") + filename;
-    await FileSystem.writeAsStringAsync(fileUri, base64Data, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
 
     if (Platform.OS === "android") {
       try {
@@ -210,7 +179,7 @@ export default function DashboardScreen() {
         });
         return;
       } catch (_e) {
-        // IntentLauncher not available - fall through to share
+        // Fall through to share sheet
       }
     }
 
@@ -424,10 +393,10 @@ export default function DashboardScreen() {
       const cached = await getCachedCaseData(selectedCase.id);
       const caseData = cached ? mergeCaseWithCache(caseResponse, cached) : caseResponse;
       
-      const apiUrl = getApiBaseUrl();
+      const expressBaseUrl = getApiUrl();
       const endpoint = type === "discharge"
-        ? (format === "pdf" ? "/export/discharge-pdf" : "/export/discharge-docx")
-        : (format === "pdf" ? "/export/casesheet-pdf" : "/export/casesheet-docx");
+        ? (format === "pdf" ? "/api/export/discharge-pdf" : "/api/export/discharge-docx")
+        : (format === "pdf" ? "/api/export/casesheet-pdf" : "/api/export/casesheet-docx");
       
       const exportData = type === "discharge"
         ? {
@@ -438,23 +407,78 @@ export default function DashboardScreen() {
             created_at: caseData.created_at,
           }
         : caseData;
-        
-      const response = await fetch(`${apiUrl}${endpoint}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(exportData),
-      });
-      
-      if (!response.ok) throw new Error("Export failed");
-      
-      const blob = await response.blob();
+
       const typePrefix = type === "discharge" ? "discharge" : "casesheet";
       const extension = format === "pdf" ? "pdf" : "docx";
       const filename = `${typePrefix}_${(selectedCase.patient?.name || "patient").replace(/\s+/g, "_")}_${Date.now()}.${extension}`;
+
+      const fullUrl = new URL(endpoint, expressBaseUrl).href;
+      console.log("[EXPORT] URL:", fullUrl);
+
+      if (Platform.OS === "web") {
+        const response = await fetch(fullUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(exportData),
+        });
+        if (!response.ok) {
+          const errText = await response.text();
+          throw new Error(`Export failed (${response.status}): ${errText.slice(0, 200)}`);
+        }
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } else {
+        const response = await fetch(fullUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(exportData),
+        });
+        console.log("[EXPORT] Response status:", response.status, "content-type:", response.headers.get("content-type"));
+        if (!response.ok) {
+          const errText = await response.text();
+          throw new Error(`Export failed (${response.status}): ${errText.slice(0, 200)}`);
+        }
+        const blob = await response.blob();
+        console.log("[EXPORT] Blob size:", blob.size, "type:", blob.type);
+        if (blob.size === 0) {
+          throw new Error("Server returned empty file");
+        }
+        const reader = new FileReader();
+        const base64Data = await new Promise<string>((resolve, reject) => {
+          reader.onload = () => {
+            const result = reader.result as string;
+            const base64 = result.split(",")[1];
+            resolve(base64);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+
+        const fileUri = (FileSystem.documentDirectory || "") + filename;
+        await FileSystem.writeAsStringAsync(fileUri, base64Data, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        
+        const fileInfo = await FileSystem.getInfoAsync(fileUri);
+        console.log("[EXPORT] File saved:", fileUri, "exists:", fileInfo.exists, "size:", (fileInfo as any).size);
+        
+        if (!fileInfo.exists) {
+          throw new Error("File was not saved properly");
+        }
+
+        await openOrShareFile(fileUri, filename);
+      }
       
-      await downloadBlobFile(blob, filename);
       setDownloadModalVisible(false);
     } catch (err: any) {
+      console.log("[EXPORT] Error:", err);
       Alert.alert("Export Failed", err.message || "Failed to export document");
     } finally {
       setExporting(false);
