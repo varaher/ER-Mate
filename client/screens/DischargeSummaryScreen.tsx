@@ -96,6 +96,89 @@ interface DischargeSummaryData {
   discharge_date: string;
 }
 
+const VITAL_FIELDS = [
+  { key: "hr", label: "HR" },
+  { key: "bp", label: "BP" },
+  { key: "rr", label: "RR" },
+  { key: "spo2", label: "SpO2" },
+  { key: "gcs", label: "GCS" },
+  { key: "pain_score", label: "Pain" },
+  { key: "grbs", label: "GRBS" },
+  { key: "temp", label: "Temp (\u00B0F)" },
+];
+
+const StableVitalInput = React.memo(({
+  fieldPath,
+  initialValue,
+  onUpdate,
+  bgColor,
+  textColor,
+  mutedColor,
+}: {
+  fieldPath: string;
+  initialValue: string;
+  onUpdate: (path: string, value: string) => void;
+  bgColor: string;
+  textColor: string;
+  mutedColor: string;
+}) => {
+  const localRef = React.useRef(initialValue);
+  const debounceRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  const handleChange = React.useCallback((text: string) => {
+    localRef.current = text;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      onUpdate(fieldPath, text);
+    }, 400);
+  }, [fieldPath, onUpdate]);
+
+  return (
+    <TextInput
+      style={[styles.vitalInput, { backgroundColor: bgColor, color: textColor }]}
+      defaultValue={initialValue}
+      onChangeText={handleChange}
+      placeholder="-"
+      placeholderTextColor={mutedColor}
+      keyboardType="default"
+    />
+  );
+});
+
+const StableVitalsGrid = React.memo(({
+  prefix,
+  data,
+  onUpdate,
+  bgColor,
+  textColor,
+  textSecondaryColor,
+  mutedColor,
+}: {
+  prefix: string;
+  data: any;
+  onUpdate: (path: string, value: string) => void;
+  bgColor: string;
+  textColor: string;
+  textSecondaryColor: string;
+  mutedColor: string;
+}) => (
+  <View style={styles.vitalsGrid}>
+    {VITAL_FIELDS.map(({ key, label }) => (
+      <View key={`${prefix}-${key}`} style={styles.vitalItem}>
+        <Text style={[styles.vitalLabel, { color: textSecondaryColor }]}>{label}</Text>
+        <StableVitalInput
+          fieldPath={`${prefix}.${key}`}
+          initialValue={data[key] || ""}
+          onUpdate={onUpdate}
+          bgColor={bgColor}
+          textColor={textColor}
+          mutedColor={mutedColor}
+        />
+      </View>
+    ))}
+  </View>
+));
+
 const defaultSummary: DischargeSummaryData = {
   mlc: false,
   allergy: "No known allergies",
@@ -779,69 +862,14 @@ export default function DischargeSummaryScreen() {
     forceUpdate();
   };
 
-  const updateFieldSilent = (path: string, value: any) => {
+  const updateFieldSilent = React.useCallback((path: string, value: any) => {
     const keys = path.split(".");
     let obj: any = summaryRef.current;
     for (let i = 0; i < keys.length - 1; i++) {
       obj = obj[keys[i]];
     }
     obj[keys[keys.length - 1]] = value;
-  };
-
-  const DebouncedVitalInput = React.memo(({ 
-    fieldPath, 
-    initialValue, 
-    placeholder = "-" 
-  }: { 
-    fieldPath: string; 
-    initialValue: string; 
-    placeholder?: string;
-  }) => {
-    const localRef = useRef(initialValue);
-    const debounceRef = useRef<NodeJS.Timeout | null>(null);
-    
-    const handleChange = (text: string) => {
-      localRef.current = text;
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(() => {
-        updateFieldSilent(fieldPath, text);
-      }, 300);
-    };
-    
-    return (
-      <TextInput
-        style={[styles.vitalInput, { backgroundColor: theme.backgroundSecondary, color: theme.text }]}
-        defaultValue={initialValue}
-        onChangeText={handleChange}
-        placeholder={placeholder}
-        placeholderTextColor={theme.textMuted}
-        keyboardType="default"
-      />
-    );
-  });
-
-  const VitalsGrid = ({ prefix, data }: { prefix: string; data: any }) => (
-    <View style={styles.vitalsGrid}>
-      {[
-        { key: "hr", label: "HR" },
-        { key: "bp", label: "BP" },
-        { key: "rr", label: "RR" },
-        { key: "spo2", label: "SpO2" },
-        { key: "gcs", label: "GCS" },
-        { key: "pain_score", label: "Pain" },
-        { key: "grbs", label: "GRBS" },
-        { key: "temp", label: "Temp (°F)" },
-      ].map(({ key, label }) => (
-        <View key={`${prefix}-${key}`} style={styles.vitalItem}>
-          <Text style={[styles.vitalLabel, { color: theme.textSecondary }]}>{label}</Text>
-          <DebouncedVitalInput
-            fieldPath={`${prefix}.${key}`}
-            initialValue={data[key] || ""}
-          />
-        </View>
-      ))}
-    </View>
-  );
+  }, []);
 
   const ToggleItem = ({ label, value, path }: { label: string; value: boolean; path: string }) => (
     <View style={styles.toggleRow}>
@@ -911,7 +939,15 @@ export default function DischargeSummaryScreen() {
             </View>
 
             <Text style={[styles.subheading, { color: theme.text }]}>Vitals at Time of Arrival</Text>
-            <VitalsGrid prefix="vitals_arrival" data={summaryRef.current.vitals_arrival} />
+            <StableVitalsGrid
+              prefix="vitals_arrival"
+              data={summaryRef.current.vitals_arrival}
+              onUpdate={updateFieldSilent}
+              bgColor={theme.backgroundSecondary}
+              textColor={theme.text}
+              textSecondaryColor={theme.textSecondary}
+              mutedColor={theme.textMuted}
+            />
 
             <View style={styles.field}>
               <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Presenting Complaints</Text>
@@ -1165,7 +1201,15 @@ export default function DischargeSummaryScreen() {
             </View>
 
             <Text style={[styles.subheading, { color: theme.text }]}>Vitals at Time of Discharge</Text>
-            <VitalsGrid prefix="vitals_discharge" data={summaryRef.current.vitals_discharge} />
+            <StableVitalsGrid
+              prefix="vitals_discharge"
+              data={summaryRef.current.vitals_discharge}
+              onUpdate={updateFieldSilent}
+              bgColor={theme.backgroundSecondary}
+              textColor={theme.text}
+              textSecondaryColor={theme.textSecondary}
+              mutedColor={theme.textMuted}
+            />
 
             <View style={styles.field}>
               <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Follow-Up Advice</Text>
