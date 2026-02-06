@@ -18,6 +18,7 @@ import { Feather } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import * as Sharing from "expo-sharing";
 import * as FileSystem from "expo-file-system/legacy";
+import * as IntentLauncher from "expo-intent-launcher";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { fetchFromApi } from "@/lib/api";
@@ -194,35 +195,24 @@ export default function DashboardScreen() {
     const base64Data = await blobToBase64(blob);
     const mimeType = getMimeType(filename);
     const uti = getUTI(filename);
-
-    if (Platform.OS === "android") {
-      try {
-        const { StorageAccessFramework } = FileSystem;
-        const permissions = await StorageAccessFramework.requestDirectoryPermissionsAsync();
-        if (permissions.granted) {
-          const safUri = await StorageAccessFramework.createFileAsync(
-            permissions.directoryUri,
-            filename,
-            mimeType
-          );
-          await FileSystem.writeAsStringAsync(safUri, base64Data, {
-            encoding: FileSystem.EncodingType.Base64,
-          });
-          Alert.alert(
-            "Download Complete",
-            `"${filename}" has been saved to your selected folder.`
-          );
-          return;
-        }
-      } catch (_e) {
-        // SAF not available or user cancelled - fall through to share sheet
-      }
-    }
-
     const fileUri = (FileSystem.documentDirectory || "") + filename;
     await FileSystem.writeAsStringAsync(fileUri, base64Data, {
       encoding: FileSystem.EncodingType.Base64,
     });
+
+    if (Platform.OS === "android") {
+      try {
+        const contentUri = await FileSystem.getContentUriAsync(fileUri);
+        await IntentLauncher.startActivityAsync("android.intent.action.VIEW", {
+          data: contentUri,
+          flags: 1,
+          type: mimeType,
+        });
+        return;
+      } catch (_e) {
+        // IntentLauncher not available - fall through to share
+      }
+    }
 
     if (await Sharing.isAvailableAsync()) {
       await Sharing.shareAsync(fileUri, {
