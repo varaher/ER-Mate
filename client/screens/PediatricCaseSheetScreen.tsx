@@ -10,6 +10,7 @@ import VoiceRecorder, { ExtractedClinicalData } from "@/components/VoiceRecorder
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { useTheme } from "@/hooks/useTheme";
 import { apiGet, apiPatch, apiPut, invalidateCases } from "@/lib/api";
+import { cacheCasePayload } from "@/lib/caseCache";
 import { useCase } from "@/context/CaseContext";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
@@ -692,6 +693,7 @@ export default function PediatricCaseSheetScreen() {
       setSaving(true);
       const payload = buildPayload();
       console.log("Committing pediatric case to backend:", caseId);
+      await cacheCasePayload(caseId, payload);
       const res = await apiPut(`/cases/${caseId}`, payload);
       console.log("Pediatric commit response:", res);
       if (res && res.success !== false) {

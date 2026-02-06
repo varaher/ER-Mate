@@ -28,6 +28,7 @@ import { AIDiagnosisPanel } from "@/components/AIDiagnosisPanel";
 import { useTheme } from "@/hooks/useTheme";
 import { useCase } from "@/context/CaseContext";
 import { apiGet, apiPatch, apiPut, apiUpload, invalidateCases } from "@/lib/api";
+import { cacheCasePayload } from "@/lib/caseCache";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import {
@@ -1162,6 +1163,7 @@ export default function CaseSheetScreen() {
       const payload = buildPayload();
       console.log("Committing case to backend:", caseId);
       console.log("Treatment medications being sent:", JSON.stringify(payload.treatment?.medications, null, 2));
+      await cacheCasePayload(caseId, payload);
       const res = await apiPut(`/cases/${caseId}`, payload);
       console.log("Commit response:", res.success, res.error || "");
       if (res.success) {
