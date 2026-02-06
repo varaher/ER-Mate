@@ -186,6 +186,8 @@ export default function ViewCaseScreen() {
   }
 
   const patient = caseData.patient || {};
+  const patientAge = parseFloat(patient.age) || 0;
+  const isPed = isPediatric(patientAge);
   const vitals = caseData.vitals_at_arrival || {};
   const primary = caseData.primary_assessment || caseData.abcde || {};
   const adjuncts = caseData.adjuncts || {};
@@ -273,7 +275,7 @@ export default function ViewCaseScreen() {
               <VitalBox label="BP" value={`${vitals.bp_systolic || "-"}/${vitals.bp_diastolic || "-"}`} unit="mmHg" />
               <VitalBox label="RR" value={vitals.rr} unit="/min" />
               <VitalBox label="SpO2" value={vitals.spo2} unit="%" />
-              <VitalBox label="Temp" value={vitals.temperature} unit="C" />
+              <VitalBox label="Temp" value={vitals.temperature} unit="F" />
               <VitalBox label="GCS" value={gcsTotal || "-"} unit={`E${vitals.gcs_e || "-"}V${vitals.gcs_v || "-"}M${vitals.gcs_m || "-"}`} />
               <VitalBox label="GRBS" value={vitals.grbs} unit="mg/dL" />
               <VitalBox label="Pain" value={vitals.pain_score} unit="/10" />
@@ -288,7 +290,7 @@ export default function ViewCaseScreen() {
               <VitalBox label="BP" value={`${vitals.bp_systolic || "-"}/${vitals.bp_diastolic || "-"}`} unit="mmHg" />
               <VitalBox label="RR" value={vitals.rr} unit="/min" />
               <VitalBox label="SpO2" value={vitals.spo2} unit="%" />
-              <VitalBox label="Temp" value={vitals.temperature} unit="C" />
+              <VitalBox label="Temp" value={vitals.temperature} unit="F" />
               <VitalBox label="GCS" value={gcsTotal || "-"} unit={`E${vitals.gcs_e || "-"}V${vitals.gcs_v || "-"}M${vitals.gcs_m || "-"}`} />
               <VitalBox label="GRBS" value={vitals.grbs} unit="mg/dL" />
             </View>
@@ -305,45 +307,118 @@ export default function ViewCaseScreen() {
           <InfoRow label="Onset" value={caseData.presenting_complaint?.onset_type} />
         </Section>
 
-        <Section title="Primary Assessment (ABCDE)">
-          <SubSection title="A - Airway">
-            <InfoRow label="Status" value={airway.status || primary.airway_status || "Patent"} />
-            {(airway.interventions?.length > 0 || primary.airway_interventions?.length > 0) && (
-              <InfoRow label="Interventions" value={(airway.interventions || primary.airway_interventions || []).join(", ")} />
-            )}
-            {(airway.notes || primary.airway_additional_notes) && <InfoRow label="Notes" value={airway.notes || primary.airway_additional_notes} />}
-          </SubSection>
+        {isPed ? (
+          <>
+            <Section title="Pediatric Assessment Triangle (PAT)">
+              <SubSection title="Appearance">
+                <InfoRow label="Tone" value={primary.pat?.appearance?.tone} />
+                <InfoRow label="Interactivity" value={primary.pat?.appearance?.interactivity} />
+                <InfoRow label="Consolability" value={primary.pat?.appearance?.consolability} />
+                <InfoRow label="Look/Gaze" value={primary.pat?.appearance?.lookGaze} />
+                <InfoRow label="Speech/Cry" value={primary.pat?.appearance?.speechCry} />
+              </SubSection>
+              <SubSection title="Work of Breathing">
+                <InfoRow label="Status" value={primary.pat?.workOfBreathing} />
+              </SubSection>
+              <SubSection title="Circulation to Skin">
+                <InfoRow label="Status" value={primary.pat?.circulationToSkin} />
+              </SubSection>
+            </Section>
 
-          <SubSection title="B - Breathing">
-            <InfoRow label="RR" value={breathing.rr || primary.breathing_rr || "-"} />
-            <InfoRow label="SpO2" value={`${breathing.spo2 || primary.breathing_spo2 || "-"}%`} />
-            <InfoRow label="Work of Breathing" value={breathing.effort || primary.breathing_work || "Normal"} />
-            {(breathing.o2Device || primary.breathing_oxygen_device) && (
-              <InfoRow label="O2 Device" value={`${breathing.o2Device || primary.breathing_oxygen_device} @ ${breathing.o2Flow || primary.breathing_oxygen_flow || "-"} L/min`} />
-            )}
-          </SubSection>
+            <Section title="Primary Assessment (ABCDE)">
+              <SubSection title="A - Airway">
+                <InfoRow label="Cry" value={airway.cry} />
+                <InfoRow label="Status" value={airway.status} />
+                <InfoRow label="Intervention" value={airway.intervention} />
+              </SubSection>
 
-          <SubSection title="C - Circulation">
-            <InfoRow label="HR" value={circulation.hr || primary.circulation_hr || "-"} />
-            <InfoRow label="BP" value={`${circulation.bpSystolic || primary.circulation_bp_systolic || "-"}/${circulation.bpDiastolic || primary.circulation_bp_diastolic || "-"}`} />
-            <InfoRow label="CRT" value={`${circulation.capillaryRefill || primary.circulation_crt || "-"} sec`} />
-            {(circulation.interventions?.length > 0 || primary.circulation_adjuncts?.length > 0) && (
-              <InfoRow label="IV Access" value={(circulation.interventions || primary.circulation_adjuncts || []).join(", ")} />
-            )}
-          </SubSection>
+              <SubSection title="B - Breathing">
+                <InfoRow label="Respiratory Rate" value={breathing.respiratoryRate} />
+                <InfoRow label="SpO2" value={breathing.spo2 ? `${breathing.spo2}%` : "N/A"} />
+                <InfoRow label="Work of Breathing" value={Array.isArray(breathing.workOfBreathing) ? breathing.workOfBreathing.join(", ") || "None" : (breathing.workOfBreathing || "N/A")} />
+                <InfoRow label="Abnormal Positioning" value={breathing.abnormalPositioning} />
+                <InfoRow label="Air Entry" value={breathing.airEntry} />
+                <InfoRow label="Subcutaneous Emphysema" value={breathing.subcutaneousEmphysema} />
+                <InfoRow label="Intervention" value={breathing.intervention} />
+              </SubSection>
 
-          <SubSection title="D - Disability">
-            <InfoRow label="AVPU" value={disability.motorResponse || primary.disability_avpu || "Alert"} />
-            <InfoRow label="GCS" value={`E${disability.gcsE || primary.disability_gcs_e || "-"}V${disability.gcsV || primary.disability_gcs_v || "-"}M${disability.gcsM || primary.disability_gcs_m || "-"}`} />
-            <InfoRow label="Pupils" value={`${disability.pupilSize || primary.disability_pupils_size || "Normal"} - ${disability.pupilReaction || primary.disability_pupils_reaction || "Reactive"}`} />
-            <InfoRow label="GRBS" value={`${disability.glucose || primary.disability_grbs || "-"} mg/dL`} />
-          </SubSection>
+              <SubSection title="C - Circulation">
+                <InfoRow label="CRT" value={circulation.crt} />
+                <InfoRow label="Heart Rate" value={circulation.heartRate} />
+                <InfoRow label="Blood Pressure" value={circulation.bloodPressure} />
+                <InfoRow label="Skin Color/Temp" value={circulation.skinColorTemp} />
+                <InfoRow label="Distended Neck Veins" value={circulation.distendedNeckVeins} />
+                <InfoRow label="Intervention" value={circulation.intervention} />
+              </SubSection>
 
-          <SubSection title="E - Exposure">
-            <InfoRow label="Temperature" value={`${exposure.temperature || primary.exposure_temperature || "-"}C`} />
-            {(exposure.notes || primary.exposure_additional_notes) && <InfoRow label="Notes" value={exposure.notes || primary.exposure_additional_notes} />}
-          </SubSection>
-        </Section>
+              <SubSection title="D - Disability">
+                <InfoRow label="AVPU/GCS" value={disability.avpuGcs} />
+                <InfoRow label="Pupils" value={disability.pupils} />
+                <InfoRow label="Abnormal Responses" value={disability.abnormalResponses} />
+                <InfoRow label="Glucose" value={disability.glucose} />
+              </SubSection>
+
+              <SubSection title="E - Exposure">
+                <InfoRow label="Temperature" value={exposure.temperature ? `${exposure.temperature}F` : "N/A"} />
+                <InfoRow label="Trauma" value={exposure.trauma} />
+                <InfoRow label="Signs of Trauma/Illness" value={Array.isArray(exposure.signsOfTraumaIllness) ? exposure.signsOfTraumaIllness.join(", ") || "None" : (exposure.signsOfTraumaIllness || "N/A")} />
+                <InfoRow label="Evidence of Infection" value={exposure.evidenceOfInfection} />
+                <InfoRow label="Long Bone Deformities" value={exposure.longBoneDeformities} />
+                <InfoRow label="Extremities" value={exposure.extremities} />
+                <InfoRow label="Immobilize" value={exposure.immobilize} />
+              </SubSection>
+            </Section>
+
+            {(primary.efast?.heart || primary.efast?.abdomen || primary.efast?.lungs || primary.efast?.pelvis) ? (
+              <Section title="EFAST">
+                <InfoRow label="Heart" value={primary.efast?.heart} />
+                <InfoRow label="Abdomen" value={primary.efast?.abdomen} />
+                <InfoRow label="Lungs" value={primary.efast?.lungs} />
+                <InfoRow label="Pelvis" value={primary.efast?.pelvis} />
+              </Section>
+            ) : null}
+          </>
+        ) : (
+          <Section title="Primary Assessment (ABCDE)">
+            <SubSection title="A - Airway">
+              <InfoRow label="Status" value={airway.status || primary.airway_status || "Patent"} />
+              {(airway.interventions?.length > 0 || primary.airway_interventions?.length > 0) && (
+                <InfoRow label="Interventions" value={(airway.interventions || primary.airway_interventions || []).join(", ")} />
+              )}
+              {(airway.notes || primary.airway_additional_notes) && <InfoRow label="Notes" value={airway.notes || primary.airway_additional_notes} />}
+            </SubSection>
+
+            <SubSection title="B - Breathing">
+              <InfoRow label="RR" value={breathing.rr || primary.breathing_rr || "-"} />
+              <InfoRow label="SpO2" value={`${breathing.spo2 || primary.breathing_spo2 || "-"}%`} />
+              <InfoRow label="Work of Breathing" value={breathing.effort || primary.breathing_work || "Normal"} />
+              {(breathing.o2Device || primary.breathing_oxygen_device) && (
+                <InfoRow label="O2 Device" value={`${breathing.o2Device || primary.breathing_oxygen_device} @ ${breathing.o2Flow || primary.breathing_oxygen_flow || "-"} L/min`} />
+              )}
+            </SubSection>
+
+            <SubSection title="C - Circulation">
+              <InfoRow label="HR" value={circulation.hr || primary.circulation_hr || "-"} />
+              <InfoRow label="BP" value={`${circulation.bpSystolic || primary.circulation_bp_systolic || "-"}/${circulation.bpDiastolic || primary.circulation_bp_diastolic || "-"}`} />
+              <InfoRow label="CRT" value={`${circulation.capillaryRefill || primary.circulation_crt || "-"} sec`} />
+              {(circulation.interventions?.length > 0 || primary.circulation_adjuncts?.length > 0) && (
+                <InfoRow label="IV Access" value={(circulation.interventions || primary.circulation_adjuncts || []).join(", ")} />
+              )}
+            </SubSection>
+
+            <SubSection title="D - Disability">
+              <InfoRow label="AVPU" value={disability.motorResponse || primary.disability_avpu || "Alert"} />
+              <InfoRow label="GCS" value={`E${disability.gcsE || primary.disability_gcs_e || "-"}V${disability.gcsV || primary.disability_gcs_v || "-"}M${disability.gcsM || primary.disability_gcs_m || "-"}`} />
+              <InfoRow label="Pupils" value={`${disability.pupilSize || primary.disability_pupils_size || "Normal"} - ${disability.pupilReaction || primary.disability_pupils_reaction || "Reactive"}`} />
+              <InfoRow label="GRBS" value={`${disability.glucose || primary.disability_grbs || "-"} mg/dL`} />
+            </SubSection>
+
+            <SubSection title="E - Exposure">
+              <InfoRow label="Temperature" value={`${exposure.temperature || primary.exposure_temperature || "-"}F`} />
+              {(exposure.notes || primary.exposure_additional_notes) && <InfoRow label="Notes" value={exposure.notes || primary.exposure_additional_notes} />}
+            </SubSection>
+          </Section>
+        )}
 
         {(adjuncts.ecg_findings || adjuncts.bedside_echo || adjuncts.additional_notes || adjuncts.efast_status || adjuncts.efast_notes) && (
           <Section title="Adjuncts to Primary Survey">
@@ -371,123 +446,198 @@ export default function ViewCaseScreen() {
           </Section>
         )}
 
-        <Section title="History">
-          <SubSection title="Events / HOPI">
-            {editMode ? (
-              <TextInput style={[styles.editableTextArea, { backgroundColor: "#FEF9C3", color: theme.text }]} multiline numberOfLines={4} defaultValue={editableFieldsRef.current.hopi} onChangeText={(text) => updateEditableField("hopi", text)} placeholder="History of present illness..." placeholderTextColor={theme.textMuted} />
-            ) : (
-              <Text style={[styles.text, { color: theme.text }]}>{history.hpi || history.events_hopi || caseData.sample?.eventsHopi || "N/A"}</Text>
-            )}
-          </SubSection>
-
-          <SubSection title="Past Medical History">
-            {editMode ? (
-              <TextInput style={[styles.editableInput, { backgroundColor: "#FEF9C3", color: theme.text }]} defaultValue={editableFieldsRef.current.past_medical} onChangeText={(text) => updateEditableField("past_medical", text)} placeholder="e.g., DM, HTN, CAD (comma separated)" placeholderTextColor={theme.textMuted} />
-            ) : (
-              <Text style={[styles.text, { color: theme.text }]}>{Array.isArray(history.past_medical) ? history.past_medical.join(", ") : (history.past_medical || "None")}</Text>
-            )}
-          </SubSection>
-
-          <SubSection title="Past Surgical History">
-            {editMode ? (
-              <TextInput style={[styles.editableInput, { backgroundColor: "#FEF9C3", color: theme.text }]} defaultValue={editableFieldsRef.current.past_surgical} onChangeText={(text) => updateEditableField("past_surgical", text)} placeholder="Surgical history..." placeholderTextColor={theme.textMuted} />
-            ) : (
-              <Text style={[styles.text, { color: theme.text }]}>{history.past_surgical || "None"}</Text>
-            )}
-          </SubSection>
-
-          <SubSection title="Allergies">
-            {editMode ? (
-              <TextInput style={[styles.editableInput, { backgroundColor: "#FEF9C3", color: theme.text }]} defaultValue={editableFieldsRef.current.allergies} onChangeText={(text) => updateEditableField("allergies", text)} placeholder="Allergies (comma separated)" placeholderTextColor={theme.textMuted} />
-            ) : (
-              <Text style={[styles.text, { color: theme.text }]}>{Array.isArray(history.allergies) ? history.allergies.join(", ") : (history.allergies || "NKDA")}</Text>
-            )}
-          </SubSection>
-
-          <SubSection title="Current Medications">
-            {editMode ? (
-              <TextInput style={[styles.editableInput, { backgroundColor: "#FEF9C3", color: theme.text }]} defaultValue={editableFieldsRef.current.medications} onChangeText={(text) => updateEditableField("medications", text)} placeholder="Current medications..." placeholderTextColor={theme.textMuted} />
-            ) : (
-              <Text style={[styles.text, { color: theme.text }]}>{history.medications || history.drug_history || "None"}</Text>
-            )}
-          </SubSection>
-
-          {(history.last_meal || history.last_meal_lmp) && (
+        {isPed ? (
+          <Section title="History (SAMPLE)">
+            <SubSection title="Signs & Symptoms">
+              {(() => {
+                const ss = history.signsAndSymptoms || {};
+                const present = [];
+                if (ss.breathingDifficulty) present.push("Breathing Difficulty");
+                if (ss.fever) present.push("Fever");
+                if (ss.vomiting) present.push("Vomiting");
+                if (ss.decreasedOralIntake) present.push("Decreased Oral Intake");
+                return (
+                  <>
+                    <InfoRow label="Present" value={present.length > 0 ? present.join(", ") : "None"} />
+                    <InfoRow label="Time Course" value={ss.timeCourse} />
+                    <InfoRow label="Notes" value={ss.notes} />
+                  </>
+                );
+              })()}
+            </SubSection>
+            <SubSection title="Allergies">
+              <InfoRow label="Allergies" value={history.allergies} />
+            </SubSection>
+            <SubSection title="Medications">
+              <InfoRow label="Current Medications" value={history.currentMedications} />
+              <InfoRow label="Last Dose" value={history.lastDoseMedications} />
+              <InfoRow label="Medications in Environment" value={history.medicationsInEnvironment} />
+            </SubSection>
+            <SubSection title="Past Medical History">
+              <InfoRow label="Health History" value={history.healthHistory} />
+              <InfoRow label="Underlying Conditions" value={history.underlyingConditions} />
+              <InfoRow label="Immunization Status" value={history.immunizationStatus} />
+            </SubSection>
             <SubSection title="Last Meal">
-              <Text style={[styles.text, { color: theme.text }]}>{history.last_meal || history.last_meal_lmp || "N/A"}</Text>
+              <InfoRow label="Last Meal" value={history.lastMeal} />
             </SubSection>
-          )}
-
-          {history.lmp && (
-            <SubSection title="LMP (Last Menstrual Period)">
-              <Text style={[styles.text, { color: theme.text }]}>{history.lmp}</Text>
+            {history.lmp ? (
+              <SubSection title="LMP">
+                <InfoRow label="LMP" value={history.lmp} />
+              </SubSection>
+            ) : null}
+            <SubSection title="Events">
+              <InfoRow label="Events" value={history.events} />
+              <InfoRow label="Treatment Before Arrival" value={history.treatmentBeforeArrival} />
             </SubSection>
-          )}
-        </Section>
+          </Section>
+        ) : (
+          <Section title="History">
+            <SubSection title="Events / HOPI">
+              {editMode ? (
+                <TextInput style={[styles.editableTextArea, { backgroundColor: "#FEF9C3", color: theme.text }]} multiline numberOfLines={4} defaultValue={editableFieldsRef.current.hopi} onChangeText={(text) => updateEditableField("hopi", text)} placeholder="History of present illness..." placeholderTextColor={theme.textMuted} />
+              ) : (
+                <Text style={[styles.text, { color: theme.text }]}>{history.hpi || history.events_hopi || caseData.sample?.eventsHopi || "N/A"}</Text>
+              )}
+            </SubSection>
 
-        <Section title="Physical Examination">
-          <ExamSection 
-            title="General Examination" 
-            status={(() => {
-              const hasAbnormal = examination.general_pallor || examination.general_icterus || examination.general_cyanosis || examination.general_clubbing || examination.general_lymphadenopathy || examination.general_edema;
-              return hasAbnormal ? "Abnormal" : (examination.general_appearance || "Normal");
-            })()}
-            notes={(() => {
-              const hasAbnormal = examination.general_pallor || examination.general_icterus || examination.general_cyanosis || examination.general_clubbing || examination.general_lymphadenopathy || examination.general_edema;
-              if (hasAbnormal) {
-                const findings = [];
-                if (examination.general_pallor) findings.push("Pallor present");
-                if (examination.general_icterus) findings.push("Icterus present");
-                if (examination.general_cyanosis) findings.push("Cyanosis present");
-                if (examination.general_clubbing) findings.push("Clubbing present");
-                if (examination.general_lymphadenopathy) findings.push("Lymphadenopathy present");
-                if (examination.general_edema) findings.push("Edema present");
-                return findings.join(". ") + (examination.general_additional_notes ? `. ${examination.general_additional_notes}` : "");
+            <SubSection title="Past Medical History">
+              {editMode ? (
+                <TextInput style={[styles.editableInput, { backgroundColor: "#FEF9C3", color: theme.text }]} defaultValue={editableFieldsRef.current.past_medical} onChangeText={(text) => updateEditableField("past_medical", text)} placeholder="e.g., DM, HTN, CAD (comma separated)" placeholderTextColor={theme.textMuted} />
+              ) : (
+                <Text style={[styles.text, { color: theme.text }]}>{Array.isArray(history.past_medical) ? history.past_medical.join(", ") : (history.past_medical || "None")}</Text>
+              )}
+            </SubSection>
+
+            <SubSection title="Past Surgical History">
+              {editMode ? (
+                <TextInput style={[styles.editableInput, { backgroundColor: "#FEF9C3", color: theme.text }]} defaultValue={editableFieldsRef.current.past_surgical} onChangeText={(text) => updateEditableField("past_surgical", text)} placeholder="Surgical history..." placeholderTextColor={theme.textMuted} />
+              ) : (
+                <Text style={[styles.text, { color: theme.text }]}>{history.past_surgical || "None"}</Text>
+              )}
+            </SubSection>
+
+            <SubSection title="Allergies">
+              {editMode ? (
+                <TextInput style={[styles.editableInput, { backgroundColor: "#FEF9C3", color: theme.text }]} defaultValue={editableFieldsRef.current.allergies} onChangeText={(text) => updateEditableField("allergies", text)} placeholder="Allergies (comma separated)" placeholderTextColor={theme.textMuted} />
+              ) : (
+                <Text style={[styles.text, { color: theme.text }]}>{Array.isArray(history.allergies) ? history.allergies.join(", ") : (history.allergies || "NKDA")}</Text>
+              )}
+            </SubSection>
+
+            <SubSection title="Current Medications">
+              {editMode ? (
+                <TextInput style={[styles.editableInput, { backgroundColor: "#FEF9C3", color: theme.text }]} defaultValue={editableFieldsRef.current.medications} onChangeText={(text) => updateEditableField("medications", text)} placeholder="Current medications..." placeholderTextColor={theme.textMuted} />
+              ) : (
+                <Text style={[styles.text, { color: theme.text }]}>{history.medications || history.drug_history || "None"}</Text>
+              )}
+            </SubSection>
+
+            {(history.last_meal || history.last_meal_lmp) ? (
+              <SubSection title="Last Meal">
+                <Text style={[styles.text, { color: theme.text }]}>{history.last_meal || history.last_meal_lmp || "N/A"}</Text>
+              </SubSection>
+            ) : null}
+
+            {history.lmp ? (
+              <SubSection title="LMP (Last Menstrual Period)">
+                <Text style={[styles.text, { color: theme.text }]}>{history.lmp}</Text>
+              </SubSection>
+            ) : null}
+          </Section>
+        )}
+
+        {isPed ? (
+          <Section title="Physical Examination">
+            <SubSection title="HEENT">
+              <InfoRow label="Head" value={examination.heent?.head} />
+              <InfoRow label="Eyes" value={examination.heent?.eyes} />
+              <InfoRow label="Ears" value={examination.heent?.ears} />
+              <InfoRow label="Nose" value={examination.heent?.nose} />
+              <InfoRow label="Throat" value={examination.heent?.throat} />
+              <InfoRow label="Lymph Nodes" value={examination.heent?.lymphNodes} />
+            </SubSection>
+            <SubSection title="Respiratory">
+              <InfoRow label="Findings" value={examination.respiratory} />
+            </SubSection>
+            <SubSection title="Cardiovascular">
+              <InfoRow label="Findings" value={examination.cardiovascular} />
+            </SubSection>
+            <SubSection title="Abdomen">
+              <InfoRow label="Findings" value={examination.abdomen} />
+            </SubSection>
+            <SubSection title="Back">
+              <InfoRow label="Findings" value={examination.back} />
+            </SubSection>
+            <SubSection title="Extremities">
+              <InfoRow label="Findings" value={examination.extremities} />
+            </SubSection>
+          </Section>
+        ) : (
+          <Section title="Physical Examination">
+            <ExamSection 
+              title="General Examination" 
+              status={(() => {
+                const hasAbnormal = examination.general_pallor || examination.general_icterus || examination.general_cyanosis || examination.general_clubbing || examination.general_lymphadenopathy || examination.general_edema;
+                return hasAbnormal ? "Abnormal" : (examination.general_appearance || "Normal");
+              })()}
+              notes={(() => {
+                const hasAbnormal = examination.general_pallor || examination.general_icterus || examination.general_cyanosis || examination.general_clubbing || examination.general_lymphadenopathy || examination.general_edema;
+                if (hasAbnormal) {
+                  const findings = [];
+                  if (examination.general_pallor) findings.push("Pallor present");
+                  if (examination.general_icterus) findings.push("Icterus present");
+                  if (examination.general_cyanosis) findings.push("Cyanosis present");
+                  if (examination.general_clubbing) findings.push("Clubbing present");
+                  if (examination.general_lymphadenopathy) findings.push("Lymphadenopathy present");
+                  if (examination.general_edema) findings.push("Edema present");
+                  return findings.join(". ") + (examination.general_additional_notes ? `. ${examination.general_additional_notes}` : "");
+                }
+                return examination.general_additional_notes || "Patient is conscious, alert, and oriented. No pallor, icterus, cyanosis, clubbing, lymphadenopathy, or edema noted.";
+              })()}
+            />
+            <ExamSection 
+              title="Cardiovascular System (CVS)" 
+              status={examination.cvs_status || "Normal"} 
+              notes={examination.cvs_status !== "Normal" 
+                ? `S1/S2: ${examination.cvs_s1_s2 || "-"}, Pulse: ${examination.cvs_pulse || "-"} @ ${examination.cvs_pulse_rate || "-"}bpm, Apex: ${examination.cvs_apexBeat || "-"}${examination.cvs_murmurs ? `, Murmurs: ${examination.cvs_murmurs}` : ""}${examination.cvs_added_sounds ? `, Added sounds: ${examination.cvs_added_sounds}` : ""}${examination.cvs_additional_notes ? `. ${examination.cvs_additional_notes}` : ""}`
+                : (examination.cvs_additional_notes || "S1 S2 heard, normal intensity. No murmurs, gallops, or rubs. JVP not elevated. Peripheral pulses well felt bilaterally.")
+              } 
+            />
+            <ExamSection 
+              title="Respiratory System" 
+              status={examination.respiratory_status || "Normal"} 
+              notes={examination.respiratory_status !== "Normal"
+                ? `Expansion: ${examination.respiratory_expansion || "-"}, Breath sounds: ${examination.respiratory_breath_sounds || "-"}, Percussion: ${examination.respiratory_percussion || "-"}${examination.respiratory_added_sounds ? `, Added sounds: ${examination.respiratory_added_sounds}` : ""}${examination.respiratory_additional_notes ? `. ${examination.respiratory_additional_notes}` : ""}`
+                : (examination.respiratory_additional_notes || "Bilateral equal air entry. Vesicular breath sounds. No wheeze, crackles, or rhonchi. Normal percussion notes.")
               }
-              return examination.general_additional_notes || "Patient is conscious, alert, and oriented. No pallor, icterus, cyanosis, clubbing, lymphadenopathy, or edema noted.";
-            })()}
-          />
-          <ExamSection 
-            title="Cardiovascular System (CVS)" 
-            status={examination.cvs_status || "Normal"} 
-            notes={examination.cvs_status !== "Normal" 
-              ? `S1/S2: ${examination.cvs_s1_s2 || "-"}, Pulse: ${examination.cvs_pulse || "-"} @ ${examination.cvs_pulse_rate || "-"}bpm, Apex: ${examination.cvs_apexBeat || "-"}${examination.cvs_murmurs ? `, Murmurs: ${examination.cvs_murmurs}` : ""}${examination.cvs_added_sounds ? `, Added sounds: ${examination.cvs_added_sounds}` : ""}${examination.cvs_additional_notes ? `. ${examination.cvs_additional_notes}` : ""}`
-              : (examination.cvs_additional_notes || "S1 S2 heard, normal intensity. No murmurs, gallops, or rubs. JVP not elevated. Peripheral pulses well felt bilaterally.")
-            } 
-          />
-          <ExamSection 
-            title="Respiratory System" 
-            status={examination.respiratory_status || "Normal"} 
-            notes={examination.respiratory_status !== "Normal"
-              ? `Expansion: ${examination.respiratory_expansion || "-"}, Breath sounds: ${examination.respiratory_breath_sounds || "-"}, Percussion: ${examination.respiratory_percussion || "-"}${examination.respiratory_added_sounds ? `, Added sounds: ${examination.respiratory_added_sounds}` : ""}${examination.respiratory_additional_notes ? `. ${examination.respiratory_additional_notes}` : ""}`
-              : (examination.respiratory_additional_notes || "Bilateral equal air entry. Vesicular breath sounds. No wheeze, crackles, or rhonchi. Normal percussion notes.")
-            }
-          />
-          <ExamSection 
-            title="Abdomen" 
-            status={examination.abdomen_status || "Normal"} 
-            notes={examination.abdomen_status !== "Normal"
-              ? `Bowel sounds: ${examination.abdomen_bowel_sounds || "-"}, Percussion: ${examination.abdomen_percussion || "-"}${examination.abdomen_organomegaly ? `, Organomegaly: ${examination.abdomen_organomegaly}` : ""}${examination.abdomen_additional_notes ? `. ${examination.abdomen_additional_notes}` : ""}`
-              : (examination.abdomen_additional_notes || "Soft, non-distended, non-tender. No guarding or rigidity. No organomegaly. Bowel sounds present and normal.")
-            }
-          />
-          <ExamSection 
-            title="Central Nervous System" 
-            status={examination.cns_status || "Normal"} 
-            notes={examination.cns_status !== "Normal"
-              ? `Higher mental: ${examination.cns_higher_mental_functions || "-"}, Cranial nerves: ${examination.cns_cranial_nerves || "-"}, Motor: ${examination.cns_motor_system || "-"}, Sensory: ${examination.cns_sensory_system || "-"}, Reflexes: ${examination.cns_reflexes || "-"}${examination.cns_additional_notes ? `. ${examination.cns_additional_notes}` : ""}`
-              : (examination.cns_additional_notes || "Conscious, oriented to time, place, and person. GCS 15/15. Cranial nerves intact. Pupils BERL. Motor power 5/5 in all limbs. Reflexes normal.")
-            }
-          />
-          <ExamSection 
-            title="Extremities" 
-            status={examination.extremities_status || "Normal"} 
-            notes={examination.extremities_status !== "Normal"
-              ? (examination.extremities_findings || examination.extremities_additional_notes || "Abnormal findings documented")
-              : (examination.extremities_additional_notes || "No edema, cyanosis, or clubbing. Peripheral pulses well felt. Full range of motion. No deformity or swelling.")
-            }
-          />
-        </Section>
+            />
+            <ExamSection 
+              title="Abdomen" 
+              status={examination.abdomen_status || "Normal"} 
+              notes={examination.abdomen_status !== "Normal"
+                ? `Bowel sounds: ${examination.abdomen_bowel_sounds || "-"}, Percussion: ${examination.abdomen_percussion || "-"}${examination.abdomen_organomegaly ? `, Organomegaly: ${examination.abdomen_organomegaly}` : ""}${examination.abdomen_additional_notes ? `. ${examination.abdomen_additional_notes}` : ""}`
+                : (examination.abdomen_additional_notes || "Soft, non-distended, non-tender. No guarding or rigidity. No organomegaly. Bowel sounds present and normal.")
+              }
+            />
+            <ExamSection 
+              title="Central Nervous System" 
+              status={examination.cns_status || "Normal"} 
+              notes={examination.cns_status !== "Normal"
+                ? `Higher mental: ${examination.cns_higher_mental_functions || "-"}, Cranial nerves: ${examination.cns_cranial_nerves || "-"}, Motor: ${examination.cns_motor_system || "-"}, Sensory: ${examination.cns_sensory_system || "-"}, Reflexes: ${examination.cns_reflexes || "-"}${examination.cns_additional_notes ? `. ${examination.cns_additional_notes}` : ""}`
+                : (examination.cns_additional_notes || "Conscious, oriented to time, place, and person. GCS 15/15. Cranial nerves intact. Pupils BERL. Motor power 5/5 in all limbs. Reflexes normal.")
+              }
+            />
+            <ExamSection 
+              title="Extremities" 
+              status={examination.extremities_status || "Normal"} 
+              notes={examination.extremities_status !== "Normal"
+                ? (examination.extremities_findings || examination.extremities_additional_notes || "Abnormal findings documented")
+                : (examination.extremities_additional_notes || "No edema, cyanosis, or clubbing. Peripheral pulses well felt. Full range of motion. No deformity or swelling.")
+              }
+            />
+          </Section>
+        )}
 
         <Section title="Investigations">
           {investigations.panels_selected?.length > 0 && <InfoRow label="Ordered" value={investigations.panels_selected.join(", ")} />}
