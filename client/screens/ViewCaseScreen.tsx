@@ -596,7 +596,7 @@ export default function ViewCaseScreen() {
               )}
               <Pressable
                 style={[styles.addNoteBtn, { backgroundColor: theme.primary }]}
-                onPress={() => navigation.navigate("AddendumNotes", { caseId, patientName: caseData.patient_name || caseData.triage?.patient_name || "Patient" })}
+                onPress={() => navigation.navigate("AddendumNotes", { caseId })}
               >
                 <Feather name="plus" size={16} color="#FFFFFF" />
                 <Text style={styles.addNoteBtnText}>Add Note</Text>

@@ -21,6 +21,7 @@ import UpgradeScreen from "@/screens/UpgradeScreen";
 import ViewCaseScreen from "@/screens/ViewCaseScreen";
 import LinkDevicesScreen from "@/screens/LinkDevicesScreen";
 import AddendumNotesScreen from "@/screens/AddendumNotesScreen";
+import ViewDischargeSummaryScreen from "@/screens/ViewDischargeSummaryScreen";
 
 export type RootStackParamList = {
   Login: undefined;
@@ -38,6 +39,7 @@ export type RootStackParamList = {
   ViewCase: { caseId: string };
   LinkDevices: undefined;
   AddendumNotes: { caseId: string };
+  ViewDischargeSummary: { caseId: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -171,6 +173,14 @@ export default function RootStackNavigator() {
             options={{
               presentation: "modal",
               headerTitle: "Addendum Notes",
+            }}
+          />
+          <Stack.Screen
+            name="ViewDischargeSummary"
+            component={ViewDischargeSummaryScreen}
+            options={{
+              presentation: "modal",
+              headerTitle: "View Discharge Summary",
             }}
           />
         </>
