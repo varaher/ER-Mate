@@ -779,6 +779,15 @@ export default function DischargeSummaryScreen() {
     forceUpdate();
   };
 
+  const updateFieldSilent = (path: string, value: any) => {
+    const keys = path.split(".");
+    let obj: any = summaryRef.current;
+    for (let i = 0; i < keys.length - 1; i++) {
+      obj = obj[keys[i]];
+    }
+    obj[keys[keys.length - 1]] = value;
+  };
+
   const DebouncedVitalInput = React.memo(({ 
     fieldPath, 
     initialValue, 
@@ -795,7 +804,7 @@ export default function DischargeSummaryScreen() {
       localRef.current = text;
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => {
-        updateField(fieldPath, text);
+        updateFieldSilent(fieldPath, text);
       }, 300);
     };
     
@@ -811,7 +820,7 @@ export default function DischargeSummaryScreen() {
     );
   });
 
-  const VitalsGrid = ({ prefix, data, keyPrefix }: { prefix: string; data: any; keyPrefix?: number }) => (
+  const VitalsGrid = ({ prefix, data }: { prefix: string; data: any }) => (
     <View style={styles.vitalsGrid}>
       {[
         { key: "hr", label: "HR" },
@@ -823,10 +832,9 @@ export default function DischargeSummaryScreen() {
         { key: "grbs", label: "GRBS" },
         { key: "temp", label: "Temp (°F)" },
       ].map(({ key, label }) => (
-        <View key={`${prefix}-${key}-${keyPrefix || 0}`} style={styles.vitalItem}>
+        <View key={`${prefix}-${key}`} style={styles.vitalItem}>
           <Text style={[styles.vitalLabel, { color: theme.textSecondary }]}>{label}</Text>
           <DebouncedVitalInput
-            key={`${prefix}-${key}-input-${keyPrefix || 0}`}
             fieldPath={`${prefix}.${key}`}
             initialValue={data[key] || ""}
           />
@@ -903,7 +911,7 @@ export default function DischargeSummaryScreen() {
             </View>
 
             <Text style={[styles.subheading, { color: theme.text }]}>Vitals at Time of Arrival</Text>
-            <VitalsGrid prefix="vitals_arrival" data={summaryRef.current.vitals_arrival} keyPrefix={updateCounter} />
+            <VitalsGrid prefix="vitals_arrival" data={summaryRef.current.vitals_arrival} />
 
             <View style={styles.field}>
               <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Presenting Complaints</Text>
@@ -1157,7 +1165,7 @@ export default function DischargeSummaryScreen() {
             </View>
 
             <Text style={[styles.subheading, { color: theme.text }]}>Vitals at Time of Discharge</Text>
-            <VitalsGrid prefix="vitals_discharge" data={summaryRef.current.vitals_discharge} keyPrefix={updateCounter} />
+            <VitalsGrid prefix="vitals_discharge" data={summaryRef.current.vitals_discharge} />
 
             <View style={styles.field}>
               <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Follow-Up Advice</Text>
