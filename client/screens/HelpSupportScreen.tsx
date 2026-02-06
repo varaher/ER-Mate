@@ -12,7 +12,6 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Linking from "expo-linking";
-import * as MailComposer from "expo-mail-composer";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { Spacing, BorderRadius, Typography } from "@/constants/theme";
@@ -53,14 +52,17 @@ export default function HelpSupportScreen() {
   const [feedbackSent, setFeedbackSent] = useState(false);
 
   const handleEmailSupport = async () => {
-    const isAvailable = await MailComposer.isAvailableAsync();
-    if (isAvailable) {
-      await MailComposer.composeAsync({
-        recipients: ["support@ermate.app"],
-        subject: "ErMate Support Request",
-        body: `\n\n---\nUser: ${user?.name || "N/A"}\nEmail: ${user?.email || "N/A"}\nPlatform: ${Platform.OS}\nApp Version: 1.0.0`,
-      });
-    } else {
+    const subject = encodeURIComponent("ErMate Support Request");
+    const body = encodeURIComponent(`\n\n---\nUser: ${user?.name || "N/A"}\nEmail: ${user?.email || "N/A"}\nPlatform: ${Platform.OS}\nApp Version: 1.0.0`);
+    const mailtoUrl = `mailto:support@ermate.app?subject=${subject}&body=${body}`;
+    try {
+      const canOpen = await Linking.canOpenURL(mailtoUrl);
+      if (canOpen) {
+        await Linking.openURL(mailtoUrl);
+      } else {
+        Alert.alert("Email Not Available", "Please send an email to support@ermate.app from your email client.");
+      }
+    } catch {
       Alert.alert("Email Not Available", "Please send an email to support@ermate.app from your email client.");
     }
   };

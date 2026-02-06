@@ -22,6 +22,10 @@ import ViewCaseScreen from "@/screens/ViewCaseScreen";
 import LinkDevicesScreen from "@/screens/LinkDevicesScreen";
 import AddendumNotesScreen from "@/screens/AddendumNotesScreen";
 import ViewDischargeSummaryScreen from "@/screens/ViewDischargeSummaryScreen";
+import NotificationsScreen from "@/screens/NotificationsScreen";
+import PrivacyScreen from "@/screens/PrivacyScreen";
+import HelpSupportScreen from "@/screens/HelpSupportScreen";
+import AboutScreen from "@/screens/AboutScreen";
 
 export type RootStackParamList = {
   Login: undefined;
@@ -40,6 +44,10 @@ export type RootStackParamList = {
   LinkDevices: undefined;
   AddendumNotes: { caseId: string };
   ViewDischargeSummary: { caseId: string };
+  Notifications: undefined;
+  Privacy: undefined;
+  HelpSupport: undefined;
+  About: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -181,6 +189,38 @@ export default function RootStackNavigator() {
             options={{
               presentation: "modal",
               headerTitle: "View Discharge Summary",
+            }}
+          />
+          <Stack.Screen
+            name="Notifications"
+            component={NotificationsScreen}
+            options={{
+              presentation: "modal",
+              headerTitle: "Notifications",
+            }}
+          />
+          <Stack.Screen
+            name="Privacy"
+            component={PrivacyScreen}
+            options={{
+              presentation: "modal",
+              headerTitle: "Privacy",
+            }}
+          />
+          <Stack.Screen
+            name="HelpSupport"
+            component={HelpSupportScreen}
+            options={{
+              presentation: "modal",
+              headerTitle: "Help & Support",
+            }}
+          />
+          <Stack.Screen
+            name="About"
+            component={AboutScreen}
+            options={{
+              presentation: "modal",
+              headerTitle: "About ErMate",
             }}
           />
         </>

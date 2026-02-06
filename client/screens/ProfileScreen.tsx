@@ -32,12 +32,12 @@ export default function ProfileScreen() {
   };
 
   const menuItems = [
-    { icon: "monitor", label: "Link to Web", onPress: () => navigation.navigate("LinkDevices") },
-    { icon: "star", label: "Upgrade Plan", onPress: () => navigation.navigate("Upgrade", {}) },
-    { icon: "bell", label: "Notifications", onPress: () => {} },
-    { icon: "shield", label: "Privacy", onPress: () => {} },
-    { icon: "help-circle", label: "Help & Support", onPress: () => {} },
-    { icon: "info", label: "About ErMate", onPress: () => {} },
+    { icon: "monitor", label: "Link to Web", onPress: () => navigation.navigate("LinkDevices"), locked: false },
+    { icon: "star", label: "Upgrade Plan", onPress: () => {}, locked: true },
+    { icon: "bell", label: "Notifications", onPress: () => navigation.navigate("Notifications"), locked: false },
+    { icon: "shield", label: "Privacy", onPress: () => navigation.navigate("Privacy"), locked: false },
+    { icon: "help-circle", label: "Help & Support", onPress: () => navigation.navigate("HelpSupport"), locked: false },
+    { icon: "info", label: "About ErMate", onPress: () => navigation.navigate("About"), locked: false },
   ];
 
   return (
@@ -74,14 +74,22 @@ export default function ProfileScreen() {
               key={item.label}
               style={({ pressed }) => [
                 styles.menuItem,
-                { opacity: pressed ? 0.7 : 1 },
+                { opacity: item.locked ? 0.5 : pressed ? 0.7 : 1 },
                 index < menuItems.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.border },
               ]}
-              onPress={item.onPress}
+              onPress={item.locked ? undefined : item.onPress}
+              disabled={item.locked}
             >
-              <Feather name={item.icon as any} size={20} color={theme.textSecondary} />
-              <Text style={[styles.menuLabel, { color: theme.text }]}>{item.label}</Text>
-              <Feather name="chevron-right" size={20} color={theme.textMuted} />
+              <Feather name={item.icon as any} size={20} color={item.locked ? theme.textMuted : theme.textSecondary} />
+              <Text style={[styles.menuLabel, { color: item.locked ? theme.textMuted : theme.text }]}>{item.label}</Text>
+              {item.locked ? (
+                <View style={[styles.lockedBadge, { backgroundColor: theme.backgroundTertiary }]}>
+                  <Feather name="lock" size={12} color={theme.textMuted} />
+                  <Text style={[styles.lockedText, { color: theme.textMuted }]}>Coming Soon</Text>
+                </View>
+              ) : (
+                <Feather name="chevron-right" size={20} color={theme.textMuted} />
+              )}
             </Pressable>
           ))}
         </View>
@@ -153,4 +161,13 @@ const styles = StyleSheet.create({
   },
   logoutText: { ...Typography.h4 },
   version: { ...Typography.caption, textAlign: "center", marginTop: Spacing.xl },
+  lockedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.full,
+    gap: 4,
+  },
+  lockedText: { ...Typography.caption },
 });
