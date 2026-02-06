@@ -585,15 +585,24 @@ export default function ViewCaseScreen() {
         {(() => {
           const addendumNotes = caseData.treatment?.addendum_notes || caseData.addendum_notes || [];
           const notesList = Array.isArray(addendumNotes) ? addendumNotes : (addendumNotes ? [addendumNotes] : []);
-          return notesList.length > 0 ? (
+          return (
             <Section title="Addendum Notes">
-              {notesList.map((note: string, idx: number) => (
+              {notesList.length > 0 ? notesList.map((note: string, idx: number) => (
                 <View key={idx} style={{ marginBottom: Spacing.sm }}>
                   <Text style={[styles.text, { color: theme.text }]}>{note}</Text>
                 </View>
-              ))}
+              )) : (
+                <Text style={[styles.text, { color: theme.textSecondary }]}>No addendum notes</Text>
+              )}
+              <Pressable
+                style={[styles.addNoteBtn, { backgroundColor: theme.primary }]}
+                onPress={() => navigation.navigate("AddendumNotes", { caseId, patientName: caseData.patient_name || caseData.triage?.patient_name || "Patient" })}
+              >
+                <Feather name="plus" size={16} color="#FFFFFF" />
+                <Text style={styles.addNoteBtnText}>Add Note</Text>
+              </Pressable>
             </Section>
-          ) : null;
+          );
         })()}
 
         <Section title="Case Information">
@@ -674,6 +683,8 @@ const styles = StyleSheet.create({
   editSection: { marginVertical: Spacing.lg, alignItems: "center" },
   editToggleBtn: { paddingHorizontal: Spacing.xl, paddingVertical: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1, borderColor: "#2563EB" },
   editToggleBtnText: { ...Typography.bodyMedium },
+  addNoteBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: Spacing.sm, paddingVertical: Spacing.sm, paddingHorizontal: Spacing.lg, borderRadius: BorderRadius.md, marginTop: Spacing.md, alignSelf: "flex-start" },
+  addNoteBtnText: { color: "#FFFFFF", ...Typography.bodyMedium },
   editHint: { marginTop: Spacing.sm, ...Typography.caption },
   buttonRow: { flexDirection: "row", gap: Spacing.md, flexWrap: "wrap" },
   saveBtn: { flex: 1, minWidth: 100, height: Spacing.buttonHeight, borderRadius: BorderRadius.md, justifyContent: "center", alignItems: "center" },
