@@ -91,17 +91,25 @@ function formatDate(dateString?: string): string {
   }
 }
 
-function formatVitals(vitals: VitalsData | undefined): string {
+function formatVitals(vitals: any): string {
   if (!vitals) return "";
   const parts: string[] = [];
   if (vitals.hr) parts.push(`HR: ${vitals.hr}`);
-  if (vitals.bp) parts.push(`BP: ${vitals.bp}`);
+  const bp = vitals.bp || ((vitals.bp_systolic || vitals.bp_diastolic) ? `${vitals.bp_systolic || "-"}/${vitals.bp_diastolic || "-"}` : "");
+  if (bp) parts.push(`BP: ${bp}`);
   if (vitals.rr) parts.push(`RR: ${vitals.rr}`);
   if (vitals.spo2) parts.push(`SpO2: ${vitals.spo2}%`);
-  if (vitals.gcs) parts.push(`GCS: ${vitals.gcs}`);
-  if (vitals.pain_score) parts.push(`Pain: ${vitals.pain_score}`);
+  const temp = vitals.temperature || vitals.temp;
+  if (temp) parts.push(`Temp: ${temp}\u00B0F`);
+  const gcsE = vitals.gcs_e; const gcsV = vitals.gcs_v; const gcsM = vitals.gcs_m;
+  if (gcsE || gcsV || gcsM) {
+    const total = (parseInt(gcsE) || 0) + (parseInt(gcsV) || 0) + (parseInt(gcsM) || 0);
+    parts.push(`GCS: ${total || "-"} (E${gcsE || "-"}V${gcsV || "-"}M${gcsM || "-"})`);
+  } else if (vitals.gcs) {
+    parts.push(`GCS: ${vitals.gcs}`);
+  }
+  if (vitals.pain_score) parts.push(`Pain: ${vitals.pain_score}/10`);
   if (vitals.grbs) parts.push(`GRBS: ${vitals.grbs}`);
-  if (vitals.temp) parts.push(`Temp: ${vitals.temp}`);
   return parts.join(" | ");
 }
 
@@ -521,168 +529,486 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/export/casesheet-pdf", async (req: Request, res: Response) => {
     try {
       const data = req.body;
-      
+
       if (!data.patient) {
         return res.status(400).json({ error: "Missing patient data" });
       }
+
+      const patientAge = parseFloat(data.patient?.age) || 0;
+      const isPed = patientAge > 0 && patientAge <= 16;
+      const primary = data.primary_assessment || data.abcde || {};
+      const vitals = data.vitals_at_arrival || data.triage?.vitals || {};
+      const adjuncts = data.adjuncts || {};
+      const abgData = data.abg || adjuncts.abg || {};
+      const history = data.history || {};
+      const exam = data.examination || {};
+      const investigations = data.investigations || {};
+      const treatment = data.treatment || {};
+      const procedures = data.procedures || {};
+      const proceduresPerformed = data.procedures_performed || procedures.procedures_performed || procedures.performed || [];
+      const proceduresNotes = procedures.general_notes || procedures.generalNotes || "";
+      const disposition = data.disposition || {};
+      const erObs = data.er_observation || {};
+      const addendumNotes = treatment.addendum_notes || data.addendum_notes || [];
+
+      const airway = primary.airway || {};
+      const breathing = primary.breathing || {};
+      const circulation = primary.circulation || {};
+      const disability = primary.disability || {};
+      const exposure = primary.exposure || {};
+      const pat = primary.pat || {};
+      const efast = primary.efast || {};
+
+      const sections: string[] = [];
+      if (data.patient) sections.push("patient");
+      if (Object.keys(vitals).length > 0) sections.push("vitals");
+      if (Object.keys(primary).length > 0) sections.push("primary_assessment");
+      if (Object.keys(adjuncts).length > 0) sections.push("adjuncts");
+      if (Object.keys(abgData).length > 0) sections.push("abg");
+      if (Object.keys(history).length > 0) sections.push("history");
+      if (Object.keys(exam).length > 0) sections.push("examination");
+      if (Object.keys(investigations).length > 0) sections.push("investigations");
+      if (Object.keys(treatment).length > 0) sections.push("treatment");
+      if (proceduresPerformed.length > 0 || proceduresNotes) sections.push("procedures");
+      if (Object.keys(disposition).length > 0) sections.push("disposition");
+      if (Object.keys(erObs).length > 0) sections.push("er_observation");
+      if (Array.isArray(addendumNotes) && addendumNotes.length > 0) sections.push("addendum_notes");
+      console.log("[EXPORT] PDF sections found:", sections.join(", "), "| isPediatric:", isPed);
 
       const doc = new PDFDocument({ size: "A4", margin: 50 });
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader("Content-Disposition", `attachment; filename="casesheet_${(data.patient?.name || "patient").replace(/\s+/g, "_")}.pdf"`);
       doc.pipe(res);
 
+      const pdfLine = () => { doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke(); };
+      const pdfHeading = (t: string) => { doc.moveDown(0.3); doc.fontSize(12).font("Helvetica-Bold").text(t); doc.moveDown(0.2); doc.fontSize(10).font("Helvetica"); };
+      const pdfSubHeading = (t: string) => { doc.fontSize(10).font("Helvetica-Bold").text(t); doc.font("Helvetica"); };
+      const pdfField = (label: string, val: any) => { if (val !== undefined && val !== null && val !== "") doc.text(`${label}: ${val}`); };
+      const pdfFieldArr = (label: string, arr: any) => {
+        if (!arr) return;
+        const text = Array.isArray(arr) ? arr.filter(Boolean).join(", ") : String(arr);
+        if (text) doc.text(`${label}: ${text}`);
+      };
+      const ensureSpace = () => { if (doc.y > 720) doc.addPage(); };
+
       doc.fontSize(18).font("Helvetica-Bold").text("EMERGENCY DEPARTMENT CASE SHEET", { align: "center" });
       doc.moveDown(0.5);
       doc.fontSize(10).font("Helvetica").text(`Generated: ${new Date().toLocaleDateString("en-IN")}`, { align: "center" });
-      doc.moveDown(1);
-      doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke();
       doc.moveDown(0.5);
+      pdfLine();
 
-      doc.fontSize(12).font("Helvetica-Bold").text("PATIENT INFORMATION");
+      pdfHeading("PATIENT INFORMATION");
+      pdfField("Name", data.patient?.name || "N/A");
+      doc.text(`Age/Sex: ${data.patient?.age || "N/A"} / ${data.patient?.sex || "N/A"}`);
+      pdfField("UHID", data.patient?.uhid);
+      pdfField("Phone", data.patient?.phone);
+      pdfField("Mode of Arrival", data.patient?.mode_of_arrival || data.mode_of_arrival);
+      pdfField("MLC", data.mlc ? "Yes" : "No");
+      if (data.patient?.arrival_datetime) pdfField("Arrival Time", new Date(data.patient.arrival_datetime).toLocaleString("en-IN"));
+      if (data.em_resident) pdfField("EM Resident", data.em_resident);
+      if (data.em_consultant) pdfField("EM Consultant", data.em_consultant);
       doc.moveDown(0.3);
-      doc.fontSize(10).font("Helvetica");
-      doc.text(`Name: ${data.patient?.name || "N/A"}     Age/Sex: ${data.patient?.age || "N/A"} / ${data.patient?.sex || "N/A"}`);
-      doc.text(`MLC: ${data.mlc ? "Yes" : "No"}     Allergy: ${data.allergy || "No known allergies"}`);
-      doc.moveDown(0.5);
 
-      if (data.presenting_complaint?.text || data.triage?.chief_complaint) {
-        doc.font("Helvetica-Bold").text("Presenting Complaint:");
-        doc.font("Helvetica").text(data.presenting_complaint?.text || data.triage?.chief_complaint || "");
+      if (data.triage_priority) {
+        pdfSubHeading("Triage");
+        doc.text(`Priority ${data.triage_priority} - ${(data.triage_color || "").toUpperCase()}`);
+        doc.moveDown(0.2);
+      }
+
+      const complaintText = data.presenting_complaint?.text || data.triage?.chief_complaint || "";
+      if (complaintText) {
+        pdfSubHeading("Presenting Complaint");
+        let ccLine = complaintText;
+        if (data.presenting_complaint?.duration) ccLine += ` | Duration: ${data.presenting_complaint.duration}`;
+        if (data.presenting_complaint?.onset_type) ccLine += ` | Onset: ${data.presenting_complaint.onset_type}`;
+        doc.text(ccLine);
         doc.moveDown(0.3);
       }
 
-      if (data.vitals_at_arrival || data.triage?.vitals) {
-        const vitals = data.vitals_at_arrival || data.triage?.vitals || {};
-        doc.font("Helvetica-Bold").text("Vitals at Arrival:");
-        doc.font("Helvetica").text(formatVitals(vitals));
-        doc.moveDown(0.5);
-      }
-
-      const pa = data.primary_assessment || {};
-      if (Object.keys(pa).length > 0) {
-        doc.font("Helvetica-Bold").text("PRIMARY ASSESSMENT (ABCDE)");
+      if (Object.keys(vitals).length > 0) {
+        pdfSubHeading("Vitals at Arrival");
+        doc.text(formatVitals(vitals));
         doc.moveDown(0.3);
-        doc.font("Helvetica");
-        if (pa.airway_status) doc.text(`Airway: ${pa.airway_status}${pa.airway_intervention ? `, Intervention: ${pa.airway_intervention}` : ""}`);
-        if (pa.breathing_rr) doc.text(`Breathing: RR ${pa.breathing_rr}, SpO2 ${pa.breathing_spo2 || "N/A"}%`);
-        if (pa.circulation_hr) doc.text(`Circulation: HR ${pa.circulation_hr}, BP ${pa.circulation_bp_systolic || ""}/${pa.circulation_bp_diastolic || ""}`);
-        if (pa.disability_gcs_e) doc.text(`Disability: GCS E${pa.disability_gcs_e}V${pa.disability_gcs_v}M${pa.disability_gcs_m}`);
-        if (pa.exposure_temperature) doc.text(`Exposure: Temp ${pa.exposure_temperature}°C`);
-        doc.moveDown(0.5);
       }
 
-      const adjuncts = data.adjuncts || {};
+      ensureSpace();
+      if (Object.keys(primary).length > 0) {
+        pdfHeading("PRIMARY ASSESSMENT (ABCDE)");
+
+        if (isPed && Object.keys(pat).length > 0) {
+          pdfSubHeading("Pediatric Assessment Triangle (PAT)");
+          const appearance = pat.appearance || {};
+          const appParts: string[] = [];
+          const tone = appearance.tone || pat.tone; if (tone) appParts.push(`Tone: ${tone}`);
+          const interactivity = appearance.interactivity || pat.interactivity; if (interactivity) appParts.push(`Interactivity: ${interactivity}`);
+          const consolability = appearance.consolability || pat.consolability; if (consolability) appParts.push(`Consolability: ${consolability}`);
+          const lookGaze = appearance.lookGaze || pat.lookGaze; if (lookGaze) appParts.push(`Look/Gaze: ${lookGaze}`);
+          const speechCry = appearance.speechCry || pat.speechCry; if (speechCry) appParts.push(`Speech/Cry: ${speechCry}`);
+          if (appParts.length > 0) doc.text(`Appearance: ${appParts.join(", ")}`);
+          pdfField("Work of Breathing", pat.workOfBreathing);
+          pdfField("Circulation to Skin", pat.circulationToSkin);
+          doc.moveDown(0.2);
+        }
+
+        const airwayStatus = airway.status || primary.airway_status;
+        const airwayInterventions = airway.interventions || primary.airway_interventions || airway.intervention;
+        const airwayNotes = airway.notes || primary.airway_additional_notes;
+        if (airwayStatus || airwayInterventions || airwayNotes) {
+          let aLine = `Airway: ${airwayStatus || "N/A"}`;
+          if (airwayInterventions) aLine += ` | Interventions: ${Array.isArray(airwayInterventions) ? airwayInterventions.join(", ") : airwayInterventions}`;
+          if (airway.cry) aLine += ` | Cry: ${airway.cry}`;
+          if (airwayNotes) aLine += ` | Notes: ${airwayNotes}`;
+          doc.text(aLine);
+        }
+
+        const bRR = breathing.rr || breathing.respiratoryRate || primary.breathing_rr;
+        const bSpO2 = breathing.spo2 || primary.breathing_spo2;
+        const bEffort = breathing.effort || breathing.workOfBreathing || primary.breathing_work;
+        const bO2Device = breathing.o2Device || primary.breathing_oxygen_device;
+        const bO2Flow = breathing.o2Flow || primary.breathing_oxygen_flow;
+        if (bRR || bSpO2 || bEffort) {
+          let bLine = "Breathing:";
+          if (bRR) bLine += ` RR ${bRR}`;
+          if (bSpO2) bLine += `, SpO2 ${bSpO2}%`;
+          if (bEffort) bLine += ` | Effort: ${Array.isArray(bEffort) ? bEffort.join(", ") : bEffort}`;
+          if (bO2Device) bLine += ` | O2 Device: ${bO2Device}`;
+          if (bO2Flow) bLine += ` @ ${bO2Flow} L/min`;
+          if (breathing.airEntry) bLine += ` | Air Entry: ${breathing.airEntry}`;
+          if (breathing.abnormalPositioning) bLine += ` | Positioning: ${breathing.abnormalPositioning}`;
+          if (breathing.subcutaneousEmphysema) bLine += ` | Subcut Emphysema: ${breathing.subcutaneousEmphysema}`;
+          if (breathing.intervention) bLine += ` | Intervention: ${Array.isArray(breathing.intervention) ? breathing.intervention.join(", ") : breathing.intervention}`;
+          doc.text(bLine);
+        }
+
+        const cHR = circulation.hr || circulation.heartRate || primary.circulation_hr;
+        const cBPS = circulation.bpSystolic || primary.circulation_bp_systolic || circulation.bloodPressure;
+        const cBPD = circulation.bpDiastolic || primary.circulation_bp_diastolic;
+        const cCRT = circulation.capillaryRefill || circulation.crt || primary.circulation_crt;
+        const cAdj = circulation.interventions || primary.circulation_adjuncts || circulation.intervention;
+        if (cHR || cBPS || cCRT) {
+          let cLine = "Circulation:";
+          if (cHR) cLine += ` HR ${cHR}`;
+          if (cBPS && cBPD) cLine += `, BP ${cBPS}/${cBPD}`;
+          else if (cBPS) cLine += `, BP ${cBPS}`;
+          if (cCRT) cLine += ` | CRT: ${cCRT}`;
+          if (circulation.skinColorTemp) cLine += ` | Skin: ${circulation.skinColorTemp}`;
+          if (circulation.distendedNeckVeins) cLine += ` | Neck Veins: ${circulation.distendedNeckVeins}`;
+          if (cAdj) cLine += ` | Adjuncts: ${Array.isArray(cAdj) ? cAdj.join(", ") : cAdj}`;
+          doc.text(cLine);
+        }
+
+        const dAVPU = disability.motorResponse || disability.avpuGcs || primary.disability_avpu;
+        const dGE = disability.gcsE || primary.disability_gcs_e;
+        const dGV = disability.gcsV || primary.disability_gcs_v;
+        const dGM = disability.gcsM || primary.disability_gcs_m;
+        const dPupilSize = disability.pupilSize || disability.pupils || primary.disability_pupils_size;
+        const dPupilReact = disability.pupilReaction || primary.disability_pupils_reaction;
+        const dGlucose = disability.glucose || primary.disability_grbs;
+        if (dAVPU || dGE || dPupilSize || dGlucose) {
+          let dLine = "Disability:";
+          if (dAVPU) dLine += ` ${dAVPU}`;
+          if (dGE || dGV || dGM) {
+            const total = (parseInt(dGE) || 0) + (parseInt(dGV) || 0) + (parseInt(dGM) || 0);
+            dLine += ` | GCS ${total || "-"} (E${dGE || "-"}V${dGV || "-"}M${dGM || "-"})`;
+          }
+          if (dPupilSize) dLine += ` | Pupils: ${dPupilSize}`;
+          if (dPupilReact) dLine += ` (${dPupilReact})`;
+          if (dGlucose) dLine += ` | Glucose: ${dGlucose}`;
+          if (disability.abnormalResponses) dLine += ` | Abnormal Responses: ${disability.abnormalResponses}`;
+          doc.text(dLine);
+        }
+
+        const eTemp = exposure.temperature || primary.exposure_temperature;
+        const eNotes = exposure.notes || primary.exposure_additional_notes;
+        if (eTemp || eNotes || exposure.trauma || exposure.signsOfTraumaIllness) {
+          let eLine = "Exposure:";
+          if (eTemp) eLine += ` Temp ${eTemp}\u00B0F`;
+          if (exposure.trauma) eLine += ` | Trauma: ${exposure.trauma}`;
+          if (exposure.signsOfTraumaIllness) eLine += ` | Signs: ${Array.isArray(exposure.signsOfTraumaIllness) ? exposure.signsOfTraumaIllness.join(", ") : exposure.signsOfTraumaIllness}`;
+          if (exposure.evidenceOfInfection) eLine += ` | Infection: ${exposure.evidenceOfInfection}`;
+          if (exposure.longBoneDeformities) eLine += ` | Long Bone: ${exposure.longBoneDeformities}`;
+          if (exposure.extremities) eLine += ` | Extremities: ${exposure.extremities}`;
+          if (exposure.immobilize) eLine += ` | Immobilize: ${exposure.immobilize}`;
+          if (eNotes) eLine += ` | Notes: ${eNotes}`;
+          doc.text(eLine);
+        }
+
+        if (isPed && Object.keys(efast).length > 0) {
+          let efLine = "EFAST:";
+          if (efast.heart) efLine += ` Heart: ${efast.heart}`;
+          if (efast.abdomen) efLine += ` | Abdomen: ${efast.abdomen}`;
+          if (efast.lungs) efLine += ` | Lungs: ${efast.lungs}`;
+          if (efast.pelvis) efLine += ` | Pelvis: ${efast.pelvis}`;
+          doc.text(efLine);
+        }
+        doc.moveDown(0.3);
+      }
+
+      ensureSpace();
       if (Object.keys(adjuncts).length > 0 && (adjuncts.ecg_findings || adjuncts.bedside_echo || adjuncts.additional_notes || adjuncts.efast_status || adjuncts.efast_notes)) {
-        doc.font("Helvetica-Bold").text("ADJUNCTS TO PRIMARY SURVEY");
-        doc.moveDown(0.3);
-        doc.font("Helvetica");
-        if (adjuncts.additional_notes) doc.text(`ABG/VBG: ${adjuncts.additional_notes}`);
-        if (adjuncts.ecg_findings) doc.text(`ECG: ${adjuncts.ecg_findings}`);
+        pdfHeading("ADJUNCTS TO PRIMARY SURVEY");
+        pdfField("ABG/VBG", adjuncts.additional_notes);
+        pdfField("ECG", adjuncts.ecg_findings);
         if (adjuncts.efast_status || adjuncts.efast_notes) doc.text(`EFAST: ${adjuncts.efast_status || ""}${adjuncts.efast_notes ? ` - ${adjuncts.efast_notes}` : ""}`);
-        if (adjuncts.bedside_echo) doc.text(`Bedside Echo: ${adjuncts.bedside_echo}`);
-        doc.moveDown(0.5);
-      }
-
-      const sample = data.sample || {};
-      if (Object.keys(sample).length > 0) {
-        doc.font("Helvetica-Bold").text("SAMPLE HISTORY");
+        pdfField("Bedside Echo", adjuncts.bedside_echo);
         doc.moveDown(0.3);
-        doc.font("Helvetica");
-        if (sample.symptoms) doc.text(`Symptoms: ${sample.symptoms}`);
-        if (sample.allergies) doc.text(`Allergies: ${sample.allergies}`);
-        if (sample.medications) doc.text(`Medications: ${sample.medications}`);
-        if (sample.pastMedicalHistory) doc.text(`Past History: ${sample.pastMedicalHistory}`);
-        if (sample.lastMeal) doc.text(`Last Meal/LMP: ${sample.lastMeal}`);
-        if (sample.eventsHopi) doc.text(`Events/HOPI: ${sample.eventsHopi}`);
-        doc.moveDown(0.5);
       }
 
-      const exam = data.examination || {};
+      if (Object.keys(abgData).length > 0) {
+        pdfSubHeading("ABG Values");
+        const abgParts: string[] = [];
+        if (abgData.pH) abgParts.push(`pH: ${abgData.pH}`);
+        if (abgData.pCO2) abgParts.push(`pCO2: ${abgData.pCO2}`);
+        if (abgData.pO2) abgParts.push(`pO2: ${abgData.pO2}`);
+        if (abgData.HCO3) abgParts.push(`HCO3: ${abgData.HCO3}`);
+        if (abgData.BE) abgParts.push(`BE: ${abgData.BE}`);
+        if (abgData.Lactate) abgParts.push(`Lactate: ${abgData.Lactate}`);
+        if (abgData.SaO2) abgParts.push(`SaO2: ${abgData.SaO2}`);
+        if (abgData.FiO2) abgParts.push(`FiO2: ${abgData.FiO2}`);
+        if (abgData.Na) abgParts.push(`Na: ${abgData.Na}`);
+        if (abgData.K) abgParts.push(`K: ${abgData.K}`);
+        if (abgData.Cl) abgParts.push(`Cl: ${abgData.Cl}`);
+        if (abgData.AnionGap) abgParts.push(`AG: ${abgData.AnionGap}`);
+        if (abgData.Glucose) abgParts.push(`Glucose: ${abgData.Glucose}`);
+        if (abgData.Hb) abgParts.push(`Hb: ${abgData.Hb}`);
+        if (abgData.AaGradient) abgParts.push(`A-a Gradient: ${abgData.AaGradient}`);
+        if (abgParts.length > 0) doc.text(abgParts.join(" | "));
+        doc.moveDown(0.3);
+      }
+
+      ensureSpace();
+      if (Object.keys(history).length > 0) {
+        if (isPed) {
+          pdfHeading("SAMPLE HISTORY (PEDIATRIC)");
+          const signsObj = history.signsAndSymptoms || {};
+          const signsText = history.signs_and_symptoms || "";
+          if (Object.keys(signsObj).length > 0) {
+            const sParts: string[] = [];
+            if (signsObj.breathingDifficulty) sParts.push(`Breathing Difficulty: ${signsObj.breathingDifficulty}`);
+            if (signsObj.fever) sParts.push(`Fever: ${signsObj.fever}`);
+            if (signsObj.vomiting) sParts.push(`Vomiting: ${signsObj.vomiting}`);
+            if (signsObj.decreasedOralIntake) sParts.push(`Decreased Oral Intake: ${signsObj.decreasedOralIntake}`);
+            if (signsObj.timeCourse) sParts.push(`Time Course: ${signsObj.timeCourse}`);
+            if (signsObj.notes) sParts.push(`Notes: ${signsObj.notes}`);
+            doc.text(`Signs & Symptoms: ${sParts.join(", ")}`);
+          } else if (signsText) {
+            pdfField("Signs & Symptoms", signsText);
+          }
+          pdfFieldArr("Allergies", history.allergies);
+          pdfField("Current Medications", history.currentMedications || history.medications || history.drug_history);
+          pdfField("Last Dose Medications", history.lastDoseMedications);
+          pdfField("Medications in Environment", history.medicationsInEnvironment);
+          pdfField("Health History", history.healthHistory || history.past_medical);
+          pdfField("Underlying Conditions", history.underlyingConditions);
+          pdfField("Immunization Status", history.immunizationStatus);
+          pdfField("Last Meal", history.lastMeal || history.last_meal);
+          pdfField("LMP", history.lmp);
+          pdfField("Events", history.events || history.hpi || history.events_hopi);
+          pdfField("Treatment Before Arrival", history.treatmentBeforeArrival);
+        } else {
+          pdfHeading("HISTORY");
+          const hpi = history.hpi || history.events_hopi || data.sample?.eventsHopi || "";
+          pdfField("HPI / Events", hpi);
+          const pastMed = Array.isArray(history.past_medical) ? history.past_medical.join(", ") : history.past_medical;
+          pdfField("Past Medical History", pastMed);
+          pdfField("Past Surgical History", history.past_surgical);
+          const allergies = Array.isArray(history.allergies) ? history.allergies.join(", ") : history.allergies;
+          pdfField("Allergies", allergies);
+          pdfField("Medications / Drug History", history.medications || history.drug_history);
+          pdfField("Last Meal / LMP", history.last_meal || history.last_meal_lmp);
+          pdfField("LMP", history.lmp);
+        }
+        doc.moveDown(0.3);
+      }
+
+      ensureSpace();
       if (Object.keys(exam).length > 0) {
-        doc.font("Helvetica-Bold").text("SYSTEMIC EXAMINATION");
+        if (isPed) {
+          pdfHeading("PHYSICAL EXAMINATION (PEDIATRIC)");
+          const heent = exam.heent || data.heent || data.physical_exam?.heent || {};
+          if (typeof heent === "object" && Object.keys(heent).length > 0) {
+            pdfSubHeading("HEENT");
+            pdfField("Head", heent.head);
+            pdfField("Eyes", heent.eyes);
+            pdfField("Ears", heent.ears);
+            pdfField("Nose", heent.nose);
+            pdfField("Throat", heent.throat);
+            pdfField("Lymph Nodes", heent.lymphNodes);
+          }
+          pdfField("Respiratory", exam.respiratory || data.physical_exam?.respiratory || exam.respiratory_additional_notes);
+          pdfField("Cardiovascular", exam.cardiovascular || data.physical_exam?.cardiovascular || exam.cvs_additional_notes);
+          pdfField("Abdomen", exam.abdomen || data.physical_exam?.abdomen || exam.abdomen_additional_notes);
+          pdfField("Back", exam.back || data.physical_exam?.back);
+          pdfField("Extremities", exam.extremities || data.physical_exam?.extremities || exam.extremities_additional_notes || exam.extremities_findings);
+        } else {
+          pdfHeading("PHYSICAL EXAMINATION");
+          const genFindings: string[] = [];
+          if (exam.general_pallor) genFindings.push("Pallor");
+          if (exam.general_icterus) genFindings.push("Icterus");
+          if (exam.general_cyanosis) genFindings.push("Cyanosis");
+          if (exam.general_clubbing) genFindings.push("Clubbing");
+          if (exam.general_lymphadenopathy) genFindings.push("Lymphadenopathy");
+          if (exam.general_edema) genFindings.push("Edema");
+          if (genFindings.length > 0 || exam.general_appearance || exam.general_additional_notes) {
+            pdfSubHeading("General Examination");
+            if (exam.general_appearance) doc.text(`Appearance: ${exam.general_appearance}`);
+            doc.text(genFindings.length > 0 ? genFindings.join(", ") : "No significant findings");
+            if (exam.general_additional_notes) doc.text(`Notes: ${exam.general_additional_notes}`);
+          }
+          if (exam.cvs_status || exam.cvs_additional_notes) {
+            pdfSubHeading("CVS");
+            pdfField("Status", exam.cvs_status);
+            pdfField("S1/S2", exam.cvs_s1_s2);
+            pdfField("Pulse", exam.cvs_pulse);
+            pdfField("Pulse Rate", exam.cvs_pulse_rate);
+            pdfField("Apex Beat", exam.cvs_apexBeat);
+            pdfField("Murmurs", exam.cvs_murmurs);
+            pdfField("Added Sounds", exam.cvs_added_sounds);
+            pdfField("Notes", exam.cvs_additional_notes);
+          }
+          if (exam.respiratory_status || exam.respiratory_additional_notes) {
+            pdfSubHeading("Respiratory");
+            pdfField("Status", exam.respiratory_status);
+            pdfField("Expansion", exam.respiratory_expansion);
+            pdfField("Breath Sounds", exam.respiratory_breath_sounds);
+            pdfField("Percussion", exam.respiratory_percussion);
+            pdfField("Added Sounds", exam.respiratory_added_sounds);
+            pdfField("Notes", exam.respiratory_additional_notes);
+          }
+          if (exam.abdomen_status || exam.abdomen_additional_notes) {
+            pdfSubHeading("Abdomen");
+            pdfField("Status", exam.abdomen_status);
+            pdfField("Bowel Sounds", exam.abdomen_bowel_sounds);
+            pdfField("Percussion", exam.abdomen_percussion);
+            pdfField("Organomegaly", exam.abdomen_organomegaly);
+            pdfField("Notes", exam.abdomen_additional_notes);
+          }
+          if (exam.cns_status || exam.cns_additional_notes) {
+            pdfSubHeading("CNS");
+            pdfField("Status", exam.cns_status);
+            pdfField("Higher Mental Functions", exam.cns_higher_mental_functions);
+            pdfField("Cranial Nerves", exam.cns_cranial_nerves);
+            pdfField("Motor System", exam.cns_motor_system);
+            pdfField("Sensory System", exam.cns_sensory_system);
+            pdfField("Reflexes", exam.cns_reflexes);
+            pdfField("Notes", exam.cns_additional_notes);
+          }
+          if (exam.extremities_status || exam.extremities_findings || exam.extremities_additional_notes) {
+            pdfSubHeading("Extremities");
+            pdfField("Status", exam.extremities_status);
+            pdfField("Findings", exam.extremities_findings);
+            pdfField("Notes", exam.extremities_additional_notes);
+          }
+        }
         doc.moveDown(0.3);
-        doc.font("Helvetica");
-        if (exam.cvs_status) doc.text(`CVS: ${exam.cvs_status}${exam.cvs_additional_notes ? ` - ${exam.cvs_additional_notes}` : ""}`);
-        if (exam.respiratory_status) doc.text(`Respiratory: ${exam.respiratory_status}${exam.respiratory_additional_notes ? ` - ${exam.respiratory_additional_notes}` : ""}`);
-        if (exam.abdomen_status) doc.text(`Abdomen: ${exam.abdomen_status}${exam.abdomen_additional_notes ? ` - ${exam.abdomen_additional_notes}` : ""}`);
-        if (exam.cns_status) doc.text(`CNS: ${exam.cns_status}${exam.cns_additional_notes ? ` - ${exam.cns_additional_notes}` : ""}`);
-        doc.moveDown(0.5);
       }
 
-      const investigations = data.investigations || {};
-      if (Object.keys(investigations).length > 0 && (investigations.panels_selected?.length > 0 || investigations.individual_tests?.length > 0 || investigations.imaging?.length > 0 || investigations.results_notes)) {
-        doc.font("Helvetica-Bold").text("INVESTIGATIONS");
-        doc.moveDown(0.3);
-        doc.font("Helvetica");
-        if (Array.isArray(investigations.panels_selected) && investigations.panels_selected.length > 0) {
-          doc.text(`Lab Panels: ${investigations.panels_selected.join(", ")}`);
-        }
-        if (Array.isArray(investigations.individual_tests) && investigations.individual_tests.length > 0) {
-          doc.text(`Individual Tests: ${investigations.individual_tests.join(", ")}`);
-        }
+      ensureSpace();
+      if (Object.keys(investigations).length > 0 && (investigations.panels_selected?.length > 0 || investigations.individual_tests?.length > 0 || investigations.imaging || investigations.results_notes)) {
+        pdfHeading("INVESTIGATIONS");
+        if (Array.isArray(investigations.panels_selected) && investigations.panels_selected.length > 0) doc.text(`Lab Panels: ${investigations.panels_selected.join(", ")}`);
+        if (Array.isArray(investigations.individual_tests) && investigations.individual_tests.length > 0) doc.text(`Individual Tests: ${investigations.individual_tests.join(", ")}`);
         if (investigations.imaging) {
-          const imagingText = Array.isArray(investigations.imaging) ? investigations.imaging.join(", ") : investigations.imaging;
-          doc.text(`Imaging: ${imagingText}`);
+          const imgText = Array.isArray(investigations.imaging) ? investigations.imaging.join(", ") : investigations.imaging;
+          doc.text(`Imaging: ${imgText}`);
         }
-        if (investigations.results_notes) {
-          doc.text(`Results Notes: ${investigations.results_notes}`);
-        }
-        doc.moveDown(0.5);
+        pdfField("Results Notes", investigations.results_notes);
+        doc.moveDown(0.3);
       }
 
-      const treatment = data.treatment || {};
-      if (treatment.primary_diagnosis || treatment.medications || treatment.infusions || treatment.iv_fluids || treatment.interventions) {
-        doc.font("Helvetica-Bold").text("TREATMENT");
-        doc.moveDown(0.3);
-        doc.font("Helvetica");
-        if (treatment.primary_diagnosis) doc.text(`Diagnosis: ${treatment.primary_diagnosis}`);
+      ensureSpace();
+      const primaryDiag = treatment.primary_diagnosis || (Array.isArray(treatment.provisional_diagnoses) && treatment.provisional_diagnoses.length > 0 ? treatment.provisional_diagnoses[0] : "");
+      if (primaryDiag || treatment.medications?.length > 0 || treatment.infusions?.length > 0 || treatment.fluids || treatment.interventions?.length > 0 || treatment.intervention_notes || treatment.other_medications) {
+        pdfHeading("TREATMENT");
+        pdfField("Primary Diagnosis", primaryDiag);
+        if (Array.isArray(treatment.provisional_diagnoses) && treatment.provisional_diagnoses.length > 0) {
+          doc.text(`Provisional Diagnoses: ${treatment.provisional_diagnoses.join(", ")}`);
+        }
         if (treatment.differential_diagnoses) {
           const diffs = Array.isArray(treatment.differential_diagnoses) ? treatment.differential_diagnoses.join(", ") : treatment.differential_diagnoses;
-          doc.text(`Differential Diagnoses: ${diffs}`);
+          pdfField("Differential Diagnoses", diffs);
         }
-        if (Array.isArray(treatment.interventions) && treatment.interventions.length > 0) {
-          doc.text(`Interventions: ${treatment.interventions.join(", ")}`);
-        }
+        if (Array.isArray(treatment.interventions) && treatment.interventions.length > 0) doc.text(`Interventions: ${treatment.interventions.join(", ")}`);
+        pdfField("Intervention Notes", treatment.intervention_notes);
+
         if (Array.isArray(treatment.medications) && treatment.medications.length > 0) {
-          doc.font("Helvetica-Bold").text("Medications:");
-          doc.font("Helvetica");
+          pdfSubHeading("Medications:");
           treatment.medications.forEach((med: any) => {
-            doc.text(`  - ${med.name || ""} ${med.dose || ""} ${med.route || ""} ${med.frequency || ""}`);
+            const name = med.name || med.drug_name || "";
+            doc.text(`  - ${name} ${med.dose || ""} ${med.route || ""} ${med.frequency || ""}`.trim());
           });
         }
         if (Array.isArray(treatment.infusions) && treatment.infusions.length > 0) {
-          doc.font("Helvetica-Bold").text("Infusions:");
-          doc.font("Helvetica");
+          pdfSubHeading("Infusions:");
           treatment.infusions.forEach((inf: any) => {
-            doc.text(`  - ${inf.drug || inf.name || ""} ${inf.dose || ""} in ${inf.dilution || ""} at ${inf.rate || ""}`);
+            const name = inf.name || inf.drug_name || inf.drug || "";
+            doc.text(`  - ${name} ${inf.dose || ""} in ${inf.dilution || ""} at ${inf.rate || ""}`.trim());
           });
         }
-        if (treatment.iv_fluids) doc.text(`IV Fluids: ${treatment.iv_fluids}`);
-        doc.moveDown(0.5);
+        if (treatment.fluids) pdfField("IV Fluids", treatment.fluids);
+        if (treatment.other_medications) pdfField("Other Medications", treatment.other_medications);
+        doc.moveDown(0.3);
       }
 
-      const procedures = data.procedures || {};
-      if (Object.keys(procedures).length > 0 && (procedures.performed?.length > 0 || procedures.generalNotes)) {
-        doc.font("Helvetica-Bold").text("PROCEDURES");
-        doc.moveDown(0.3);
-        doc.font("Helvetica");
-        if (Array.isArray(procedures.performed) && procedures.performed.length > 0) {
-          doc.text(`Performed: ${procedures.performed.join(", ")}`);
+      ensureSpace();
+      if (proceduresPerformed.length > 0 || proceduresNotes) {
+        pdfHeading("PROCEDURES");
+        if (Array.isArray(proceduresPerformed) && proceduresPerformed.length > 0) {
+          proceduresPerformed.forEach((proc: any) => {
+            if (typeof proc === "string") {
+              doc.text(`  - ${proc}`);
+            } else {
+              doc.text(`  - ${proc.name || "Procedure"}${proc.notes ? `: ${proc.notes}` : ""}`);
+            }
+          });
         }
-        if (procedures.generalNotes) doc.text(`Notes: ${procedures.generalNotes}`);
-        doc.moveDown(0.5);
+        if (proceduresNotes) pdfField("General Notes", proceduresNotes);
+        doc.moveDown(0.3);
       }
 
-      const disposition = data.disposition || {};
-      if (Object.keys(disposition).length > 0) {
-        doc.font("Helvetica-Bold").text("DISPOSITION");
+      ensureSpace();
+      if (erObs.notes || erObs.duration) {
+        pdfHeading("ER OBSERVATION");
+        pdfField("Duration", erObs.duration);
+        pdfField("Notes", erObs.notes);
         doc.moveDown(0.3);
-        doc.font("Helvetica");
-        if (disposition.type) doc.text(`Disposition: ${disposition.type}`);
-        if (disposition.department) doc.text(`Department/Facility: ${disposition.department}`);
-        if (disposition.notes) doc.text(`Notes: ${disposition.notes}`);
-        doc.moveDown(0.5);
       }
+
+      ensureSpace();
+      if (Object.keys(disposition).length > 0 && (disposition.type || disposition.admit_to || disposition.destination || disposition.department || disposition.notes)) {
+        pdfHeading("DISPOSITION");
+        pdfField("Type", disposition.type);
+        pdfField("Admit To", disposition.admit_to || disposition.destination || disposition.department);
+        pdfField("Room", disposition.admit_to_room);
+        pdfField("Refer To", disposition.refer_to);
+        pdfField("Condition at Discharge", disposition.condition_at_discharge || disposition.condition);
+        pdfField("Notes", disposition.notes);
+        doc.moveDown(0.3);
+      }
+
+      const addNotes = Array.isArray(addendumNotes) ? addendumNotes.filter(Boolean) : [];
+      if (addNotes.length > 0) {
+        ensureSpace();
+        pdfHeading("ADDENDUM NOTES");
+        addNotes.forEach((note: string, i: number) => {
+          doc.text(`${i + 1}. ${note}`);
+        });
+        doc.moveDown(0.3);
+      }
+
+      if (data.status || data.created_at || data.updated_at) {
+        ensureSpace();
+        pdfSubHeading("Case Info");
+        pdfField("Status", data.status);
+        if (data.created_at) pdfField("Created", new Date(data.created_at).toLocaleString("en-IN"));
+        if (data.updated_at) pdfField("Updated", new Date(data.updated_at).toLocaleString("en-IN"));
+        doc.moveDown(0.3);
+      }
+
+      doc.moveDown(0.5);
+      pdfLine();
+      doc.moveDown(0.3);
+      doc.fontSize(8).font("Helvetica-Oblique").text("This case sheet is generated from ERmate for clinical documentation purposes.", { align: "center" });
 
       doc.end();
     } catch (err) {
@@ -694,158 +1020,453 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/export/casesheet-docx", async (req: Request, res: Response) => {
     try {
       const data = req.body;
-      
+
       if (!data.patient) {
         return res.status(400).json({ error: "Missing patient data" });
       }
 
+      const patientAge = parseFloat(data.patient?.age) || 0;
+      const isPed = patientAge > 0 && patientAge <= 16;
+      const primary = data.primary_assessment || data.abcde || {};
+      const vitals = data.vitals_at_arrival || data.triage?.vitals || {};
+      const adjuncts = data.adjuncts || {};
+      const abgData = data.abg || adjuncts.abg || {};
+      const history = data.history || {};
+      const exam = data.examination || {};
+      const investigations = data.investigations || {};
+      const treatment = data.treatment || {};
+      const procedures = data.procedures || {};
+      const proceduresPerformed = data.procedures_performed || procedures.procedures_performed || procedures.performed || [];
+      const proceduresNotes = procedures.general_notes || procedures.generalNotes || "";
+      const disposition = data.disposition || {};
+      const erObs = data.er_observation || {};
+      const addendumNotes = treatment.addendum_notes || data.addendum_notes || [];
+
+      const airway = primary.airway || {};
+      const breathing = primary.breathing || {};
+      const circulation = primary.circulation || {};
+      const disability = primary.disability || {};
+      const exposure = primary.exposure || {};
+      const pat = primary.pat || {};
+      const efast = primary.efast || {};
+
+      const dSections: string[] = [];
+      if (data.patient) dSections.push("patient");
+      if (Object.keys(vitals).length > 0) dSections.push("vitals");
+      if (Object.keys(primary).length > 0) dSections.push("primary_assessment");
+      if (Object.keys(adjuncts).length > 0) dSections.push("adjuncts");
+      if (Object.keys(abgData).length > 0) dSections.push("abg");
+      if (Object.keys(history).length > 0) dSections.push("history");
+      if (Object.keys(exam).length > 0) dSections.push("examination");
+      if (Object.keys(investigations).length > 0) dSections.push("investigations");
+      if (Object.keys(treatment).length > 0) dSections.push("treatment");
+      if (proceduresPerformed.length > 0 || proceduresNotes) dSections.push("procedures");
+      if (Object.keys(disposition).length > 0) dSections.push("disposition");
+      if (Object.keys(erObs).length > 0) dSections.push("er_observation");
+      if (Array.isArray(addendumNotes) && addendumNotes.length > 0) dSections.push("addendum_notes");
+      console.log("[EXPORT] DOCX sections found:", dSections.join(", "), "| isPediatric:", isPed);
+
       const children: Paragraph[] = [];
 
-      children.push(
-        new Paragraph({
-          text: "EMERGENCY DEPARTMENT CASE SHEET",
-          heading: HeadingLevel.TITLE,
-          alignment: AlignmentType.CENTER,
-          spacing: { after: 300 },
-        })
-      );
+      const dH = (t: string) => new Paragraph({ text: t, heading: HeadingLevel.HEADING_2, spacing: { before: 300, after: 100 } });
+      const dP = (t: string) => new Paragraph({ text: t, spacing: { after: 40 } });
+      const dBold = (label: string, val: string) => new Paragraph({ children: [new TextRun({ text: `${label}: `, bold: true }), new TextRun({ text: val })], spacing: { after: 40 } });
+      const dField = (label: string, val: any) => { if (val !== undefined && val !== null && val !== "") children.push(dBold(label, String(val))); };
+      const dFieldArr = (label: string, arr: any) => {
+        if (!arr) return;
+        const text = Array.isArray(arr) ? arr.filter(Boolean).join(", ") : String(arr);
+        if (text) children.push(dBold(label, text));
+      };
 
       children.push(
-        new Paragraph({
-          text: "PATIENT INFORMATION",
-          heading: HeadingLevel.HEADING_2,
-          spacing: { before: 200, after: 100 },
-        }),
-        new Paragraph({ text: `Name: ${data.patient?.name || "N/A"}        Age/Sex: ${data.patient?.age || "N/A"} / ${data.patient?.sex || "N/A"}` }),
-        new Paragraph({ text: `MLC: ${data.mlc ? "Yes" : "No"}        Allergy: ${data.allergy || "No known allergies"}`, spacing: { after: 200 } })
+        new Paragraph({ text: "EMERGENCY DEPARTMENT CASE SHEET", heading: HeadingLevel.TITLE, alignment: AlignmentType.CENTER, spacing: { after: 100 } }),
+        new Paragraph({ text: `Generated: ${new Date().toLocaleDateString("en-IN")}`, alignment: AlignmentType.CENTER, spacing: { after: 300 } })
       );
 
-      if (data.presenting_complaint?.text || data.triage?.chief_complaint) {
-        children.push(
-          new Paragraph({ children: [new TextRun({ text: "Presenting Complaint: ", bold: true }), new TextRun({ text: data.presenting_complaint?.text || data.triage?.chief_complaint || "" })] })
-        );
+      children.push(dH("PATIENT INFORMATION"));
+      dField("Name", data.patient?.name || "N/A");
+      children.push(dP(`Age/Sex: ${data.patient?.age || "N/A"} / ${data.patient?.sex || "N/A"}`));
+      dField("UHID", data.patient?.uhid);
+      dField("Phone", data.patient?.phone);
+      dField("Mode of Arrival", data.patient?.mode_of_arrival || data.mode_of_arrival);
+      dField("MLC", data.mlc ? "Yes" : "No");
+      if (data.patient?.arrival_datetime) dField("Arrival Time", new Date(data.patient.arrival_datetime).toLocaleString("en-IN"));
+      if (data.em_resident) dField("EM Resident", data.em_resident);
+      if (data.em_consultant) dField("EM Consultant", data.em_consultant);
+
+      if (data.triage_priority) {
+        children.push(dBold("Triage", `Priority ${data.triage_priority} - ${(data.triage_color || "").toUpperCase()}`));
       }
 
-      const pa = data.primary_assessment || {};
-      if (Object.keys(pa).length > 0) {
-        children.push(
-          new Paragraph({ text: "PRIMARY ASSESSMENT (ABCDE)", heading: HeadingLevel.HEADING_2, spacing: { before: 300, after: 100 } })
-        );
-        if (pa.airway_status) children.push(new Paragraph({ text: `Airway: ${pa.airway_status}` }));
-        if (pa.breathing_rr) children.push(new Paragraph({ text: `Breathing: RR ${pa.breathing_rr}, SpO2 ${pa.breathing_spo2 || "N/A"}%` }));
-        if (pa.circulation_hr) children.push(new Paragraph({ text: `Circulation: HR ${pa.circulation_hr}, BP ${pa.circulation_bp_systolic}/${pa.circulation_bp_diastolic}` }));
-        if (pa.disability_gcs_e) children.push(new Paragraph({ text: `Disability: GCS E${pa.disability_gcs_e}V${pa.disability_gcs_v}M${pa.disability_gcs_m}` }));
+      const complaintText = data.presenting_complaint?.text || data.triage?.chief_complaint || "";
+      if (complaintText) {
+        let ccLine = complaintText;
+        if (data.presenting_complaint?.duration) ccLine += ` | Duration: ${data.presenting_complaint.duration}`;
+        if (data.presenting_complaint?.onset_type) ccLine += ` | Onset: ${data.presenting_complaint.onset_type}`;
+        children.push(dBold("Presenting Complaint", ccLine));
       }
 
-      const adjunctsDocx = data.adjuncts || {};
-      if (Object.keys(adjunctsDocx).length > 0 && (adjunctsDocx.ecg_findings || adjunctsDocx.bedside_echo || adjunctsDocx.additional_notes || adjunctsDocx.efast_status || adjunctsDocx.efast_notes)) {
-        children.push(
-          new Paragraph({ text: "ADJUNCTS TO PRIMARY SURVEY", heading: HeadingLevel.HEADING_2, spacing: { before: 300, after: 100 } })
-        );
-        if (adjunctsDocx.additional_notes) children.push(new Paragraph({ text: `ABG/VBG: ${adjunctsDocx.additional_notes}` }));
-        if (adjunctsDocx.ecg_findings) children.push(new Paragraph({ text: `ECG: ${adjunctsDocx.ecg_findings}` }));
-        if (adjunctsDocx.efast_status || adjunctsDocx.efast_notes) children.push(new Paragraph({ text: `EFAST: ${adjunctsDocx.efast_status || ""}${adjunctsDocx.efast_notes ? ` - ${adjunctsDocx.efast_notes}` : ""}` }));
-        if (adjunctsDocx.bedside_echo) children.push(new Paragraph({ text: `Bedside Echo: ${adjunctsDocx.bedside_echo}` }));
+      if (Object.keys(vitals).length > 0) {
+        children.push(dBold("Vitals at Arrival", formatVitals(vitals)));
       }
 
-      const sample = data.sample || {};
-      if (Object.keys(sample).length > 0) {
-        children.push(
-          new Paragraph({ text: "SAMPLE HISTORY", heading: HeadingLevel.HEADING_2, spacing: { before: 300, after: 100 } })
-        );
-        if (sample.symptoms) children.push(new Paragraph({ text: `Symptoms: ${sample.symptoms}` }));
-        if (sample.allergies) children.push(new Paragraph({ text: `Allergies: ${sample.allergies}` }));
-        if (sample.medications) children.push(new Paragraph({ text: `Medications: ${sample.medications}` }));
-        if (sample.pastMedicalHistory) children.push(new Paragraph({ text: `Past History: ${sample.pastMedicalHistory}` }));
-        if (sample.eventsHopi) children.push(new Paragraph({ text: `Events/HOPI: ${sample.eventsHopi}` }));
+      if (Object.keys(primary).length > 0) {
+        children.push(dH("PRIMARY ASSESSMENT (ABCDE)"));
+
+        if (isPed && Object.keys(pat).length > 0) {
+          children.push(new Paragraph({ children: [new TextRun({ text: "Pediatric Assessment Triangle (PAT)", bold: true, underline: {} })], spacing: { before: 100, after: 40 } }));
+          const appearance = pat.appearance || {};
+          const appParts: string[] = [];
+          const tone = appearance.tone || pat.tone; if (tone) appParts.push(`Tone: ${tone}`);
+          const interactivity = appearance.interactivity || pat.interactivity; if (interactivity) appParts.push(`Interactivity: ${interactivity}`);
+          const consolability = appearance.consolability || pat.consolability; if (consolability) appParts.push(`Consolability: ${consolability}`);
+          const lookGaze = appearance.lookGaze || pat.lookGaze; if (lookGaze) appParts.push(`Look/Gaze: ${lookGaze}`);
+          const speechCry = appearance.speechCry || pat.speechCry; if (speechCry) appParts.push(`Speech/Cry: ${speechCry}`);
+          if (appParts.length > 0) children.push(dBold("Appearance", appParts.join(", ")));
+          if (pat.workOfBreathing) dField("Work of Breathing", pat.workOfBreathing);
+          if (pat.circulationToSkin) dField("Circulation to Skin", pat.circulationToSkin);
+        }
+
+        const airwayStatus = airway.status || primary.airway_status;
+        const airwayInterventions = airway.interventions || primary.airway_interventions || airway.intervention;
+        const airwayNotes = airway.notes || primary.airway_additional_notes;
+        if (airwayStatus || airwayInterventions || airwayNotes) {
+          let aLine = airwayStatus || "N/A";
+          if (airwayInterventions) aLine += ` | Interventions: ${Array.isArray(airwayInterventions) ? airwayInterventions.join(", ") : airwayInterventions}`;
+          if (airway.cry) aLine += ` | Cry: ${airway.cry}`;
+          if (airwayNotes) aLine += ` | Notes: ${airwayNotes}`;
+          children.push(dBold("Airway", aLine));
+        }
+
+        const bRR = breathing.rr || breathing.respiratoryRate || primary.breathing_rr;
+        const bSpO2 = breathing.spo2 || primary.breathing_spo2;
+        const bEffort = breathing.effort || breathing.workOfBreathing || primary.breathing_work;
+        const bO2Device = breathing.o2Device || primary.breathing_oxygen_device;
+        const bO2Flow = breathing.o2Flow || primary.breathing_oxygen_flow;
+        if (bRR || bSpO2 || bEffort) {
+          let bLine = "";
+          if (bRR) bLine += `RR ${bRR}`;
+          if (bSpO2) bLine += `, SpO2 ${bSpO2}%`;
+          if (bEffort) bLine += ` | Effort: ${Array.isArray(bEffort) ? bEffort.join(", ") : bEffort}`;
+          if (bO2Device) bLine += ` | O2 Device: ${bO2Device}`;
+          if (bO2Flow) bLine += ` @ ${bO2Flow} L/min`;
+          if (breathing.airEntry) bLine += ` | Air Entry: ${breathing.airEntry}`;
+          if (breathing.abnormalPositioning) bLine += ` | Positioning: ${breathing.abnormalPositioning}`;
+          if (breathing.subcutaneousEmphysema) bLine += ` | Subcut Emphysema: ${breathing.subcutaneousEmphysema}`;
+          if (breathing.intervention) bLine += ` | Intervention: ${Array.isArray(breathing.intervention) ? breathing.intervention.join(", ") : breathing.intervention}`;
+          children.push(dBold("Breathing", bLine));
+        }
+
+        const cHR = circulation.hr || circulation.heartRate || primary.circulation_hr;
+        const cBPS = circulation.bpSystolic || primary.circulation_bp_systolic || circulation.bloodPressure;
+        const cBPD = circulation.bpDiastolic || primary.circulation_bp_diastolic;
+        const cCRT = circulation.capillaryRefill || circulation.crt || primary.circulation_crt;
+        const cAdj = circulation.interventions || primary.circulation_adjuncts || circulation.intervention;
+        if (cHR || cBPS || cCRT) {
+          let cLine = "";
+          if (cHR) cLine += `HR ${cHR}`;
+          if (cBPS && cBPD) cLine += `, BP ${cBPS}/${cBPD}`;
+          else if (cBPS) cLine += `, BP ${cBPS}`;
+          if (cCRT) cLine += ` | CRT: ${cCRT}`;
+          if (circulation.skinColorTemp) cLine += ` | Skin: ${circulation.skinColorTemp}`;
+          if (circulation.distendedNeckVeins) cLine += ` | Neck Veins: ${circulation.distendedNeckVeins}`;
+          if (cAdj) cLine += ` | Adjuncts: ${Array.isArray(cAdj) ? cAdj.join(", ") : cAdj}`;
+          children.push(dBold("Circulation", cLine));
+        }
+
+        const dAVPU = disability.motorResponse || disability.avpuGcs || primary.disability_avpu;
+        const dGE = disability.gcsE || primary.disability_gcs_e;
+        const dGV = disability.gcsV || primary.disability_gcs_v;
+        const dGM = disability.gcsM || primary.disability_gcs_m;
+        const dPupilSize = disability.pupilSize || disability.pupils || primary.disability_pupils_size;
+        const dPupilReact = disability.pupilReaction || primary.disability_pupils_reaction;
+        const dGlucose = disability.glucose || primary.disability_grbs;
+        if (dAVPU || dGE || dPupilSize || dGlucose) {
+          let dLine = "";
+          if (dAVPU) dLine += dAVPU;
+          if (dGE || dGV || dGM) {
+            const total = (parseInt(dGE) || 0) + (parseInt(dGV) || 0) + (parseInt(dGM) || 0);
+            dLine += ` | GCS ${total || "-"} (E${dGE || "-"}V${dGV || "-"}M${dGM || "-"})`;
+          }
+          if (dPupilSize) dLine += ` | Pupils: ${dPupilSize}`;
+          if (dPupilReact) dLine += ` (${dPupilReact})`;
+          if (dGlucose) dLine += ` | Glucose: ${dGlucose}`;
+          if (disability.abnormalResponses) dLine += ` | Abnormal Responses: ${disability.abnormalResponses}`;
+          children.push(dBold("Disability", dLine));
+        }
+
+        const eTemp = exposure.temperature || primary.exposure_temperature;
+        const eNotes = exposure.notes || primary.exposure_additional_notes;
+        if (eTemp || eNotes || exposure.trauma || exposure.signsOfTraumaIllness) {
+          let eLine = "";
+          if (eTemp) eLine += `Temp ${eTemp}\u00B0F`;
+          if (exposure.trauma) eLine += ` | Trauma: ${exposure.trauma}`;
+          if (exposure.signsOfTraumaIllness) eLine += ` | Signs: ${Array.isArray(exposure.signsOfTraumaIllness) ? exposure.signsOfTraumaIllness.join(", ") : exposure.signsOfTraumaIllness}`;
+          if (exposure.evidenceOfInfection) eLine += ` | Infection: ${exposure.evidenceOfInfection}`;
+          if (exposure.longBoneDeformities) eLine += ` | Long Bone: ${exposure.longBoneDeformities}`;
+          if (exposure.extremities) eLine += ` | Extremities: ${exposure.extremities}`;
+          if (exposure.immobilize) eLine += ` | Immobilize: ${exposure.immobilize}`;
+          if (eNotes) eLine += ` | Notes: ${eNotes}`;
+          children.push(dBold("Exposure", eLine));
+        }
+
+        if (isPed && Object.keys(efast).length > 0) {
+          let efLine = "";
+          if (efast.heart) efLine += `Heart: ${efast.heart}`;
+          if (efast.abdomen) efLine += ` | Abdomen: ${efast.abdomen}`;
+          if (efast.lungs) efLine += ` | Lungs: ${efast.lungs}`;
+          if (efast.pelvis) efLine += ` | Pelvis: ${efast.pelvis}`;
+          children.push(dBold("EFAST", efLine));
+        }
       }
 
-      const exam = data.examination || {};
+      if (Object.keys(adjuncts).length > 0 && (adjuncts.ecg_findings || adjuncts.bedside_echo || adjuncts.additional_notes || adjuncts.efast_status || adjuncts.efast_notes)) {
+        children.push(dH("ADJUNCTS TO PRIMARY SURVEY"));
+        if (adjuncts.additional_notes) children.push(dBold("ABG/VBG", adjuncts.additional_notes));
+        if (adjuncts.ecg_findings) children.push(dBold("ECG", adjuncts.ecg_findings));
+        if (adjuncts.efast_status || adjuncts.efast_notes) children.push(dBold("EFAST", `${adjuncts.efast_status || ""}${adjuncts.efast_notes ? ` - ${adjuncts.efast_notes}` : ""}`));
+        if (adjuncts.bedside_echo) children.push(dBold("Bedside Echo", adjuncts.bedside_echo));
+      }
+
+      if (Object.keys(abgData).length > 0) {
+        const abgParts: string[] = [];
+        if (abgData.pH) abgParts.push(`pH: ${abgData.pH}`);
+        if (abgData.pCO2) abgParts.push(`pCO2: ${abgData.pCO2}`);
+        if (abgData.pO2) abgParts.push(`pO2: ${abgData.pO2}`);
+        if (abgData.HCO3) abgParts.push(`HCO3: ${abgData.HCO3}`);
+        if (abgData.BE) abgParts.push(`BE: ${abgData.BE}`);
+        if (abgData.Lactate) abgParts.push(`Lactate: ${abgData.Lactate}`);
+        if (abgData.SaO2) abgParts.push(`SaO2: ${abgData.SaO2}`);
+        if (abgData.FiO2) abgParts.push(`FiO2: ${abgData.FiO2}`);
+        if (abgData.Na) abgParts.push(`Na: ${abgData.Na}`);
+        if (abgData.K) abgParts.push(`K: ${abgData.K}`);
+        if (abgData.Cl) abgParts.push(`Cl: ${abgData.Cl}`);
+        if (abgData.AnionGap) abgParts.push(`AG: ${abgData.AnionGap}`);
+        if (abgData.Glucose) abgParts.push(`Glucose: ${abgData.Glucose}`);
+        if (abgData.Hb) abgParts.push(`Hb: ${abgData.Hb}`);
+        if (abgData.AaGradient) abgParts.push(`A-a Gradient: ${abgData.AaGradient}`);
+        if (abgParts.length > 0) children.push(dBold("ABG Values", abgParts.join(" | ")));
+      }
+
+      if (Object.keys(history).length > 0) {
+        if (isPed) {
+          children.push(dH("SAMPLE HISTORY (PEDIATRIC)"));
+          const signsObj = history.signsAndSymptoms || {};
+          const signsText = history.signs_and_symptoms || "";
+          if (Object.keys(signsObj).length > 0) {
+            const sParts: string[] = [];
+            if (signsObj.breathingDifficulty) sParts.push(`Breathing Difficulty: ${signsObj.breathingDifficulty}`);
+            if (signsObj.fever) sParts.push(`Fever: ${signsObj.fever}`);
+            if (signsObj.vomiting) sParts.push(`Vomiting: ${signsObj.vomiting}`);
+            if (signsObj.decreasedOralIntake) sParts.push(`Decreased Oral Intake: ${signsObj.decreasedOralIntake}`);
+            if (signsObj.timeCourse) sParts.push(`Time Course: ${signsObj.timeCourse}`);
+            if (signsObj.notes) sParts.push(`Notes: ${signsObj.notes}`);
+            children.push(dBold("Signs & Symptoms", sParts.join(", ")));
+          } else if (signsText) {
+            dField("Signs & Symptoms", signsText);
+          }
+          dFieldArr("Allergies", history.allergies);
+          dField("Current Medications", history.currentMedications || history.medications || history.drug_history);
+          dField("Last Dose Medications", history.lastDoseMedications);
+          dField("Medications in Environment", history.medicationsInEnvironment);
+          dField("Health History", history.healthHistory || history.past_medical);
+          dField("Underlying Conditions", history.underlyingConditions);
+          dField("Immunization Status", history.immunizationStatus);
+          dField("Last Meal", history.lastMeal || history.last_meal);
+          dField("LMP", history.lmp);
+          dField("Events", history.events || history.hpi || history.events_hopi);
+          dField("Treatment Before Arrival", history.treatmentBeforeArrival);
+        } else {
+          children.push(dH("HISTORY"));
+          const hpi = history.hpi || history.events_hopi || data.sample?.eventsHopi || "";
+          dField("HPI / Events", hpi);
+          const pastMed = Array.isArray(history.past_medical) ? history.past_medical.join(", ") : history.past_medical;
+          dField("Past Medical History", pastMed);
+          dField("Past Surgical History", history.past_surgical);
+          const allergies = Array.isArray(history.allergies) ? history.allergies.join(", ") : history.allergies;
+          dField("Allergies", allergies);
+          dField("Medications / Drug History", history.medications || history.drug_history);
+          dField("Last Meal / LMP", history.last_meal || history.last_meal_lmp);
+          dField("LMP", history.lmp);
+        }
+      }
+
       if (Object.keys(exam).length > 0) {
-        children.push(
-          new Paragraph({ text: "SYSTEMIC EXAMINATION", heading: HeadingLevel.HEADING_2, spacing: { before: 300, after: 100 } })
-        );
-        if (exam.cvs_status) children.push(new Paragraph({ text: `CVS: ${exam.cvs_status}` }));
-        if (exam.respiratory_status) children.push(new Paragraph({ text: `Respiratory: ${exam.respiratory_status}` }));
-        if (exam.abdomen_status) children.push(new Paragraph({ text: `Abdomen: ${exam.abdomen_status}` }));
-        if (exam.cns_status) children.push(new Paragraph({ text: `CNS: ${exam.cns_status}` }));
+        if (isPed) {
+          children.push(dH("PHYSICAL EXAMINATION (PEDIATRIC)"));
+          const heent = exam.heent || data.heent || data.physical_exam?.heent || {};
+          if (typeof heent === "object" && Object.keys(heent).length > 0) {
+            children.push(new Paragraph({ children: [new TextRun({ text: "HEENT", bold: true, underline: {} })], spacing: { before: 100, after: 40 } }));
+            dField("Head", heent.head);
+            dField("Eyes", heent.eyes);
+            dField("Ears", heent.ears);
+            dField("Nose", heent.nose);
+            dField("Throat", heent.throat);
+            dField("Lymph Nodes", heent.lymphNodes);
+          }
+          dField("Respiratory", exam.respiratory || data.physical_exam?.respiratory || exam.respiratory_additional_notes);
+          dField("Cardiovascular", exam.cardiovascular || data.physical_exam?.cardiovascular || exam.cvs_additional_notes);
+          dField("Abdomen", exam.abdomen || data.physical_exam?.abdomen || exam.abdomen_additional_notes);
+          dField("Back", exam.back || data.physical_exam?.back);
+          dField("Extremities", exam.extremities || data.physical_exam?.extremities || exam.extremities_additional_notes || exam.extremities_findings);
+        } else {
+          children.push(dH("PHYSICAL EXAMINATION"));
+          const genFindings: string[] = [];
+          if (exam.general_pallor) genFindings.push("Pallor");
+          if (exam.general_icterus) genFindings.push("Icterus");
+          if (exam.general_cyanosis) genFindings.push("Cyanosis");
+          if (exam.general_clubbing) genFindings.push("Clubbing");
+          if (exam.general_lymphadenopathy) genFindings.push("Lymphadenopathy");
+          if (exam.general_edema) genFindings.push("Edema");
+          if (genFindings.length > 0 || exam.general_appearance || exam.general_additional_notes) {
+            children.push(new Paragraph({ children: [new TextRun({ text: "General Examination", bold: true, underline: {} })], spacing: { before: 100, after: 40 } }));
+            if (exam.general_appearance) dField("Appearance", exam.general_appearance);
+            children.push(dP(genFindings.length > 0 ? genFindings.join(", ") : "No significant findings"));
+            if (exam.general_additional_notes) dField("Notes", exam.general_additional_notes);
+          }
+          if (exam.cvs_status || exam.cvs_additional_notes) {
+            children.push(new Paragraph({ children: [new TextRun({ text: "CVS", bold: true, underline: {} })], spacing: { before: 100, after: 40 } }));
+            dField("Status", exam.cvs_status);
+            dField("S1/S2", exam.cvs_s1_s2);
+            dField("Pulse", exam.cvs_pulse);
+            dField("Pulse Rate", exam.cvs_pulse_rate);
+            dField("Apex Beat", exam.cvs_apexBeat);
+            dField("Murmurs", exam.cvs_murmurs);
+            dField("Added Sounds", exam.cvs_added_sounds);
+            dField("Notes", exam.cvs_additional_notes);
+          }
+          if (exam.respiratory_status || exam.respiratory_additional_notes) {
+            children.push(new Paragraph({ children: [new TextRun({ text: "Respiratory", bold: true, underline: {} })], spacing: { before: 100, after: 40 } }));
+            dField("Status", exam.respiratory_status);
+            dField("Expansion", exam.respiratory_expansion);
+            dField("Breath Sounds", exam.respiratory_breath_sounds);
+            dField("Percussion", exam.respiratory_percussion);
+            dField("Added Sounds", exam.respiratory_added_sounds);
+            dField("Notes", exam.respiratory_additional_notes);
+          }
+          if (exam.abdomen_status || exam.abdomen_additional_notes) {
+            children.push(new Paragraph({ children: [new TextRun({ text: "Abdomen", bold: true, underline: {} })], spacing: { before: 100, after: 40 } }));
+            dField("Status", exam.abdomen_status);
+            dField("Bowel Sounds", exam.abdomen_bowel_sounds);
+            dField("Percussion", exam.abdomen_percussion);
+            dField("Organomegaly", exam.abdomen_organomegaly);
+            dField("Notes", exam.abdomen_additional_notes);
+          }
+          if (exam.cns_status || exam.cns_additional_notes) {
+            children.push(new Paragraph({ children: [new TextRun({ text: "CNS", bold: true, underline: {} })], spacing: { before: 100, after: 40 } }));
+            dField("Status", exam.cns_status);
+            dField("Higher Mental Functions", exam.cns_higher_mental_functions);
+            dField("Cranial Nerves", exam.cns_cranial_nerves);
+            dField("Motor System", exam.cns_motor_system);
+            dField("Sensory System", exam.cns_sensory_system);
+            dField("Reflexes", exam.cns_reflexes);
+            dField("Notes", exam.cns_additional_notes);
+          }
+          if (exam.extremities_status || exam.extremities_findings || exam.extremities_additional_notes) {
+            children.push(new Paragraph({ children: [new TextRun({ text: "Extremities", bold: true, underline: {} })], spacing: { before: 100, after: 40 } }));
+            dField("Status", exam.extremities_status);
+            dField("Findings", exam.extremities_findings);
+            dField("Notes", exam.extremities_additional_notes);
+          }
+        }
       }
 
-      const investigations = data.investigations || {};
-      if (Object.keys(investigations).length > 0 && (investigations.panels_selected?.length > 0 || investigations.individual_tests?.length > 0 || investigations.imaging?.length > 0 || investigations.results_notes)) {
-        children.push(
-          new Paragraph({ text: "INVESTIGATIONS", heading: HeadingLevel.HEADING_2, spacing: { before: 300, after: 100 } })
-        );
-        if (Array.isArray(investigations.panels_selected) && investigations.panels_selected.length > 0) {
-          children.push(new Paragraph({ text: `Lab Panels: ${investigations.panels_selected.join(", ")}` }));
-        }
-        if (Array.isArray(investigations.individual_tests) && investigations.individual_tests.length > 0) {
-          children.push(new Paragraph({ text: `Individual Tests: ${investigations.individual_tests.join(", ")}` }));
-        }
+      if (Object.keys(investigations).length > 0 && (investigations.panels_selected?.length > 0 || investigations.individual_tests?.length > 0 || investigations.imaging || investigations.results_notes)) {
+        children.push(dH("INVESTIGATIONS"));
+        if (Array.isArray(investigations.panels_selected) && investigations.panels_selected.length > 0) children.push(dBold("Lab Panels", investigations.panels_selected.join(", ")));
+        if (Array.isArray(investigations.individual_tests) && investigations.individual_tests.length > 0) children.push(dBold("Individual Tests", investigations.individual_tests.join(", ")));
         if (investigations.imaging) {
-          const imagingText = Array.isArray(investigations.imaging) ? investigations.imaging.join(", ") : investigations.imaging;
-          children.push(new Paragraph({ text: `Imaging: ${imagingText}` }));
+          const imgText = Array.isArray(investigations.imaging) ? investigations.imaging.join(", ") : investigations.imaging;
+          children.push(dBold("Imaging", imgText));
         }
-        if (investigations.results_notes) {
-          children.push(new Paragraph({ text: `Results Notes: ${investigations.results_notes}` }));
-        }
+        dField("Results Notes", investigations.results_notes);
       }
 
-      const treatment = data.treatment || {};
-      if (treatment.primary_diagnosis || treatment.medications || treatment.infusions || treatment.iv_fluids || treatment.interventions) {
-        children.push(
-          new Paragraph({ text: "TREATMENT", heading: HeadingLevel.HEADING_2, spacing: { before: 300, after: 100 } })
-        );
-        if (treatment.primary_diagnosis) children.push(new Paragraph({ text: `Diagnosis: ${treatment.primary_diagnosis}` }));
+      const primaryDiag = treatment.primary_diagnosis || (Array.isArray(treatment.provisional_diagnoses) && treatment.provisional_diagnoses.length > 0 ? treatment.provisional_diagnoses[0] : "");
+      if (primaryDiag || treatment.medications?.length > 0 || treatment.infusions?.length > 0 || treatment.fluids || treatment.interventions?.length > 0 || treatment.intervention_notes || treatment.other_medications) {
+        children.push(dH("TREATMENT"));
+        dField("Primary Diagnosis", primaryDiag);
+        if (Array.isArray(treatment.provisional_diagnoses) && treatment.provisional_diagnoses.length > 0) {
+          children.push(dBold("Provisional Diagnoses", treatment.provisional_diagnoses.join(", ")));
+        }
         if (treatment.differential_diagnoses) {
           const diffs = Array.isArray(treatment.differential_diagnoses) ? treatment.differential_diagnoses.join(", ") : treatment.differential_diagnoses;
-          children.push(new Paragraph({ text: `Differential Diagnoses: ${diffs}` }));
+          dField("Differential Diagnoses", diffs);
         }
-        if (Array.isArray(treatment.interventions) && treatment.interventions.length > 0) {
-          children.push(new Paragraph({ text: `Interventions: ${treatment.interventions.join(", ")}` }));
-        }
+        if (Array.isArray(treatment.interventions) && treatment.interventions.length > 0) children.push(dBold("Interventions", treatment.interventions.join(", ")));
+        dField("Intervention Notes", treatment.intervention_notes);
+
         if (Array.isArray(treatment.medications) && treatment.medications.length > 0) {
-          children.push(new Paragraph({ children: [new TextRun({ text: "Medications:", bold: true })] }));
+          children.push(new Paragraph({ children: [new TextRun({ text: "Medications:", bold: true })], spacing: { before: 80, after: 40 } }));
           treatment.medications.forEach((med: any) => {
-            children.push(new Paragraph({ text: `  - ${med.name || ""} ${med.dose || ""} ${med.route || ""} ${med.frequency || ""}` }));
+            const name = med.name || med.drug_name || "";
+            children.push(dP(`  - ${name} ${med.dose || ""} ${med.route || ""} ${med.frequency || ""}`.trim()));
           });
         }
         if (Array.isArray(treatment.infusions) && treatment.infusions.length > 0) {
-          children.push(new Paragraph({ children: [new TextRun({ text: "Infusions:", bold: true })] }));
+          children.push(new Paragraph({ children: [new TextRun({ text: "Infusions:", bold: true })], spacing: { before: 80, after: 40 } }));
           treatment.infusions.forEach((inf: any) => {
-            children.push(new Paragraph({ text: `  - ${inf.drug || inf.name || ""} ${inf.dose || ""} in ${inf.dilution || ""} at ${inf.rate || ""}` }));
+            const name = inf.name || inf.drug_name || inf.drug || "";
+            children.push(dP(`  - ${name} ${inf.dose || ""} in ${inf.dilution || ""} at ${inf.rate || ""}`.trim()));
           });
         }
-        if (treatment.iv_fluids) children.push(new Paragraph({ text: `IV Fluids: ${treatment.iv_fluids}` }));
+        if (treatment.fluids) dField("IV Fluids", treatment.fluids);
+        if (treatment.other_medications) dField("Other Medications", treatment.other_medications);
       }
 
-      const procedures = data.procedures || {};
-      if (Object.keys(procedures).length > 0 && (procedures.performed?.length > 0 || procedures.generalNotes)) {
-        children.push(
-          new Paragraph({ text: "PROCEDURES", heading: HeadingLevel.HEADING_2, spacing: { before: 300, after: 100 } })
-        );
-        if (Array.isArray(procedures.performed) && procedures.performed.length > 0) {
-          children.push(new Paragraph({ text: `Performed: ${procedures.performed.join(", ")}` }));
+      if (proceduresPerformed.length > 0 || proceduresNotes) {
+        children.push(dH("PROCEDURES"));
+        if (Array.isArray(proceduresPerformed) && proceduresPerformed.length > 0) {
+          proceduresPerformed.forEach((proc: any) => {
+            if (typeof proc === "string") {
+              children.push(dP(`  - ${proc}`));
+            } else {
+              children.push(dP(`  - ${proc.name || "Procedure"}${proc.notes ? `: ${proc.notes}` : ""}`));
+            }
+          });
         }
-        if (procedures.generalNotes) children.push(new Paragraph({ text: `Notes: ${procedures.generalNotes}` }));
+        if (proceduresNotes) dField("General Notes", proceduresNotes);
       }
 
-      const disposition = data.disposition || {};
-      if (Object.keys(disposition).length > 0 && (disposition.type || disposition.department || disposition.notes)) {
-        children.push(
-          new Paragraph({ text: "DISPOSITION", heading: HeadingLevel.HEADING_2, spacing: { before: 300, after: 100 } })
-        );
-        if (disposition.type) children.push(new Paragraph({ text: `Disposition: ${disposition.type}` }));
-        if (disposition.department) children.push(new Paragraph({ text: `Department/Facility: ${disposition.department}` }));
-        if (disposition.notes) children.push(new Paragraph({ text: `Notes: ${disposition.notes}` }));
+      if (erObs.notes || erObs.duration) {
+        children.push(dH("ER OBSERVATION"));
+        dField("Duration", erObs.duration);
+        dField("Notes", erObs.notes);
       }
+
+      if (Object.keys(disposition).length > 0 && (disposition.type || disposition.admit_to || disposition.destination || disposition.department || disposition.notes)) {
+        children.push(dH("DISPOSITION"));
+        dField("Type", disposition.type);
+        dField("Admit To", disposition.admit_to || disposition.destination || disposition.department);
+        dField("Room", disposition.admit_to_room);
+        dField("Refer To", disposition.refer_to);
+        dField("Condition at Discharge", disposition.condition_at_discharge || disposition.condition);
+        dField("Notes", disposition.notes);
+      }
+
+      const addNotes = Array.isArray(addendumNotes) ? addendumNotes.filter(Boolean) : [];
+      if (addNotes.length > 0) {
+        children.push(dH("ADDENDUM NOTES"));
+        addNotes.forEach((note: string, i: number) => {
+          children.push(dP(`${i + 1}. ${note}`));
+        });
+      }
+
+      if (data.status || data.created_at || data.updated_at) {
+        children.push(dH("CASE INFO"));
+        dField("Status", data.status);
+        if (data.created_at) dField("Created", new Date(data.created_at).toLocaleString("en-IN"));
+        if (data.updated_at) dField("Updated", new Date(data.updated_at).toLocaleString("en-IN"));
+      }
+
+      children.push(new Paragraph({ text: "This case sheet is generated from ERmate for clinical documentation purposes.", alignment: AlignmentType.CENTER, spacing: { before: 400 } }));
 
       const docxDoc = new Document({
         sections: [{ properties: {}, children }],
       });
 
       const buffer = await Packer.toBuffer(docxDoc);
-      
+
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
       res.setHeader("Content-Disposition", `attachment; filename="casesheet_${(data.patient?.name || "patient").replace(/\s+/g, "_")}.docx"`);
       res.send(Buffer.from(buffer));
