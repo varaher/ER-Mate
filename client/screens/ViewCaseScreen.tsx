@@ -309,74 +309,90 @@ export default function ViewCaseScreen() {
 
         {isPed ? (
           <>
-            <Section title="Pediatric Assessment Triangle (PAT)">
-              <SubSection title="Appearance">
-                <InfoRow label="Tone" value={primary.pat?.appearance?.tone} />
-                <InfoRow label="Interactivity" value={primary.pat?.appearance?.interactivity} />
-                <InfoRow label="Consolability" value={primary.pat?.appearance?.consolability} />
-                <InfoRow label="Look/Gaze" value={primary.pat?.appearance?.lookGaze} />
-                <InfoRow label="Speech/Cry" value={primary.pat?.appearance?.speechCry} />
-              </SubSection>
-              <SubSection title="Work of Breathing">
-                <InfoRow label="Status" value={primary.pat?.workOfBreathing} />
-              </SubSection>
-              <SubSection title="Circulation to Skin">
-                <InfoRow label="Status" value={primary.pat?.circulationToSkin} />
-              </SubSection>
-            </Section>
+            {(() => {
+              const pat = primary.pat || {};
+              const pedAirway = primary.airway || {};
+              const pedBreathing = primary.breathing || {};
+              const pedCirculation = primary.circulation || {};
+              const pedDisability = primary.disability || {};
+              const pedExposure = primary.exposure || {};
+              const pedEfast = primary.efast || {};
+              const hasPat = pat.appearance?.tone || pat.tone || pat.workOfBreathing || pat.circulationToSkin;
+              return (
+                <>
+                  {hasPat ? (
+                    <Section title="Pediatric Assessment Triangle (PAT)">
+                      <SubSection title="Appearance">
+                        <InfoRow label="Tone" value={pat.appearance?.tone || pat.tone} />
+                        <InfoRow label="Interactivity" value={pat.appearance?.interactivity || pat.interactivity} />
+                        <InfoRow label="Consolability" value={pat.appearance?.consolability || pat.consolability} />
+                        <InfoRow label="Look/Gaze" value={pat.appearance?.lookGaze || pat.lookGaze} />
+                        <InfoRow label="Speech/Cry" value={pat.appearance?.speechCry || pat.speechCry} />
+                      </SubSection>
+                      <SubSection title="Work of Breathing">
+                        <InfoRow label="Status" value={pat.workOfBreathing} />
+                      </SubSection>
+                      <SubSection title="Circulation to Skin">
+                        <InfoRow label="Status" value={pat.circulationToSkin} />
+                      </SubSection>
+                    </Section>
+                  ) : null}
 
-            <Section title="Primary Assessment (ABCDE)">
-              <SubSection title="A - Airway">
-                <InfoRow label="Cry" value={airway.cry} />
-                <InfoRow label="Status" value={airway.status} />
-                <InfoRow label="Intervention" value={airway.intervention} />
-              </SubSection>
+                  <Section title="Primary Assessment (ABCDE)">
+                    <SubSection title="A - Airway">
+                      <InfoRow label="Cry" value={pedAirway.cry} />
+                      <InfoRow label="Status" value={pedAirway.status || primary.airway_status} />
+                      <InfoRow label="Intervention" value={pedAirway.intervention} />
+                    </SubSection>
 
-              <SubSection title="B - Breathing">
-                <InfoRow label="Respiratory Rate" value={breathing.respiratoryRate} />
-                <InfoRow label="SpO2" value={breathing.spo2 ? `${breathing.spo2}%` : "N/A"} />
-                <InfoRow label="Work of Breathing" value={Array.isArray(breathing.workOfBreathing) ? breathing.workOfBreathing.join(", ") || "None" : (breathing.workOfBreathing || "N/A")} />
-                <InfoRow label="Abnormal Positioning" value={breathing.abnormalPositioning} />
-                <InfoRow label="Air Entry" value={breathing.airEntry} />
-                <InfoRow label="Subcutaneous Emphysema" value={breathing.subcutaneousEmphysema} />
-                <InfoRow label="Intervention" value={breathing.intervention} />
-              </SubSection>
+                    <SubSection title="B - Breathing">
+                      <InfoRow label="Respiratory Rate" value={pedBreathing.respiratoryRate || primary.breathing_rr} />
+                      <InfoRow label="SpO2" value={(() => { const v = pedBreathing.spo2 || primary.breathing_spo2; return v ? `${v}%` : undefined; })()} />
+                      <InfoRow label="Work of Breathing" value={(() => { const w = pedBreathing.workOfBreathing || primary.breathing_work; return Array.isArray(w) ? w.join(", ") || "None" : w; })()} />
+                      <InfoRow label="Abnormal Positioning" value={pedBreathing.abnormalPositioning} />
+                      <InfoRow label="Air Entry" value={pedBreathing.airEntry} />
+                      <InfoRow label="Subcutaneous Emphysema" value={pedBreathing.subcutaneousEmphysema} />
+                      <InfoRow label="Intervention" value={pedBreathing.intervention} />
+                    </SubSection>
 
-              <SubSection title="C - Circulation">
-                <InfoRow label="CRT" value={circulation.crt} />
-                <InfoRow label="Heart Rate" value={circulation.heartRate} />
-                <InfoRow label="Blood Pressure" value={circulation.bloodPressure} />
-                <InfoRow label="Skin Color/Temp" value={circulation.skinColorTemp} />
-                <InfoRow label="Distended Neck Veins" value={circulation.distendedNeckVeins} />
-                <InfoRow label="Intervention" value={circulation.intervention} />
-              </SubSection>
+                    <SubSection title="C - Circulation">
+                      <InfoRow label="CRT" value={pedCirculation.crt || (primary.circulation_crt ? `${primary.circulation_crt} sec` : undefined)} />
+                      <InfoRow label="Heart Rate" value={pedCirculation.heartRate || primary.circulation_hr} />
+                      <InfoRow label="Blood Pressure" value={pedCirculation.bloodPressure} />
+                      <InfoRow label="Skin Color/Temp" value={pedCirculation.skinColorTemp} />
+                      <InfoRow label="Distended Neck Veins" value={pedCirculation.distendedNeckVeins} />
+                      <InfoRow label="Intervention" value={pedCirculation.intervention} />
+                    </SubSection>
 
-              <SubSection title="D - Disability">
-                <InfoRow label="AVPU/GCS" value={disability.avpuGcs} />
-                <InfoRow label="Pupils" value={disability.pupils} />
-                <InfoRow label="Abnormal Responses" value={disability.abnormalResponses} />
-                <InfoRow label="Glucose" value={disability.glucose} />
-              </SubSection>
+                    <SubSection title="D - Disability">
+                      <InfoRow label="AVPU/GCS" value={pedDisability.avpuGcs || primary.disability_avpu} />
+                      <InfoRow label="Pupils" value={pedDisability.pupils || primary.disability_pupils_size} />
+                      <InfoRow label="Abnormal Responses" value={pedDisability.abnormalResponses} />
+                      <InfoRow label="Glucose" value={pedDisability.glucose || primary.disability_grbs} />
+                    </SubSection>
 
-              <SubSection title="E - Exposure">
-                <InfoRow label="Temperature" value={exposure.temperature ? `${exposure.temperature}F` : "N/A"} />
-                <InfoRow label="Trauma" value={exposure.trauma} />
-                <InfoRow label="Signs of Trauma/Illness" value={Array.isArray(exposure.signsOfTraumaIllness) ? exposure.signsOfTraumaIllness.join(", ") || "None" : (exposure.signsOfTraumaIllness || "N/A")} />
-                <InfoRow label="Evidence of Infection" value={exposure.evidenceOfInfection} />
-                <InfoRow label="Long Bone Deformities" value={exposure.longBoneDeformities} />
-                <InfoRow label="Extremities" value={exposure.extremities} />
-                <InfoRow label="Immobilize" value={exposure.immobilize} />
-              </SubSection>
-            </Section>
+                    <SubSection title="E - Exposure">
+                      <InfoRow label="Temperature" value={(() => { const t = pedExposure.temperature || primary.exposure_temperature; return t ? `${t}F` : undefined; })()} />
+                      <InfoRow label="Trauma" value={pedExposure.trauma} />
+                      <InfoRow label="Signs of Trauma/Illness" value={(() => { const s = pedExposure.signsOfTraumaIllness; return Array.isArray(s) ? s.join(", ") || "None" : s; })()} />
+                      <InfoRow label="Evidence of Infection" value={pedExposure.evidenceOfInfection} />
+                      <InfoRow label="Long Bone Deformities" value={pedExposure.longBoneDeformities} />
+                      <InfoRow label="Extremities" value={pedExposure.extremities} />
+                      <InfoRow label="Immobilize" value={pedExposure.immobilize} />
+                    </SubSection>
+                  </Section>
 
-            {(primary.efast?.heart || primary.efast?.abdomen || primary.efast?.lungs || primary.efast?.pelvis) ? (
-              <Section title="EFAST">
-                <InfoRow label="Heart" value={primary.efast?.heart} />
-                <InfoRow label="Abdomen" value={primary.efast?.abdomen} />
-                <InfoRow label="Lungs" value={primary.efast?.lungs} />
-                <InfoRow label="Pelvis" value={primary.efast?.pelvis} />
-              </Section>
-            ) : null}
+                  {(pedEfast.heart || pedEfast.abdomen || pedEfast.lungs || pedEfast.pelvis) ? (
+                    <Section title="EFAST">
+                      <InfoRow label="Heart" value={pedEfast.heart} />
+                      <InfoRow label="Abdomen" value={pedEfast.abdomen} />
+                      <InfoRow label="Lungs" value={pedEfast.lungs} />
+                      <InfoRow label="Pelvis" value={pedEfast.pelvis} />
+                    </Section>
+                  ) : null}
+                </>
+              );
+            })()}
           </>
         ) : (
           <Section title="Primary Assessment (ABCDE)">
@@ -451,14 +467,14 @@ export default function ViewCaseScreen() {
             <SubSection title="Signs & Symptoms">
               {(() => {
                 const ss = history.signsAndSymptoms || {};
-                const present = [];
+                const present: string[] = [];
                 if (ss.breathingDifficulty) present.push("Breathing Difficulty");
                 if (ss.fever) present.push("Fever");
                 if (ss.vomiting) present.push("Vomiting");
                 if (ss.decreasedOralIntake) present.push("Decreased Oral Intake");
                 return (
                   <>
-                    <InfoRow label="Present" value={present.length > 0 ? present.join(", ") : "None"} />
+                    <InfoRow label="Present" value={present.length > 0 ? present.join(", ") : (history.signs_and_symptoms || "None")} />
                     <InfoRow label="Time Course" value={ss.timeCourse} />
                     <InfoRow label="Notes" value={ss.notes} />
                   </>
@@ -466,28 +482,28 @@ export default function ViewCaseScreen() {
               })()}
             </SubSection>
             <SubSection title="Allergies">
-              <InfoRow label="Allergies" value={history.allergies} />
+              <InfoRow label="Allergies" value={(() => { const a = history.allergies; return Array.isArray(a) ? a.join(", ") : a; })()} />
             </SubSection>
             <SubSection title="Medications">
-              <InfoRow label="Current Medications" value={history.currentMedications} />
+              <InfoRow label="Current Medications" value={history.currentMedications || history.medications || history.drug_history} />
               <InfoRow label="Last Dose" value={history.lastDoseMedications} />
               <InfoRow label="Medications in Environment" value={history.medicationsInEnvironment} />
             </SubSection>
             <SubSection title="Past Medical History">
-              <InfoRow label="Health History" value={history.healthHistory} />
+              <InfoRow label="Health History" value={(() => { const h = history.healthHistory || history.past_medical; return Array.isArray(h) ? h.join(", ") : h; })()} />
               <InfoRow label="Underlying Conditions" value={history.underlyingConditions} />
               <InfoRow label="Immunization Status" value={history.immunizationStatus} />
             </SubSection>
             <SubSection title="Last Meal">
-              <InfoRow label="Last Meal" value={history.lastMeal} />
+              <InfoRow label="Last Meal" value={history.lastMeal || history.last_meal} />
             </SubSection>
-            {history.lmp ? (
+            {(history.lmp) ? (
               <SubSection title="LMP">
                 <InfoRow label="LMP" value={history.lmp} />
               </SubSection>
             ) : null}
             <SubSection title="Events">
-              <InfoRow label="Events" value={history.events} />
+              <InfoRow label="Events" value={history.events || history.hpi || history.events_hopi} />
               <InfoRow label="Treatment Before Arrival" value={history.treatmentBeforeArrival} />
             </SubSection>
           </Section>
@@ -549,28 +565,33 @@ export default function ViewCaseScreen() {
 
         {isPed ? (
           <Section title="Physical Examination">
-            <SubSection title="HEENT">
-              <InfoRow label="Head" value={examination.heent?.head} />
-              <InfoRow label="Eyes" value={examination.heent?.eyes} />
-              <InfoRow label="Ears" value={examination.heent?.ears} />
-              <InfoRow label="Nose" value={examination.heent?.nose} />
-              <InfoRow label="Throat" value={examination.heent?.throat} />
-              <InfoRow label="Lymph Nodes" value={examination.heent?.lymphNodes} />
-            </SubSection>
+            {(() => {
+              const heent = examination.heent || caseData.heent || caseData.physical_exam?.heent || {};
+              return (
+                <SubSection title="HEENT">
+                  <InfoRow label="Head" value={heent.head || examination.general_additional_notes} />
+                  <InfoRow label="Eyes" value={heent.eyes} />
+                  <InfoRow label="Ears" value={heent.ears} />
+                  <InfoRow label="Nose" value={heent.nose} />
+                  <InfoRow label="Throat" value={heent.throat} />
+                  <InfoRow label="Lymph Nodes" value={heent.lymphNodes} />
+                </SubSection>
+              );
+            })()}
             <SubSection title="Respiratory">
-              <InfoRow label="Findings" value={examination.respiratory} />
+              <InfoRow label="Findings" value={examination.respiratory || caseData.physical_exam?.respiratory || examination.respiratory_additional_notes} />
             </SubSection>
             <SubSection title="Cardiovascular">
-              <InfoRow label="Findings" value={examination.cardiovascular} />
+              <InfoRow label="Findings" value={examination.cardiovascular || caseData.physical_exam?.cardiovascular || examination.cvs_additional_notes} />
             </SubSection>
             <SubSection title="Abdomen">
-              <InfoRow label="Findings" value={examination.abdomen} />
+              <InfoRow label="Findings" value={examination.abdomen || caseData.physical_exam?.abdomen || examination.abdomen_additional_notes} />
             </SubSection>
             <SubSection title="Back">
-              <InfoRow label="Findings" value={examination.back} />
+              <InfoRow label="Findings" value={examination.back || caseData.physical_exam?.back} />
             </SubSection>
             <SubSection title="Extremities">
-              <InfoRow label="Findings" value={examination.extremities} />
+              <InfoRow label="Findings" value={examination.extremities || caseData.physical_exam?.extremities || examination.extremities_additional_notes || examination.extremities_findings} />
             </SubSection>
           </Section>
         ) : (

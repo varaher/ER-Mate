@@ -8,6 +8,9 @@ interface CaseCacheEntry {
   procedures: any;
   addendum_notes: string[];
   discharge_summary: any;
+  primary_assessment: any;
+  history: any;
+  examination: any;
   updatedAt: string;
 }
 
@@ -42,6 +45,9 @@ export async function cacheCasePayload(caseId: string, payload: any): Promise<vo
     procedures: payload.procedures || existing.procedures || {},
     addendum_notes: payload.addendum_notes || existing.addendum_notes || [],
     discharge_summary: payload.discharge_summary || existing.discharge_summary || {},
+    primary_assessment: payload.primary_assessment || existing.primary_assessment || {},
+    history: payload.history || existing.history || {},
+    examination: payload.examination || existing.examination || {},
     updatedAt: new Date().toISOString(),
   };
 
@@ -65,6 +71,9 @@ export async function cacheAddendumNotes(caseId: string, notes: string[]): Promi
       procedures: {},
       addendum_notes: [],
       discharge_summary: {},
+      primary_assessment: {},
+      history: {},
+      examination: {},
       updatedAt: new Date().toISOString(),
     };
   }
@@ -82,6 +91,9 @@ export async function cacheDischargeSummary(caseId: string, summary: any): Promi
       procedures: {},
       addendum_notes: [],
       discharge_summary: {},
+      primary_assessment: {},
+      history: {},
+      examination: {},
       updatedAt: new Date().toISOString(),
     };
   }
@@ -156,6 +168,54 @@ export function mergeCaseWithCache(caseData: any, cached: CaseCacheEntry): any {
   }
   if (!merged.procedures.general_notes && cached.procedures.general_notes) {
     merged.procedures.general_notes = cached.procedures.general_notes;
+  }
+
+  if (cached.primary_assessment && Object.keys(cached.primary_assessment).length > 0) {
+    if (!merged.primary_assessment) merged.primary_assessment = {};
+    if (cached.primary_assessment.pat && !merged.primary_assessment.pat) {
+      merged.primary_assessment.pat = cached.primary_assessment.pat;
+    }
+    if (cached.primary_assessment.airway && !merged.primary_assessment.airway) {
+      merged.primary_assessment.airway = cached.primary_assessment.airway;
+    }
+    if (cached.primary_assessment.breathing && !merged.primary_assessment.breathing) {
+      merged.primary_assessment.breathing = cached.primary_assessment.breathing;
+    }
+    if (cached.primary_assessment.circulation && !merged.primary_assessment.circulation) {
+      merged.primary_assessment.circulation = cached.primary_assessment.circulation;
+    }
+    if (cached.primary_assessment.disability && !merged.primary_assessment.disability) {
+      merged.primary_assessment.disability = cached.primary_assessment.disability;
+    }
+    if (cached.primary_assessment.exposure && !merged.primary_assessment.exposure) {
+      merged.primary_assessment.exposure = cached.primary_assessment.exposure;
+    }
+    if (cached.primary_assessment.efast && !merged.primary_assessment.efast) {
+      merged.primary_assessment.efast = cached.primary_assessment.efast;
+    }
+  }
+
+  if (cached.history && Object.keys(cached.history).length > 0) {
+    if (!merged.history) merged.history = {};
+    const historyFields = ['allergies', 'currentMedications', 'lastDoseMedications', 'medicationsInEnvironment', 'healthHistory', 'underlyingConditions', 'immunizationStatus', 'lastMeal', 'lmp', 'events', 'treatmentBeforeArrival', 'signsAndSymptoms'];
+    for (const field of historyFields) {
+      if (cached.history[field] && !merged.history[field]) {
+        merged.history[field] = cached.history[field];
+      }
+    }
+  }
+
+  if (cached.examination && Object.keys(cached.examination).length > 0) {
+    if (!merged.examination) merged.examination = {};
+    if (cached.examination.heent && !merged.examination.heent) {
+      merged.examination.heent = cached.examination.heent;
+    }
+    const examFields = ['respiratory', 'cardiovascular', 'abdomen', 'back', 'extremities'];
+    for (const field of examFields) {
+      if (cached.examination[field] && !merged.examination[field]) {
+        merged.examination[field] = cached.examination[field];
+      }
+    }
   }
 
   return merged;
