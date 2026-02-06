@@ -29,6 +29,7 @@ export default function ViewDischargeSummaryScreen() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [hasSummary, setHasSummary] = useState(false);
   const [summary, setSummary] = useState<any>(null);
   const [patientInfo, setPatientInfo] = useState<any>(null);
 
@@ -54,11 +55,12 @@ export default function ViewDischargeSummaryScreen() {
         setPatientInfo(mergedData.patient || {});
 
         const savedSummary = mergedData.discharge_summary;
-        if (savedSummary && Object.keys(savedSummary).length > 0) {
+        if (savedSummary && typeof savedSummary === "object" && Object.keys(savedSummary).length > 0 && savedSummary.presenting_complaint !== undefined) {
           setSummary(savedSummary);
+          setHasSummary(true);
         } else {
-          const autoSummary = buildAutoSummary(mergedData);
-          setSummary(autoSummary);
+          setSummary(null);
+          setHasSummary(false);
         }
       } else {
         setError(true);
@@ -69,88 +71,6 @@ export default function ViewDischargeSummaryScreen() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const buildAutoSummary = (data: any) => {
-    const vitals = data.vitals_at_arrival || data.vitals || {};
-    const patient = data.patient || {};
-    const triage = data.triage || {};
-    const treatment = data.treatment || {};
-    const disposition = data.disposition || {};
-    const exam = data.examination || {};
-    const sample = data.sample || {};
-    const history = data.history || {};
-    const primaryAssessment = data.primary_assessment || {};
-    const abcde = data.abcde || {};
-
-    const gcsE = vitals.gcs_e || primaryAssessment.disability_gcs_e || 4;
-    const gcsV = vitals.gcs_v || primaryAssessment.disability_gcs_v || 5;
-    const gcsM = vitals.gcs_m || primaryAssessment.disability_gcs_m || 6;
-    const gcsTotal = vitals.gcs_total || (gcsE + gcsV + gcsM);
-
-    const medsText = treatment.medications?.map((m: any) => `${m.name || ""} ${m.dose || ""} ${m.route || ""} ${m.frequency || ""}`.trim()).join("\n") || "";
-    const infText = treatment.infusions?.map((inf: any) => `${inf.drug_name || inf.name || ""} ${inf.dose || ""} ${inf.dilution ? `in ${inf.dilution}` : ""} ${inf.rate ? `@ ${inf.rate}` : ""}`.trim()).join("\n") || "";
-    const addendumNotes = data.treatment?.addendum_notes || data.addendum_notes || [];
-    const notesList = Array.isArray(addendumNotes) ? addendumNotes : (addendumNotes ? [addendumNotes] : []);
-
-    const courseParts: string[] = [];
-    if (medsText) courseParts.push("MEDICATIONS GIVEN IN ER:\n" + medsText);
-    if (infText) courseParts.push("INFUSIONS:\n" + infText);
-    if (notesList.length > 0) courseParts.push("CLINICAL NOTES:\n" + notesList.join("\n"));
-
-    return {
-      mlc: data.mlc ?? false,
-      allergy: sample.allergies || history.allergies?.join(", ") || patient.allergies || triage.allergies || "No known allergies",
-      vitals_arrival: {
-        hr: vitals.hr?.toString() || "",
-        bp: `${vitals.bp_systolic || ""}/${vitals.bp_diastolic || ""}`,
-        rr: vitals.rr?.toString() || "",
-        spo2: vitals.spo2?.toString() || "",
-        gcs: gcsTotal.toString(),
-        pain_score: vitals.pain_score?.toString() || "",
-        grbs: vitals.grbs?.toString() || "",
-        temp: vitals.temperature?.toString() || "",
-      },
-      presenting_complaint: data.presenting_complaint?.text || triage.chief_complaint || "",
-      history_of_present_illness: history.hpi || history.events_hopi || sample.eventsHopi || "",
-      past_medical_history: history.past_medical?.join(", ") || sample.pastMedicalHistory || "",
-      family_history: patient.family_history || "",
-      lmp: history.last_meal_lmp || sample.lastMeal || "",
-      primary_assessment: {
-        airway: abcde.airway?.status || primaryAssessment.airway || "Patent",
-        breathing: `RR: ${vitals.rr || "-"}/min, SpO2: ${vitals.spo2 || "-"}%`,
-        circulation: `HR: ${vitals.hr || "-"} bpm, BP: ${vitals.bp_systolic || "-"}/${vitals.bp_diastolic || "-"} mmHg`,
-        disability: `GCS: ${gcsTotal}/15, GRBS: ${vitals.grbs || "-"} mg/dL`,
-        exposure: `Temp: ${vitals.temperature || "-"}`,
-        efast: data.adjuncts?.efast_notes || abcde.efast || "",
-      },
-      secondary_assessment: {
-        pallor: exam.general_pallor || exam.general?.pallor || false,
-        icterus: exam.general_icterus || exam.general?.icterus || false,
-        cyanosis: exam.general_cyanosis || exam.general?.cyanosis || false,
-        clubbing: exam.general_clubbing || exam.general?.clubbing || false,
-        lymphadenopathy: exam.general_lymphadenopathy || exam.general?.lymphadenopathy || false,
-        edema: exam.general_edema || exam.general?.edema || false,
-      },
-      systemic_exam: {
-        chest: exam.respiratory_notes || "",
-        cvs: exam.cvs_notes || "",
-        pa: exam.abdomen_notes || "",
-        cns: exam.cns_notes || "",
-        extremities: "",
-      },
-      course_in_hospital: courseParts.join("\n\n"),
-      investigations: treatment.investigations || "",
-      diagnosis: treatment.primary_diagnosis || treatment.provisional_diagnosis || "",
-      discharge_medications: "",
-      disposition_type: disposition.type || disposition.disposition_type || "Normal Discharge",
-      condition_at_discharge: disposition.condition || disposition.condition_at_discharge || "STABLE",
-      vitals_discharge: { hr: "", bp: "", rr: "", spo2: "", gcs: "", pain_score: "", grbs: "", temp: "" },
-      follow_up_advice: disposition.follow_up || disposition.follow_up_instructions || "",
-      ed_resident: data.em_resident || "",
-      ed_consultant: "",
-      discharge_date: new Date().toLocaleDateString(),
-    };
   };
 
   const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
@@ -187,25 +107,33 @@ export default function ViewDischargeSummaryScreen() {
     );
   }
 
-  if (error || !summary) {
+  if (error) {
     return (
-      <View style={[styles.errorContainer, { backgroundColor: theme.backgroundDefault }]}>
+      <View style={[styles.emptyContainer, { backgroundColor: theme.backgroundDefault }]}>
         <Feather name="alert-circle" size={48} color={theme.textMuted} />
-        <Text style={[styles.errorText, { color: theme.textSecondary }]}>
-          {error ? "Unable to load discharge summary" : "No discharge summary available"}
+        <Text style={[styles.emptyTitle, { color: theme.text }]}>Unable to load data</Text>
+        <Pressable style={[styles.primaryBtn, { backgroundColor: theme.primary }]} onPress={loadData}>
+          <Text style={styles.primaryBtnText}>Retry</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  if (!hasSummary || !summary) {
+    return (
+      <View style={[styles.emptyContainer, { backgroundColor: theme.backgroundDefault }]}>
+        <Feather name="clipboard" size={56} color={theme.textMuted} />
+        <Text style={[styles.emptyTitle, { color: theme.text }]}>No Discharge Summary Yet</Text>
+        <Text style={[styles.emptySubtitle, { color: theme.textSecondary }]}>
+          A discharge summary hasn't been created for this case yet. Tap below to create one.
         </Text>
-        <View style={styles.errorActions}>
-          <Pressable style={[styles.retryBtn, { backgroundColor: theme.primary }]} onPress={loadData}>
-            <Text style={styles.retryBtnText}>Retry</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.editBtn, { backgroundColor: theme.success }]}
-            onPress={() => navigation.navigate("DischargeSummary", { caseId })}
-          >
-            <Feather name="edit" size={16} color="#FFFFFF" />
-            <Text style={styles.editBtnText}>Create Discharge Summary</Text>
-          </Pressable>
-        </View>
+        <Pressable
+          style={[styles.primaryBtn, { backgroundColor: theme.success }]}
+          onPress={() => navigation.navigate("DischargeSummary", { caseId })}
+        >
+          <Feather name="plus" size={18} color="#FFFFFF" />
+          <Text style={styles.primaryBtnText}>Create Discharge Summary</Text>
+        </Pressable>
       </View>
     );
   }
@@ -339,11 +267,11 @@ export default function ViewDischargeSummaryScreen() {
 
         <View style={styles.actionRow}>
           <Pressable
-            style={[styles.actionBtn, { backgroundColor: theme.primary }]}
+            style={[styles.primaryBtn, { backgroundColor: theme.primary }]}
             onPress={() => navigation.navigate("DischargeSummary", { caseId })}
           >
             <Feather name="edit" size={18} color="#FFFFFF" />
-            <Text style={styles.actionBtnText}>Edit Discharge Summary</Text>
+            <Text style={styles.primaryBtnText}>Edit Discharge Summary</Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -356,13 +284,11 @@ const styles = StyleSheet.create({
   content: { padding: Spacing.lg, gap: Spacing.md },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center", gap: Spacing.md },
   loadingText: { ...Typography.body },
-  errorContainer: { flex: 1, justifyContent: "center", alignItems: "center", gap: Spacing.lg, padding: Spacing.xl },
-  errorText: { ...Typography.body, textAlign: "center" },
-  errorActions: { gap: Spacing.md, alignItems: "center" },
-  retryBtn: { paddingHorizontal: Spacing.xl, paddingVertical: Spacing.md, borderRadius: BorderRadius.md },
-  retryBtnText: { color: "#FFFFFF", ...Typography.bodyMedium },
-  editBtn: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, paddingHorizontal: Spacing.xl, paddingVertical: Spacing.md, borderRadius: BorderRadius.md },
-  editBtnText: { color: "#FFFFFF", ...Typography.bodyMedium },
+  emptyContainer: { flex: 1, justifyContent: "center", alignItems: "center", gap: Spacing.lg, padding: Spacing.xl },
+  emptyTitle: { ...Typography.h3, textAlign: "center" },
+  emptySubtitle: { ...Typography.body, textAlign: "center", lineHeight: 22, maxWidth: 300 },
+  primaryBtn: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, paddingHorizontal: Spacing.xl, paddingVertical: Spacing.md, borderRadius: BorderRadius.md },
+  primaryBtnText: { color: "#FFFFFF", ...Typography.bodyMedium },
   section: { borderRadius: BorderRadius.lg, padding: Spacing.lg, gap: Spacing.sm },
   sectionTitle: { ...Typography.h3, marginBottom: Spacing.xs },
   text: { ...Typography.body, lineHeight: 22 },
@@ -376,6 +302,4 @@ const styles = StyleSheet.create({
   vitalValue: { ...Typography.bodyMedium, fontSize: 16, marginVertical: 2 },
   vitalUnit: { ...Typography.caption, fontSize: 10 },
   actionRow: { marginTop: Spacing.lg, alignItems: "center" },
-  actionBtn: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, paddingHorizontal: Spacing.xl, paddingVertical: Spacing.md, borderRadius: BorderRadius.md },
-  actionBtnText: { color: "#FFFFFF", ...Typography.bodyMedium },
 });

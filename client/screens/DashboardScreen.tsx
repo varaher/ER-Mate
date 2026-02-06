@@ -594,6 +594,12 @@ export default function DashboardScreen() {
                           <Feather name="file-text" size={16} color={theme.success} />
                         </Pressable>
                         <Pressable
+                          style={[styles.actionBtn, { backgroundColor: "#e0f2fe" }]}
+                          onPress={() => navigation.navigate("DischargeSummary", { caseId: caseItem.id })}
+                        >
+                          <Feather name="clipboard" size={16} color="#0284c7" />
+                        </Pressable>
+                        <Pressable
                           style={[styles.actionBtn, { backgroundColor: "#fef3c7" }]}
                           onPress={() => navigation.navigate("AddendumNotes", { caseId: caseItem.id })}
                         >
