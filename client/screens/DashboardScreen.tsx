@@ -589,7 +589,7 @@ export default function DashboardScreen() {
                         </Pressable>
                         <Pressable
                           style={[styles.actionBtn, { backgroundColor: theme.successLight }]}
-                          onPress={() => navigation.navigate("DischargeSummary", { caseId: caseItem.id })}
+                          onPress={() => navigation.navigate("ViewDischargeSummary", { caseId: caseItem.id })}
                         >
                           <Feather name="file-text" size={16} color={theme.success} />
                         </Pressable>

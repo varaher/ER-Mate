@@ -635,8 +635,15 @@ export default function ViewCaseScreen() {
             <Text style={styles.editBtnText}>Full Edit</Text>
           </Pressable>
           <Pressable style={[styles.dischargeBtn, { backgroundColor: theme.success }]} onPress={() => navigation.navigate("DischargeSummary", { caseId })}>
-            <Feather name="file-text" size={18} color="#FFFFFF" />
+            <Feather name="edit" size={18} color="#FFFFFF" />
             <Text style={styles.editBtnText}>Discharge</Text>
+          </Pressable>
+        </View>
+
+        <View style={[styles.buttonRow, { marginTop: Spacing.md }]}>
+          <Pressable style={[styles.dischargeBtn, { backgroundColor: "#6366f1" }]} onPress={() => navigation.navigate("ViewDischargeSummary", { caseId })}>
+            <Feather name="eye" size={18} color="#FFFFFF" />
+            <Text style={styles.editBtnText}>View Discharge Summary</Text>
           </Pressable>
         </View>
 
