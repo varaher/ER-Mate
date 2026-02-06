@@ -9,7 +9,7 @@ import {
   TextInput,
   Alert,
 } from "react-native";
-import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
+import { useNavigation, useRoute, RouteProp, useFocusEffect } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -62,6 +62,12 @@ export default function ViewCaseScreen() {
   useEffect(() => {
     loadCaseData();
   }, [caseId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadCaseData();
+    }, [caseId])
+  );
 
   const loadCaseData = async () => {
     try {

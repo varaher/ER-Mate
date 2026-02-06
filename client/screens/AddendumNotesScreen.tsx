@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
 import { apiGet, apiPut } from "@/lib/api";
+import { cacheAddendumNotes, getCachedCaseData } from "@/lib/caseCache";
 import { Spacing, BorderRadius, Typography } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -43,14 +44,23 @@ export default function AddendumNotesScreen() {
     try {
       setLoading(true);
       const res = await apiGet<any>(`/cases/${caseId}`);
+      const cached = await getCachedCaseData(caseId);
       if (res.success && res.data) {
         setPatientName(res.data.patient?.name || "Patient");
-        const notes = res.data.treatment?.addendum_notes || res.data.addendum_notes || [];
-        setExistingNotes(Array.isArray(notes) ? notes : (notes ? [notes] : []));
+        const backendNotes = res.data.treatment?.addendum_notes || res.data.addendum_notes || [];
+        const backendList = Array.isArray(backendNotes) ? backendNotes : (backendNotes ? [backendNotes] : []);
+        const cachedList = cached?.addendum_notes || [];
+        const notes = cachedList.length > backendList.length ? cachedList : backendList;
+        setExistingNotes(notes);
       }
     } catch (err) {
       console.error("Error loading case:", err);
-      Alert.alert("Error", "Unable to load case data");
+      const cached2 = await getCachedCaseData(caseId);
+      if (cached2?.addendum_notes?.length) {
+        setExistingNotes(cached2.addendum_notes);
+      } else {
+        Alert.alert("Error", "Unable to load case data");
+      }
     } finally {
       setLoading(false);
     }
@@ -69,6 +79,8 @@ export default function AddendumNotesScreen() {
       const formattedNote = `[${timestamp}] ${newNote}`;
       const updatedNotes = [...existingNotes, formattedNote];
 
+      await cacheAddendumNotes(caseId, updatedNotes);
+
       const res = await apiPut(`/cases/${caseId}`, {
         treatment: {
           addendum_notes: updatedNotes,
@@ -81,7 +93,9 @@ export default function AddendumNotesScreen() {
           { text: "OK", onPress: () => navigation.goBack() }
         ]);
       } else {
-        Alert.alert("Error", "Failed to save addendum note");
+        Alert.alert("Saved Locally", "Note saved locally. Backend sync may have failed.", [
+          { text: "OK", onPress: () => navigation.goBack() }
+        ]);
       }
     } catch (err) {
       console.error("Error saving addendum:", err);

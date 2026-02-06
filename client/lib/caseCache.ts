@@ -2,13 +2,17 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const CACHE_KEY = "@ermate_case_cache";
 
+interface CaseCacheEntry {
+  treatment: any;
+  investigations: any;
+  procedures: any;
+  addendum_notes: string[];
+  discharge_summary: any;
+  updatedAt: string;
+}
+
 interface CaseCache {
-  [caseId: string]: {
-    treatment: any;
-    investigations: any;
-    procedures: any;
-    updatedAt: string;
-  };
+  [caseId: string]: CaseCacheEntry;
 }
 
 async function loadCache(): Promise<CaseCache> {
@@ -31,10 +35,13 @@ async function saveCache(cache: CaseCache): Promise<void> {
 
 export async function cacheCasePayload(caseId: string, payload: any): Promise<void> {
   const cache = await loadCache();
+  const existing = cache[caseId] || {};
   cache[caseId] = {
-    treatment: payload.treatment || {},
-    investigations: payload.investigations || {},
-    procedures: payload.procedures || {},
+    treatment: payload.treatment || existing.treatment || {},
+    investigations: payload.investigations || existing.investigations || {},
+    procedures: payload.procedures || existing.procedures || {},
+    addendum_notes: payload.addendum_notes || existing.addendum_notes || [],
+    discharge_summary: payload.discharge_summary || existing.discharge_summary || {},
     updatedAt: new Date().toISOString(),
   };
 
@@ -49,12 +56,46 @@ export async function cacheCasePayload(caseId: string, payload: any): Promise<vo
   await saveCache(cache);
 }
 
-export async function getCachedCaseData(caseId: string): Promise<{ treatment: any; investigations: any; procedures: any } | null> {
+export async function cacheAddendumNotes(caseId: string, notes: string[]): Promise<void> {
+  const cache = await loadCache();
+  if (!cache[caseId]) {
+    cache[caseId] = {
+      treatment: {},
+      investigations: {},
+      procedures: {},
+      addendum_notes: [],
+      discharge_summary: {},
+      updatedAt: new Date().toISOString(),
+    };
+  }
+  cache[caseId].addendum_notes = notes;
+  cache[caseId].updatedAt = new Date().toISOString();
+  await saveCache(cache);
+}
+
+export async function cacheDischargeSummary(caseId: string, summary: any): Promise<void> {
+  const cache = await loadCache();
+  if (!cache[caseId]) {
+    cache[caseId] = {
+      treatment: {},
+      investigations: {},
+      procedures: {},
+      addendum_notes: [],
+      discharge_summary: {},
+      updatedAt: new Date().toISOString(),
+    };
+  }
+  cache[caseId].discharge_summary = summary;
+  cache[caseId].updatedAt = new Date().toISOString();
+  await saveCache(cache);
+}
+
+export async function getCachedCaseData(caseId: string): Promise<CaseCacheEntry | null> {
   const cache = await loadCache();
   return cache[caseId] || null;
 }
 
-export function mergeCaseWithCache(caseData: any, cached: { treatment: any; investigations: any; procedures: any }): any {
+export function mergeCaseWithCache(caseData: any, cached: CaseCacheEntry): any {
   const merged = { ...caseData };
 
   if (!merged.treatment) merged.treatment = {};
@@ -82,6 +123,20 @@ export function mergeCaseWithCache(caseData: any, cached: { treatment: any; inve
   }
   if (!merged.treatment.intervention_notes && cached.treatment.intervention_notes) {
     merged.treatment.intervention_notes = cached.treatment.intervention_notes;
+  }
+
+  const backendNotes = merged.treatment?.addendum_notes || merged.addendum_notes || [];
+  const backendNotesList = Array.isArray(backendNotes) ? backendNotes : (backendNotes ? [backendNotes] : []);
+  const cachedNotesList = cached.addendum_notes || [];
+  if (cachedNotesList.length > backendNotesList.length) {
+    merged.treatment.addendum_notes = cachedNotesList;
+    merged.addendum_notes = cachedNotesList;
+  }
+
+  if (cached.discharge_summary && Object.keys(cached.discharge_summary).length > 0) {
+    if (!merged.discharge_summary || Object.keys(merged.discharge_summary).length === 0) {
+      merged.discharge_summary = cached.discharge_summary;
+    }
   }
 
   if (!merged.investigations) merged.investigations = {};

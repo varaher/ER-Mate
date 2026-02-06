@@ -22,6 +22,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { fetchFromApi } from "@/lib/api";
 import { isPediatric } from "@/lib/pediatricVitals";
+import { getCachedCaseData, mergeCaseWithCache } from "@/lib/caseCache";
 import { getDraftByBackendId, type DraftCase } from "@/lib/draftManager";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
@@ -347,10 +348,22 @@ export default function DashboardScreen() {
         cns: formatSystemicExam("cns"),
         extremities: "",
       },
-      course_in_hospital: caseData.discharge_summary?.course_in_hospital || "",
+      course_in_hospital: caseData.discharge_summary?.course_in_hospital || (() => {
+        const courseParts: string[] = [];
+        const medsText = treatment.medications?.map((m: any) => `${m.name || ""} ${m.dose || ""} ${m.route || ""} ${m.frequency || ""}`.trim()).join("\n");
+        if (medsText) courseParts.push("MEDICATIONS GIVEN IN ER:\n" + medsText);
+        if (treatment.infusions?.length > 0) {
+          const infText = treatment.infusions.map((inf: any) => `${inf.drug_name || inf.name || ""} ${inf.dose || ""} ${inf.dilution ? `in ${inf.dilution}` : ""} ${inf.rate ? `@ ${inf.rate}` : ""}`.trim()).join("\n");
+          if (infText) courseParts.push("INFUSIONS:\n" + infText);
+        }
+        const addendumNotes = caseData.treatment?.addendum_notes || caseData.addendum_notes || [];
+        const notesList = Array.isArray(addendumNotes) ? addendumNotes : (addendumNotes ? [addendumNotes] : []);
+        if (notesList.length > 0) courseParts.push("CLINICAL NOTES:\n" + notesList.join("\n"));
+        return courseParts.join("\n\n");
+      })(),
       investigations: treatment.investigations || "",
       diagnosis: treatment.primary_diagnosis || treatment.provisional_diagnosis || "",
-      discharge_medications: treatment.medications?.map((m: any) => `${m.name} ${m.dose} ${m.route} ${m.frequency}`).join(", ") || "",
+      discharge_medications: caseData.discharge_summary?.discharge_medications || "",
       disposition_type: disposition.type || disposition.disposition_type || "Normal Discharge",
       condition_at_discharge: disposition.condition || disposition.condition_at_discharge || "STABLE",
       vitals_discharge: {
@@ -371,7 +384,8 @@ export default function DashboardScreen() {
     setExporting(true);
     try {
       const caseResponse = await fetchFromApi<any>(`/cases/${selectedCase.id}`);
-      const caseData = caseResponse;
+      const cached = await getCachedCaseData(selectedCase.id);
+      const caseData = cached ? mergeCaseWithCache(caseResponse, cached) : caseResponse;
       
       const apiUrl = getApiBaseUrl();
       const endpoint = type === "discharge"
@@ -411,7 +425,7 @@ export default function DashboardScreen() {
   };
 
   const isCompleted = (status: string) => status === "completed" || status === "discharged";
-  const canDownload = (status: string) => status === "completed" || status === "discharged" || status === "in_progress";
+  const canDownload = (_status: string) => true;
 
   if (loading) {
     return (
@@ -654,9 +668,7 @@ export default function DashboardScreen() {
                   </Pressable>
                 </View>
 
-                {selectedCase && isCompleted(selectedCase.status) ? (
-                  <>
-                    <Text style={[styles.downloadSectionTitle, { color: theme.text, marginTop: Spacing.lg }]}>
+                <Text style={[styles.downloadSectionTitle, { color: theme.text, marginTop: Spacing.lg }]}>
                       Discharge Summary
                     </Text>
                     <View style={styles.downloadRow}>
@@ -675,12 +687,6 @@ export default function DashboardScreen() {
                         <Text style={[styles.downloadBtnText, { color: "#2563eb" }]}>Word</Text>
                       </Pressable>
                     </View>
-                  </>
-                ) : (
-                  <Text style={[styles.downloadNote, { color: theme.textSecondary, marginTop: Spacing.lg }]}>
-                    Discharge summary available after case is completed
-                  </Text>
-                )}
               </View>
             )}
           </View>

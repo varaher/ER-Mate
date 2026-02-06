@@ -22,7 +22,7 @@ import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollV
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { useTheme } from "@/hooks/useTheme";
 import { apiGet, apiPatch, apiPost, apiPut, invalidateCases } from "@/lib/api";
-import { getCachedCaseData, mergeCaseWithCache } from "@/lib/caseCache";
+import { getCachedCaseData, mergeCaseWithCache, cacheDischargeSummary } from "@/lib/caseCache";
 import { getApiUrl } from "@/lib/query-client";
 import { isPediatric } from "@/lib/pediatricVitals";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
@@ -180,6 +180,11 @@ export default function DischargeSummaryScreen() {
     const gcsTotal = vitals.gcs_total || (gcsE + gcsV + gcsM);
 
     const autoMeds = formatMedications(treatment.medications || data.medications);
+    const autoInfusions = formatInfusions(treatment.infusions);
+    const autoFluids = formatFluids(treatment.fluids);
+    const addendumNotes = data.treatment?.addendum_notes || data.addendum_notes || [];
+    const notesList = Array.isArray(addendumNotes) ? addendumNotes : (addendumNotes ? [addendumNotes] : []);
+    const autoCourseInHospital = buildCourseInHospital(autoMeds, autoInfusions, autoFluids, notesList, treatment);
 
     summaryRef.current = {
       ...defaultSummary,
@@ -223,10 +228,10 @@ export default function DischargeSummaryScreen() {
         cns: formatSystemicExam("cns", exam),
         extremities: formatSystemicExam("extremities", exam),
       },
-      course_in_hospital: savedSummary.course_in_hospital || "",
+      course_in_hospital: savedSummary.course_in_hospital || autoCourseInHospital,
       investigations: savedSummary.investigations || formatInvestigations(treatment.investigations || data.investigations),
       diagnosis: savedSummary.diagnosis || treatment.primary_diagnosis || treatment.provisional_diagnosis || treatment.ai_diagnosis || data.final_diagnosis || data.treatment?.primary_diagnosis || "",
-      discharge_medications: savedSummary.discharge_medications || autoMeds,
+      discharge_medications: savedSummary.discharge_medications || "",
       disposition_type: savedSummary.disposition_type || disposition.type || disposition.disposition_type || "Normal Discharge",
       condition_at_discharge: savedSummary.condition_at_discharge || disposition.condition || disposition.condition_at_discharge || "STABLE",
       vitals_discharge: savedSummary.vitals_discharge || { hr: "", bp: "", rr: "", spo2: "", gcs: "", pain_score: "", grbs: "", temp: "" },
@@ -481,6 +486,73 @@ export default function DischargeSummaryScreen() {
     return "";
   };
 
+  const formatInfusions = (infusions: any): string => {
+    if (!infusions) return "";
+    if (typeof infusions === "string") return infusions;
+    if (Array.isArray(infusions) && infusions.length > 0) {
+      return infusions.map((inf: any) => {
+        const parts = [inf.drug_name || inf.name || ""];
+        if (inf.dose) parts.push(inf.dose);
+        if (inf.dilution) parts.push(`in ${inf.dilution}`);
+        if (inf.rate) parts.push(`@ ${inf.rate}`);
+        return parts.filter(Boolean).join(" ");
+      }).join("\n");
+    }
+    return "";
+  };
+
+  const formatFluids = (fluids: any): string => {
+    if (!fluids) return "";
+    if (typeof fluids === "string") return fluids;
+    if (Array.isArray(fluids) && fluids.length > 0) {
+      return fluids.map((f: any) => {
+        const parts = [f.type || f.name || ""];
+        if (f.volume) parts.push(f.volume);
+        if (f.rate) parts.push(`@ ${f.rate}`);
+        return parts.filter(Boolean).join(" ");
+      }).join("\n");
+    }
+    if (typeof fluids === "object") {
+      const parts: string[] = [];
+      if (fluids.type) parts.push(fluids.type);
+      if (fluids.volume) parts.push(fluids.volume);
+      if (fluids.rate) parts.push(`@ ${fluids.rate}`);
+      if (fluids.notes) parts.push(fluids.notes);
+      return parts.join(" ");
+    }
+    return "";
+  };
+
+  const buildCourseInHospital = (meds: string, infusions: string, fluids: string, addendumNotes: string[], treatment: any): string => {
+    const sections: string[] = [];
+
+    if (meds) {
+      sections.push("MEDICATIONS GIVEN IN ER:\n" + meds);
+    }
+
+    if (infusions) {
+      sections.push("INFUSIONS:\n" + infusions);
+    }
+
+    if (fluids) {
+      sections.push("IV FLUIDS:\n" + fluids);
+    }
+
+    if (treatment.interventions?.length > 0) {
+      sections.push("INTERVENTIONS:\n" + treatment.interventions.join(", "));
+    }
+
+    if (treatment.intervention_notes) {
+      sections.push("INTERVENTION NOTES:\n" + treatment.intervention_notes);
+    }
+
+    if (addendumNotes.length > 0) {
+      sections.push("CLINICAL NOTES:\n" + addendumNotes.join("\n"));
+    }
+
+    return sections.join("\n\n");
+  };
+
   const generateCourseInHospital = async () => {
     setGenerating(true);
     console.log("[AI] Generating course in hospital...");
@@ -541,6 +613,8 @@ export default function DischargeSummaryScreen() {
   const handleSave = async () => {
     setSaving(true);
     try {
+      await cacheDischargeSummary(caseId, summaryRef.current);
+
       const res = await apiPut(`/cases/${caseId}`, {
         discharge_summary: summaryRef.current,
         status: "completed",
@@ -550,12 +624,10 @@ export default function DischargeSummaryScreen() {
         await invalidateCases();
         Alert.alert("Success", "Discharge summary saved successfully");
       } else {
-        const errMsg = typeof res.error === 'string' ? res.error : JSON.stringify(res.error) || "Failed to save";
-        Alert.alert("Error", errMsg);
+        Alert.alert("Saved Locally", "Discharge summary saved locally. Backend sync may have failed.");
       }
     } catch (err) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      Alert.alert("Error", errMsg);
+      Alert.alert("Saved Locally", "Discharge summary saved locally. Backend sync may have failed.");
     } finally {
       setSaving(false);
     }
@@ -568,6 +640,7 @@ export default function DischargeSummaryScreen() {
   const exportPDF = async () => {
     setExporting(true);
     try {
+      await cacheDischargeSummary(caseId, summaryRef.current);
       await apiPut(`/cases/${caseId}`, {
         discharge_summary: summaryRef.current,
         status: "completed",
@@ -639,6 +712,7 @@ export default function DischargeSummaryScreen() {
   const exportDOCX = async () => {
     setExportingDocx(true);
     try {
+      await cacheDischargeSummary(caseId, summaryRef.current);
       await apiPut(`/cases/${caseId}`, {
         discharge_summary: summaryRef.current,
         status: "completed",
