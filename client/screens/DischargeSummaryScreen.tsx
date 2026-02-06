@@ -22,6 +22,7 @@ import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollV
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { useTheme } from "@/hooks/useTheme";
 import { apiGet, apiPatch, apiPost, apiPut, invalidateCases } from "@/lib/api";
+import { getCachedCaseData, mergeCaseWithCache } from "@/lib/caseCache";
 import { getApiUrl } from "@/lib/query-client";
 import { isPediatric } from "@/lib/pediatricVitals";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
@@ -148,8 +149,10 @@ export default function DischargeSummaryScreen() {
     try {
       const res = await apiGet<any>(`/cases/${caseId}`);
       if (res.success && res.data) {
-        setCaseData(res.data);
-        populateFromCaseData(res.data);
+        const cached = await getCachedCaseData(caseId);
+        const mergedData = cached ? mergeCaseWithCache(res.data, cached) : res.data;
+        setCaseData(mergedData);
+        populateFromCaseData(mergedData);
       }
     } catch (err) {
       console.error("Error loading case:", err);

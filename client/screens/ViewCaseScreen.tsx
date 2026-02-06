@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
 import { apiGet, apiPut } from "@/lib/api";
+import { getCachedCaseData, mergeCaseWithCache } from "@/lib/caseCache";
 import { isPediatric } from "@/lib/pediatricVitals";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
@@ -67,30 +68,32 @@ export default function ViewCaseScreen() {
       setLoading(true);
       const res = await apiGet<any>(`/cases/${caseId}`);
       if (res.success && res.data) {
-        console.log("ViewCaseScreen: full treatment object:", JSON.stringify(res.data.treatment, null, 2));
-        console.log("ViewCaseScreen: checking all medication paths...");
-        
-        // Check for medications under ALL possible field paths (UI should be tolerant)
-        const medications = res.data.treatment?.medications 
-          || res.data.treatment?.medications_given 
-          || res.data.treatment?.given_medications
-          || res.data.treatment?.meds
-          || res.data.medications
-          || res.data.discharge?.medications
-          || res.data.disposition?.discharge_medications
+        const cached = await getCachedCaseData(caseId);
+        let mergedData = res.data;
+        if (cached) {
+          console.log("ViewCaseScreen: merging with local cache");
+          mergedData = mergeCaseWithCache(res.data, cached);
+        }
+
+        const medications = mergedData.treatment?.medications 
+          || mergedData.treatment?.medications_given 
+          || mergedData.treatment?.given_medications
+          || mergedData.treatment?.meds
+          || mergedData.medications
+          || mergedData.discharge?.medications
+          || mergedData.disposition?.discharge_medications
           || [];
         
         console.log("ViewCaseScreen: found medications:", JSON.stringify(medications, null, 2));
         
-        // Ensure treatment object exists and has medications
-        if (!res.data.treatment) {
-          res.data.treatment = {};
+        if (!mergedData.treatment) {
+          mergedData.treatment = {};
         }
         if (medications.length > 0) {
-          res.data.treatment.medications = medications;
+          mergedData.treatment.medications = medications;
         }
         
-        setCaseData(res.data);
+        setCaseData(mergedData);
         editableFieldsRef.current = {
           presenting_complaint: res.data.presenting_complaint?.text || "",
           hopi: res.data.history?.hpi || res.data.history?.events_hopi || "",
