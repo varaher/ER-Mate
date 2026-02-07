@@ -1,9 +1,6 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { Platform } from "react-native";
 
-/**
- * Gets the base URL for the Express API server (e.g., "http://localhost:3000")
- * @returns {string} The API base URL
- */
 export function getApiUrl(): string {
   let host = process.env.EXPO_PUBLIC_DOMAIN;
 
@@ -11,9 +8,7 @@ export function getApiUrl(): string {
     throw new Error("EXPO_PUBLIC_DOMAIN is not set");
   }
 
-  // Keep port 5000 for API routing - Replit maps external:5000 to local:5000 (Express API)
-  // Default HTTPS (port 443/80) routes to local:8081 (Expo web) which doesn't have API routes
-  if (!host.includes(':')) {
+  if (Platform.OS === "web" && !host.includes(':')) {
     host = `${host}:5000`;
   }
   
