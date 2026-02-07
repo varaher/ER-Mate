@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { StyleSheet, View, ActivityIndicator } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -35,16 +35,11 @@ export default function App() {
         console.warn("Font loading error:", e);
       } finally {
         setFontsLoaded(true);
+        await SplashScreen.hideAsync();
       }
     }
     loadFonts();
   }, []);
-
-  const onLayoutRootView = useCallback(async () => {
-    if (fontsLoaded) {
-      await SplashScreen.hideAsync();
-    }
-  }, [fontsLoaded]);
 
   if (!fontsLoaded) {
     return (
@@ -60,7 +55,7 @@ export default function App() {
         <AuthProvider>
           <CaseProvider>
             <SafeAreaProvider>
-              <GestureHandlerRootView style={styles.root} onLayout={onLayoutRootView}>
+              <GestureHandlerRootView style={styles.root}>
                 <KeyboardProvider>
                   <NavigationContainer>
                     <RootStackNavigator />
