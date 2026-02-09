@@ -60,8 +60,7 @@ async function handleResponse<T>(res: Response): Promise<ApiResponse<T>> {
       return { success: false, error: "Your session has expired. Please log in again.", tokenExpired: true };
     }
     
-    // Return full error data if available for better debugging
-    return { success: false, error: errorData || errorMessage };
+    return { success: false, error: errorMessage };
   }
   const data = await res.json();
   
