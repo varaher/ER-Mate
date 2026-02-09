@@ -54,8 +54,8 @@ async function handleResponse<T>(res: Response): Promise<ApiResponse<T>> {
       errorMessage = errorText || res.statusText;
     }
     
-    // Check for token expiry
-    if (isTokenExpiredError(errorMessage, res.status)) {
+    const currentToken = await getToken();
+    if (currentToken && isTokenExpiredError(errorMessage, res.status)) {
       await handleTokenExpiry();
       return { success: false, error: "Your session has expired. Please log in again.", tokenExpired: true };
     }
