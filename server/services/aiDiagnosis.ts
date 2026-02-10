@@ -821,9 +821,41 @@ export async function transcribeAndExtractVoice(
   patientContext?: { age?: number; sex?: string; chiefComplaint?: string },
   mode: string = 'full'
 ): Promise<VoiceTranscriptionResult> {
+  let transcript = '';
+
+  const { isSarvamAvailable, sarvamSpeechToTextTranslate } = await import('./sarvamAI');
+  
+  if (isSarvamAvailable()) {
+    try {
+      console.log("[Voice] Using Sarvam AI for speech-to-text (optimized for Indian accents)");
+      const sarvamResult = await sarvamSpeechToTextTranslate(audioBuffer, filename);
+      transcript = sarvamResult.transcript || '';
+      console.log("[Voice] Sarvam STT success, detected language:", sarvamResult.language_code);
+    } catch (sarvamError) {
+      console.warn("[Voice] Sarvam STT failed, falling back to OpenAI Whisper:", sarvamError);
+      transcript = await fallbackWhisperTranscribe(audioBuffer, filename);
+    }
+  } else {
+    console.log("[Voice] Sarvam AI not configured, using OpenAI Whisper");
+    transcript = await fallbackWhisperTranscribe(audioBuffer, filename);
+  }
+
+  if (!transcript || transcript.trim().length === 0) {
+    return { transcript: 'No speech detected in the recording.' };
+  }
+
+  if (mode === 'full') {
+    const structured = await extractClinicalDataFromVoice(transcript, patientContext);
+    return { transcript, structured };
+  }
+
+  return { transcript };
+}
+
+async function fallbackWhisperTranscribe(audioBuffer: Buffer, filename: string): Promise<string> {
   const openai = getOpenAIClient();
   if (!openai) {
-    throw new Error("AI service not available - OpenAI not configured");
+    throw new Error("No transcription service available - neither Sarvam AI nor OpenAI configured");
   }
 
   try {
@@ -837,22 +869,11 @@ export async function transcribeAndExtractVoice(
       response_format: 'text',
     });
 
-    const transcript = typeof transcriptionResponse === 'string' 
+    return typeof transcriptionResponse === 'string' 
       ? transcriptionResponse 
       : (transcriptionResponse as unknown as { text: string }).text || '';
-
-    if (!transcript || transcript.trim().length === 0) {
-      return { transcript: 'No speech detected in the recording.' };
-    }
-
-    if (mode === 'full') {
-      const structured = await extractClinicalDataFromVoice(transcript, patientContext);
-      return { transcript, structured };
-    }
-
-    return { transcript };
   } catch (error) {
-    console.error("Voice transcription error:", error);
+    console.error("[Whisper] Transcription error:", error);
     throw new Error("Failed to transcribe audio");
   }
 }
