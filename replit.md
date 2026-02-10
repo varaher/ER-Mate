@@ -30,7 +30,8 @@ Preferred communication style: Simple, everyday language.
 
 ### Key Features
 
-**Voice Input System**: Integrates `VoiceRecorder` component using `expo-audio` for recording and transcription via an external backend, supporting AI-powered clinical data extraction to auto-populate case sheet fields.
+**Voice Input System**: Integrates `VoiceRecorder` component using `expo-audio` for recording. Speech-to-text uses Sarvam AI (Saaras v3 model, optimized for Indian accents) as primary with OpenAI Whisper as fallback. OpenAI handles clinical data extraction from transcripts to auto-populate case sheet fields. Available in both adult and pediatric case sheets (Notes tab).
+**Document Scanning System**: `DocumentScanner` component uses device camera or image picker to capture documents (lab reports, prescriptions, handwritten notes). Images are sent to `/api/scan/document` endpoint which uses Sarvam Vision API for OCR text extraction, then OpenAI for clinical data structuring. Available in both adult and pediatric case sheets (Notes tab).
 **AI Diagnosis System**: Generates differential diagnoses with confidence levels and medical guideline citations. It includes a self-learning feedback system that stores user feedback to improve AI accuracy.
 **Document Export System**: Supports export of Case Sheets and Discharge Summaries in PDF and DOCX formats, with platform-aware file handling for web and mobile.
 **Device Linking**: Provides a secure WhatsApp-style web linking feature for accessing the web application, generating temporary, expiring link codes.
@@ -57,3 +58,4 @@ Preferred communication style: Simple, everyday language.
 
 **AI Integration**:
 - OpenAI (via Replit AI Integrations) for AI diagnosis and interpretation.
+- Sarvam AI (via SARVAM_AI_API_KEY secret) for speech-to-text (Saaras v3 model) and document OCR (Sarvam Vision).
