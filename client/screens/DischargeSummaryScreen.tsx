@@ -905,7 +905,7 @@ export default function DischargeSummaryScreen() {
             <View>
               <Text style={[styles.patientName, { color: theme.text }]}>{patient.name || "Patient"}</Text>
               <Text style={[styles.patientDetails, { color: theme.textSecondary }]}>
-                {patient.age} yrs | {patient.sex} {pediatric ? "| Pediatric" : ""}
+                {patient.age} yrs | {patient.sex}{patient.weight ? ` | ${patient.weight} kg` : ""} {pediatric ? "| Pediatric" : ""}
               </Text>
             </View>
             <View style={[styles.mlcBadge, { backgroundColor: summaryRef.current.mlc ? TriageColors.red : theme.successLight }]}>

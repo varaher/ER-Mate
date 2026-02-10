@@ -258,6 +258,7 @@ export default function ViewCaseScreen() {
         <Section title="Patient Information">
           <InfoRow label="Name" value={patient.name} />
           <InfoRow label="Age/Sex" value={`${patient.age || "N/A"} / ${patient.sex || "N/A"}`} />
+          {patient.weight ? <InfoRow label="Weight" value={`${patient.weight} kg`} /> : null}
           <InfoRow label="UHID" value={patient.uhid} />
           <InfoRow label="Phone" value={patient.phone} />
           <InfoRow label="Mode of Arrival" value={patient.mode_of_arrival || caseData.mode_of_arrival} />

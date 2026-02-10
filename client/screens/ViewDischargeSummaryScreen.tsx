@@ -157,6 +157,7 @@ export default function ViewDischargeSummaryScreen() {
         <Section title="Patient Information">
           <InfoRow label="Name" value={patientInfo.name} />
           <InfoRow label="Age/Sex" value={`${patientInfo.age || "N/A"} / ${patientInfo.sex || "N/A"}`} />
+          {patientInfo.weight ? <InfoRow label="Weight" value={`${patientInfo.weight} kg`} /> : null}
           <InfoRow label="UHID" value={patientInfo.uhid} />
           <InfoRow label="MLC" value={summary.mlc} />
           <InfoRow label="Discharge Date" value={summary.discharge_date} />
