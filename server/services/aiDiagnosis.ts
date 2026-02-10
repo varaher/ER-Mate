@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { getDb } from "../db";
 import { aiFeedback } from "@shared/schema";
 import { count, eq, sql } from "drizzle-orm";
+import { searchMedicalLiterature, type MedicalSearchResult } from "./medicalSearch";
 
 function getOpenAIClient(): OpenAI | null {
   const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
@@ -23,6 +24,9 @@ export interface Citation {
   year?: string;
   url?: string;
   excerpt: string;
+  sourceType?: "pubmed" | "textbook" | "guideline" | "wikem";
+  authors?: string;
+  refNumber?: number;
 }
 
 export interface DiagnosisSuggestion {
@@ -30,6 +34,9 @@ export interface DiagnosisSuggestion {
   diagnosis: string;
   confidence: "high" | "moderate" | "low";
   reasoning: string;
+  keyFindings: string[];
+  workup: string[];
+  management: string[];
   citations: Citation[];
 }
 
@@ -38,7 +45,18 @@ export interface RedFlag {
   flag: string;
   severity: "critical" | "warning";
   action: string;
+  timeframe?: string;
   citations: Citation[];
+}
+
+export interface SearchSource {
+  id: string;
+  title: string;
+  source: string;
+  authors?: string;
+  year?: string;
+  url: string;
+  sourceType: "pubmed" | "textbook" | "guideline" | "wikem";
 }
 
 export interface AIFeedback {
@@ -50,75 +68,6 @@ export interface AIFeedback {
   timestamp: Date;
   userId?: string;
 }
-
-const MEDICAL_KNOWLEDGE_BASE = {
-  atls: {
-    source: "ATLS - Advanced Trauma Life Support",
-    title: "American College of Surgeons ATLS Guidelines",
-    year: "2023",
-    url: "https://www.facs.org/quality-programs/trauma/atls",
-  },
-  pals: {
-    source: "PALS - Pediatric Advanced Life Support",
-    title: "American Heart Association PALS Guidelines",
-    year: "2023",
-    url: "https://cpr.heart.org/en/resuscitation-science/cpr-and-ecc-guidelines/pediatric-advanced-life-support",
-  },
-  sepsis: {
-    source: "Surviving Sepsis Campaign",
-    title: "International Guidelines for Management of Sepsis and Septic Shock",
-    year: "2021",
-    url: "https://www.sccm.org/SurvivingSepsisCampaign",
-  },
-  acs: {
-    source: "ACC/AHA Guidelines",
-    title: "Guidelines for Management of Patients with Acute Coronary Syndromes",
-    year: "2023",
-    url: "https://www.acc.org/guidelines",
-  },
-  stroke: {
-    source: "AHA/ASA Stroke Guidelines",
-    title: "Guidelines for Early Management of Acute Ischemic Stroke",
-    year: "2019",
-    url: "https://www.stroke.org/en/professionals",
-  },
-  trauma: {
-    source: "Eastern Association for Surgery of Trauma",
-    title: "EAST Practice Management Guidelines",
-    year: "2022",
-    url: "https://www.east.org/education-resources/practice-management-guidelines",
-  },
-  toxicology: {
-    source: "AACT Clinical Toxicology Guidelines",
-    title: "American Academy of Clinical Toxicology Position Statements",
-    year: "2023",
-    url: undefined as string | undefined,
-  },
-  pediatricEmergency: {
-    source: "Pediatric Emergency Medicine",
-    title: "Fleisher & Ludwig's Textbook of Pediatric Emergency Medicine",
-    year: "2020",
-    url: undefined as string | undefined,
-  },
-  wikiem: {
-    source: "WikEM",
-    title: "The Global Emergency Medicine Wiki",
-    year: "2024",
-    url: "https://wikem.org",
-  },
-  tintinalli: {
-    source: "Tintinalli's Emergency Medicine",
-    title: "Tintinalli's Emergency Medicine: A Comprehensive Study Guide",
-    year: "2020",
-    url: undefined as string | undefined,
-  },
-  rosens: {
-    source: "Rosen's Emergency Medicine",
-    title: "Rosen's Emergency Medicine: Concepts and Clinical Practice",
-    year: "2022",
-    url: undefined as string | undefined,
-  },
-} as const;
 
 interface ABGData {
   sampleType?: string;
@@ -165,6 +114,23 @@ function formatABGData(abgData?: ABGData): string {
   return parts.length > 0 ? parts.join(", ") : "";
 }
 
+function buildSourcesContext(searchResults: MedicalSearchResult[]): string {
+  if (searchResults.length === 0) return "";
+
+  let context = "\n\n## MEDICAL LITERATURE SEARCH RESULTS (use these as references)\n";
+  searchResults.forEach((result, index) => {
+    context += `\n[${index + 1}] ${result.title}`;
+    if (result.authors) context += ` - ${result.authors}`;
+    if (result.year) context += ` (${result.year})`;
+    context += `\n    Source: ${result.source}`;
+    context += `\n    URL: ${result.url}`;
+    if (result.snippet) context += `\n    Summary: ${result.snippet}`;
+    context += "\n";
+  });
+
+  return context;
+}
+
 export async function generateDiagnosisSuggestions(caseData: {
   chiefComplaint: string;
   vitals: Record<string, string>;
@@ -173,57 +139,72 @@ export async function generateDiagnosisSuggestions(caseData: {
   age: number;
   gender: string;
   abgData?: ABGData;
-}): Promise<{ suggestions: DiagnosisSuggestion[]; redFlags: RedFlag[] }> {
+}): Promise<{ suggestions: DiagnosisSuggestion[]; redFlags: RedFlag[]; sources: SearchSource[] }> {
   const isPediatric = caseData.age <= 16;
   const abgInfo = formatABGData(caseData.abgData);
-  
-  const systemPrompt = `You are an expert emergency medicine physician assistant. Analyze the patient case and provide:
-1. Up to 3 differential diagnoses ranked by likelihood
-2. Any red flags requiring immediate attention
 
-For EACH diagnosis and red flag, you MUST cite specific medical guidelines or sources.
+  console.log("[AI Diagnosis] Searching medical literature for:", caseData.chiefComplaint);
+  let searchResults: MedicalSearchResult[] = [];
+  try {
+    searchResults = await searchMedicalLiterature(
+      caseData.chiefComplaint,
+      caseData.age,
+      caseData.history?.substring(0, 200)
+    );
+    console.log(`[AI Diagnosis] Found ${searchResults.length} medical references`);
+  } catch (err) {
+    console.warn("[AI Diagnosis] Medical literature search failed:", err);
+  }
 
-Guidelines and sources to reference:
-- ATLS (Advanced Trauma Life Support) for trauma cases
-- PALS (Pediatric Advanced Life Support) for pediatric emergencies
-- Surviving Sepsis Campaign for sepsis/infection
-- ACC/AHA Guidelines for cardiac conditions
-- AHA/ASA Guidelines for stroke
-- EAST Guidelines for surgical emergencies
-- WikEM (wikiem) - emergency medicine wiki for quick reference
-- Tintinalli's Emergency Medicine (tintinalli) - comprehensive EM textbook
-- Rosen's Emergency Medicine (rosens) - clinical practice reference
+  const sourcesContext = buildSourcesContext(searchResults);
 
-Patient is ${isPediatric ? "pediatric (use PALS protocols)" : "adult (use ATLS protocols)"}.
+  const sources: SearchSource[] = searchResults.map((r) => ({
+    id: r.id,
+    title: r.title,
+    source: r.source,
+    authors: r.authors,
+    year: r.year,
+    url: r.url,
+    sourceType: r.sourceType,
+  }));
+
+  const systemPrompt = `You are an expert emergency medicine physician and clinical decision support system. You have been trained on emergency medicine textbooks including Tintinalli's Emergency Medicine, Rosen's Emergency Medicine, and current clinical practice guidelines.
+
+Your role is to analyze the patient case using evidence-based medicine and provide:
+1. Up to 3 differential diagnoses ranked by likelihood with detailed reasoning
+2. Red flags requiring immediate attention with specific time-sensitive actions
+3. For EACH diagnosis: key supporting findings, recommended workup, and initial management
+
+CRITICAL INSTRUCTIONS:
+- Cite specific sources using reference numbers [1], [2], etc. from the provided medical literature search results
+- Each diagnosis reasoning MUST include inline citations like "According to [1], ..." or "Per Tintinalli's [2], ..."
+- Include specific diagnostic criteria, clinical decision rules, and guideline recommendations
+- For red flags, cite the specific guideline that defines the criteria (e.g., "SIRS criteria per Surviving Sepsis Campaign [3]")
+- Think like a senior EM attending teaching a resident - explain WHY each diagnosis is considered
+
+Patient is ${isPediatric ? "PEDIATRIC (age <= 16, use PALS protocols, weight-based dosing)" : "ADULT (use ATLS protocols)"}.
+${sourcesContext}
 
 Respond in JSON format:
 {
   "suggestions": [
     {
-      "diagnosis": "Primary diagnosis",
+      "diagnosis": "Primary diagnosis name",
       "confidence": "high|moderate|low",
-      "reasoning": "Brief clinical reasoning",
-      "citations": [
-        {
-          "id": "cite1",
-          "sourceKey": "atls|pals|sepsis|acs|stroke|trauma|toxicology|pediatricEmergency",
-          "excerpt": "Specific guideline text or criterion referenced"
-        }
-      ]
+      "reasoning": "Detailed clinical reasoning with inline citations [1], [2]. Explain the pathophysiology, why this patient's presentation matches, and key distinguishing features from the differential. Reference specific textbook chapters or guideline criteria.",
+      "keyFindings": ["Finding 1 that supports this diagnosis", "Finding 2", "Finding 3"],
+      "workup": ["Investigation 1 to order", "Investigation 2", "Lab/imaging 3"],
+      "management": ["Initial management step 1", "Step 2", "Disposition consideration"],
+      "citationRefs": [1, 3, 5]
     }
   ],
   "redFlags": [
     {
-      "flag": "Critical finding",
+      "flag": "Critical finding description",
       "severity": "critical|warning",
-      "action": "Immediate action required",
-      "citations": [
-        {
-          "id": "rf1",
-          "sourceKey": "atls|pals|sepsis|acs|stroke|trauma",
-          "excerpt": "Guideline-based criteria for this red flag"
-        }
-      ]
+      "action": "Specific immediate action required - be precise (e.g., 'Obtain STAT ECG and troponin, activate cath lab if STEMI')",
+      "timeframe": "Within X minutes/hours",
+      "citationRefs": [2, 4]
     }
   ]
 }`;
@@ -235,11 +216,11 @@ Respond in JSON format:
 - History: ${caseData.history}
 - Examination: ${caseData.examination}${abgInfo ? `\n- ABG/VBG: ${abgInfo}` : ""}
 
-Provide differential diagnoses and identify any red flags.${abgInfo ? " Consider the ABG values in your assessment - look for acid-base disturbances, oxygenation issues, and electrolyte abnormalities that may suggest specific diagnoses or red flags." : ""}`;
+Analyze this case thoroughly. Provide differential diagnoses with evidence-based reasoning, cite the medical literature provided, identify all red flags, and recommend workup and management for each diagnosis.${abgInfo ? " Consider the ABG values carefully - analyze acid-base status, oxygenation, electrolytes, and their implications for the differential." : ""}`;
 
   const openai = getOpenAIClient();
   if (!openai) {
-    return { suggestions: [], redFlags: [] };
+    return { suggestions: [], redFlags: [], sources };
   }
 
   try {
@@ -251,61 +232,80 @@ Provide differential diagnoses and identify any red flags.${abgInfo ? " Consider
       ],
       response_format: { type: "json_object" },
       temperature: 0.3,
+      max_tokens: 4000,
     });
 
     const content = response.choices[0]?.message?.content;
     if (!content) {
-      return { suggestions: [], redFlags: [] };
+      return { suggestions: [], redFlags: [], sources };
     }
 
     const parsed = JSON.parse(content);
-    
-    const suggestions: DiagnosisSuggestion[] = (parsed.suggestions || []).map((s: { diagnosis: string; confidence: string; reasoning: string; citations?: Array<{ id: string; sourceKey: string; excerpt: string }> }) => ({
-      id: randomUUID(),
-      diagnosis: s.diagnosis,
-      confidence: s.confidence as "high" | "moderate" | "low",
-      reasoning: s.reasoning,
-      citations: (s.citations || []).map((c: { id: string; sourceKey: string; excerpt: string }) => {
-        const sourceInfo = MEDICAL_KNOWLEDGE_BASE[c.sourceKey as keyof typeof MEDICAL_KNOWLEDGE_BASE] || {
-          source: "Medical Literature",
-          title: "Clinical Guidelines",
-        };
-        return {
-          id: c.id,
-          source: sourceInfo.source,
-          title: sourceInfo.title,
-          year: sourceInfo.year,
-          url: sourceInfo.url,
-          excerpt: c.excerpt,
-        };
-      }),
-    }));
 
-    const redFlags: RedFlag[] = (parsed.redFlags || []).map((r: { flag: string; severity: string; action: string; citations?: Array<{ id: string; sourceKey: string; excerpt: string }> }) => ({
-      id: randomUUID(),
-      flag: r.flag,
-      severity: r.severity as "critical" | "warning",
-      action: r.action,
-      citations: (r.citations || []).map((c: { id: string; sourceKey: string; excerpt: string }) => {
-        const sourceInfo = MEDICAL_KNOWLEDGE_BASE[c.sourceKey as keyof typeof MEDICAL_KNOWLEDGE_BASE] || {
-          source: "Medical Literature",
-          title: "Clinical Guidelines",
-        };
-        return {
-          id: c.id,
-          source: sourceInfo.source,
-          title: sourceInfo.title,
-          year: sourceInfo.year,
-          url: sourceInfo.url,
-          excerpt: c.excerpt,
-        };
-      }),
-    }));
+    const suggestions: DiagnosisSuggestion[] = (parsed.suggestions || []).map((s: any) => {
+      const citationRefs: number[] = s.citationRefs || [];
+      const citations: Citation[] = citationRefs
+        .filter((refNum: number) => refNum >= 1 && refNum <= searchResults.length)
+        .map((refNum: number) => {
+          const source = searchResults[refNum - 1];
+          return {
+            id: source.id,
+            source: source.source,
+            title: source.title,
+            year: source.year,
+            url: source.url,
+            excerpt: source.snippet,
+            sourceType: source.sourceType,
+            authors: source.authors,
+            refNumber: refNum,
+          };
+        });
 
-    return { suggestions, redFlags };
+      return {
+        id: randomUUID(),
+        diagnosis: s.diagnosis,
+        confidence: s.confidence as "high" | "moderate" | "low",
+        reasoning: s.reasoning,
+        keyFindings: s.keyFindings || [],
+        workup: s.workup || [],
+        management: s.management || [],
+        citations,
+      };
+    });
+
+    const redFlags: RedFlag[] = (parsed.redFlags || []).map((r: any) => {
+      const citationRefs: number[] = r.citationRefs || [];
+      const citations: Citation[] = citationRefs
+        .filter((refNum: number) => refNum >= 1 && refNum <= searchResults.length)
+        .map((refNum: number) => {
+          const source = searchResults[refNum - 1];
+          return {
+            id: source.id,
+            source: source.source,
+            title: source.title,
+            year: source.year,
+            url: source.url,
+            excerpt: source.snippet,
+            sourceType: source.sourceType,
+            authors: source.authors,
+            refNumber: refNum,
+          };
+        });
+
+      return {
+        id: randomUUID(),
+        flag: r.flag,
+        severity: r.severity as "critical" | "warning",
+        action: r.action,
+        timeframe: r.timeframe,
+        citations,
+      };
+    });
+
+    return { suggestions, redFlags, sources };
   } catch (error) {
     console.error("AI Diagnosis error:", error);
-    return { suggestions: [], redFlags: [] };
+    return { suggestions: [], redFlags: [], sources };
   }
 }
 
