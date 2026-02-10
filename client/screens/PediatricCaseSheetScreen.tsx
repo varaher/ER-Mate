@@ -65,6 +65,7 @@ interface PatientInfo {
   informant_reliability: string;
   chief_complaint: string;
   triage_category: string;
+  weight: string;
   vitals: {
     hr: string;
     bp_systolic: string;
@@ -351,6 +352,9 @@ export default function PediatricCaseSheetScreen() {
   const loadFromCaseSheetData = (caseSheetData: any) => {
     if (!caseSheetData) return false;
     
+    if (caseSheetData.patient?.weight) {
+      setPatient((prev) => prev ? { ...prev, weight: caseSheetData.patient.weight } : prev);
+    }
     if (caseSheetData.primary_assessment?.pat) {
       setPatData(caseSheetData.primary_assessment.pat);
     }
@@ -459,6 +463,7 @@ export default function PediatricCaseSheetScreen() {
           informant_reliability: patientData.informant_reliability || triageData.informant_reliability || "",
           chief_complaint: complaintData.text || triageData.chief_complaint || "",
           triage_category: triageData.triage_color || triageData.triage_category || "green",
+          weight: patientData.weight || triageData.weight || "",
           vitals: {
             hr: String(vitalsData.hr || triageData.hr || ""),
             bp_systolic: String(vitalsData.bp_systolic || triageData.bp_systolic || ""),
@@ -493,6 +498,7 @@ export default function PediatricCaseSheetScreen() {
             informant_reliability: patientData.informant_reliability || data.informant_reliability || "",
             chief_complaint: complaintData.text || data.chief_complaint || "",
             triage_category: data.triage_color || data.triage_category || "green",
+            weight: patientData.weight || data.weight || "",
             vitals: {
               hr: String(vitalsData.hr || ""),
               bp_systolic: String(vitalsData.bp_systolic || ""),
@@ -538,6 +544,7 @@ export default function PediatricCaseSheetScreen() {
         mode_of_arrival: "Walk-in",
         arrival_datetime: new Date().toISOString(),
         mlc: false,
+        weight: patient.weight || "",
       } : undefined,
       presenting_complaint: {
         text: patient?.chief_complaint || triageData?.presenting_complaint?.text || "",
@@ -728,12 +735,36 @@ export default function PediatricCaseSheetScreen() {
     }
   };
 
+  const getPatientWeight = (): { weight: number; isEstimate: boolean } => {
+    const enteredWeight = parseFloat(patient?.weight || "");
+    if (enteredWeight > 0) return { weight: enteredWeight, isEstimate: false };
+    const age = patient?.age || 0;
+    const estimated = age < 1 ? 5 : age * 2 + 8;
+    return { weight: estimated, isEstimate: true };
+  };
+
+  const calculateDose = (dosePerKg: string, weight: number): string => {
+    const match = dosePerKg.match(/([\d.]+)(?:\s*-\s*([\d.]+))?\s*(mg|mcg|ml|mEq)\/kg/i);
+    if (!match) return dosePerKg;
+    const low = parseFloat(match[1]);
+    const high = match[2] ? parseFloat(match[2]) : null;
+    const unit = match[3];
+    if (high) {
+      return `${(low * weight).toFixed(1)}-${(high * weight).toFixed(1)} ${unit}`;
+    }
+    return `${(low * weight).toFixed(1)} ${unit}`;
+  };
+
   const addDrugFromList = (drug: typeof PEDIATRIC_DRUG_LIST[0]) => {
-    const patientWeight = patient?.age ? (patient.age < 1 ? 5 : patient.age * 2 + 8) : 10; // Rough weight estimate
+    const { weight, isEstimate } = getPatientWeight();
+    const calculatedDose = calculateDose(drug.dose, weight);
+    const doseText = isEstimate
+      ? `${calculatedDose} (${drug.dose}, est. wt: ${weight}kg)`
+      : `${calculatedDose} (${drug.dose}, wt: ${weight}kg)`;
     const newMed: MedicationEntry = {
       id: Date.now().toString(),
       name: drug.name,
-      dose: `${drug.dose} (Est. wt: ${patientWeight}kg)`,
+      dose: doseText,
       route: drug.route,
       frequency: drug.frequency,
     };
@@ -1011,6 +1042,29 @@ export default function PediatricCaseSheetScreen() {
               <View style={styles.vitalItem}><Text style={[styles.vitalValue, { color: theme.text }]}>{patient.vitals.rr || "--"}</Text><Text style={[styles.vitalLabel, { color: theme.textSecondary }]}>RR</Text></View>
               <View style={styles.vitalItem}><Text style={[styles.vitalValue, { color: theme.text }]}>{patient.vitals.spo2 || "--"}%</Text><Text style={[styles.vitalLabel, { color: theme.textSecondary }]}>SpO2</Text></View>
               <View style={styles.vitalItem}><Text style={[styles.vitalValue, { color: theme.text }]}>{patient.vitals.temperature || "--"}</Text><Text style={[styles.vitalLabel, { color: theme.textSecondary }]}>Temp</Text></View>
+            </View>
+
+            <View style={[styles.weightSection, { backgroundColor: theme.backgroundSecondary, borderColor: TriageColors.blue }]}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginBottom: Spacing.sm }}>
+                <Feather name="activity" size={18} color={TriageColors.blue} />
+                <Text style={[styles.fieldLabel, { color: theme.text, fontWeight: "700" }]}>Weight (kg)</Text>
+              </View>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.md }}>
+                <TextInput
+                  style={[styles.inputField, { backgroundColor: theme.card, color: theme.text, flex: 1, fontSize: 18, fontWeight: "600" }]}
+                  placeholder="Enter weight in kg"
+                  placeholderTextColor={theme.textMuted}
+                  value={patient.weight}
+                  onChangeText={(v) => setPatient((prev) => prev ? { ...prev, weight: v } : prev)}
+                  keyboardType="decimal-pad"
+                />
+                <Text style={{ color: theme.textSecondary, fontSize: 14 }}>kg</Text>
+              </View>
+              {!patient.weight ? (
+                <Text style={{ color: TriageColors.orange, fontSize: 12, marginTop: Spacing.xs, fontStyle: "italic" }}>
+                  Weight needed for accurate drug dosing. Estimated: {patient.age < 1 ? 5 : patient.age * 2 + 8}kg
+                </Text>
+              ) : null}
             </View>
 
             <View style={styles.infoSection}>
@@ -1711,19 +1765,33 @@ export default function PediatricCaseSheetScreen() {
               value={drugSearchText}
               onChangeText={setDrugSearchText}
             />
+            {(() => {
+              const { weight, isEstimate } = getPatientWeight();
+              return (
+                <View style={{ backgroundColor: isEstimate ? "#FEF3C7" : "#DCFCE7", padding: Spacing.sm, borderRadius: 8, marginBottom: Spacing.md }}>
+                  <Text style={{ color: isEstimate ? "#92400E" : "#166534", fontSize: 13, fontWeight: "600" }}>
+                    {isEstimate ? `Using estimated weight: ${weight}kg (enter actual weight in Patient tab)` : `Using weight: ${weight}kg`}
+                  </Text>
+                </View>
+              );
+            })()}
             <FlatList
               data={filteredDrugs}
               keyExtractor={(item) => item.name}
-              renderItem={({ item }) => (
-                <Pressable
-                  style={{ padding: Spacing.md, backgroundColor: theme.backgroundSecondary, borderRadius: 8, marginBottom: Spacing.xs }}
-                  onPress={() => addDrugFromList(item)}
-                >
-                  <Text style={[styles.fieldLabel, { color: theme.text, fontWeight: "600" }]}>{item.name}</Text>
-                  <Text style={{ color: TriageColors.green, fontSize: 13, marginTop: 2 }}>Dose: {item.dose}</Text>
-                  <Text style={{ color: theme.textSecondary, fontSize: 12 }}>{item.route} | {item.frequency}</Text>
-                </Pressable>
-              )}
+              renderItem={({ item }) => {
+                const { weight } = getPatientWeight();
+                const calcDose = calculateDose(item.dose, weight);
+                return (
+                  <Pressable
+                    style={{ padding: Spacing.md, backgroundColor: theme.backgroundSecondary, borderRadius: 8, marginBottom: Spacing.xs }}
+                    onPress={() => addDrugFromList(item)}
+                  >
+                    <Text style={[styles.fieldLabel, { color: theme.text, fontWeight: "600" }]}>{item.name}</Text>
+                    <Text style={{ color: TriageColors.green, fontSize: 14, fontWeight: "600", marginTop: 2 }}>Calc: {calcDose}</Text>
+                    <Text style={{ color: theme.textSecondary, fontSize: 12 }}>Per kg: {item.dose} | {item.route} | {item.frequency}</Text>
+                  </Pressable>
+                );
+              }}
               ListEmptyComponent={<Text style={{ color: theme.textMuted, textAlign: "center", padding: Spacing.lg }}>No drugs found</Text>}
             />
           </View>
@@ -1765,6 +1833,7 @@ const styles = StyleSheet.create({
   vitalItem: { alignItems: "center", minWidth: 50 },
   vitalValue: { ...Typography.bodyMedium, fontWeight: "600" },
   vitalLabel: { ...Typography.small },
+  weightSection: { marginTop: Spacing.lg, padding: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1.5, borderStyle: "dashed" },
   infoSection: { marginTop: Spacing.lg },
   fieldWithVoice: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: Spacing.md, marginBottom: Spacing.sm },
   fieldLabel: { ...Typography.bodyMedium },
