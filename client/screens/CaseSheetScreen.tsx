@@ -25,6 +25,7 @@ import { DropdownField } from "@/components/DropdownField";
 import { CheckboxGroup } from "@/components/CheckboxGroup";
 import { TextInputField } from "@/components/TextInputField";
 import { AIDiagnosisPanel } from "@/components/AIDiagnosisPanel";
+import SmartDictation, { SmartDictationExtracted } from "@/components/SmartDictation";
 import { useTheme } from "@/hooks/useTheme";
 import { useCase } from "@/context/CaseContext";
 import { apiGet, apiPatch, apiPut, apiUpload, invalidateCases } from "@/lib/api";
@@ -1450,6 +1451,94 @@ export default function CaseSheetScreen() {
     handleSave(true);
   };
 
+  const handleSmartDictation = (data: SmartDictationExtracted) => {
+    if (data.chiefComplaint) {
+      updateFormData("sample", "signsSymptoms", (formData.sample.signsSymptoms ? formData.sample.signsSymptoms + ", " : "") + data.chiefComplaint);
+    }
+    if (data.historyOfPresentIllness) {
+      let hpi = data.historyOfPresentIllness;
+      if (data.onset) hpi += ` Onset: ${data.onset}.`;
+      if (data.duration) hpi += ` Duration: ${data.duration}.`;
+      if (data.progression) hpi += ` Progression: ${data.progression}.`;
+      if (data.associatedSymptoms) hpi += ` Associated symptoms: ${data.associatedSymptoms}.`;
+      if (data.negativeSymptoms) hpi += ` Pertinent negatives: ${data.negativeSymptoms}.`;
+      updateFormData("sample", "eventsHopi", (formData.sample.eventsHopi ? formData.sample.eventsHopi + " " : "") + hpi);
+    }
+    if (data.pastMedicalHistory) {
+      updateFormData("sample", "pastMedicalHistory", (formData.sample.pastMedicalHistory ? formData.sample.pastMedicalHistory + ", " : "") + data.pastMedicalHistory);
+    }
+    if (data.pastSurgicalHistory) {
+      setPastSurgicalHistory((prev) => (prev ? `${prev}, ${data.pastSurgicalHistory}` : data.pastSurgicalHistory!));
+    }
+    if (data.allergies) {
+      updateFormData("sample", "allergies", (formData.sample.allergies ? formData.sample.allergies + ", " : "") + data.allergies);
+    }
+    if (data.currentMedications) {
+      updateFormData("sample", "medications", (formData.sample.medications ? formData.sample.medications + ", " : "") + data.currentMedications);
+    }
+    if (data.familyHistory) {
+      setOtherHistory((prev) => (prev ? `${prev}. Family History: ${data.familyHistory}` : `Family History: ${data.familyHistory}`));
+    }
+    if (data.socialHistory) {
+      setOtherHistory((prev) => (prev ? `${prev}. Social History: ${data.socialHistory}` : `Social History: ${data.socialHistory}`));
+    }
+    if (data.menstrualHistory) {
+      updateFormData("sample", "lastMenstrualPeriod", data.menstrualHistory);
+    }
+    if (data.symptoms && data.symptoms.length > 0) {
+      const symptomsText = data.symptoms.join(", ");
+      updateFormData("sample", "signsSymptoms", (formData.sample.signsSymptoms ? formData.sample.signsSymptoms + ", " : "") + symptomsText);
+    }
+    if (data.painDetails) {
+      const pd = data.painDetails;
+      const parts = [];
+      if (pd.location) parts.push(`Location: ${pd.location}`);
+      if (pd.severity) parts.push(`Severity: ${pd.severity}`);
+      if (pd.character) parts.push(`Character: ${pd.character}`);
+      if (pd.aggravatingFactors) parts.push(`Aggravating: ${pd.aggravatingFactors}`);
+      if (pd.relievingFactors) parts.push(`Relieving: ${pd.relievingFactors}`);
+      if (parts.length > 0) {
+        const painText = parts.join(". ");
+        updateFormData("sample", "eventsHopi", (formData.sample.eventsHopi ? formData.sample.eventsHopi + ". Pain: " : "Pain: ") + painText);
+      }
+    }
+    if (data.examFindings) {
+      if (data.examFindings.general) {
+        updateExamData("general", "notes", (examData.general.notes ? examData.general.notes + " " : "") + data.examFindings.general);
+      }
+      if (data.examFindings.cvs) {
+        updateExamData("cvs", "notes", (examData.cvs.notes ? examData.cvs.notes + " " : "") + data.examFindings.cvs);
+      }
+      if (data.examFindings.respiratory) {
+        updateExamData("respiratory", "notes", (examData.respiratory.notes ? examData.respiratory.notes + " " : "") + data.examFindings.respiratory);
+      }
+      if (data.examFindings.abdomen) {
+        updateExamData("abdomen", "notes", (examData.abdomen.notes ? examData.abdomen.notes + " " : "") + data.examFindings.abdomen);
+      }
+      if (data.examFindings.cns) {
+        updateExamData("cns", "notes", (examData.cns.notes ? examData.cns.notes + " " : "") + data.examFindings.cns);
+      }
+    }
+    if (data.diagnosis && data.diagnosis.length > 0) {
+      const diagnosisText = data.diagnosis.join(", ");
+      setTreatmentData((prev) => ({ ...prev, primaryDiagnosis: prev.primaryDiagnosis ? prev.primaryDiagnosis + ", " + diagnosisText : diagnosisText }));
+    }
+    if (data.differentialDiagnosis && data.differentialDiagnosis.length > 0) {
+      const ddx = data.differentialDiagnosis.join(", ");
+      setTreatmentData((prev) => ({ ...prev, differentialDiagnoses: prev.differentialDiagnoses ? prev.differentialDiagnoses + ", " + ddx : ddx }));
+    }
+    if (data.treatmentNotes) {
+      setTreatmentData((prev) => ({ ...prev, addendumNotes: (prev.addendumNotes || "") + " " + data.treatmentNotes }));
+    }
+    if (data.investigationsOrdered) {
+      setTreatmentData((prev) => ({ ...prev, labsOrdered: prev.labsOrdered ? prev.labsOrdered + ", " + data.investigationsOrdered : data.investigationsOrdered! }));
+    }
+    if (data.imagingOrdered) {
+      setTreatmentData((prev) => ({ ...prev, imaging: prev.imaging ? prev.imaging + ", " + data.imagingOrdered : data.imagingOrdered! }));
+    }
+    handleSave(true);
+  };
+
   const handleDocumentScanExtraction = (data: {
     chiefComplaint?: string;
     hpiNotes?: string;
@@ -1702,6 +1791,16 @@ export default function CaseSheetScreen() {
                 </View>
               </View>
             )}
+
+            <SmartDictation
+              onDataExtracted={handleSmartDictation}
+              patientContext={{
+                age: caseData?.patient?.age ? parseFloat(caseData.patient.age) : undefined,
+                sex: caseData?.patient?.sex,
+                chiefComplaint: caseData?.presenting_complaint?.text,
+                caseType: 'adult',
+              }}
+            />
 
             <View style={[styles.card, { backgroundColor: theme.card }]}>
               <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Mode of Arrival</Text>

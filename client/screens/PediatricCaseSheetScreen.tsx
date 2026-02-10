@@ -9,6 +9,7 @@ import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollV
 import VoiceRecorder, { ExtractedClinicalData } from "@/components/VoiceRecorder";
 import { DocumentScanner } from "@/components/DocumentScanner";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
+import SmartDictation, { SmartDictationExtracted } from "@/components/SmartDictation";
 import { useTheme } from "@/hooks/useTheme";
 import { apiGet, apiPatch, apiPut, invalidateCases } from "@/lib/api";
 import { cacheCasePayload } from "@/lib/caseCache";
@@ -873,6 +874,85 @@ export default function PediatricCaseSheetScreen() {
     handleSave(true);
   };
 
+  const handleSmartDictation = (data: SmartDictationExtracted) => {
+    if (data.chiefComplaint) {
+      setHistoryData((prev) => ({ ...prev, events: (prev.events ? prev.events + ". " : "") + "Chief Complaint: " + data.chiefComplaint }));
+    }
+    if (data.historyOfPresentIllness) {
+      let hpi = data.historyOfPresentIllness;
+      if (data.onset) hpi += ` Onset: ${data.onset}.`;
+      if (data.duration) hpi += ` Duration: ${data.duration}.`;
+      if (data.progression) hpi += ` Progression: ${data.progression}.`;
+      if (data.associatedSymptoms) hpi += ` Associated: ${data.associatedSymptoms}.`;
+      if (data.negativeSymptoms) hpi += ` Negatives: ${data.negativeSymptoms}.`;
+      setHistoryData((prev) => ({ ...prev, events: (prev.events ? prev.events + " " : "") + hpi }));
+    }
+    if (data.pastMedicalHistory) {
+      setHistoryData((prev) => ({ ...prev, healthHistory: (prev.healthHistory ? prev.healthHistory + ", " : "") + data.pastMedicalHistory }));
+    }
+    if (data.allergies) {
+      setHistoryData((prev) => ({ ...prev, allergies: (prev.allergies ? prev.allergies + ", " : "") + data.allergies }));
+    }
+    if (data.currentMedications) {
+      setHistoryData((prev) => ({ ...prev, currentMedications: (prev.currentMedications ? prev.currentMedications + ", " : "") + data.currentMedications }));
+    }
+    if (data.immunizationHistory) {
+      setHistoryData((prev) => ({ ...prev, immunizationStatus: (prev.immunizationStatus ? prev.immunizationStatus + ". " : "") + data.immunizationHistory }));
+    }
+    if (data.birthHistory || data.feedingHistory || data.developmentalHistory) {
+      const parts = [data.birthHistory, data.feedingHistory, data.developmentalHistory].filter(Boolean);
+      if (parts.length > 0) {
+        setHistoryData((prev) => ({ ...prev, underlyingConditions: (prev.underlyingConditions ? prev.underlyingConditions + ". " : "") + parts.join(". ") }));
+      }
+    }
+    if (data.familyHistory || data.socialHistory) {
+      const parts = [data.familyHistory ? `Family: ${data.familyHistory}` : null, data.socialHistory ? `Social: ${data.socialHistory}` : null].filter(Boolean);
+      if (parts.length > 0) {
+        setHistoryData((prev) => ({ ...prev, healthHistory: (prev.healthHistory ? prev.healthHistory + ". " : "") + parts.join(". ") }));
+      }
+    }
+    if (data.symptoms && data.symptoms.length > 0) {
+      const symptomsText = data.symptoms.join(", ");
+      setHistoryData((prev) => ({ ...prev, events: (prev.events ? prev.events + ", " : "") + symptomsText }));
+    }
+    if (data.examFindings) {
+      if (data.examFindings.heent || data.examFindings.general) {
+        const heentText = [data.examFindings.general, data.examFindings.heent].filter(Boolean).join(". ");
+        setExamData((prev) => ({ ...prev, heent: { ...prev.heent, head: (prev.heent.head ? prev.heent.head + " " : "") + heentText } }));
+      }
+      if (data.examFindings.respiratory) {
+        setExamData((prev) => ({ ...prev, respiratory: (prev.respiratory ? prev.respiratory + " " : "") + data.examFindings!.respiratory }));
+      }
+      if (data.examFindings.cvs) {
+        setExamData((prev) => ({ ...prev, cardiovascular: (prev.cardiovascular ? prev.cardiovascular + " " : "") + data.examFindings!.cvs }));
+      }
+      if (data.examFindings.abdomen) {
+        setExamData((prev) => ({ ...prev, abdomen: (prev.abdomen ? prev.abdomen + " " : "") + data.examFindings!.abdomen }));
+      }
+      if (data.examFindings.cns) {
+        setExamData((prev) => ({ ...prev, extremities: (prev.extremities ? prev.extremities + ". CNS: " : "CNS: ") + data.examFindings!.cns }));
+      }
+    }
+    if (data.diagnosis && data.diagnosis.length > 0) {
+      const diagnosisText = data.diagnosis.join(", ");
+      setTreatmentData((prev) => ({ ...prev, primaryDiagnosis: (prev.primaryDiagnosis ? prev.primaryDiagnosis + ", " : "") + diagnosisText }));
+    }
+    if (data.differentialDiagnosis && data.differentialDiagnosis.length > 0) {
+      const ddx = data.differentialDiagnosis.join(", ");
+      setTreatmentData((prev) => ({ ...prev, differentialDiagnoses: (prev.differentialDiagnoses ? prev.differentialDiagnoses + ", " : "") + ddx }));
+    }
+    if (data.treatmentNotes) {
+      setTreatmentData((prev) => ({ ...prev, resultsSummary: (prev.resultsSummary ? prev.resultsSummary + " " : "") + data.treatmentNotes }));
+    }
+    if (data.investigationsOrdered) {
+      setTreatmentData((prev) => ({ ...prev, labsOrdered: prev.labsOrdered ? prev.labsOrdered + ", " + data.investigationsOrdered : data.investigationsOrdered! }));
+    }
+    if (data.imagingOrdered) {
+      setTreatmentData((prev) => ({ ...prev, imaging: prev.imaging ? prev.imaging + ", " + data.imagingOrdered : data.imagingOrdered! }));
+    }
+    handleSave(true);
+  };
+
   const handleDocumentScanExtraction = (data: {
     chiefComplaint?: string;
     hpiNotes?: string;
@@ -1114,6 +1194,16 @@ export default function PediatricCaseSheetScreen() {
               <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.md }]}>Informant</Text>
               <Text style={[styles.fieldValue, { color: theme.textSecondary }]}>{patient.informant_name || "Not specified"}{patient.informant_reliability ? ` (${patient.informant_reliability})` : ""}</Text>
             </View>
+
+            <SmartDictation
+              onDataExtracted={handleSmartDictation}
+              patientContext={{
+                age: patient?.age,
+                sex: patient?.sex,
+                chiefComplaint: patient?.chief_complaint,
+                caseType: 'pediatric',
+              }}
+            />
           </View>
         )}
 
