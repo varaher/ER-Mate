@@ -36,7 +36,7 @@ export async function sarvamSpeechToText(
       "api-subscription-key": apiKey,
       ...formData.getHeaders(),
     },
-    body: formData.getBuffer(),
+    body: formData.getBuffer() as unknown as BodyInit,
   });
 
   if (!response.ok) {
@@ -71,7 +71,7 @@ export async function sarvamSpeechToTextTranslate(
       "api-subscription-key": apiKey,
       ...formData.getHeaders(),
     },
-    body: formData.getBuffer(),
+    body: formData.getBuffer() as unknown as BodyInit,
   });
 
   if (!response.ok) {
@@ -113,7 +113,7 @@ export async function sarvamParsePDF(
       "api-subscription-key": apiKey,
       ...formData.getHeaders(),
     },
-    body: formData.getBuffer(),
+    body: formData.getBuffer() as unknown as BodyInit,
   });
 
   if (!response.ok) {

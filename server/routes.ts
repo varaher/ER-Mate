@@ -1658,6 +1658,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/scan/document", upload.single('document'), async (req: Request, res: Response) => {
+    try {
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ error: "No document file provided" });
+      }
+
+      const { isSarvamAvailable, sarvamParsePDF } = await import("./services/sarvamAI");
+      
+      if (!isSarvamAvailable()) {
+        return res.status(503).json({ error: "Document scanning service not available - Sarvam AI not configured" });
+      }
+
+      const pageNumber = parseInt(req.body.pageNumber) || 1;
+      let pdfBuffer = file.buffer;
+
+      const isImage = file.mimetype.startsWith("image/");
+      if (isImage) {
+        const { default: PDFDocument } = await import("pdfkit");
+        pdfBuffer = await new Promise<Buffer>((resolve, reject) => {
+          const doc = new PDFDocument({ size: "A4" });
+          const chunks: Buffer[] = [];
+          doc.on("data", (chunk: Buffer) => chunks.push(chunk));
+          doc.on("end", () => resolve(Buffer.concat(chunks)));
+          doc.on("error", reject);
+          doc.image(file.buffer, 0, 0, { fit: [595, 842], align: "center", valign: "center" });
+          doc.end();
+        });
+      }
+
+      const parsedText = await sarvamParsePDF(pdfBuffer, pageNumber);
+
+      if (!parsedText || parsedText.trim().length === 0) {
+        return res.json({ 
+          success: true, 
+          text: "", 
+          structured: null,
+          message: "No text could be extracted from the document" 
+        });
+      }
+
+      let structured = null;
+      let patientContext;
+      if (req.body.patientContext) {
+        try { patientContext = JSON.parse(req.body.patientContext); } catch { patientContext = undefined; }
+      }
+
+      const extractMode = req.body.mode || "clinical";
+      if (extractMode === "clinical") {
+        try {
+          structured = await extractClinicalDataFromVoice(parsedText, patientContext);
+        } catch (extractErr) {
+          console.warn("[Doc Scan] Clinical extraction failed:", extractErr);
+        }
+      }
+
+      res.json({
+        success: true,
+        text: parsedText,
+        structured,
+      });
+    } catch (error) {
+      console.error("Document scan error:", error);
+      res.status(500).json({ error: (error as Error).message || "Failed to scan document" });
+    }
+  });
+
+  app.get("/api/sarvam/status", async (_req: Request, res: Response) => {
+    const { isSarvamAvailable } = await import("./services/sarvamAI");
+    res.json({ available: isSarvamAvailable() });
+  });
+
   app.post("/api/treatment-history/save", async (req: Request, res: Response) => {
     try {
       const { userId, diagnosis, medications, infusions, patientAge, patientSex, caseId } = req.body;
