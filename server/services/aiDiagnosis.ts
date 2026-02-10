@@ -852,6 +852,184 @@ export async function transcribeAndExtractVoice(
   return { transcript };
 }
 
+export interface SmartDictationResult {
+  chiefComplaint?: string;
+  historyOfPresentIllness?: string;
+  onset?: string;
+  duration?: string;
+  progression?: string;
+  associatedSymptoms?: string;
+  negativeSymptoms?: string;
+  pastMedicalHistory?: string;
+  pastSurgicalHistory?: string;
+  allergies?: string;
+  currentMedications?: string;
+  familyHistory?: string;
+  socialHistory?: string;
+  menstrualHistory?: string;
+  immunizationHistory?: string;
+  birthHistory?: string;
+  feedingHistory?: string;
+  developmentalHistory?: string;
+  symptoms?: string[];
+  painDetails?: {
+    location?: string;
+    severity?: string;
+    character?: string;
+    onset?: string;
+    duration?: string;
+    aggravatingFactors?: string;
+    relievingFactors?: string;
+    associatedSymptoms?: string;
+  };
+  vitalsSuggested?: {
+    bp?: string;
+    hr?: string;
+    rr?: string;
+    spo2?: string;
+    temperature?: string;
+    grbs?: string;
+  };
+  examFindings?: {
+    general?: string;
+    cvs?: string;
+    respiratory?: string;
+    abdomen?: string;
+    cns?: string;
+    musculoskeletal?: string;
+    skin?: string;
+    heent?: string;
+  };
+  diagnosis?: string[];
+  differentialDiagnosis?: string[];
+  treatmentNotes?: string;
+  investigationsOrdered?: string;
+  imagingOrdered?: string;
+  rawTranscription?: string;
+  fieldsPopulated?: string[];
+}
+
+export async function extractSmartDictation(
+  transcription: string,
+  patientContext?: { age?: number; sex?: string; chiefComplaint?: string; caseType?: string }
+): Promise<SmartDictationResult> {
+  const openai = getOpenAIClient();
+  if (!openai) {
+    console.warn("OpenAI not configured - returning raw transcription only");
+    return { rawTranscription: transcription };
+  }
+
+  const isPediatric = patientContext?.caseType === 'pediatric' || 
+    (patientContext?.age !== undefined && patientContext.age <= 16);
+
+  const contextInfo = patientContext
+    ? `Patient context: ${patientContext.age || "unknown"} year old ${patientContext.sex || "patient"}${patientContext.chiefComplaint ? `, presenting with: ${patientContext.chiefComplaint}` : ""}. Case type: ${isPediatric ? "Pediatric (PALS)" : "Adult (ATLS)"}.`
+    : "No patient context provided";
+
+  const pediatricFields = isPediatric ? `
+  "immunizationHistory": "Vaccination history if mentioned",
+  "birthHistory": "Birth history - term/preterm, birth weight, NICU stay, etc. if mentioned",
+  "feedingHistory": "Breastfeeding/formula/weaning history if mentioned",
+  "developmentalHistory": "Developmental milestones if mentioned",` : "";
+
+  const prompt = `You are an expert Emergency Medicine clinical documentation assistant. A physician is dictating a patient's complete history in one continuous narrative. Your job is to carefully parse this dictation and extract every piece of clinical information, placing it into the correct case sheet field.
+
+${contextInfo}
+
+Voice dictation transcript:
+"${transcription}"
+
+IMPORTANT INSTRUCTIONS:
+1. Parse the ENTIRE dictation carefully. Doctors may speak in informal/shorthand style.
+2. Recognize common medical abbreviations: "pt" = patient, "c/o" = complaining of, "h/o" = history of, "k/c/o" = known case of, "OHA" = oral hypoglycemic agents, "dx" = diagnosis, "rx" = treatment, "hx" = history, "sx" = symptoms, "o/e" = on examination, "NAD" = no acute distress, "GRBS" = random blood sugar, etc.
+3. Differentiate between: presenting complaints vs past history vs examination findings vs diagnosis.
+4. If something is mentioned as a NEGATIVE finding (e.g., "not associated with vomiting"), put it in "negativeSymptoms".
+5. Only include fields that have actual content from the transcript. Omit empty fields entirely.
+6. Be precise - do not invent or assume information not stated.
+7. Include a "fieldsPopulated" array listing which fields you filled, so the UI can show what was auto-populated.
+
+Respond in JSON format:
+{
+  "chiefComplaint": "Main presenting complaint(s) - what the patient came in for",
+  "historyOfPresentIllness": "Detailed narrative of the current illness episode - onset, progression, character, associated/aggravating/relieving factors",
+  "onset": "When symptoms started (e.g., '2 days ago', 'sudden onset')",
+  "duration": "Duration of symptoms",
+  "progression": "How symptoms progressed (gradual, sudden, worsening, etc.)",
+  "associatedSymptoms": "Symptoms that accompany the chief complaint",
+  "negativeSymptoms": "Pertinent negatives explicitly mentioned (e.g., 'no vomiting, no loose stools')",
+  "pastMedicalHistory": "Known medical conditions (diabetes, hypertension, asthma, etc.)",
+  "pastSurgicalHistory": "Previous surgeries if mentioned",
+  "allergies": "Drug or food allergies if mentioned",
+  "currentMedications": "Current medications the patient is taking",
+  "familyHistory": "Family medical history if mentioned",
+  "socialHistory": "Smoking, alcohol, occupation, etc. if mentioned",
+  "menstrualHistory": "Menstrual/obstetric history if mentioned and relevant",${pediatricFields}
+  "symptoms": ["Array of individual symptoms extracted"],
+  "painDetails": {
+    "location": "Where the pain is",
+    "severity": "Pain score or description",
+    "character": "Nature of pain (sharp, dull, colicky, burning, etc.)",
+    "onset": "When pain started",
+    "duration": "How long",
+    "aggravatingFactors": "What makes it worse",
+    "relievingFactors": "What makes it better",
+    "associatedSymptoms": "Symptoms with the pain"
+  },
+  "vitalsSuggested": {
+    "bp": "Blood pressure if mentioned",
+    "hr": "Heart rate if mentioned",
+    "rr": "Respiratory rate if mentioned",
+    "spo2": "SpO2 if mentioned",
+    "temperature": "Temperature if mentioned",
+    "grbs": "Blood sugar if mentioned"
+  },
+  "examFindings": {
+    "general": "General appearance/examination findings",
+    "cvs": "Cardiovascular examination findings",
+    "respiratory": "Respiratory examination findings",
+    "abdomen": "Abdominal examination findings",
+    "cns": "Neurological examination findings",
+    "musculoskeletal": "MSK findings if mentioned",
+    "skin": "Skin/wound findings if mentioned",
+    "heent": "Head, eyes, ears, nose, throat findings if mentioned"
+  },
+  "diagnosis": ["Primary diagnosis or working diagnosis"],
+  "differentialDiagnosis": ["Differential diagnoses if mentioned"],
+  "treatmentNotes": "Any treatment plans or medications given if mentioned",
+  "investigationsOrdered": "Labs ordered if mentioned (CBC, RFT, etc.)",
+  "imagingOrdered": "Imaging ordered if mentioned (X-ray, CT, USG, etc.)",
+  "fieldsPopulated": ["Array of field names that were populated"]
+}`;
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        { 
+          role: "system", 
+          content: "You are an expert emergency medicine clinical documentation assistant specializing in parsing doctor dictations. You understand Indian English medical terminology, common abbreviations, and clinical workflow. Extract ONLY information explicitly stated or strongly implied in the dictation. Never invent data. Be thorough - capture every clinical detail mentioned." 
+        },
+        { role: "user", content: prompt },
+      ],
+      temperature: 0.1,
+      max_tokens: 3000,
+      response_format: { type: "json_object" },
+    });
+
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      throw new Error("Empty response from AI");
+    }
+
+    const extracted = JSON.parse(content) as SmartDictationResult;
+    extracted.rawTranscription = transcription;
+    return extracted;
+  } catch (error) {
+    console.error("Failed to extract smart dictation data:", error);
+    return { rawTranscription: transcription };
+  }
+}
+
 async function fallbackWhisperTranscribe(audioBuffer: Buffer, filename: string): Promise<string> {
   const openai = getOpenAIClient();
   if (!openai) {

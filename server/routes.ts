@@ -1658,6 +1658,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/voice/smart-dictation", upload.single('audio'), async (req: Request, res: Response) => {
+    try {
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ error: "No audio file provided" });
+      }
+
+      let patientContext;
+      if (req.body.patientContext) {
+        try {
+          patientContext = JSON.parse(req.body.patientContext);
+        } catch {
+          patientContext = undefined;
+        }
+      }
+
+      const filename = file.originalname || 'voice.m4a';
+
+      const { isSarvamAvailable, sarvamSpeechToTextTranslate } = await import("./services/sarvamAI");
+      const { extractSmartDictation } = await import("./services/aiDiagnosis");
+
+      let transcript = '';
+
+      if (isSarvamAvailable()) {
+        try {
+          console.log("[SmartDictation] Using Sarvam AI for speech-to-text");
+          const sarvamResult = await sarvamSpeechToTextTranslate(file.buffer, filename);
+          transcript = sarvamResult.transcript || '';
+          console.log("[SmartDictation] Sarvam STT success, transcript length:", transcript.length);
+        } catch (sarvamError) {
+          console.warn("[SmartDictation] Sarvam STT failed, falling back to Whisper:", sarvamError);
+          const { transcribeAndExtractVoice } = await import("./services/aiDiagnosis");
+          const fallbackResult = await transcribeAndExtractVoice(file.buffer, filename, patientContext, 'transcribe_only');
+          transcript = fallbackResult.transcript || '';
+        }
+      } else {
+        console.log("[SmartDictation] Using OpenAI Whisper for speech-to-text");
+        const { transcribeAndExtractVoice } = await import("./services/aiDiagnosis");
+        const result = await transcribeAndExtractVoice(file.buffer, filename, patientContext, 'transcribe_only');
+        transcript = result.transcript || '';
+      }
+
+      if (!transcript || transcript.trim().length === 0) {
+        return res.json({ transcript: '', extracted: null, error: 'No speech detected' });
+      }
+
+      console.log("[SmartDictation] Extracting clinical data from transcript...");
+      const extracted = await extractSmartDictation(transcript, patientContext);
+
+      res.json({ transcript, extracted });
+    } catch (error) {
+      console.error("Smart dictation error:", error);
+      res.status(500).json({ error: (error as Error).message || "Failed to process dictation" });
+    }
+  });
+
   app.post("/api/scan/document", upload.single('document'), async (req: Request, res: Response) => {
     try {
       const file = req.file;
