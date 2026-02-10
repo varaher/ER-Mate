@@ -57,5 +57,8 @@ Preferred communication style: Simple, everyday language.
 - `@tanstack/react-query`: Server state management.
 
 **AI Integration**:
-- OpenAI (via Replit AI Integrations) for AI diagnosis and interpretation.
+- OpenAI (via Replit AI Integrations) for AI diagnosis, interpretation, and clinical data extraction.
 - Sarvam AI (via SARVAM_AI_API_KEY secret) for speech-to-text (Saaras v3 model) and document OCR (Sarvam Vision).
+- **AI Diagnosis System** (`server/services/aiDiagnosis.ts`): Perplexity-style evidence-based diagnosis with real-time medical literature search. Searches PubMed API and WikEM before AI analysis, includes context-appropriate textbook and guideline references (ATLS, PALS, Surviving Sepsis, etc.). Returns `DiagnosisSuggestion` with `keyFindings`, `workup`, `management`, inline `[citation]` references, and `SearchSource[]` array with clickable URLs.
+- **Medical Search Service** (`server/services/medicalSearch.ts`): Searches PubMed (NCBI E-utilities), WikEM API, and provides curated textbook/guideline references based on chief complaint context. Returns `MedicalSearchResult[]` with source types: pubmed, textbook, guideline, wikem.
+- **AIDiagnosisPanel** (`client/components/AIDiagnosisPanel.tsx`): Perplexity-style UI with expandable differential diagnoses, inline `[1]` citation references, horizontally scrollable citation chips, collapsible Sources panel with categorized references, and self-learning feedback (accept/reject). Red flags include timeframe badges and cited guidelines.
