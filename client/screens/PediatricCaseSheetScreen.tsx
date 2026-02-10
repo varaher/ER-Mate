@@ -1543,10 +1543,16 @@ export default function PediatricCaseSheetScreen() {
               <Text style={[styles.cardTitle, { color: theme.text }]}>Treatment Given</Text>
               
               <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Medications (Pediatric Formulary)</Text>
-              <Pressable style={[styles.addDrugBtn, { backgroundColor: TriageColors.green }]} onPress={() => setShowDrugPicker(true)}>
-                <Feather name="plus" size={18} color="#FFFFFF" />
-                <Text style={styles.addDrugBtnText}>Add Drug from List</Text>
-              </Pressable>
+              <View style={{ flexDirection: "row", gap: Spacing.sm }}>
+                <Pressable style={[styles.addDrugBtn, { backgroundColor: TriageColors.green, flex: 1, marginTop: Spacing.sm }]} onPress={() => setShowDrugPicker(true)}>
+                  <Feather name="plus" size={18} color="#FFFFFF" />
+                  <Text style={styles.addDrugBtnText}>Add Drug</Text>
+                </Pressable>
+                <Pressable style={[styles.addDrugBtn, { backgroundColor: theme.primary, flex: 1, marginTop: Spacing.sm }]} onPress={() => navigation.navigate("PediatricDrugCalculator" as any, { weight: patient?.weight || "" })}>
+                  <Feather name="book-open" size={18} color="#FFFFFF" />
+                  <Text style={styles.addDrugBtnText}>Drug Calculator</Text>
+                </Pressable>
+              </View>
 
               {treatmentData.medications.length > 0 && (
                 <View style={{ marginBottom: Spacing.md }}>

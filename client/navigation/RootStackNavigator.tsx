@@ -26,6 +26,7 @@ import NotificationsScreen from "@/screens/NotificationsScreen";
 import PrivacyScreen from "@/screens/PrivacyScreen";
 import HelpSupportScreen from "@/screens/HelpSupportScreen";
 import AboutScreen from "@/screens/AboutScreen";
+import PediatricDrugCalculatorScreen from "@/screens/PediatricDrugCalculatorScreen";
 
 export type RootStackParamList = {
   Login: undefined;
@@ -48,6 +49,7 @@ export type RootStackParamList = {
   Privacy: undefined;
   HelpSupport: undefined;
   About: undefined;
+  PediatricDrugCalculator: { weight?: string } | undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -221,6 +223,14 @@ export default function RootStackNavigator() {
             options={{
               presentation: "modal",
               headerTitle: "About ErMate",
+            }}
+          />
+          <Stack.Screen
+            name="PediatricDrugCalculator"
+            component={PediatricDrugCalculatorScreen}
+            options={{
+              presentation: "modal",
+              headerTitle: "Pediatric Drug Calculator",
             }}
           />
         </>

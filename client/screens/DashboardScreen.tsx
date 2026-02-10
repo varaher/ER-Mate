@@ -554,6 +554,25 @@ export default function DashboardScreen() {
           <Feather name="chevron-right" size={24} color={theme.primary} />
         </Pressable>
 
+        <Pressable
+          style={({ pressed }) => [
+            styles.newPatientBtn,
+            { backgroundColor: theme.card, borderColor: "#06b6d4", opacity: pressed ? 0.9 : 1 },
+          ]}
+          onPress={() => navigation.navigate("PediatricDrugCalculator" as any)}
+        >
+          <View style={[styles.newPatientIcon, { backgroundColor: "#06b6d4" }]}>
+            <Feather name="book-open" size={24} color="#FFFFFF" />
+          </View>
+          <View style={styles.newPatientText}>
+            <Text style={[styles.newPatientTitle, { color: theme.text }]}>Pediatric Drug Calculator</Text>
+            <Text style={[styles.newPatientSubtitle, { color: theme.textSecondary }]}>
+              Weight-based dosing reference
+            </Text>
+          </View>
+          <Feather name="chevron-right" size={24} color="#06b6d4" />
+        </Pressable>
+
         <View style={styles.statsRow}>
           {[
             { value: stats.total, label: "Today", color: theme.primary },
