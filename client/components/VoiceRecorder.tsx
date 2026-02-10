@@ -453,7 +453,7 @@ export default function VoiceRecorder({
         <View style={styles.processingContainer}>
           <ActivityIndicator size="small" color={colors.primary} />
           <Text style={[styles.processingText, { color: colors.textSecondary }]}>
-            Processing voice recording...
+            Transcribing with Sarvam AI...
           </Text>
         </View>
       )}

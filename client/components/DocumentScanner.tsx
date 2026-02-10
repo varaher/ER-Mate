@@ -14,6 +14,7 @@ import {
 import { Feather } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
 import * as ImagePicker from "expo-image-picker";
+import * as FileSystem from "expo-file-system";
 // @ts-ignore - expo-camera types may not be fully available
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { getApiUrl } from "@/lib/query-client";
@@ -87,42 +88,110 @@ export function DocumentScanner({ onDataExtracted, context }: DocumentScannerPro
     setExtractedData(null);
   }, []);
 
+  const processImage = useCallback(async (imageUri: string) => {
+    setIsProcessing(true);
+    try {
+      const apiUrl = getApiUrl();
+      const scanUrl = new URL("/api/scan/document", apiUrl).toString();
+      const formData = new FormData();
+
+      if (Platform.OS === "web") {
+        const resp = await fetch(imageUri);
+        const blob = await resp.blob();
+        formData.append("document", blob, "scan.jpg");
+      } else {
+        const file = new FileSystem.File(imageUri);
+        formData.append("document", file as unknown as Blob, "scan.jpg");
+      }
+
+      if (context) {
+        formData.append("patientContext", JSON.stringify({
+          age: context.patientAge,
+          sex: context.patientSex,
+          chiefComplaint: context.presentingComplaint,
+        }));
+      }
+      formData.append("mode", "clinical");
+
+      const response = await fetch(scanUrl, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.structured) {
+          const mapped: ExtractedData = {
+            chiefComplaint: data.structured.chiefComplaint,
+            hpiNotes: data.structured.historyOfPresentIllness,
+            allergies: data.structured.allergies,
+            pastMedicalHistory: data.structured.pastMedicalHistory,
+            medications: data.structured.medications,
+            vitals: data.structured.vitalsSuggested ? {
+              hr: data.structured.vitalsSuggested.hr,
+              bp: data.structured.vitalsSuggested.bp,
+              rr: data.structured.vitalsSuggested.rr,
+              spo2: data.structured.vitalsSuggested.spo2,
+              temp: data.structured.vitalsSuggested.temperature,
+              grbs: data.structured.vitalsSuggested.grbs,
+            } : undefined,
+            labResults: data.structured.assessmentPlan,
+            diagnosis: data.structured.diagnosis?.join(", "),
+            treatmentNotes: data.structured.treatmentNotes,
+            generalNotes: data.text ? `[Scanned Document] ${data.text.substring(0, 500)}` : undefined,
+          };
+          setExtractedData(mapped);
+        } else if (data.text) {
+          setExtractedData({ generalNotes: data.text });
+        } else {
+          Alert.alert("No Data Found", data.message || "Could not extract data from this document");
+        }
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        Alert.alert("Extraction Failed", errorData.error || "Could not extract data from image");
+      }
+    } catch (error) {
+      console.error("Error processing image:", error);
+      Alert.alert("Error", "Failed to process image. Please try again.");
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [context]);
+
   const takePicture = useCallback(async () => {
     if (cameraRef.current) {
       try {
         const photo = await cameraRef.current.takePictureAsync({
           quality: 0.8,
-          base64: true,
         });
         if (photo) {
           setCapturedImage(photo.uri);
           setShowCamera(false);
-          processImage(photo.base64 || "");
+          processImage(photo.uri);
         }
       } catch (error) {
         console.error("Error taking picture:", error);
         Alert.alert("Error", "Failed to capture image");
       }
     }
-  }, []);
+  }, [processImage]);
 
   const pickImage = useCallback(async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         quality: 0.8,
-        base64: true,
       });
 
       if (!result.canceled && result.assets[0]) {
         setCapturedImage(result.assets[0].uri);
-        processImage(result.assets[0].base64 || "");
+        processImage(result.assets[0].uri);
       }
     } catch (error) {
       console.error("Error picking image:", error);
       Alert.alert("Error", "Failed to select image");
     }
-  }, []);
+  }, [processImage]);
 
   const openCamera = useCallback(async () => {
     if (!permission?.granted) {
@@ -137,34 +206,6 @@ export function DocumentScanner({ onDataExtracted, context }: DocumentScannerPro
     }
     setShowCamera(true);
   }, [permission, requestPermission]);
-
-  const processImage = useCallback(async (base64Data: string) => {
-    setIsProcessing(true);
-    try {
-      const apiUrl = getApiUrl();
-      const response = await fetch(`${apiUrl}api/ai/extract-from-image`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          imageBase64: base64Data,
-          patientContext: context,
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setExtractedData(data.extractedData);
-      } else {
-        const errorData = await response.json();
-        Alert.alert("Extraction Failed", errorData.error || "Could not extract data from image");
-      }
-    } catch (error) {
-      console.error("Error processing image:", error);
-      Alert.alert("Error", "Failed to process image. Please try again.");
-    } finally {
-      setIsProcessing(false);
-    }
-  }, [context]);
 
   const applyExtractedData = useCallback(() => {
     if (extractedData) {
@@ -319,7 +360,7 @@ export function DocumentScanner({ onDataExtracted, context }: DocumentScannerPro
                 <View style={[styles.processingContainer, { backgroundColor: theme.backgroundSecondary }]}>
                   <ActivityIndicator size="large" color={theme.primary} />
                   <Text style={[styles.processingText, { color: theme.text }]}>
-                    Analyzing document with AI...
+                    Scanning document with Sarvam AI...
                   </Text>
                 </View>
               ) : extractedData ? (

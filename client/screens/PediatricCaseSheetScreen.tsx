@@ -7,6 +7,7 @@ import { Feather } from "@expo/vector-icons";
 import { Audio } from "expo-av";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import VoiceRecorder, { ExtractedClinicalData } from "@/components/VoiceRecorder";
+import { DocumentScanner } from "@/components/DocumentScanner";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { useTheme } from "@/hooks/useTheme";
 import { apiGet, apiPatch, apiPut, invalidateCases } from "@/lib/api";
@@ -872,6 +873,46 @@ export default function PediatricCaseSheetScreen() {
     handleSave(true);
   };
 
+  const handleDocumentScanExtraction = (data: {
+    chiefComplaint?: string;
+    hpiNotes?: string;
+    allergies?: string;
+    pastMedicalHistory?: string;
+    medications?: string;
+    vitals?: { hr?: string; bp?: string; rr?: string; spo2?: string; temp?: string; grbs?: string };
+    labResults?: string;
+    imagingResults?: string;
+    diagnosis?: string;
+    treatmentNotes?: string;
+    generalNotes?: string;
+  }) => {
+    if (data.chiefComplaint) {
+      setHistoryData((prev) => ({ ...prev, events: (prev.events ? prev.events + ", " : "") + data.chiefComplaint }));
+    }
+    if (data.hpiNotes) {
+      setHistoryData((prev) => ({ ...prev, events: (prev.events ? prev.events + " " : "") + data.hpiNotes }));
+    }
+    if (data.allergies) {
+      setHistoryData((prev) => ({ ...prev, allergies: (prev.allergies ? prev.allergies + ", " : "") + data.allergies }));
+    }
+    if (data.pastMedicalHistory) {
+      setHistoryData((prev) => ({ ...prev, healthHistory: (prev.healthHistory ? prev.healthHistory + ", " : "") + data.pastMedicalHistory }));
+    }
+    if (data.medications) {
+      setHistoryData((prev) => ({ ...prev, currentMedications: (prev.currentMedications ? prev.currentMedications + ", " : "") + data.medications }));
+    }
+    if (data.labResults) {
+      setTreatmentData((prev) => ({ ...prev, resultsSummary: (prev.resultsSummary ? prev.resultsSummary + "; " : "") + data.labResults }));
+    }
+    if (data.diagnosis) {
+      setTreatmentData((prev) => ({ ...prev, primaryDiagnosis: (prev.primaryDiagnosis ? prev.primaryDiagnosis + ", " : "") + data.diagnosis }));
+    }
+    if (data.treatmentNotes) {
+      setTreatmentData((prev) => ({ ...prev, resultsSummary: (prev.resultsSummary ? prev.resultsSummary + " " : "") + data.treatmentNotes }));
+    }
+    handleSave(true);
+  };
+
   const handlePrevious = () => {
     const currentIndex = TABS.findIndex((t) => t.key === activeTab);
     if (currentIndex > 0) {
@@ -1632,6 +1673,15 @@ export default function PediatricCaseSheetScreen() {
                 chiefComplaint: patient?.chief_complaint,
               }}
               mode="full"
+            />
+
+            <DocumentScanner
+              onDataExtracted={handleDocumentScanExtraction}
+              context={{
+                patientAge: patient?.age,
+                patientSex: patient?.sex,
+                presentingComplaint: patient?.chief_complaint,
+              }}
             />
 
             <View style={[styles.card, { backgroundColor: theme.card }]}>
