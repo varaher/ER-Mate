@@ -1038,18 +1038,19 @@ async function fallbackWhisperTranscribe(audioBuffer: Buffer, filename: string):
 
   try {
     const uint8Array = new Uint8Array(audioBuffer);
-    const file = new File([uint8Array], filename, { type: 'audio/m4a' });
+    const mimeType = filename.endsWith('.webm') ? 'audio/webm' : filename.endsWith('.wav') ? 'audio/wav' : filename.endsWith('.mp3') ? 'audio/mpeg' : 'audio/mp4';
+    const file = new File([uint8Array], filename, { type: mimeType });
     
     const transcriptionResponse = await openai.audio.transcriptions.create({
       file: file,
-      model: 'whisper-1',
+      model: 'gpt-4o-mini-transcribe',
       language: 'en',
-      response_format: 'text',
+      response_format: 'json',
     });
 
     return typeof transcriptionResponse === 'string' 
       ? transcriptionResponse 
-      : (transcriptionResponse as unknown as { text: string }).text || '';
+      : (transcriptionResponse as any).text || '';
   } catch (error) {
     console.error("[Whisper] Transcription error:", error);
     throw new Error("Failed to transcribe audio");

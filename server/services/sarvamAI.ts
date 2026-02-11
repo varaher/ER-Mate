@@ -30,7 +30,7 @@ export async function sarvamSpeechToText(
   formData.append("language_code", languageCode);
   formData.append("mode", "transcribe");
 
-  const response = await fetch(`${SARVAM_API_BASE}/speech-to-text/transcribe`, {
+  const response = await fetch(`${SARVAM_API_BASE}/speech-to-text`, {
     method: "POST",
     headers: {
       "api-subscription-key": apiKey,
@@ -64,8 +64,9 @@ export async function sarvamSpeechToTextTranslate(
     filename: filename,
     contentType: getAudioMimeType(filename),
   });
+  formData.append("model", "saaras:v2");
 
-  const response = await fetch(`${SARVAM_API_BASE}/speech-to-text/translate`, {
+  const response = await fetch(`${SARVAM_API_BASE}/speech-to-text-translate`, {
     method: "POST",
     headers: {
       "api-subscription-key": apiKey,
