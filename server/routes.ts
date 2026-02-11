@@ -1628,8 +1628,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/voice/transcribe", upload.single('audio'), async (req: Request, res: Response) => {
     try {
       const file = req.file;
+      console.log("[Voice Transcribe] Request received, file:", file ? `${file.originalname} (${file.size} bytes, ${file.mimetype})` : "NO FILE", "body keys:", Object.keys(req.body));
       if (!file) {
         return res.status(400).json({ error: "No audio file provided" });
+      }
+
+      if (file.size < 100) {
+        return res.status(400).json({ error: "Audio file is too small - recording may have failed" });
       }
 
       let patientContext;
@@ -1642,7 +1647,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const mode = req.body.mode || 'full';
-      const filename = file.originalname || 'voice.m4a';
+      let filename = file.originalname || 'voice.m4a';
+      if (filename.endsWith('.caf')) {
+        filename = filename.replace('.caf', '.m4a');
+      }
 
       const result = await transcribeAndExtractVoice(
         file.buffer,
@@ -1661,8 +1669,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/voice/smart-dictation", upload.single('audio'), async (req: Request, res: Response) => {
     try {
       const file = req.file;
+      console.log("[Smart Dictation] Request received, file:", file ? `${file.originalname} (${file.size} bytes, ${file.mimetype})` : "NO FILE", "body keys:", Object.keys(req.body));
       if (!file) {
         return res.status(400).json({ error: "No audio file provided" });
+      }
+
+      if (file.size < 100) {
+        return res.status(400).json({ error: "Audio file is too small - recording may have failed" });
       }
 
       let patientContext;
@@ -1674,7 +1687,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      const filename = file.originalname || 'voice.m4a';
+      let filename = file.originalname || 'voice.m4a';
+      if (filename.endsWith('.caf')) {
+        filename = filename.replace('.caf', '.m4a');
+      }
 
       const { isSarvamAvailable, sarvamSpeechToTextTranslate } = await import("./services/sarvamAI");
       const { extractSmartDictation } = await import("./services/aiDiagnosis");

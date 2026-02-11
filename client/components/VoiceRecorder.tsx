@@ -311,13 +311,16 @@ export default function VoiceRecorder({
       const formData = new FormData();
       
       if (Platform.OS === 'web') {
-        // Web: Use the blob directly
         const extension = webRecordingBlob!.type.includes('webm') ? 'webm' : 'm4a';
         formData.append('audio', webRecordingBlob!, `voice.${extension}`);
       } else {
-        // Native: Use expo-file-system File class
-        const file = new FileSystem.File(recordingUri!);
-        formData.append('audio', file as unknown as Blob, 'voice.m4a');
+        const uri = recordingUri!;
+        const extension = uri.split('.').pop() || 'm4a';
+        formData.append('audio', {
+          uri,
+          name: `voice.${extension}`,
+          type: `audio/${extension === 'caf' ? 'x-caf' : extension === 'm4a' ? 'mp4' : extension}`,
+        } as any);
       }
       
       if (patientContext) {
@@ -358,9 +361,10 @@ export default function VoiceRecorder({
 
       discardRecording();
     } catch (err) {
-      console.error('Save error:', err);
-      Alert.alert('Error', 'Failed to process voice recording. Please try again.');
-      onError?.((err as Error).message);
+      const errorMsg = (err as Error).message || 'Unknown error';
+      console.error('Save error:', errorMsg);
+      Alert.alert('Error', `Voice processing failed: ${errorMsg}`);
+      onError?.(errorMsg);
     } finally {
       setIsProcessing(false);
     }

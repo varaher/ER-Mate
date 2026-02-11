@@ -153,6 +153,8 @@ function getAudioMimeType(filename: string): string {
     amr: "audio/amr",
     wma: "audio/x-ms-wma",
     opus: "audio/opus",
+    caf: "audio/x-caf",
+    mp4: "audio/mp4",
   };
   return mimeMap[ext] || "audio/mpeg";
 }

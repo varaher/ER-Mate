@@ -313,8 +313,13 @@ export default function SmartDictation({
         const extension = webRecordingBlob!.type.includes('webm') ? 'webm' : 'm4a';
         formData.append('audio', webRecordingBlob!, `voice.${extension}`);
       } else {
-        const file = new FileSystem.File(recordingUri!);
-        formData.append('audio', file as unknown as Blob, 'voice.m4a');
+        const uri = recordingUri!;
+        const extension = uri.split('.').pop() || 'm4a';
+        formData.append('audio', {
+          uri,
+          name: `voice.${extension}`,
+          type: `audio/${extension === 'caf' ? 'x-caf' : extension === 'm4a' ? 'mp4' : extension}`,
+        } as any);
       }
 
       if (patientContext) {
@@ -352,8 +357,9 @@ export default function SmartDictation({
         Alert.alert('Notice', 'Speech was transcribed but no clinical data could be extracted.');
       }
     } catch (err) {
-      console.error('Smart dictation error:', err);
-      Alert.alert('Error', 'Failed to process recording. Please try again.');
+      const errorMsg = (err as Error).message || 'Unknown error';
+      console.error('Smart dictation error:', errorMsg);
+      Alert.alert('Error', `Smart dictation failed: ${errorMsg}`);
     } finally {
       setIsProcessing(false);
       setProcessingStep('');
