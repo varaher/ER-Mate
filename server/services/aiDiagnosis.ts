@@ -571,7 +571,12 @@ export interface ExtractedClinicalData {
     cns?: string;
   };
   diagnosis?: string[];
+  differentialDiagnosis?: string[];
   treatmentNotes?: string;
+  prescribedMedications?: Array<{ name: string; dose?: string; route?: string; frequency?: string }>;
+  prescribedInfusions?: Array<{ name: string; dose?: string; dilution?: string; rate?: string }>;
+  investigationsOrdered?: string;
+  imagingOrdered?: string;
   rawTranscription?: string;
 }
 
@@ -621,8 +626,19 @@ Respond in JSON format:
     "cns": "Neurological findings if mentioned"
   },
   "diagnosis": ["Possible diagnoses mentioned"],
-  "treatmentNotes": "Any treatment plans or notes mentioned"
+  "differentialDiagnosis": ["Differential diagnoses if mentioned"],
+  "prescribedMedications": [
+    {"name": "Drug name", "dose": "Dose with units", "route": "PO/IV/IM/SC/etc", "frequency": "OD/BD/TDS/QID/SOS/etc"}
+  ],
+  "prescribedInfusions": [
+    {"name": "Fluid or drug name (NS, RL, Dopamine, etc)", "dose": "Amount if mentioned", "dilution": "Dilution details", "rate": "Rate of infusion"}
+  ],
+  "investigationsOrdered": "Labs ordered (CBC, RFT, LFT, etc.)",
+  "imagingOrdered": "Imaging ordered (X-ray, CT, USG, etc.)",
+  "treatmentNotes": "Any other treatment plans or notes not captured above"
 }
+
+IMPORTANT: When the doctor mentions prescribing or administering medications (e.g., "give paracetamol 1g IV", "start on Tab Pantoprazole 40mg OD"), extract them into "prescribedMedications" array. When IV fluids or continuous infusions are mentioned (e.g., "start NS at 100ml/hr", "Dopamine drip"), extract them into "prescribedInfusions" array. "medications" field is ONLY for the patient's current/home medications (medication history).
 
 Only include fields that have actual content from the transcript. Omit empty or irrelevant fields.`;
 

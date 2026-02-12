@@ -76,6 +76,8 @@ export interface SmartDictationExtracted {
   diagnosis?: string[];
   differentialDiagnosis?: string[];
   treatmentNotes?: string;
+  prescribedMedications?: Array<{ name: string; dose?: string; route?: string; frequency?: string }>;
+  prescribedInfusions?: Array<{ name: string; dose?: string; dilution?: string; rate?: string }>;
   investigationsOrdered?: string;
   imagingOrdered?: string;
   rawTranscription?: string;
@@ -119,6 +121,8 @@ const FIELD_LABELS: Record<string, string> = {
   diagnosis: 'Diagnosis',
   differentialDiagnosis: 'Differential Diagnosis',
   treatmentNotes: 'Treatment Notes',
+  prescribedMedications: 'Prescribed Medications',
+  prescribedInfusions: 'Infusions / IV Fluids',
   investigationsOrdered: 'Investigations',
   imagingOrdered: 'Imaging',
 };
@@ -134,6 +138,8 @@ const FIELD_ICONS: Record<string, string> = {
   examFindings: 'search',
   vitalsSuggested: 'activity',
   treatmentNotes: 'edit-3',
+  prescribedMedications: 'thermometer',
+  prescribedInfusions: 'droplet',
 };
 
 type FlowStep = 'idle' | 'recording' | 'transcribing' | 'transcript_ready' | 'extracting' | 'review';
@@ -447,6 +453,26 @@ export default function SmartDictation({
     }
     if (extractedData.differentialDiagnosis && extractedData.differentialDiagnosis.length > 0) {
       fields.push({ key: 'differentialDiagnosis', label: 'Differential Diagnosis', value: extractedData.differentialDiagnosis.join(', ') });
+    }
+    if (extractedData.prescribedMedications && extractedData.prescribedMedications.length > 0) {
+      const medsText = extractedData.prescribedMedications.map((m) => {
+        const parts = [m.name];
+        if (m.dose) parts.push(m.dose);
+        if (m.route) parts.push(m.route);
+        if (m.frequency) parts.push(m.frequency);
+        return parts.join(' ');
+      }).join(', ');
+      fields.push({ key: 'prescribedMedications', label: 'Prescribed Medications', value: medsText });
+    }
+    if (extractedData.prescribedInfusions && extractedData.prescribedInfusions.length > 0) {
+      const infText = extractedData.prescribedInfusions.map((i) => {
+        const parts = [i.name];
+        if (i.dose) parts.push(i.dose);
+        if (i.dilution) parts.push(`in ${i.dilution}`);
+        if (i.rate) parts.push(`@ ${i.rate}`);
+        return parts.join(' ');
+      }).join(', ');
+      fields.push({ key: 'prescribedInfusions', label: 'Infusions / IV Fluids', value: infText });
     }
 
     if (extractedData.painDetails) {

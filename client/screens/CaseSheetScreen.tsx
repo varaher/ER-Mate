@@ -1532,8 +1532,29 @@ export default function CaseSheetScreen() {
       const ddx = data.differentialDiagnosis.join(", ");
       setTreatmentData((prev) => ({ ...prev, differentialDiagnoses: prev.differentialDiagnoses ? prev.differentialDiagnoses + ", " + ddx : ddx }));
     }
+    if (data.prescribedMedications && data.prescribedMedications.length > 0) {
+      const newMeds: MedicationEntry[] = data.prescribedMedications.map((med) => ({
+        id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
+        name: med.name || "",
+        dose: med.dose || "",
+        route: med.route || "",
+        frequency: med.frequency || "",
+      }));
+      setTreatmentData((prev) => ({ ...prev, medications: [...prev.medications, ...newMeds] }));
+    }
+    if (data.prescribedInfusions && data.prescribedInfusions.length > 0) {
+      const newInfusions: InfusionEntry[] = data.prescribedInfusions.map((inf) => ({
+        id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
+        name: inf.name || "",
+        dose: inf.dose || "",
+        dilution: inf.dilution || "",
+        rate: inf.rate || "",
+        notes: "",
+      }));
+      setTreatmentData((prev) => ({ ...prev, infusions: [...prev.infusions, ...newInfusions] }));
+    }
     if (data.treatmentNotes) {
-      setTreatmentData((prev) => ({ ...prev, addendumNotes: (prev.addendumNotes || "") + " " + data.treatmentNotes }));
+      setTreatmentData((prev) => ({ ...prev, otherMedications: (prev.otherMedications ? prev.otherMedications + ". " : "") + data.treatmentNotes }));
     }
     if (data.investigationsOrdered) {
       setTreatmentData((prev) => ({ ...prev, labsOrdered: prev.labsOrdered ? prev.labsOrdered + ", " + data.investigationsOrdered : data.investigationsOrdered! }));
