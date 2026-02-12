@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   ScrollView,
   Modal,
+  TextInput,
 } from 'react-native';
 import { useAudioRecorder, AudioModule, RecordingPresets } from 'expo-audio';
 import { Audio } from 'expo-av';
@@ -136,22 +137,23 @@ const FIELD_ICONS: Record<string, string> = {
   treatmentNotes: 'edit-3',
 };
 
+type FlowStep = 'idle' | 'recording' | 'transcribing' | 'transcript_ready' | 'extracting' | 'review';
+
 export default function SmartDictation({
   onDataExtracted,
   patientContext,
   disabled = false,
 }: SmartDictationProps) {
   const { theme } = useTheme();
-  const [isRecording, setIsRecording] = useState(false);
-  const [hasRecording, setHasRecording] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [processingStep, setProcessingStep] = useState('');
+  const [step, setStep] = useState<FlowStep>('idle');
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [recordingUri, setRecordingUri] = useState<string | null>(null);
   const [webRecordingBlob, setWebRecordingBlob] = useState<Blob | null>(null);
-  const [showResults, setShowResults] = useState(false);
-  const [extractedData, setExtractedData] = useState<SmartDictationExtracted | null>(null);
   const [transcript, setTranscript] = useState('');
+  const [editedTranscript, setEditedTranscript] = useState('');
+  const [extractedData, setExtractedData] = useState<SmartDictationExtracted | null>(null);
+  const [showResults, setShowResults] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
@@ -165,7 +167,7 @@ export default function SmartDictation({
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
 
   useEffect(() => {
-    if (isRecording) {
+    if (step === 'recording') {
       Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, { toValue: 1.2, duration: 800, useNativeDriver: true }),
@@ -192,7 +194,7 @@ export default function SmartDictation({
     return () => {
       if (durationInterval.current) clearInterval(durationInterval.current);
     };
-  }, [isRecording]);
+  }, [step]);
 
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -200,14 +202,29 @@ export default function SmartDictation({
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const resetAll = async () => {
+    if (recordingUri && Platform.OS !== 'web') {
+      try { await FileSystem.deleteAsync(recordingUri, { idempotent: true }); } catch {}
+    }
+    setStep('idle');
+    setRecordingDuration(0);
+    setRecordingUri(null);
+    setWebRecordingBlob(null);
+    setTranscript('');
+    setEditedTranscript('');
+    setExtractedData(null);
+    setShowResults(false);
+    setErrorMsg('');
+    webRecorderRef.current.audioChunks = [];
+  };
+
   const startRecording = async () => {
     try {
       setRecordingDuration(0);
       setTranscript('');
+      setEditedTranscript('');
       setExtractedData(null);
-      setHasRecording(false);
-      setRecordingUri(null);
-      setWebRecordingBlob(null);
+      setErrorMsg('');
 
       if (Platform.OS === 'web') {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -231,15 +248,15 @@ export default function SmartDictation({
         mediaRecorder.onstop = () => {
           const audioBlob = new Blob(webRecorderRef.current.audioChunks, { type: mediaRecorder.mimeType });
           setWebRecordingBlob(audioBlob);
-          setHasRecording(true);
           if (webRecorderRef.current.stream) {
             webRecorderRef.current.stream.getTracks().forEach(track => track.stop());
           }
+          transcribeRecording(audioBlob, null);
         };
 
         webRecorderRef.current.mediaRecorder = mediaRecorder;
         mediaRecorder.start(100);
-        setIsRecording(true);
+        setStep('recording');
       } else {
         const status = await AudioModule.requestRecordingPermissionsAsync();
         if (!status.granted) {
@@ -253,7 +270,7 @@ export default function SmartDictation({
           shouldDuckAndroid: true,
         });
         audioRecorder?.record();
-        setIsRecording(true);
+        setStep('recording');
       }
     } catch (err) {
       console.error('Failed to start recording:', err);
@@ -262,9 +279,8 @@ export default function SmartDictation({
   };
 
   const stopRecording = async () => {
-    if (!isRecording) return;
+    if (step !== 'recording') return;
     try {
-      setIsRecording(false);
       if (Platform.OS === 'web') {
         const mediaRecorder = webRecorderRef.current.mediaRecorder;
         if (mediaRecorder && mediaRecorder.state !== 'inactive') {
@@ -275,61 +291,45 @@ export default function SmartDictation({
         const uri = audioRecorder?.uri;
         if (uri) {
           setRecordingUri(uri);
-          setHasRecording(true);
+          transcribeRecording(null, uri);
+        } else {
+          setStep('idle');
+          Alert.alert('Error', 'Recording failed - no audio captured');
         }
       }
     } catch (err) {
       console.error('Failed to stop recording:', err);
-      setIsRecording(false);
+      setStep('idle');
     }
   };
 
-  const discardRecording = async () => {
-    if (recordingUri && Platform.OS !== 'web') {
-      try {
-        await FileSystem.deleteAsync(recordingUri, { idempotent: true });
-      } catch {}
-    }
-    setHasRecording(false);
-    setRecordingUri(null);
-    setWebRecordingBlob(null);
-    setTranscript('');
-    setRecordingDuration(0);
-    setExtractedData(null);
-    webRecorderRef.current.audioChunks = [];
-  };
-
-  const processRecording = async () => {
-    if (Platform.OS === 'web' && !webRecordingBlob) return;
-    if (Platform.OS !== 'web' && !recordingUri) return;
-
-    setIsProcessing(true);
-    setProcessingStep('Transcribing speech...');
+  const transcribeRecording = async (blob: Blob | null, uri: string | null) => {
+    setStep('transcribing');
 
     try {
       const formData = new FormData();
 
-      if (Platform.OS === 'web') {
-        const extension = webRecordingBlob!.type.includes('webm') ? 'webm' : 'm4a';
-        formData.append('audio', webRecordingBlob!, `voice.${extension}`);
-      } else {
-        const uri = recordingUri!;
+      if (Platform.OS === 'web' && blob) {
+        const extension = blob.type.includes('webm') ? 'webm' : 'm4a';
+        formData.append('audio', blob, `voice.${extension}`);
+      } else if (uri) {
         const extension = uri.split('.').pop() || 'm4a';
         formData.append('audio', {
           uri,
           name: `voice.${extension}`,
           type: `audio/${extension === 'caf' ? 'x-caf' : extension === 'm4a' ? 'mp4' : extension}`,
         } as any);
+      } else {
+        throw new Error('No audio data');
       }
 
+      formData.append('mode', 'field');
       if (patientContext) {
         formData.append('patientContext', JSON.stringify(patientContext));
       }
 
-      setProcessingStep('Analyzing clinical content...');
-
       const apiUrl = getApiUrl();
-      const url = new URL('/api/voice/smart-dictation', apiUrl).toString();
+      const url = new URL('/api/voice/transcribe', apiUrl).toString();
 
       const response = await fetch(url, {
         method: 'POST',
@@ -338,40 +338,77 @@ export default function SmartDictation({
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Processing failed');
+        throw new Error(errorData.error || `Transcription failed (${response.status})`);
+      }
+
+      const result = await response.json();
+      const text = result.transcript || '';
+
+      if (!text.trim()) {
+        setErrorMsg('No speech detected. Please try recording again.');
+        setStep('idle');
+        return;
+      }
+
+      setTranscript(text);
+      setEditedTranscript(text);
+      setStep('transcript_ready');
+    } catch (err) {
+      const msg = (err as Error).message || 'Transcription failed';
+      console.error('Transcription error:', msg);
+      setErrorMsg(msg);
+      setStep('idle');
+    }
+  };
+
+  const copyToCaseSheet = async () => {
+    const textToProcess = editedTranscript.trim();
+    if (!textToProcess) return;
+
+    setStep('extracting');
+
+    try {
+      const apiUrl = getApiUrl();
+      const url = new URL('/api/voice/extract-clinical', apiUrl).toString();
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transcript: textToProcess,
+          patientContext,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Extraction failed');
       }
 
       const result = await response.json();
 
-      if (result.error && !result.transcript) {
-        throw new Error(result.error);
-      }
-
-      setTranscript(result.transcript || '');
-      setProcessingStep('Mapping to case sheet fields...');
-
       if (result.extracted) {
         setExtractedData(result.extracted);
         setShowResults(true);
+        setStep('review');
       } else {
-        Alert.alert('Notice', 'Speech was transcribed but no clinical data could be extracted.');
+        Alert.alert('Notice', 'Could not identify specific clinical fields from the text. The raw text has been preserved.');
+        onDataExtracted({ rawTranscription: textToProcess });
+        resetAll();
       }
     } catch (err) {
-      const errorMsg = (err as Error).message || 'Unknown error';
-      console.error('Smart dictation error:', errorMsg);
-      Alert.alert('Error', `Smart dictation failed: ${errorMsg}`);
-    } finally {
-      setIsProcessing(false);
-      setProcessingStep('');
+      const msg = (err as Error).message || 'Extraction failed';
+      console.error('Clinical extraction error:', msg);
+      Alert.alert('Error', `Failed to process: ${msg}`);
+      setStep('transcript_ready');
     }
   };
 
   const applyExtractedData = () => {
     if (extractedData) {
-      onDataExtracted(extractedData);
+      onDataExtracted({ ...extractedData, rawTranscription: editedTranscript });
       setShowResults(false);
-      discardRecording();
-      Alert.alert('Applied', 'Clinical data has been populated across relevant sections of the case sheet.');
+      resetAll();
     }
   };
 
@@ -395,11 +432,9 @@ export default function SmartDictation({
     if (extractedData.symptoms && extractedData.symptoms.length > 0) {
       fields.push({ key: 'symptoms', label: 'Symptoms', value: extractedData.symptoms.join(', ') });
     }
-
     if (extractedData.diagnosis && extractedData.diagnosis.length > 0) {
       fields.push({ key: 'diagnosis', label: 'Diagnosis', value: extractedData.diagnosis.join(', ') });
     }
-
     if (extractedData.differentialDiagnosis && extractedData.differentialDiagnosis.length > 0) {
       fields.push({ key: 'differentialDiagnosis', label: 'Differential Diagnosis', value: extractedData.differentialDiagnosis.join(', ') });
     }
@@ -454,9 +489,9 @@ export default function SmartDictation({
 
   const handleMicPress = () => {
     if (disabled) return;
-    if (isRecording) {
+    if (step === 'recording') {
       stopRecording();
-    } else if (!hasRecording) {
+    } else if (step === 'idle') {
       startRecording();
     }
   };
@@ -473,89 +508,121 @@ export default function SmartDictation({
           </View>
           <View style={styles.headerTextContainer}>
             <Text style={[styles.title, { color: theme.text }]}>
-              Dictate Full History
+              Vibe Dictation
             </Text>
             <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-              Speak the entire patient history and it will be auto-filled across all sections
+              Just talk naturally - AI will fill the case sheet
             </Text>
           </View>
         </View>
 
-        <View style={styles.mainArea}>
-          <Animated.View style={[
-            styles.micButtonOuter,
-            {
-              transform: [{ scale: isRecording ? pulseAnim : 1 }],
-              backgroundColor: isRecording ? 'rgba(239, 68, 68, 0.15)' : 'transparent',
-            }
-          ]}>
+        {step === 'idle' && (
+          <View style={styles.mainArea}>
             <Pressable
               onPress={handleMicPress}
-              disabled={disabled || isProcessing || hasRecording}
-              style={[
-                styles.micButton,
-                {
-                  backgroundColor: isRecording ? TriageColors.red : '#7c3aed',
-                  opacity: disabled || isProcessing || hasRecording ? 0.5 : 1,
-                },
-              ]}
+              disabled={disabled}
+              style={[styles.bigMicButton, { backgroundColor: '#7c3aed', opacity: disabled ? 0.5 : 1 }]}
             >
-              <Feather name={isRecording ? 'square' : 'mic'} size={32} color="#FFFFFF" />
+              <Feather name="mic" size={36} color="#FFFFFF" />
             </Pressable>
-          </Animated.View>
-
-          <View style={styles.statusArea}>
-            {isProcessing ? (
-              <View style={styles.processingStatus}>
-                <ActivityIndicator size="small" color="#7c3aed" />
-                <Text style={[styles.processingText, { color: '#7c3aed' }]}>
-                  {processingStep}
-                </Text>
+            <Text style={[styles.idleText, { color: theme.textMuted }]}>
+              Tap to start dictating
+            </Text>
+            {errorMsg ? (
+              <View style={[styles.errorBox, { backgroundColor: `${TriageColors.red}15` }]}>
+                <Feather name="alert-circle" size={14} color={TriageColors.red} />
+                <Text style={[styles.errorText, { color: TriageColors.red }]}>{errorMsg}</Text>
               </View>
-            ) : isRecording ? (
-              <View style={styles.recordingStatus}>
-                <Animated.View style={[styles.recordingDot, { opacity: glowAnim }]} />
-                <Text style={[styles.recordingText, { color: TriageColors.red }]}>
-                  Recording... {formatDuration(recordingDuration)}
-                </Text>
-                <Text style={[styles.recordingHint, { color: theme.textMuted }]}>
-                  Dictate the full history naturally
-                </Text>
-              </View>
-            ) : hasRecording ? (
-              <Text style={[styles.readyText, { color: TriageColors.green }]}>
-                Recording ready ({formatDuration(recordingDuration)})
-              </Text>
-            ) : (
-              <Text style={[styles.idleText, { color: theme.textMuted }]}>
-                Tap the mic and dictate the patient's full history
-              </Text>
-            )}
-          </View>
-        </View>
-
-        {hasRecording && !isProcessing && (
-          <View style={styles.actionRow}>
-            <Pressable
-              onPress={discardRecording}
-              style={[styles.actionBtn, { backgroundColor: theme.backgroundSecondary }]}
-            >
-              <Feather name="trash-2" size={16} color={TriageColors.red} />
-              <Text style={[styles.actionBtnText, { color: TriageColors.red }]}>Discard</Text>
-            </Pressable>
-            <Pressable
-              onPress={processRecording}
-              style={[styles.actionBtn, styles.processBtn]}
-            >
-              <Feather name="zap" size={16} color="#FFFFFF" />
-              <Text style={[styles.actionBtnText, { color: '#FFFFFF' }]}>Process & Auto-fill</Text>
-            </Pressable>
+            ) : null}
           </View>
         )}
 
-        {isProcessing && (
-          <View style={[styles.processingBar, { backgroundColor: theme.backgroundSecondary }]}>
-            <View style={[styles.processingBarFill, { backgroundColor: '#7c3aed' }]} />
+        {step === 'recording' && (
+          <View style={styles.mainArea}>
+            <Animated.View style={[
+              styles.micButtonOuter,
+              { transform: [{ scale: pulseAnim }], backgroundColor: 'rgba(239, 68, 68, 0.15)' }
+            ]}>
+              <Pressable
+                onPress={handleMicPress}
+                style={[styles.bigMicButton, { backgroundColor: TriageColors.red }]}
+              >
+                <Feather name="square" size={32} color="#FFFFFF" />
+              </Pressable>
+            </Animated.View>
+            <View style={styles.recordingInfo}>
+              <Animated.View style={[styles.recordingDot, { opacity: glowAnim }]} />
+              <Text style={[styles.recordingText, { color: TriageColors.red }]}>
+                Recording... {formatDuration(recordingDuration)}
+              </Text>
+            </View>
+            <Text style={[styles.recordingHint, { color: theme.textMuted }]}>
+              Speak the entire patient history naturally
+            </Text>
+          </View>
+        )}
+
+        {step === 'transcribing' && (
+          <View style={styles.mainArea}>
+            <View style={[styles.processingBox, { backgroundColor: theme.backgroundSecondary }]}>
+              <ActivityIndicator size="large" color="#7c3aed" />
+              <Text style={[styles.processingTitle, { color: theme.text }]}>
+                Transcribing...
+              </Text>
+              <Text style={[styles.processingSubtitle, { color: theme.textMuted }]}>
+                Converting speech to text
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {step === 'transcript_ready' && (
+          <View style={styles.transcriptArea}>
+            <View style={styles.transcriptHeader}>
+              <Feather name="file-text" size={16} color={TriageColors.green} />
+              <Text style={[styles.transcriptLabel, { color: TriageColors.green }]}>
+                Transcription Complete
+              </Text>
+            </View>
+            <View style={[styles.transcriptBox, { backgroundColor: theme.backgroundSecondary, borderColor: theme.border }]}>
+              <TextInput
+                style={[styles.transcriptInput, { color: theme.text }]}
+                value={editedTranscript}
+                onChangeText={setEditedTranscript}
+                multiline
+                textAlignVertical="top"
+                placeholder="Transcribed text appears here..."
+                placeholderTextColor={theme.textMuted}
+              />
+            </View>
+            <Text style={[styles.editHint, { color: theme.textMuted }]}>
+              You can edit the text above before copying
+            </Text>
+
+            <View style={styles.actionRow}>
+              <Pressable onPress={resetAll} style={[styles.actionBtn, { backgroundColor: theme.backgroundSecondary }]}>
+                <Feather name="rotate-ccw" size={16} color={theme.textSecondary} />
+                <Text style={[styles.actionBtnText, { color: theme.textSecondary }]}>Re-record</Text>
+              </Pressable>
+              <Pressable onPress={copyToCaseSheet} style={[styles.actionBtn, styles.copyBtn]}>
+                <Feather name="clipboard" size={16} color="#FFFFFF" />
+                <Text style={[styles.actionBtnText, { color: '#FFFFFF' }]}>Copy to Case Sheet</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
+
+        {step === 'extracting' && (
+          <View style={styles.mainArea}>
+            <View style={[styles.processingBox, { backgroundColor: theme.backgroundSecondary }]}>
+              <ActivityIndicator size="large" color="#7c3aed" />
+              <Text style={[styles.processingTitle, { color: theme.text }]}>
+                Analyzing...
+              </Text>
+              <Text style={[styles.processingSubtitle, { color: theme.textMuted }]}>
+                AI is mapping text to case sheet fields
+              </Text>
+            </View>
           </View>
         )}
       </View>
@@ -564,23 +631,14 @@ export default function SmartDictation({
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: theme.backgroundDefault }]}>
             <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
-              <Text style={[styles.modalTitle, { color: theme.text }]}>Extracted Clinical Data</Text>
-              <Pressable onPress={() => setShowResults(false)} style={styles.modalClose}>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>Review Before Applying</Text>
+              <Pressable onPress={() => { setShowResults(false); setStep('transcript_ready'); }} style={styles.modalClose}>
                 <Feather name="x" size={24} color={theme.text} />
               </Pressable>
             </View>
 
-            {transcript ? (
-              <View style={[styles.transcriptBox, { backgroundColor: theme.backgroundSecondary }]}>
-                <Text style={[styles.transcriptLabel, { color: theme.textSecondary }]}>Transcript</Text>
-                <Text style={[styles.transcriptText, { color: theme.text }]} numberOfLines={3}>
-                  "{transcript}"
-                </Text>
-              </View>
-            ) : null}
-
             <Text style={[styles.fieldsHeader, { color: theme.textSecondary }]}>
-              {populatedFields.length} field{populatedFields.length !== 1 ? 's' : ''} will be populated:
+              {populatedFields.length} field{populatedFields.length !== 1 ? 's' : ''} identified:
             </Text>
 
             <ScrollView style={styles.fieldsList} showsVerticalScrollIndicator={false}>
@@ -598,7 +656,7 @@ export default function SmartDictation({
                       {field.label}
                     </Text>
                   </View>
-                  <Text style={[styles.fieldItemValue, { color: theme.text }]} numberOfLines={3}>
+                  <Text style={[styles.fieldItemValue, { color: theme.text }]}>
                     {field.value}
                   </Text>
                 </View>
@@ -607,17 +665,17 @@ export default function SmartDictation({
 
             <View style={styles.modalActions}>
               <Pressable
-                onPress={() => setShowResults(false)}
+                onPress={() => { setShowResults(false); setStep('transcript_ready'); }}
                 style={[styles.modalActionBtn, { backgroundColor: theme.backgroundSecondary }]}
               >
-                <Text style={[styles.modalActionText, { color: theme.text }]}>Cancel</Text>
+                <Text style={[styles.modalActionText, { color: theme.text }]}>Back</Text>
               </Pressable>
               <Pressable
                 onPress={applyExtractedData}
                 style={[styles.modalActionBtn, styles.applyBtn]}
               >
                 <Feather name="check-circle" size={18} color="#FFFFFF" />
-                <Text style={[styles.modalActionText, { color: '#FFFFFF' }]}>Apply All</Text>
+                <Text style={[styles.modalActionText, { color: '#FFFFFF' }]}>Apply to Case Sheet</Text>
               </Pressable>
             </View>
           </View>
@@ -631,12 +689,12 @@ const styles = StyleSheet.create({
   container: {
     borderRadius: BorderRadius.lg,
     padding: Spacing.md,
+    marginVertical: Spacing.sm,
     borderWidth: 1,
-    borderStyle: 'dashed',
   },
   header: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: Spacing.sm,
     marginBottom: Spacing.md,
   },
@@ -647,12 +705,12 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 12,
     gap: 4,
-    marginTop: 2,
   },
   headerBadgeText: {
     color: '#FFFFFF',
     fontSize: 11,
     fontWeight: '700',
+    textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   headerTextContainer: {
@@ -665,96 +723,125 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 12,
     marginTop: 2,
-    lineHeight: 16,
   },
   mainArea: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.md,
+    paddingVertical: Spacing.md,
+    gap: Spacing.sm,
+  },
+  bigMicButton: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   micButtonOuter: {
-    borderRadius: 40,
-    padding: 8,
-  },
-  micButton: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    alignItems: 'center',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     justifyContent: 'center',
+    alignItems: 'center',
   },
-  statusArea: {
+  idleText: {
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginTop: 4,
+  },
+  errorText: {
+    fontSize: 13,
     flex: 1,
   },
-  processingStatus: {
+  recordingInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  processingText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  recordingStatus: {
-    gap: 2,
-  },
   recordingDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#EF4444',
-    position: 'absolute',
-    right: 0,
-    top: 0,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#ef4444',
   },
   recordingText: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
   },
   recordingHint: {
-    fontSize: 12,
-    marginTop: 2,
+    fontSize: 13,
+    textAlign: 'center',
   },
-  readyText: {
-    fontSize: 15,
+  processingBox: {
+    alignItems: 'center',
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.md,
+    gap: Spacing.sm,
+    width: '100%',
+  },
+  processingTitle: {
+    fontSize: 16,
     fontWeight: '600',
   },
-  idleText: {
+  processingSubtitle: {
     fontSize: 13,
-    lineHeight: 18,
+  },
+  transcriptArea: {
+    gap: Spacing.sm,
+  },
+  transcriptHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  transcriptLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  transcriptBox: {
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    minHeight: 120,
+    maxHeight: 200,
+  },
+  transcriptInput: {
+    padding: Spacing.sm,
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  editHint: {
+    fontSize: 12,
+    textAlign: 'center',
   },
   actionRow: {
     flexDirection: 'row',
     gap: Spacing.sm,
-    marginTop: Spacing.md,
+    marginTop: Spacing.xs,
   },
   actionBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: BorderRadius.md,
     gap: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: BorderRadius.md,
   },
-  processBtn: {
-    backgroundColor: '#7c3aed',
+  copyBtn: {
     flex: 2,
+    backgroundColor: '#7c3aed',
   },
   actionBtnText: {
     fontSize: 14,
     fontWeight: '600',
-  },
-  processingBar: {
-    height: 3,
-    borderRadius: 2,
-    marginTop: Spacing.md,
-    overflow: 'hidden',
-  },
-  processingBarFill: {
-    height: '100%',
-    width: '30%',
-    borderRadius: 2,
   },
   modalOverlay: {
     flex: 1,
@@ -762,16 +849,17 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    maxHeight: '85%',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    paddingBottom: 34,
+    paddingTop: Spacing.md,
+    maxHeight: '80%',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.sm,
     borderBottomWidth: 1,
   },
   modalTitle: {
@@ -781,85 +869,62 @@ const styles = StyleSheet.create({
   modalClose: {
     padding: 4,
   },
-  transcriptBox: {
-    marginHorizontal: Spacing.md,
-    marginTop: Spacing.sm,
-    padding: Spacing.sm,
-    borderRadius: BorderRadius.md,
-  },
-  transcriptLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  transcriptText: {
-    fontSize: 13,
-    fontStyle: 'italic',
-    lineHeight: 18,
-  },
   fieldsHeader: {
     fontSize: 13,
-    fontWeight: '600',
     paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.xs,
+    paddingTop: Spacing.sm,
   },
   fieldsList: {
     paddingHorizontal: Spacing.md,
+    marginTop: Spacing.xs,
   },
   fieldItem: {
-    padding: Spacing.sm,
     borderRadius: BorderRadius.md,
-    marginBottom: Spacing.xs,
     borderWidth: 1,
+    padding: Spacing.sm,
+    marginBottom: Spacing.xs,
   },
   fieldItemHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
     marginBottom: 4,
   },
   fieldIconBg: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     justifyContent: 'center',
+    alignItems: 'center',
   },
   fieldItemLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
+    fontSize: 13,
+    fontWeight: '600',
   },
   fieldItemValue: {
     fontSize: 14,
     lineHeight: 20,
-    paddingLeft: 30,
   },
   modalActions: {
     flexDirection: 'row',
     gap: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.md,
+    padding: Spacing.md,
   },
   modalActionBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
     paddingVertical: 14,
     borderRadius: BorderRadius.md,
-    gap: 8,
   },
   applyBtn: {
-    backgroundColor: '#7c3aed',
     flex: 2,
+    backgroundColor: '#7c3aed',
   },
   modalActionText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
   },
 });

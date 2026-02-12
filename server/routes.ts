@@ -1730,6 +1730,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/voice/extract-clinical", async (req: Request, res: Response) => {
+    try {
+      const { transcript, patientContext } = req.body;
+      if (!transcript || typeof transcript !== 'string' || !transcript.trim()) {
+        return res.status(400).json({ error: "No transcript text provided" });
+      }
+
+      console.log("[ExtractClinical] Processing transcript, length:", transcript.length);
+
+      const { extractSmartDictation } = await import("./services/aiDiagnosis");
+      const extracted = await extractSmartDictation(transcript, patientContext);
+
+      res.json({ extracted });
+    } catch (error) {
+      console.error("Clinical extraction error:", error);
+      res.status(500).json({ error: (error as Error).message || "Failed to extract clinical data" });
+    }
+  });
+
   app.post("/api/scan/document", upload.single('document'), async (req: Request, res: Response) => {
     try {
       const file = req.file;

@@ -8,16 +8,15 @@ import {
   Alert,
   Platform,
   ActivityIndicator,
+  TextInput,
 } from 'react-native';
 import { useAudioRecorder, AudioModule, RecordingPresets } from 'expo-audio';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/useTheme';
-import { apiUpload, apiPost } from '@/lib/api';
 import { getApiUrl } from '@/lib/query-client';
 
-// Web MediaRecorder types
 interface WebRecorderState {
   mediaRecorder: MediaRecorder | null;
   audioChunks: Blob[];
@@ -103,6 +102,8 @@ interface VoiceRecorderProps {
   disabled?: boolean;
 }
 
+type FlowStep = 'idle' | 'recording' | 'transcribing' | 'transcript_ready';
+
 export default function VoiceRecorder({
   onExtractedData,
   onTranscriptionComplete,
@@ -115,45 +116,32 @@ export default function VoiceRecorder({
   const { theme } = useTheme();
   const colors = theme;
 
-  const [isRecording, setIsRecording] = useState(false);
-  const [hasRecording, setHasRecording] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [step, setStep] = useState<FlowStep>('idle');
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [recordingUri, setRecordingUri] = useState<string | null>(null);
   const [webRecordingBlob, setWebRecordingBlob] = useState<Blob | null>(null);
-  const [transcription, setTranscription] = useState<string>('');
-  
+  const [transcript, setTranscript] = useState('');
+  const [editedTranscript, setEditedTranscript] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const durationInterval = useRef<ReturnType<typeof setInterval> | null>(null);
-  
-  // Web recorder state
   const webRecorderRef = useRef<WebRecorderState>({
     mediaRecorder: null,
     audioChunks: [],
     stream: null,
   });
-  
-  // Native recorder - always call the hook to follow React's rules of hooks
-  // The hook is a no-op on web, but we still call it unconditionally
+
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
 
   useEffect(() => {
-    if (isRecording) {
+    if (step === 'recording') {
       Animated.loop(
         Animated.sequence([
-          Animated.timing(pulseAnim, {
-            toValue: 1.3,
-            duration: 600,
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulseAnim, {
-            toValue: 1,
-            duration: 600,
-            useNativeDriver: true,
-          }),
+          Animated.timing(pulseAnim, { toValue: 1.3, duration: 600, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
         ])
       ).start();
-      
       durationInterval.current = setInterval(() => {
         setRecordingDuration(prev => prev + 1);
       }, 1000);
@@ -164,13 +152,10 @@ export default function VoiceRecorder({
         durationInterval.current = null;
       }
     }
-    
     return () => {
-      if (durationInterval.current) {
-        clearInterval(durationInterval.current);
-      }
+      if (durationInterval.current) clearInterval(durationInterval.current);
     };
-  }, [isRecording]);
+  }, [step]);
 
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -178,21 +163,32 @@ export default function VoiceRecorder({
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const resetAll = async () => {
+    if (recordingUri && Platform.OS !== 'web') {
+      try { await FileSystem.deleteAsync(recordingUri, { idempotent: true }); } catch {}
+    }
+    setStep('idle');
+    setRecordingDuration(0);
+    setRecordingUri(null);
+    setWebRecordingBlob(null);
+    setTranscript('');
+    setEditedTranscript('');
+    setErrorMsg('');
+    webRecorderRef.current.audioChunks = [];
+  };
+
   const startRecording = async () => {
     try {
       setRecordingDuration(0);
-      setTranscription('');
-      setHasRecording(false);
-      setRecordingUri(null);
-      setWebRecordingBlob(null);
+      setTranscript('');
+      setEditedTranscript('');
+      setErrorMsg('');
 
       if (Platform.OS === 'web') {
-        // Web: Use MediaRecorder API
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
           Alert.alert('Not Supported', 'Voice recording is not supported in this browser');
           return;
         }
-
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         webRecorderRef.current.stream = stream;
         webRecorderRef.current.audioChunks = [];
@@ -208,38 +204,31 @@ export default function VoiceRecorder({
         };
 
         mediaRecorder.onstop = () => {
-          const audioBlob = new Blob(webRecorderRef.current.audioChunks, { 
-            type: mediaRecorder.mimeType 
-          });
+          const audioBlob = new Blob(webRecorderRef.current.audioChunks, { type: mediaRecorder.mimeType });
           setWebRecordingBlob(audioBlob);
-          setHasRecording(true);
-
-          // Stop all tracks
           if (webRecorderRef.current.stream) {
             webRecorderRef.current.stream.getTracks().forEach(track => track.stop());
           }
+          transcribeRecording(audioBlob, null);
         };
 
         webRecorderRef.current.mediaRecorder = mediaRecorder;
-        mediaRecorder.start(100); // Collect data every 100ms
-        setIsRecording(true);
+        mediaRecorder.start(100);
+        setStep('recording');
       } else {
-        // Native: Use expo-audio
         const status = await AudioModule.requestRecordingPermissionsAsync();
         if (!status.granted) {
           Alert.alert('Permission Required', 'Microphone access is needed for voice recording');
           return;
         }
-
         await Audio.setAudioModeAsync({
           allowsRecordingIOS: true,
           playsInSilentModeIOS: true,
           staysActiveInBackground: false,
           shouldDuckAndroid: true,
         });
-
         audioRecorder?.record();
-        setIsRecording(true);
+        setStep('recording');
       }
     } catch (err) {
       console.error('Failed to start recording:', err);
@@ -249,133 +238,103 @@ export default function VoiceRecorder({
   };
 
   const stopRecording = async () => {
-    if (!isRecording) return;
-    
+    if (step !== 'recording') return;
     try {
-      setIsRecording(false);
-
       if (Platform.OS === 'web') {
-        // Web: Stop MediaRecorder
         const mediaRecorder = webRecorderRef.current.mediaRecorder;
         if (mediaRecorder && mediaRecorder.state !== 'inactive') {
           mediaRecorder.stop();
         }
       } else {
-        // Native: Stop expo-audio recorder
         await audioRecorder?.stop();
         const uri = audioRecorder?.uri;
         if (uri) {
           setRecordingUri(uri);
-          setHasRecording(true);
+          transcribeRecording(null, uri);
+        } else {
+          setStep('idle');
+          setErrorMsg('Recording failed - no audio captured');
         }
       }
     } catch (err) {
       console.error('Failed to stop recording:', err);
-      setIsRecording(false);
+      setStep('idle');
     }
   };
 
-  const cleanupRecording = async (uri: string | null) => {
-    if (uri && Platform.OS !== 'web') {
-      try {
-        await FileSystem.deleteAsync(uri, { idempotent: true });
-      } catch (e) {
-        // Ignore cleanup errors
-      }
-    }
-  };
+  const transcribeRecording = async (blob: Blob | null, uri: string | null) => {
+    setStep('transcribing');
 
-  const discardRecording = async () => {
-    await cleanupRecording(recordingUri);
-    setHasRecording(false);
-    setRecordingUri(null);
-    setWebRecordingBlob(null);
-    setTranscription('');
-    setRecordingDuration(0);
-    webRecorderRef.current.audioChunks = [];
-  };
-
-  const saveToCase = async () => {
-    if (Platform.OS === 'web' && !webRecordingBlob) {
-      Alert.alert('Error', 'No recording available');
-      return;
-    }
-    if (Platform.OS !== 'web' && !recordingUri) {
-      Alert.alert('Error', 'No recording available');
-      return;
-    }
-
-    setIsProcessing(true);
-    
     try {
       const formData = new FormData();
-      
-      if (Platform.OS === 'web') {
-        const extension = webRecordingBlob!.type.includes('webm') ? 'webm' : 'm4a';
-        formData.append('audio', webRecordingBlob!, `voice.${extension}`);
-      } else {
-        const uri = recordingUri!;
+
+      if (Platform.OS === 'web' && blob) {
+        const extension = blob.type.includes('webm') ? 'webm' : 'm4a';
+        formData.append('audio', blob, `voice.${extension}`);
+      } else if (uri) {
         const extension = uri.split('.').pop() || 'm4a';
         formData.append('audio', {
           uri,
           name: `voice.${extension}`,
           type: `audio/${extension === 'caf' ? 'x-caf' : extension === 'm4a' ? 'mp4' : extension}`,
         } as any);
+      } else {
+        throw new Error('No audio data');
       }
-      
+
+      formData.append('mode', 'field');
       if (patientContext) {
         formData.append('patientContext', JSON.stringify(patientContext));
       }
-      formData.append('mode', mode);
 
       const apiUrl = getApiUrl();
-      const transcribeUrl = new URL('/api/voice/transcribe', apiUrl).toString();
-      
-      const response = await fetch(transcribeUrl, {
+      const url = new URL('/api/voice/transcribe', apiUrl).toString();
+
+      const response = await fetch(url, {
         method: 'POST',
         body: formData,
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Transcription failed');
+        throw new Error(errorData.error || `Transcription failed (${response.status})`);
       }
 
       const result = await response.json();
-      const { transcript, structured } = result;
+      const text = result.transcript || '';
 
-      setTranscription(transcript || '');
-      onTranscriptionComplete?.(transcript || '');
-
-      if (mode === 'full' && structured) {
-        const extracted: ExtractedClinicalData = {
-          ...structured,
-          rawTranscription: transcript,
-        };
-        onExtractedData?.(extracted);
-        Alert.alert('Success', 'Voice note saved and clinical data extracted to case sheet');
-      } else {
-        onExtractedData?.({ rawTranscription: transcript });
-        Alert.alert('Saved', 'Voice note transcribed and saved');
+      if (!text.trim()) {
+        setErrorMsg('No speech detected. Please try again.');
+        setStep('idle');
+        return;
       }
 
-      discardRecording();
+      setTranscript(text);
+      setEditedTranscript(text);
+      setStep('transcript_ready');
     } catch (err) {
-      const errorMsg = (err as Error).message || 'Unknown error';
-      console.error('Save error:', errorMsg);
-      Alert.alert('Error', `Voice processing failed: ${errorMsg}`);
-      onError?.(errorMsg);
-    } finally {
-      setIsProcessing(false);
+      const msg = (err as Error).message || 'Transcription failed';
+      console.error('Transcription error:', msg);
+      setErrorMsg(msg);
+      setStep('idle');
+      onError?.(msg);
     }
+  };
+
+  const copyToField = () => {
+    const text = editedTranscript.trim();
+    if (!text) return;
+
+    onTranscriptionComplete?.(text);
+    onExtractedData?.({ rawTranscription: text });
+    resetAll();
   };
 
   const handleMicPress = () => {
     if (disabled) return;
-    
-    if (isRecording) {
+    if (step === 'recording') {
       stopRecording();
-    } else if (!hasRecording) {
+    } else if (step === 'idle') {
       startRecording();
     }
   };
@@ -383,95 +342,86 @@ export default function VoiceRecorder({
   return (
     <View style={[styles.container, { backgroundColor: colors.card }]}>
       <View style={styles.header}>
-        <Feather name="mic" size={20} color={colors.primary} />
+        <Feather name="mic" size={18} color={colors.primary} />
         <Text style={[styles.title, { color: colors.text }]}>
-          {mode === 'field' && fieldName ? `Voice Input: ${fieldName}` : 'Voice Clinical Notes'}
+          {mode === 'field' && fieldName ? `Voice: ${fieldName}` : 'Voice Input'}
         </Text>
       </View>
 
-      <View style={styles.controlsRow}>
-        <Animated.View style={[
-          styles.micButtonWrapper,
-          { transform: [{ scale: isRecording ? pulseAnim : 1 }] }
-        ]}>
+      {step === 'idle' && (
+        <View style={styles.centerArea}>
           <Pressable
             onPress={handleMicPress}
-            disabled={disabled || isProcessing || hasRecording}
-            style={[
-              styles.micButton,
-              {
-                backgroundColor: isRecording ? colors.danger : colors.primary,
-                opacity: disabled || isProcessing || hasRecording ? 0.5 : 1,
-              },
-            ]}
+            disabled={disabled}
+            style={[styles.micButton, { backgroundColor: colors.primary, opacity: disabled ? 0.5 : 1 }]}
           >
-            <Feather
-              name={isRecording ? 'square' : 'mic'}
-              size={28}
-              color="#fff"
-            />
+            <Feather name="mic" size={28} color="#fff" />
           </Pressable>
-        </Animated.View>
-
-        <View style={styles.statusContainer}>
-          {isRecording ? (
-            <View style={styles.recordingStatus}>
-              <View style={[styles.recordingDot, { backgroundColor: colors.danger }]} />
-              <Text style={[styles.statusText, { color: colors.danger }]}>
-                Recording... {formatDuration(recordingDuration)}
-              </Text>
+          <Text style={[styles.hintText, { color: colors.textSecondary }]}>
+            Tap to record
+          </Text>
+          {errorMsg ? (
+            <View style={[styles.errorBox, { backgroundColor: `${colors.danger}15` }]}>
+              <Feather name="alert-circle" size={14} color={colors.danger} />
+              <Text style={[styles.errorText, { color: colors.danger }]}>{errorMsg}</Text>
             </View>
-          ) : hasRecording ? (
-            <Text style={[styles.statusText, { color: colors.success }]}>
-              Recording ready ({formatDuration(recordingDuration)})
-            </Text>
-          ) : (
-            <Text style={[styles.statusText, { color: colors.textSecondary }]}>
-              Tap to start recording
-            </Text>
-          )}
-        </View>
-      </View>
-
-      {hasRecording && !isProcessing && (
-        <View style={styles.actionButtons}>
-          <Pressable
-            onPress={discardRecording}
-            style={[styles.actionButton, { backgroundColor: colors.backgroundSecondary }]}
-          >
-            <Feather name="trash-2" size={18} color={colors.danger} />
-            <Text style={[styles.actionButtonText, { color: colors.danger }]}>Discard</Text>
-          </Pressable>
-          
-          <Pressable
-            onPress={saveToCase}
-            style={[styles.actionButton, styles.saveButton, { backgroundColor: colors.success }]}
-          >
-            <Feather name="check" size={18} color="#fff" />
-            <Text style={[styles.actionButtonText, { color: '#fff' }]}>Save to Case</Text>
-          </Pressable>
+          ) : null}
         </View>
       )}
 
-      {isProcessing && (
-        <View style={styles.processingContainer}>
+      {step === 'recording' && (
+        <View style={styles.centerArea}>
+          <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+            <Pressable
+              onPress={handleMicPress}
+              style={[styles.micButton, { backgroundColor: colors.danger }]}
+            >
+              <Feather name="square" size={24} color="#fff" />
+            </Pressable>
+          </Animated.View>
+          <View style={styles.recordingRow}>
+            <View style={[styles.recordingDot, { backgroundColor: colors.danger }]} />
+            <Text style={[styles.recordingText, { color: colors.danger }]}>
+              Recording {formatDuration(recordingDuration)}
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {step === 'transcribing' && (
+        <View style={styles.centerArea}>
           <ActivityIndicator size="small" color={colors.primary} />
           <Text style={[styles.processingText, { color: colors.textSecondary }]}>
-            Transcribing with Sarvam AI...
+            Transcribing...
           </Text>
         </View>
       )}
 
-      {transcription ? (
-        <View style={[styles.transcriptionBox, { backgroundColor: colors.backgroundSecondary }]}>
-          <Text style={[styles.transcriptionLabel, { color: colors.textSecondary }]}>
-            Transcription:
-          </Text>
-          <Text style={[styles.transcriptionText, { color: colors.text }]}>
-            {transcription}
-          </Text>
+      {step === 'transcript_ready' && (
+        <View style={styles.transcriptArea}>
+          <View style={[styles.transcriptBox, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}>
+            <TextInput
+              style={[styles.transcriptInput, { color: colors.text }]}
+              value={editedTranscript}
+              onChangeText={setEditedTranscript}
+              multiline
+              textAlignVertical="top"
+              placeholderTextColor={colors.textMuted}
+            />
+          </View>
+
+          <View style={styles.actionRow}>
+            <Pressable onPress={resetAll} style={[styles.actionBtn, { backgroundColor: colors.backgroundSecondary }]}>
+              <Feather name="rotate-ccw" size={16} color={colors.textSecondary} />
+              <Text style={[styles.actionBtnText, { color: colors.textSecondary }]}>Redo</Text>
+            </Pressable>
+            <Pressable onPress={copyToField} style={[styles.actionBtn, styles.copyBtn, { backgroundColor: colors.success }]}>
+              <Feather name="clipboard" size={16} color="#fff" />
+              <Text style={[styles.actionBtnText, { color: '#fff' }]}>Copy to Field</Text>
+            </Pressable>
+          </View>
         </View>
-      ) : null}
+      )}
     </View>
   );
 }
@@ -486,20 +436,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 16,
+    marginBottom: 12,
   },
   title: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
   },
-  controlsRow: {
-    flexDirection: 'row',
+  centerArea: {
     alignItems: 'center',
-    gap: 16,
-  },
-  micButtonWrapper: {
-    width: 60,
-    height: 60,
+    gap: 10,
+    paddingVertical: 8,
   },
   micButton: {
     width: 60,
@@ -508,10 +454,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  statusContainer: {
+  hintText: {
+    fontSize: 13,
+  },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginTop: 4,
+  },
+  errorText: {
+    fontSize: 13,
     flex: 1,
   },
-  recordingStatus: {
+  recordingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
@@ -521,54 +480,45 @@ const styles = StyleSheet.create({
     height: 10,
     borderRadius: 5,
   },
-  statusText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 16,
-  },
-  actionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-  },
-  saveButton: {
-    flex: 2,
-  },
-  actionButtonText: {
-    fontSize: 14,
+  recordingText: {
+    fontSize: 16,
     fontWeight: '600',
-  },
-  processingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    marginTop: 16,
-    paddingVertical: 12,
   },
   processingText: {
     fontSize: 14,
   },
-  transcriptionBox: {
-    marginTop: 16,
-    padding: 12,
+  transcriptArea: {
+    gap: 10,
+  },
+  transcriptBox: {
     borderRadius: 8,
+    borderWidth: 1,
+    minHeight: 80,
+    maxHeight: 150,
   },
-  transcriptionLabel: {
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  transcriptionText: {
+  transcriptInput: {
+    padding: 10,
     fontSize: 14,
     lineHeight: 20,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  actionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  copyBtn: {
+    flex: 2,
+  },
+  actionBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
