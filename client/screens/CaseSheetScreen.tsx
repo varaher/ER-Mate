@@ -1143,6 +1143,7 @@ export default function CaseSheetScreen() {
     try {
       const payload = buildPayload();
       await saveToDraft(payload);
+      await cacheCasePayload(caseId, payload);
       setLastSaved(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
       if (!silent) Alert.alert("Saved Locally", "Data saved locally. It will be submitted when you click Finish in Disposition.");
     } catch (err) {
