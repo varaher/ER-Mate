@@ -1766,6 +1766,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/voice/translate", async (req: Request, res: Response) => {
+    try {
+      const { text } = req.body;
+      if (!text || typeof text !== 'string' || !text.trim()) {
+        return res.status(400).json({ error: "No text provided for translation" });
+      }
+
+      const { isSarvamAvailable, sarvamTranslateToEnglish } = await import("./services/sarvamAI");
+
+      if (!isSarvamAvailable()) {
+        return res.json({ translated_text: text, skipped: true, reason: "Sarvam AI not configured" });
+      }
+
+      console.log("[Translate] Translating text to English, length:", text.length);
+      const result = await sarvamTranslateToEnglish(text.trim());
+
+      res.json({
+        translated_text: result.translated_text,
+        source_language: result.source_language_code,
+        original_text: text,
+      });
+    } catch (error) {
+      console.error("[Translate] Error:", error);
+      res.json({ translated_text: req.body.text, skipped: true, reason: (error as Error).message });
+    }
+  });
+
   app.post("/api/voice/extract-clinical", async (req: Request, res: Response) => {
     try {
       const { transcript, patientContext } = req.body;
