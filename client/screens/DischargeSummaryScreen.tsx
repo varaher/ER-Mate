@@ -96,6 +96,15 @@ interface DischargeSummaryData {
   discharge_date: string;
 }
 
+const safeText = (val: any): string => {
+  if (val === null || val === undefined) return "";
+  if (typeof val === "object" && val !== null && !Array.isArray(val)) {
+    if ("text" in val) return String(val.text || "");
+    return "";
+  }
+  return String(val);
+};
+
 const VITAL_FIELDS = [
   { key: "hr", label: "HR" },
   { key: "bp", label: "BP" },
@@ -272,7 +281,7 @@ export default function DischargeSummaryScreen() {
     summaryRef.current = {
       ...defaultSummary,
       mlc: savedSummary.mlc ?? data.mlc ?? false,
-      allergy: savedSummary.allergy || sample.allergies || history.allergies?.join(", ") || patient.allergies || triage.allergies || "No known allergies",
+      allergy: savedSummary.allergy || safeText(sample.allergies) || (Array.isArray(history.allergies) ? history.allergies.join(", ") : safeText(history.allergies)) || safeText(patient.allergies) || safeText(triage.allergies) || "No known allergies",
       vitals_arrival: savedSummary.vitals_arrival || {
         hr: vitals.hr?.toString() || vitals.heart_rate?.toString() || primaryAssessment.circulation_hr?.toString() || "",
         bp: `${vitals.bp_systolic || primaryAssessment.circulation_bp_systolic || ""}/${vitals.bp_diastolic || primaryAssessment.circulation_bp_diastolic || ""}`,
@@ -283,18 +292,18 @@ export default function DischargeSummaryScreen() {
         grbs: vitals.grbs?.toString() || vitals.blood_glucose?.toString() || primaryAssessment.disability_grbs?.toString() || "",
         temp: vitals.temperature?.toString() || primaryAssessment.exposure_temperature?.toString() || "",
       },
-      presenting_complaint: savedSummary.presenting_complaint || data.presenting_complaint?.text || triage.chief_complaint || "",
-      history_of_present_illness: savedSummary.history_of_present_illness || history.hpi || history.events_hopi || sample.eventsHopi || data.history_of_present_illness || triage.history || "",
-      past_medical_history: savedSummary.past_medical_history || history.past_medical?.join(", ") || sample.pastMedicalHistory || patient.past_medical_history || triage.past_medical_history || "",
-      family_history: savedSummary.family_history || patient.family_history || "",
-      lmp: savedSummary.lmp || history.last_meal_lmp || sample.lastMeal || patient.lmp || "",
+      presenting_complaint: savedSummary.presenting_complaint || safeText(data.presenting_complaint?.text || data.presenting_complaint) || safeText(triage.chief_complaint) || "",
+      history_of_present_illness: savedSummary.history_of_present_illness || safeText(history.hpi) || safeText(history.events_hopi) || safeText(sample.eventsHopi) || safeText(data.history_of_present_illness) || safeText(triage.history) || "",
+      past_medical_history: savedSummary.past_medical_history || (Array.isArray(history.past_medical) ? history.past_medical.join(", ") : safeText(history.past_medical)) || safeText(sample.pastMedicalHistory) || safeText(patient.past_medical_history) || safeText(triage.past_medical_history) || "",
+      family_history: savedSummary.family_history || safeText(patient.family_history) || "",
+      lmp: savedSummary.lmp || safeText(history.last_meal_lmp) || safeText(sample.lastMeal) || safeText(patient.lmp) || "",
       primary_assessment: savedSummary.primary_assessment || {
         airway: formatAirwayFromData(abcde.airway, primaryAssessment),
         breathing: formatBreathingFromData(abcde.breathing, vitals, primaryAssessment),
         circulation: formatCirculationFromData(abcde.circulation, primaryAssessment),
         disability: formatDisabilityFromData(abcde.disability, primaryAssessment, gcsTotal),
         exposure: formatExposureFromData(abcde.exposure, primaryAssessment),
-        efast: data.adjuncts?.efast_notes || abcde.efast || "",
+        efast: safeText(data.adjuncts?.efast_notes) || safeText(abcde.efast) || "",
       },
       secondary_assessment: savedSummary.secondary_assessment || {
         pallor: exam.general_pallor || exam.general?.pallor || false,
@@ -313,13 +322,13 @@ export default function DischargeSummaryScreen() {
       },
       course_in_hospital: savedSummary.course_in_hospital || autoCourseInHospital,
       investigations: savedSummary.investigations || formatInvestigations(treatment.investigations || data.investigations),
-      diagnosis: savedSummary.diagnosis || treatment.primary_diagnosis || treatment.provisional_diagnosis || treatment.ai_diagnosis || data.final_diagnosis || data.treatment?.primary_diagnosis || "",
+      diagnosis: savedSummary.diagnosis || safeText(treatment.primary_diagnosis) || safeText(treatment.provisional_diagnosis) || safeText(treatment.ai_diagnosis) || safeText(data.final_diagnosis) || safeText(data.treatment?.primary_diagnosis) || "",
       discharge_medications: savedSummary.discharge_medications || "",
-      disposition_type: savedSummary.disposition_type || disposition.type || disposition.disposition_type || "Normal Discharge",
-      condition_at_discharge: savedSummary.condition_at_discharge || disposition.condition || disposition.condition_at_discharge || "STABLE",
+      disposition_type: savedSummary.disposition_type || safeText(disposition.type) || safeText(disposition.disposition_type) || "Normal Discharge",
+      condition_at_discharge: savedSummary.condition_at_discharge || safeText(disposition.condition) || safeText(disposition.condition_at_discharge) || "STABLE",
       vitals_discharge: savedSummary.vitals_discharge || { hr: "", bp: "", rr: "", spo2: "", gcs: "", pain_score: "", grbs: "", temp: "" },
-      follow_up_advice: savedSummary.follow_up_advice || disposition.follow_up || disposition.follow_up_instructions || "",
-      ed_resident: savedSummary.ed_resident || data.em_resident || "",
+      follow_up_advice: savedSummary.follow_up_advice || safeText(disposition.follow_up) || safeText(disposition.follow_up_instructions) || "",
+      ed_resident: savedSummary.ed_resident || safeText(data.em_resident) || "",
       ed_consultant: savedSummary.ed_consultant || "",
       sign_time_resident: savedSummary.sign_time_resident || "",
       sign_time_consultant: savedSummary.sign_time_consultant || "",

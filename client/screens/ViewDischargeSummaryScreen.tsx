@@ -20,6 +20,15 @@ import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteProps = RouteProp<RootStackParamList, "ViewDischargeSummary">;
 
+const safeText = (val: any): string => {
+  if (val === null || val === undefined) return "";
+  if (typeof val === "object" && val !== null && !Array.isArray(val)) {
+    if ("text" in val) return String(val.text || "");
+    return "";
+  }
+  return String(val);
+};
+
 export default function ViewDischargeSummaryScreen() {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RouteProps>();
@@ -80,8 +89,8 @@ export default function ViewDischargeSummaryScreen() {
     </View>
   );
 
-  const InfoRow = ({ label, value }: { label: string; value?: string | number | null | boolean }) => {
-    const displayValue = typeof value === "boolean" ? (value ? "Yes" : "No") : (value || "N/A");
+  const InfoRow = ({ label, value }: { label: string; value?: any }) => {
+    const displayValue = typeof value === "boolean" ? (value ? "Yes" : "No") : (safeText(value) || "N/A");
     return (
       <View style={styles.infoRow}>
         <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>{label}:</Text>
@@ -90,10 +99,10 @@ export default function ViewDischargeSummaryScreen() {
     );
   };
 
-  const VitalBox = ({ label, value, unit }: { label: string; value?: string | number | null; unit: string }) => (
+  const VitalBox = ({ label, value, unit }: { label: string; value?: any; unit: string }) => (
     <View style={[styles.vitalBox, { backgroundColor: theme.backgroundSecondary }]}>
       <Text style={[styles.vitalLabel, { color: theme.textSecondary }]}>{label}</Text>
-      <Text style={[styles.vitalValue, { color: theme.text }]}>{value || "-"}</Text>
+      <Text style={[styles.vitalValue, { color: theme.text }]}>{safeText(value) || "-"}</Text>
       <Text style={[styles.vitalUnit, { color: theme.textMuted }]}>{unit}</Text>
     </View>
   );
@@ -164,7 +173,7 @@ export default function ViewDischargeSummaryScreen() {
         </Section>
 
         <Section title="Presenting Complaint">
-          <Text style={[styles.text, { color: theme.text }]}>{summary.presenting_complaint || "N/A"}</Text>
+          <Text style={[styles.text, { color: theme.text }]}>{safeText(summary.presenting_complaint) || "N/A"}</Text>
         </Section>
 
         <Section title="History">
@@ -216,22 +225,22 @@ export default function ViewDischargeSummaryScreen() {
         ) : null}
 
         <Section title="Diagnosis">
-          <Text style={[styles.diagnosisText, { color: theme.text }]}>{summary.diagnosis || "N/A"}</Text>
+          <Text style={[styles.diagnosisText, { color: theme.text }]}>{safeText(summary.diagnosis) || "N/A"}</Text>
         </Section>
 
         {summary.investigations ? (
           <Section title="Investigations">
-            <Text style={[styles.text, { color: theme.text }]}>{summary.investigations}</Text>
+            <Text style={[styles.text, { color: theme.text }]}>{safeText(summary.investigations)}</Text>
           </Section>
         ) : null}
 
         <Section title="Course in Hospital">
-          <Text style={[styles.text, { color: theme.text }]}>{summary.course_in_hospital || "N/A"}</Text>
+          <Text style={[styles.text, { color: theme.text }]}>{safeText(summary.course_in_hospital) || "N/A"}</Text>
         </Section>
 
         {summary.discharge_medications ? (
           <Section title="Discharge Medications">
-            <Text style={[styles.text, { color: theme.text }]}>{summary.discharge_medications}</Text>
+            <Text style={[styles.text, { color: theme.text }]}>{safeText(summary.discharge_medications)}</Text>
           </Section>
         ) : null}
 
@@ -255,7 +264,7 @@ export default function ViewDischargeSummaryScreen() {
 
         {summary.follow_up_advice ? (
           <Section title="Follow-up Advice">
-            <Text style={[styles.text, { color: theme.text }]}>{summary.follow_up_advice}</Text>
+            <Text style={[styles.text, { color: theme.text }]}>{safeText(summary.follow_up_advice)}</Text>
           </Section>
         ) : null}
 
