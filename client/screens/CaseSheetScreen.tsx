@@ -2836,12 +2836,12 @@ export default function CaseSheetScreen() {
                 </View>
               )}
 
-              <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.lg }]}>Infusions (Drips)</Text>
+              <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.lg }]}>Infusions / IV Fluids</Text>
               
               <View style={styles.medicationInputRow}>
                 <TextInput
                   style={[styles.medicationInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, flex: 2 }]}
-                  placeholder="Drug (e.g., Dopamine)"
+                  placeholder="Drug / Fluid (e.g., NS, RL, Dopamine)"
                   placeholderTextColor={theme.textMuted}
                   value={newInfusion.name}
                   onChangeText={(v) => setNewInfusion((prev) => ({ ...prev, name: v }))}
@@ -2872,7 +2872,7 @@ export default function CaseSheetScreen() {
               </View>
               <Pressable style={[styles.addDrugBtn, { backgroundColor: "#8B5CF6" }]} onPress={addInfusion}>
                 <Feather name="plus" size={18} color="#FFFFFF" />
-                <Text style={styles.addDrugBtnText}>Add Infusion</Text>
+                <Text style={styles.addDrugBtnText}>Add Infusion / IV Fluid</Text>
               </Pressable>
 
               {treatmentData.infusions.length > 0 && (
@@ -2891,11 +2891,6 @@ export default function CaseSheetScreen() {
                 </View>
               )}
 
-              <View style={styles.fieldWithVoice}>
-                <Text style={[styles.fieldLabel, { color: theme.text }]}>IV Fluids</Text>
-                <VoiceButton fieldKey="treatment.ivFluids" />
-              </View>
-              <TextInput style={[styles.inputField, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="NS, RL, etc..." placeholderTextColor={theme.textMuted} value={treatmentData.ivFluids} onChangeText={(v) => setTreatmentData((prev) => ({ ...prev, ivFluids: v }))} />
             </View>
 
             <Pressable style={[styles.addAddendumBtn, { borderColor: theme.border }]}>

@@ -708,22 +708,19 @@ export default function ViewCaseScreen() {
             </SubSection>
           )}
 
-          {treatment.infusions?.length > 0 && (
-            <SubSection title="Infusions">
-              {treatment.infusions.map((inf: any, idx: number) => (
+          {(treatment.infusions?.length > 0 || treatment.fluids) && (
+            <SubSection title="Infusions / IV Fluids">
+              {treatment.infusions?.map((inf: any, idx: number) => (
                 <View key={idx} style={styles.medicationItem}>
                   <Text style={[styles.medicationName, { color: theme.text }]}>• {inf.name || inf.drug_name}</Text>
                   <Text style={[styles.medicationDetails, { color: theme.textSecondary }]}>
-                    {inf.dose} in {inf.dilution} - Rate: {inf.rate}
+                    {inf.dose ? `${inf.dose} in ` : ""}{inf.dilution}{inf.rate ? ` - Rate: ${inf.rate}` : ""}
                   </Text>
                 </View>
               ))}
-            </SubSection>
-          )}
-
-          {treatment.fluids && (
-            <SubSection title="IV Fluids">
-              <Text style={[styles.text, { color: theme.text }]}>{safeText(treatment.fluids)}</Text>
+              {treatment.fluids ? (
+                <Text style={[styles.text, { color: theme.text, marginTop: 4 }]}>{safeText(treatment.fluids)}</Text>
+              ) : null}
             </SubSection>
           )}
 

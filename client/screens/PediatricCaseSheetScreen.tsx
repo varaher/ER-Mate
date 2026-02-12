@@ -1687,18 +1687,13 @@ export default function PediatricCaseSheetScreen() {
               </View>
               <TextInput style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Additional drugs not in list..." placeholderTextColor={theme.textMuted} value={treatmentData.otherMedications} onChangeText={(v) => setTreatmentData((prev) => ({ ...prev, otherMedications: v }))} multiline />
 
-              <View style={styles.fieldWithVoice}>
-                <Text style={[styles.fieldLabel, { color: theme.text }]}>IV Fluids</Text>
-                <VoiceButton fieldKey="treatment.ivFluids" />
-              </View>
-              <TextInput style={[styles.inputField, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="NS, RL, etc..." placeholderTextColor={theme.textMuted} value={treatmentData.ivFluids} onChangeText={(v) => setTreatmentData((prev) => ({ ...prev, ivFluids: v }))} />
             </View>
 
             <View style={[styles.card, { backgroundColor: theme.card, borderLeftWidth: 4, borderLeftColor: "#9333EA" }]}>
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.md }}>
                 <View>
-                  <Text style={[styles.cardTitle, { color: theme.text, marginBottom: 2 }]}>Infusions / Drips</Text>
-                  <Text style={[styles.cardSubtitle, { color: theme.textSecondary }]}>IV medications with continuous rate</Text>
+                  <Text style={[styles.cardTitle, { color: theme.text, marginBottom: 2 }]}>Infusions / IV Fluids</Text>
+                  <Text style={[styles.cardSubtitle, { color: theme.textSecondary }]}>IV fluids and medications with continuous rate</Text>
                 </View>
                 <Pressable
                   style={[styles.addDrugBtn, { backgroundColor: "#9333EA", paddingHorizontal: 12, paddingVertical: 8 }]}
@@ -1708,7 +1703,7 @@ export default function PediatricCaseSheetScreen() {
                   }}
                 >
                   <Feather name="plus" size={16} color="#FFFFFF" />
-                  <Text style={[styles.addDrugBtnText, { fontSize: 13 }]}>Add Infusion</Text>
+                  <Text style={[styles.addDrugBtnText, { fontSize: 13 }]}>Add Infusion / IV Fluid</Text>
                 </Pressable>
               </View>
 
@@ -1726,7 +1721,7 @@ export default function PediatricCaseSheetScreen() {
                   <Text style={[styles.fieldLabel, { color: theme.text, marginBottom: 4 }]}>Drug Name</Text>
                   <TextInput
                     style={[styles.inputField, { backgroundColor: theme.card, color: theme.text, marginBottom: Spacing.sm }]}
-                    placeholder="e.g., Dopamine, Noradrenaline..."
+                    placeholder="e.g., NS, RL, Dopamine, Noradrenaline..."
                     placeholderTextColor={theme.textMuted}
                     value={infusion.name}
                     onChangeText={(v) => setTreatmentData((prev) => ({ ...prev, infusions: prev.infusions.map((i) => i.id === infusion.id ? { ...i, name: v } : i) }))}
