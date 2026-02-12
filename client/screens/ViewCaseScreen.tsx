@@ -18,6 +18,7 @@ import { apiGet, apiPut } from "@/lib/api";
 import { getCachedCaseData, mergeCaseWithCache } from "@/lib/caseCache";
 import { isPediatric } from "@/lib/pediatricVitals";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
+import { AIDiagnosisPanel } from "@/components/AIDiagnosisPanel";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -768,6 +769,24 @@ export default function ViewCaseScreen() {
             <InfoRow label="Condition" value={disposition.condition_at_discharge || disposition.condition} />
           </Section>
         )}
+
+        <AIDiagnosisPanel
+          caseId={caseId}
+          chiefComplaint={safeText(caseData.chief_complaint) || safeText(caseData.triage?.chief_complaint) || ""}
+          vitals={(() => {
+            const v = caseData.vitals || caseData.primary_assessment?.vitals || {};
+            const result: Record<string, string> = {};
+            Object.entries(v).forEach(([k, val]) => { if (val) result[k] = safeText(val); });
+            return result;
+          })()}
+          history={safeText(caseData.history_of_present_illness) || safeText(caseData.hpi) || ""}
+          examination={(() => {
+            const exam = caseData.secondary_survey || caseData.examination || {};
+            return Object.entries(exam).filter(([_, v]) => v).map(([k, v]) => `${k}: ${safeText(v)}`).join("; ");
+          })()}
+          age={caseData.patient?.age || 0}
+          gender={caseData.patient?.sex || caseData.patient?.gender || ""}
+        />
 
         {(() => {
           const addendumNotes = caseData.treatment?.addendum_notes || caseData.addendum_notes || [];
