@@ -823,21 +823,26 @@ export async function transcribeAndExtractVoice(
 ): Promise<VoiceTranscriptionResult> {
   let transcript = '';
 
+  const { convertAudioToWav } = await import('./audioConvert');
+  const converted = await convertAudioToWav(audioBuffer, filename);
+  const wavBuffer = converted.buffer;
+  const wavFilename = converted.filename;
+
   const { isSarvamAvailable, sarvamSpeechToTextTranslate } = await import('./sarvamAI');
   
   if (isSarvamAvailable()) {
     try {
       console.log("[Voice] Using Sarvam AI for speech-to-text (optimized for Indian accents)");
-      const sarvamResult = await sarvamSpeechToTextTranslate(audioBuffer, filename);
+      const sarvamResult = await sarvamSpeechToTextTranslate(wavBuffer, wavFilename);
       transcript = sarvamResult.transcript || '';
       console.log("[Voice] Sarvam STT success, detected language:", sarvamResult.language_code);
     } catch (sarvamError) {
       console.warn("[Voice] Sarvam STT failed, falling back to OpenAI Whisper:", sarvamError);
-      transcript = await fallbackWhisperTranscribe(audioBuffer, filename);
+      transcript = await fallbackWhisperTranscribe(wavBuffer, wavFilename);
     }
   } else {
     console.log("[Voice] Sarvam AI not configured, using OpenAI Whisper");
-    transcript = await fallbackWhisperTranscribe(audioBuffer, filename);
+    transcript = await fallbackWhisperTranscribe(wavBuffer, wavFilename);
   }
 
   if (!transcript || transcript.trim().length === 0) {

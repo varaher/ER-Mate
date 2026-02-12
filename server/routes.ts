@@ -1648,13 +1648,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const mode = req.body.mode || 'full';
       let filename = file.originalname || 'voice.m4a';
-      if (filename.endsWith('.caf')) {
-        filename = filename.replace('.caf', '.m4a');
-      }
+
+      const { convertAudioToWav } = await import("./services/audioConvert");
+      const converted = await convertAudioToWav(file.buffer, filename);
 
       const result = await transcribeAndExtractVoice(
-        file.buffer,
-        filename,
+        converted.buffer,
+        converted.filename,
         patientContext,
         mode
       );
@@ -1688,9 +1688,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       let filename = file.originalname || 'voice.m4a';
-      if (filename.endsWith('.caf')) {
-        filename = filename.replace('.caf', '.m4a');
-      }
+
+      const { convertAudioToWav } = await import("./services/audioConvert");
+      const converted = await convertAudioToWav(file.buffer, filename);
 
       const { isSarvamAvailable, sarvamSpeechToTextTranslate } = await import("./services/sarvamAI");
       const { extractSmartDictation } = await import("./services/aiDiagnosis");
@@ -1700,19 +1700,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (isSarvamAvailable()) {
         try {
           console.log("[SmartDictation] Using Sarvam AI for speech-to-text");
-          const sarvamResult = await sarvamSpeechToTextTranslate(file.buffer, filename);
+          const sarvamResult = await sarvamSpeechToTextTranslate(converted.buffer, converted.filename);
           transcript = sarvamResult.transcript || '';
           console.log("[SmartDictation] Sarvam STT success, transcript length:", transcript.length);
         } catch (sarvamError) {
           console.warn("[SmartDictation] Sarvam STT failed, falling back to Whisper:", sarvamError);
           const { transcribeAndExtractVoice } = await import("./services/aiDiagnosis");
-          const fallbackResult = await transcribeAndExtractVoice(file.buffer, filename, patientContext, 'transcribe_only');
+          const fallbackResult = await transcribeAndExtractVoice(converted.buffer, converted.filename, patientContext, 'transcribe_only');
           transcript = fallbackResult.transcript || '';
         }
       } else {
         console.log("[SmartDictation] Using OpenAI Whisper for speech-to-text");
         const { transcribeAndExtractVoice } = await import("./services/aiDiagnosis");
-        const result = await transcribeAndExtractVoice(file.buffer, filename, patientContext, 'transcribe_only');
+        const result = await transcribeAndExtractVoice(converted.buffer, converted.filename, patientContext, 'transcribe_only');
         transcript = result.transcript || '';
       }
 
