@@ -331,12 +331,31 @@ export default function VoiceRecorder({
     }
   };
 
-  const copyToField = () => {
+  const copyToField = async () => {
     const text = editedTranscript.trim();
     if (!text) return;
 
-    onTranscriptionComplete?.(text);
-    onExtractedData?.({ rawTranscription: text });
+    let finalText = text;
+    try {
+      const apiUrl = getApiUrl();
+      const translateUrl = new URL('/api/voice/translate', apiUrl).toString();
+      const translateRes = await fetch(translateUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      if (translateRes.ok) {
+        const translateData = await translateRes.json();
+        if (translateData.translated_text && !translateData.skipped) {
+          finalText = translateData.translated_text;
+        }
+      }
+    } catch (translateErr) {
+      console.warn('[VoiceRecorder] Translation skipped:', translateErr);
+    }
+
+    onTranscriptionComplete?.(finalText);
+    onExtractedData?.({ rawTranscription: finalText });
     resetAll();
   };
 

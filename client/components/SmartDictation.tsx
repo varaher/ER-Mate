@@ -385,13 +385,33 @@ export default function SmartDictation({
 
     try {
       const apiUrl = getApiUrl();
+
+      let englishText = textToProcess;
+      try {
+        const translateUrl = new URL('/api/voice/translate', apiUrl).toString();
+        const translateRes = await fetch(translateUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: textToProcess }),
+        });
+        if (translateRes.ok) {
+          const translateData = await translateRes.json();
+          if (translateData.translated_text && !translateData.skipped) {
+            englishText = translateData.translated_text;
+            console.log('[SmartDictation] Translated from', translateData.source_language, 'to English');
+          }
+        }
+      } catch (translateErr) {
+        console.warn('[SmartDictation] Translation skipped:', translateErr);
+      }
+
       const url = new URL('/api/voice/extract-clinical', apiUrl).toString();
 
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          transcript: textToProcess,
+          transcript: englishText,
           patientContext,
         }),
       });
