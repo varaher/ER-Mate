@@ -137,6 +137,46 @@ export async function sarvamParsePDF(
   return result.parsed_text || "";
 }
 
+export interface SarvamTranslateResult {
+  translated_text: string;
+  source_language_code?: string;
+}
+
+export async function sarvamTranslateToEnglish(
+  text: string
+): Promise<SarvamTranslateResult> {
+  const apiKey = getSarvamApiKey();
+  if (!apiKey) {
+    throw new Error("Sarvam AI API key not configured");
+  }
+
+  const response = await fetch(`${SARVAM_API_BASE}/translate`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "api-subscription-key": apiKey,
+    },
+    body: JSON.stringify({
+      input: text,
+      source_language_code: "auto",
+      target_language_code: "en-IN",
+      mode: "formal",
+      model: "mayura:v1",
+      numerals_format: "international",
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("[Sarvam Translate] Error:", response.status, errorText);
+    throw new Error(`Sarvam translation failed: ${response.status} - ${errorText}`);
+  }
+
+  const result = await response.json() as SarvamTranslateResult;
+  console.log("[Sarvam Translate] Success, source language:", result.source_language_code, "output length:", result.translated_text?.length);
+  return result;
+}
+
 export function isSarvamAvailable(): boolean {
   return !!getSarvamApiKey();
 }
