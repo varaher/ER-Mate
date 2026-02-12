@@ -1514,16 +1514,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/ai/diagnose", async (req: Request, res: Response) => {
     try {
-      const { chiefComplaint, vitals, history, examination, age, gender, abgData } = req.body;
+      const { chiefComplaint, vitals, history, examination, age, gender, abgData, treatmentData } = req.body;
       
       if (!chiefComplaint) {
         return res.status(400).json({ error: "Chief complaint is required" });
       }
 
+      let enhancedHistory = history || "";
+      if (treatmentData) {
+        const treatmentParts: string[] = [];
+        if (treatmentData.medications?.length > 0) {
+          const medsText = treatmentData.medications.map((m: any) => `${m.name || ""} ${m.dose || ""} ${m.route || ""} ${m.frequency || ""}`.trim()).filter(Boolean).join(", ");
+          if (medsText) treatmentParts.push(`Medications administered: ${medsText}`);
+        }
+        if (treatmentData.fluids) treatmentParts.push(`IV Fluids: ${treatmentData.fluids}`);
+        if (treatmentData.interventions) treatmentParts.push(`Other interventions: ${treatmentData.interventions}`);
+        if (treatmentData.primaryDiagnosis) treatmentParts.push(`Working diagnosis: ${treatmentData.primaryDiagnosis}`);
+        if (treatmentData.differentialDiagnoses) treatmentParts.push(`Differential diagnoses considered: ${treatmentData.differentialDiagnoses}`);
+        if (treatmentParts.length > 0) {
+          enhancedHistory = `${enhancedHistory}\n\nTreatment administered:\n${treatmentParts.join("\n")}`;
+        }
+      }
+
       const result = await generateDiagnosisSuggestions({
         chiefComplaint,
         vitals: vitals || {},
-        history: history || "",
+        history: enhancedHistory,
         examination: examination || "",
         age: age || 30,
         gender: gender || "Unknown",

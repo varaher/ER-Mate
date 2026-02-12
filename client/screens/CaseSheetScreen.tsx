@@ -2727,7 +2727,7 @@ export default function CaseSheetScreen() {
             <View style={[styles.card, { backgroundColor: theme.card }]}>
               <AIDiagnosisPanel
                 caseId={caseId || ""}
-                chiefComplaint={formData.sample.signsSymptoms}
+                chiefComplaint={formData.sample.signsSymptoms || (typeof caseData?.presenting_complaint === "object" && caseData?.presenting_complaint?.text ? caseData.presenting_complaint.text : (caseData?.presenting_complaint || caseData?.chief_complaint || caseData?.triage?.chief_complaint || ""))}
                 vitals={{
                   hr: formData.circulation.hr,
                   bp: `${formData.circulation.bpSystolic}/${formData.circulation.bpDiastolic}`,
@@ -2759,6 +2759,13 @@ export default function CaseSheetScreen() {
                   aaGradient: formData.adjuncts.abgAaGradient,
                   interpretation: formData.adjuncts.abgInterpretation || abgInterpretation || "",
                   status: formData.adjuncts.abgStatus,
+                }}
+                treatmentData={{
+                  medications: treatmentData.medications.filter(m => m.name),
+                  fluids: treatmentData.ivFluids,
+                  primaryDiagnosis: treatmentData.primaryDiagnosis,
+                  differentialDiagnoses: treatmentData.differentialDiagnoses,
+                  interventions: treatmentData.otherMedications,
                 }}
                 onDiagnosisSelect={(diagnosis) => setTreatmentData((prev) => ({ ...prev, primaryDiagnosis: diagnosis }))}
               />

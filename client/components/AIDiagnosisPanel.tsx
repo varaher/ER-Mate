@@ -92,6 +92,15 @@ interface ABGData {
   status?: string;
 }
 
+interface TreatmentData {
+  medications?: { name: string; dose?: string; route?: string; frequency?: string }[];
+  fluids?: string;
+  procedures?: string;
+  primaryDiagnosis?: string;
+  differentialDiagnoses?: string;
+  interventions?: string;
+}
+
 interface AIDiagnosisPanelProps {
   caseId: string;
   chiefComplaint: string;
@@ -101,6 +110,7 @@ interface AIDiagnosisPanelProps {
   age: number;
   gender: string;
   abgData?: ABGData;
+  treatmentData?: TreatmentData;
   onDiagnosisSelect?: (diagnosis: string) => void;
 }
 
@@ -140,6 +150,7 @@ export function AIDiagnosisPanel({
   age,
   gender,
   abgData,
+  treatmentData,
   onDiagnosisSelect,
 }: AIDiagnosisPanelProps) {
   const { theme } = useTheme();
@@ -155,7 +166,10 @@ export function AIDiagnosisPanel({
   const [searchStatus, setSearchStatus] = useState<string>("");
 
   const fetchDiagnosis = useCallback(async () => {
-    if (!chiefComplaint) return;
+    if (!chiefComplaint?.trim()) {
+      setError("Please enter the chief complaint or signs & symptoms before analyzing.");
+      return;
+    }
 
     const apiUrl = getAIApiUrl();
     if (!apiUrl) {
@@ -179,6 +193,7 @@ export function AIDiagnosisPanel({
           age,
           gender,
           abgData,
+          treatmentData: treatmentData || undefined,
         }),
       });
 
@@ -203,7 +218,7 @@ export function AIDiagnosisPanel({
       setIsLoading(false);
       setSearchStatus("");
     }
-  }, [chiefComplaint, vitals, history, examination, age, gender, abgData]);
+  }, [chiefComplaint, vitals, history, examination, age, gender, abgData, treatmentData]);
 
   const submitFeedback = async (
     suggestionId: string,

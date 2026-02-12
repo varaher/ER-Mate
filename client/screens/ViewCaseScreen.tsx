@@ -786,6 +786,17 @@ export default function ViewCaseScreen() {
           })()}
           age={caseData.patient?.age || 0}
           gender={caseData.patient?.sex || caseData.patient?.gender || ""}
+          treatmentData={{
+            medications: (caseData.treatment?.medications || []).map((m: any) => ({
+              name: safeText(m.name) || safeText(m.drug),
+              dose: safeText(m.dose),
+              route: safeText(m.route),
+              frequency: safeText(m.frequency),
+            })).filter((m: any) => m.name),
+            fluids: safeText(caseData.treatment?.fluids) || safeText(caseData.treatment?.iv_fluids),
+            primaryDiagnosis: safeText(caseData.treatment?.primary_diagnosis) || safeText(caseData.provisional_diagnosis),
+            interventions: safeText(caseData.treatment?.other_medications),
+          }}
         />
 
         {(() => {
