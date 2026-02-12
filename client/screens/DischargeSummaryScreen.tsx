@@ -659,7 +659,11 @@ export default function DischargeSummaryScreen() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           case_id: caseId,
-          summary_data: summaryRef.current
+          summary_data: {
+            ...summaryRef.current,
+            patient_age: caseData?.patient?.age,
+            patient_sex: caseData?.patient?.sex,
+          }
         }),
       });
       

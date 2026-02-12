@@ -426,11 +426,17 @@ export interface DischargeSummaryInput {
   chief_complaint?: string;
   diagnosis?: string;
   treatment_given?: string;
-  medications?: any[];
-  investigations?: any[];
+  medications?: any;
+  investigations?: any;
   vitals?: Record<string, string>;
   examination?: Record<string, any>;
   procedures?: string;
+  primary_assessment?: Record<string, string>;
+  history_of_present_illness?: string;
+  past_medical_history?: string;
+  allergy?: string;
+  disposition_type?: string;
+  condition_at_discharge?: string;
 }
 
 export async function generateCourseInHospital(summaryData: DischargeSummaryInput): Promise<{ course_in_hospital: string; diagnosis?: string }> {
@@ -446,30 +452,50 @@ export async function generateCourseInHospital(summaryData: DischargeSummaryInpu
 
   const medicationsText = Array.isArray(summaryData.medications)
     ? summaryData.medications.map((m: any) => `${m.name || ""} ${m.dose || ""} ${m.route || ""} ${m.frequency || ""}`).filter(Boolean).join(", ")
-    : summaryData.medications || "";
+    : (typeof summaryData.medications === "string" ? summaryData.medications : "") || "";
 
   const investigationsText = Array.isArray(summaryData.investigations)
     ? summaryData.investigations.map((i: any) => `${i.name || i.test || ""}: ${i.result || i.value || "pending"}`).filter(Boolean).join(", ")
-    : summaryData.investigations || "";
+    : (typeof summaryData.investigations === "string" ? summaryData.investigations : "") || "";
 
-  const prompt = `You are a senior emergency medicine physician writing a discharge summary. Generate a professional "Course in Hospital" section based on the following case details:
+  const vitalsText = summaryData.vitals 
+    ? Object.entries(summaryData.vitals).filter(([_, v]) => v).map(([k, v]) => `${k.toUpperCase()}: ${v}`).join(", ")
+    : "";
+
+  const primaryAssessmentText = summaryData.primary_assessment
+    ? Object.entries(summaryData.primary_assessment).filter(([_, v]) => v).map(([k, v]) => `${k}: ${v}`).join("; ")
+    : "";
+
+  const prompt = `You are a senior emergency medicine physician writing a discharge summary. Generate a professional "Course in Hospital" section based on the following case details.
+
+CRITICAL RULES:
+- ONLY describe what is documented below. Do NOT assume, infer, or add any treatments, medications, or procedures that are not explicitly listed.
+- If a medication was given as an injection (Inj.), do NOT say it was given as a tablet (Tab.) or vice versa. Use the exact route/form documented.
+- If no medications are documented, simply state "No specific medications were administered in the ER."
+- Do NOT add any clinical decisions, reasoning, or treatment plans that are not documented below.
+- Be strictly factual. No fabrication or speculation.
 
 Patient: ${patientInfo}
 Chief Complaint: ${summaryData.chief_complaint || "Not specified"}
+History of Present Illness: ${summaryData.history_of_present_illness || "Not documented"}
+Past Medical History: ${summaryData.past_medical_history || "None"}
+Allergies: ${summaryData.allergy || "NKDA"}
+Vitals at Arrival: ${vitalsText || "Not documented"}
+Primary Assessment (ABCDE): ${primaryAssessmentText || "Not documented"}
 Working Diagnosis: ${summaryData.diagnosis || "To be determined"}
-Treatment Given: ${summaryData.treatment_given || "Not specified"}
 Medications Administered: ${medicationsText || "None documented"}
 Investigations: ${investigationsText || "None documented"}
 Procedures: ${summaryData.procedures || "None"}
+Disposition: ${summaryData.disposition_type || "Not specified"}
+Condition at Discharge: ${summaryData.condition_at_discharge || "Not specified"}
 
 Write a concise, professional clinical narrative (2-4 paragraphs) describing:
 1. Presentation and initial assessment
-2. Investigations performed and key findings
-3. Treatment provided including medications
-4. Clinical response and current status
-5. Disposition plan
+2. Investigations performed and key findings (only if documented)
+3. Treatment provided - list ONLY the exact medications/interventions documented above
+4. Clinical response and disposition
 
-Use professional medical terminology. Be factual and concise. Do not include speculative information.
+Use professional medical terminology. Be strictly factual based ONLY on the data provided above.
 
 Respond in JSON format:
 {

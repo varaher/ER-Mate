@@ -1590,7 +1590,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Summary data is required" });
       }
 
-      const result = await generateCourseInHospital(summary_data);
+      const mappedData = {
+        chief_complaint: summary_data.presenting_complaint || "",
+        diagnosis: summary_data.diagnosis || "",
+        treatment_given: summary_data.course_in_hospital || "",
+        medications: summary_data.discharge_medications || "",
+        investigations: summary_data.investigations || "",
+        procedures: "",
+        patient: {
+          age: summary_data.patient_age,
+          gender: summary_data.patient_sex,
+        },
+        vitals: summary_data.vitals_arrival || {},
+        primary_assessment: summary_data.primary_assessment || {},
+        history_of_present_illness: summary_data.history_of_present_illness || "",
+        past_medical_history: summary_data.past_medical_history || "",
+        allergy: summary_data.allergy || "",
+        disposition_type: summary_data.disposition_type || "",
+        condition_at_discharge: summary_data.condition_at_discharge || "",
+      };
+
+      const result = await generateCourseInHospital(mappedData);
       
       res.json({ 
         success: true, 

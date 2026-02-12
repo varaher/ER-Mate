@@ -726,11 +726,17 @@ export default function ViewCaseScreen() {
             </SubSection>
           )}
 
+          {treatment.other_medications ? (
+            <SubSection title="Other Medications">
+              <Text style={[styles.text, { color: theme.text }]}>{safeText(treatment.other_medications)}</Text>
+            </SubSection>
+          ) : null}
+
           <SubSection title="Notes">
             {editMode ? (
               <TextInput style={[styles.editableTextArea, { backgroundColor: "#FEF9C3", color: theme.text }]} multiline numberOfLines={3} defaultValue={editableFieldsRef.current.intervention_notes} onChangeText={(text) => updateEditableField("intervention_notes", text)} placeholder="Treatment notes..." placeholderTextColor={theme.textMuted} />
             ) : (
-              <Text style={[styles.text, { color: theme.text }]}>{safeText(treatment.intervention_notes) || safeText(treatment.other_medications) || "N/A"}</Text>
+              <Text style={[styles.text, { color: theme.text }]}>{safeText(treatment.intervention_notes) || "N/A"}</Text>
             )}
           </SubSection>
         </Section>
