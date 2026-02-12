@@ -10,7 +10,6 @@ import {
   ActivityIndicator,
   TextInput,
 } from 'react-native';
-import { useAudioRecorder, AudioModule, RecordingPresets } from 'expo-audio';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
 import { Feather } from '@expo/vector-icons';
@@ -131,8 +130,7 @@ export default function VoiceRecorder({
     audioChunks: [],
     stream: null,
   });
-
-  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const nativeRecordingRef = useRef<Audio.Recording | null>(null);
 
   useEffect(() => {
     if (step === 'recording') {
@@ -216,8 +214,8 @@ export default function VoiceRecorder({
         mediaRecorder.start(100);
         setStep('recording');
       } else {
-        const status = await AudioModule.requestRecordingPermissionsAsync();
-        if (!status.granted) {
+        const permission = await Audio.requestPermissionsAsync();
+        if (!permission.granted) {
           Alert.alert('Permission Required', 'Microphone access is needed for voice recording');
           return;
         }
@@ -227,7 +225,10 @@ export default function VoiceRecorder({
           staysActiveInBackground: false,
           shouldDuckAndroid: true,
         });
-        audioRecorder?.record();
+        const recording = new Audio.Recording();
+        await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+        await recording.startAsync();
+        nativeRecordingRef.current = recording;
         setStep('recording');
       }
     } catch (err) {
@@ -246,25 +247,27 @@ export default function VoiceRecorder({
           mediaRecorder.stop();
         }
       } else {
-        await audioRecorder?.stop();
-        let uri = audioRecorder?.uri;
-        if (!uri) {
-          for (let i = 0; i < 20; i++) {
-            await new Promise(r => setTimeout(r, 150));
-            uri = audioRecorder?.uri;
-            if (uri) break;
-          }
+        const recording = nativeRecordingRef.current;
+        if (!recording) {
+          setStep('idle');
+          setErrorMsg('No active recording found');
+          return;
         }
+        await recording.stopAndUnloadAsync();
+        await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+        const uri = recording.getURI();
+        nativeRecordingRef.current = null;
         if (uri) {
           setRecordingUri(uri);
           transcribeRecording(null, uri);
         } else {
           setStep('idle');
-          setErrorMsg('Recording failed - no audio captured. Please try again.');
+          setErrorMsg('Recording failed - no audio file created');
         }
       }
     } catch (err) {
       console.error('Failed to stop recording:', err);
+      nativeRecordingRef.current = null;
       setStep('idle');
     }
   };
