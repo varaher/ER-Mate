@@ -10,6 +10,7 @@ import VoiceRecorder, { ExtractedClinicalData } from "@/components/VoiceRecorder
 import { DocumentScanner } from "@/components/DocumentScanner";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import SmartDictation, { SmartDictationExtracted } from "@/components/SmartDictation";
+import { AIDiagnosisPanel } from "@/components/AIDiagnosisPanel";
 import { useTheme } from "@/hooks/useTheme";
 import { apiGet, apiPatch, apiPut, invalidateCases } from "@/lib/api";
 import { cacheCasePayload } from "@/lib/caseCache";
@@ -716,12 +717,16 @@ export default function PediatricCaseSheetScreen() {
         console.error("Pediatric commit failed:", res);
         const errorData = res.error as any;
         let errorMessage = "Failed to save case data. Please try again.";
-        if (errorData?.error === "edit_limit_reached") {
+        if (typeof errorData === "string") {
+          if (errorData.includes("edit_limit") || errorData.includes("Edit limit") || errorData.includes("edits per case")) {
+            errorMessage = "You've reached the edit limit for this case on the free plan. Please upgrade for unlimited edits.";
+          } else {
+            errorMessage = errorData;
+          }
+        } else if (errorData?.error === "edit_limit_reached") {
           errorMessage = errorData.message || "Edit limit reached. Please upgrade for unlimited edits.";
         } else if (Array.isArray(errorData)) {
           errorMessage = errorData.map((e: any) => e.msg || e.message).join(", ");
-        } else if (typeof errorData === "string") {
-          errorMessage = errorData;
         } else if (errorData?.message) {
           errorMessage = errorData.message;
         }
@@ -1618,15 +1623,31 @@ export default function PediatricCaseSheetScreen() {
               <TextInput style={[styles.textAreaLarge, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Other possibilities based on primary and secondary assessments..." placeholderTextColor={theme.textMuted} value={treatmentData.differentialDiagnoses} onChangeText={(v) => setTreatmentData((prev) => ({ ...prev, differentialDiagnoses: v }))} multiline />
             </View>
 
-            <View style={styles.actionButtonsRow}>
-              <Pressable style={[styles.actionBtn, { backgroundColor: "#FEE2E2" }]}>
-                <Feather name="alert-triangle" size={18} color={TriageColors.red} />
-                <Text style={[styles.actionBtnText, { color: TriageColors.red }]}>Red Flags</Text>
-              </Pressable>
-              <Pressable style={[styles.actionBtn, { backgroundColor: "#E0E7FF" }]}>
-                <Feather name="zap" size={18} color={theme.primary} />
-                <Text style={[styles.actionBtnText, { color: theme.primary }]}>AI Diagnosis</Text>
-              </Pressable>
+            <View style={[styles.card, { backgroundColor: theme.card }]}>
+              <AIDiagnosisPanel
+                caseId={caseId || ""}
+                chiefComplaint={patient?.chief_complaint || ""}
+                vitals={{
+                  hr: circulationData.heartRate,
+                  bp: circulationData.bloodPressure,
+                  rr: breathingData.respiratoryRate,
+                  spo2: breathingData.spo2,
+                  temp: exposureData.temperature || "",
+                  gcs: disabilityData.avpuGcs || "",
+                }}
+                history={`${historyData.events}\nAllergies: ${historyData.allergies}\nMedications: ${historyData.currentMedications}\nHealth History: ${historyData.healthHistory}\nUnderlying Conditions: ${historyData.underlyingConditions}`}
+                examination={`Respiratory: ${examData.respiratory}\nCardiovascular: ${examData.cardiovascular}\nAbdomen: ${examData.abdomen}\nExtremities: ${examData.extremities}`}
+                age={parseInt(String(patient?.age || "5"))}
+                gender={patient?.sex || "Unknown"}
+                treatmentData={{
+                  medications: treatmentData.medications.filter(m => m.name),
+                  fluids: treatmentData.ivFluids,
+                  primaryDiagnosis: treatmentData.primaryDiagnosis,
+                  differentialDiagnoses: treatmentData.differentialDiagnoses,
+                  interventions: treatmentData.otherMedications,
+                }}
+                onDiagnosisSelect={(diagnosis) => setTreatmentData((prev) => ({ ...prev, primaryDiagnosis: diagnosis }))}
+              />
             </View>
 
             <View style={[styles.card, { backgroundColor: theme.card }]}>

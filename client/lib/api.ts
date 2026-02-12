@@ -49,7 +49,14 @@ async function handleResponse<T>(res: Response): Promise<ApiResponse<T>> {
       const errorJson = JSON.parse(errorText);
       errorData = errorJson;
       const rawError = errorJson.detail || errorJson.message || errorJson.error || errorText;
-      errorMessage = typeof rawError === 'string' ? rawError : JSON.stringify(rawError);
+      if (typeof rawError === 'string') {
+        errorMessage = rawError;
+      } else if (typeof rawError === 'object' && rawError !== null) {
+        errorMessage = rawError.message || rawError.detail || (typeof rawError.error === 'string' ? rawError.error : JSON.stringify(rawError));
+        errorData = rawError;
+      } else {
+        errorMessage = JSON.stringify(rawError);
+      }
     } catch {
       errorMessage = errorText || res.statusText;
     }

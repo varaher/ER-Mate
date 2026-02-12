@@ -1178,12 +1178,16 @@ export default function CaseSheetScreen() {
         console.error("Commit failed:", res.error);
         const errorData = res.error as any;
         let errorMessage = "Failed to save case. Please try again.";
-        if (errorData?.error === "edit_limit_reached") {
+        if (typeof errorData === "string") {
+          if (errorData.includes("edit_limit") || errorData.includes("Edit limit") || errorData.includes("edits per case")) {
+            errorMessage = "You've reached the edit limit for this case on the free plan. Please upgrade for unlimited edits.";
+          } else {
+            errorMessage = errorData;
+          }
+        } else if (errorData?.error === "edit_limit_reached") {
           errorMessage = errorData.message || "Edit limit reached. Please upgrade for unlimited edits.";
         } else if (Array.isArray(errorData)) {
           errorMessage = errorData.map((e: any) => e.msg || e.message).join(", ");
-        } else if (typeof errorData === "string") {
-          errorMessage = errorData;
         } else if (errorData?.message) {
           errorMessage = errorData.message;
         }
