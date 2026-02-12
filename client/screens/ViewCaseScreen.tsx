@@ -23,6 +23,15 @@ import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteProps = RouteProp<RootStackParamList, "ViewCase">;
 
+const safeText = (val: any): string => {
+  if (val === null || val === undefined) return "";
+  if (typeof val === "object" && val !== null && !Array.isArray(val)) {
+    if ("text" in val) return String(val.text || "");
+    return "";
+  }
+  return String(val);
+};
+
 const getTriageColor = (color?: string) => {
   const colors: Record<string, string> = {
     red: TriageColors.red,
@@ -223,25 +232,25 @@ export default function ViewCaseScreen() {
     </View>
   );
 
-  const InfoRow = ({ label, value }: { label: string; value?: string | number | null }) => (
+  const InfoRow = ({ label, value }: { label: string; value?: any }) => (
     <View style={styles.infoRow}>
       <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>{label}:</Text>
-      <Text style={[styles.infoValue, { color: theme.text }]}>{value || "N/A"}</Text>
+      <Text style={[styles.infoValue, { color: theme.text }]}>{safeText(value) || "N/A"}</Text>
     </View>
   );
 
-  const VitalBox = ({ label, value, unit }: { label: string; value?: string | number | null; unit: string }) => (
+  const VitalBox = ({ label, value, unit }: { label: string; value?: any; unit: string }) => (
     <View style={[styles.vitalBox, { backgroundColor: theme.backgroundSecondary }]}>
       <Text style={[styles.vitalLabel, { color: theme.textSecondary }]}>{label}</Text>
-      <Text style={[styles.vitalValue, { color: theme.text }]}>{value || "-"}</Text>
+      <Text style={[styles.vitalValue, { color: theme.text }]}>{safeText(value) || "-"}</Text>
       <Text style={[styles.vitalUnit, { color: theme.textMuted }]}>{unit}</Text>
     </View>
   );
 
-  const ExamSection = ({ title, status, notes }: { title: string; status?: string; notes?: string }) => (
+  const ExamSection = ({ title, status, notes }: { title: string; status?: any; notes?: any }) => (
     <View style={styles.examSection}>
-      <Text style={[styles.examSectionTitle, { color: theme.text }]}>{title}: {status || "Normal"}</Text>
-      <Text style={[styles.examDetail, { color: theme.textSecondary }]}>{notes || "No additional notes"}</Text>
+      <Text style={[styles.examSectionTitle, { color: theme.text }]}>{title}: {safeText(status) || "Normal"}</Text>
+      <Text style={[styles.examDetail, { color: theme.textSecondary }]}>{safeText(notes) || "No additional notes"}</Text>
     </View>
   );
 
@@ -441,23 +450,23 @@ export default function ViewCaseScreen() {
           <Section title="Adjuncts to Primary Survey">
             {(adjuncts.additional_notes) && (
               <SubSection title="ABG / VBG">
-                <Text style={[styles.text, { color: theme.text }]}>{adjuncts.additional_notes}</Text>
+                <Text style={[styles.text, { color: theme.text }]}>{safeText(adjuncts.additional_notes)}</Text>
               </SubSection>
             )}
             {(adjuncts.ecg_findings) && (
               <SubSection title="ECG">
-                <Text style={[styles.text, { color: theme.text }]}>{adjuncts.ecg_findings}</Text>
+                <Text style={[styles.text, { color: theme.text }]}>{safeText(adjuncts.ecg_findings)}</Text>
               </SubSection>
             )}
             {(adjuncts.efast_status || adjuncts.efast_notes) && (
               <SubSection title="EFAST">
                 <InfoRow label="Status" value={adjuncts.efast_status} />
-                {adjuncts.efast_notes && <Text style={[styles.text, { color: theme.text }]}>{adjuncts.efast_notes}</Text>}
+                {adjuncts.efast_notes && <Text style={[styles.text, { color: theme.text }]}>{safeText(adjuncts.efast_notes)}</Text>}
               </SubSection>
             )}
             {(adjuncts.bedside_echo) && (
               <SubSection title="Bedside Echo">
-                <Text style={[styles.text, { color: theme.text }]}>{adjuncts.bedside_echo}</Text>
+                <Text style={[styles.text, { color: theme.text }]}>{safeText(adjuncts.bedside_echo)}</Text>
               </SubSection>
             )}
           </Section>
@@ -514,7 +523,7 @@ export default function ViewCaseScreen() {
               {editMode ? (
                 <TextInput style={[styles.editableTextArea, { backgroundColor: "#FEF9C3", color: theme.text }]} multiline numberOfLines={4} defaultValue={editableFieldsRef.current.hopi} onChangeText={(text) => updateEditableField("hopi", text)} placeholder="History of present illness..." placeholderTextColor={theme.textMuted} />
               ) : (
-                <Text style={[styles.text, { color: theme.text }]}>{history.hpi || history.events_hopi || caseData.sample?.eventsHopi || "N/A"}</Text>
+                <Text style={[styles.text, { color: theme.text }]}>{safeText(history.hpi) || safeText(history.events_hopi) || safeText(caseData.sample?.eventsHopi) || "N/A"}</Text>
               )}
             </SubSection>
 
@@ -522,7 +531,7 @@ export default function ViewCaseScreen() {
               {editMode ? (
                 <TextInput style={[styles.editableInput, { backgroundColor: "#FEF9C3", color: theme.text }]} defaultValue={editableFieldsRef.current.past_medical} onChangeText={(text) => updateEditableField("past_medical", text)} placeholder="e.g., DM, HTN, CAD (comma separated)" placeholderTextColor={theme.textMuted} />
               ) : (
-                <Text style={[styles.text, { color: theme.text }]}>{Array.isArray(history.past_medical) ? history.past_medical.join(", ") : (history.past_medical || "None")}</Text>
+                <Text style={[styles.text, { color: theme.text }]}>{Array.isArray(history.past_medical) ? history.past_medical.join(", ") : (safeText(history.past_medical) || "None")}</Text>
               )}
             </SubSection>
 
@@ -530,7 +539,7 @@ export default function ViewCaseScreen() {
               {editMode ? (
                 <TextInput style={[styles.editableInput, { backgroundColor: "#FEF9C3", color: theme.text }]} defaultValue={editableFieldsRef.current.past_surgical} onChangeText={(text) => updateEditableField("past_surgical", text)} placeholder="Surgical history..." placeholderTextColor={theme.textMuted} />
               ) : (
-                <Text style={[styles.text, { color: theme.text }]}>{history.past_surgical || "None"}</Text>
+                <Text style={[styles.text, { color: theme.text }]}>{safeText(history.past_surgical) || "None"}</Text>
               )}
             </SubSection>
 
@@ -538,7 +547,7 @@ export default function ViewCaseScreen() {
               {editMode ? (
                 <TextInput style={[styles.editableInput, { backgroundColor: "#FEF9C3", color: theme.text }]} defaultValue={editableFieldsRef.current.allergies} onChangeText={(text) => updateEditableField("allergies", text)} placeholder="Allergies (comma separated)" placeholderTextColor={theme.textMuted} />
               ) : (
-                <Text style={[styles.text, { color: theme.text }]}>{Array.isArray(history.allergies) ? history.allergies.join(", ") : (history.allergies || "NKDA")}</Text>
+                <Text style={[styles.text, { color: theme.text }]}>{Array.isArray(history.allergies) ? history.allergies.join(", ") : (safeText(history.allergies) || "NKDA")}</Text>
               )}
             </SubSection>
 
@@ -546,19 +555,19 @@ export default function ViewCaseScreen() {
               {editMode ? (
                 <TextInput style={[styles.editableInput, { backgroundColor: "#FEF9C3", color: theme.text }]} defaultValue={editableFieldsRef.current.medications} onChangeText={(text) => updateEditableField("medications", text)} placeholder="Current medications..." placeholderTextColor={theme.textMuted} />
               ) : (
-                <Text style={[styles.text, { color: theme.text }]}>{history.medications || history.drug_history || "None"}</Text>
+                <Text style={[styles.text, { color: theme.text }]}>{safeText(history.medications) || safeText(history.drug_history) || "None"}</Text>
               )}
             </SubSection>
 
             {(history.last_meal || history.last_meal_lmp) ? (
               <SubSection title="Last Meal">
-                <Text style={[styles.text, { color: theme.text }]}>{history.last_meal || history.last_meal_lmp || "N/A"}</Text>
+                <Text style={[styles.text, { color: theme.text }]}>{safeText(history.last_meal) || safeText(history.last_meal_lmp) || "N/A"}</Text>
               </SubSection>
             ) : null}
 
             {history.lmp ? (
               <SubSection title="LMP (Last Menstrual Period)">
-                <Text style={[styles.text, { color: theme.text }]}>{history.lmp}</Text>
+                <Text style={[styles.text, { color: theme.text }]}>{safeText(history.lmp)}</Text>
               </SubSection>
             ) : null}
           </Section>
@@ -674,7 +683,7 @@ export default function ViewCaseScreen() {
           {treatment.interventions?.length > 0 && <InfoRow label="Interventions" value={treatment.interventions.join(", ")} />}
           
           <SubSection title="Primary Diagnosis">
-            <Text style={[styles.text, { color: theme.text }]}>{treatment.primary_diagnosis || treatment.provisional_diagnoses?.[0] || "N/A"}</Text>
+            <Text style={[styles.text, { color: theme.text }]}>{safeText(treatment.primary_diagnosis) || safeText(treatment.provisional_diagnoses?.[0]) || "N/A"}</Text>
           </SubSection>
           
           <SubSection title="Differential Diagnoses">
@@ -713,7 +722,7 @@ export default function ViewCaseScreen() {
 
           {treatment.fluids && (
             <SubSection title="IV Fluids">
-              <Text style={[styles.text, { color: theme.text }]}>{treatment.fluids}</Text>
+              <Text style={[styles.text, { color: theme.text }]}>{safeText(treatment.fluids)}</Text>
             </SubSection>
           )}
 
@@ -721,7 +730,7 @@ export default function ViewCaseScreen() {
             {editMode ? (
               <TextInput style={[styles.editableTextArea, { backgroundColor: "#FEF9C3", color: theme.text }]} multiline numberOfLines={3} defaultValue={editableFieldsRef.current.intervention_notes} onChangeText={(text) => updateEditableField("intervention_notes", text)} placeholder="Treatment notes..." placeholderTextColor={theme.textMuted} />
             ) : (
-              <Text style={[styles.text, { color: theme.text }]}>{treatment.intervention_notes || treatment.other_medications || "N/A"}</Text>
+              <Text style={[styles.text, { color: theme.text }]}>{safeText(treatment.intervention_notes) || safeText(treatment.other_medications) || "N/A"}</Text>
             )}
           </SubSection>
         </Section>
@@ -739,7 +748,7 @@ export default function ViewCaseScreen() {
 
         {caseData.er_observation?.notes && (
           <Section title="ER Observation">
-            <Text style={[styles.text, { color: theme.text }]}>{caseData.er_observation.notes}</Text>
+            <Text style={[styles.text, { color: theme.text }]}>{safeText(caseData.er_observation.notes)}</Text>
             {caseData.er_observation.duration && <InfoRow label="Duration" value={caseData.er_observation.duration} />}
           </Section>
         )}
@@ -759,9 +768,9 @@ export default function ViewCaseScreen() {
           const notesList = Array.isArray(addendumNotes) ? addendumNotes : (addendumNotes ? [addendumNotes] : []);
           return (
             <Section title="Addendum Notes">
-              {notesList.length > 0 ? notesList.map((note: string, idx: number) => (
+              {notesList.length > 0 ? notesList.map((note: any, idx: number) => (
                 <View key={idx} style={{ marginBottom: Spacing.sm }}>
-                  <Text style={[styles.text, { color: theme.text }]}>{note}</Text>
+                  <Text style={[styles.text, { color: theme.text }]}>{safeText(note)}</Text>
                 </View>
               )) : (
                 <Text style={[styles.text, { color: theme.textSecondary }]}>No addendum notes</Text>
