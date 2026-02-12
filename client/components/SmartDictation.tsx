@@ -288,13 +288,20 @@ export default function SmartDictation({
         }
       } else {
         await audioRecorder?.stop();
-        const uri = audioRecorder?.uri;
+        let uri = audioRecorder?.uri;
+        if (!uri) {
+          for (let i = 0; i < 20; i++) {
+            await new Promise(r => setTimeout(r, 150));
+            uri = audioRecorder?.uri;
+            if (uri) break;
+          }
+        }
         if (uri) {
           setRecordingUri(uri);
           transcribeRecording(null, uri);
         } else {
           setStep('idle');
-          Alert.alert('Error', 'Recording failed - no audio captured');
+          Alert.alert('Error', 'Recording failed - no audio captured. Please try again.');
         }
       }
     } catch (err) {
