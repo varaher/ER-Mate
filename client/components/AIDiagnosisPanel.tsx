@@ -45,6 +45,7 @@ interface DiagnosisSuggestion {
   id: string;
   diagnosis: string;
   confidence: "high" | "moderate" | "low";
+  severity_rank?: number;
   reasoning: string;
   keyFindings: string[];
   workup: string[];
@@ -273,6 +274,28 @@ export function AIDiagnosisPanel({
     }
   };
 
+  const getSeverityColor = (rank: number) => {
+    switch (rank) {
+      case 1: return "#DC2626";
+      case 2: return "#EA580C";
+      case 3: return "#D97706";
+      case 4: return "#2563EB";
+      case 5: return "#22C55E";
+      default: return theme.textSecondary;
+    }
+  };
+
+  const getSeverityLabel = (rank: number) => {
+    switch (rank) {
+      case 1: return "MOST SEVERE";
+      case 2: return "SEVERE";
+      case 3: return "MODERATE";
+      case 4: return "MILD";
+      case 5: return "LEAST SEVERE";
+      default: return "";
+    }
+  };
+
   const scrollToCitation = (refNum: number) => {
     setShowSources(true);
   };
@@ -313,22 +336,34 @@ export function AIDiagnosisPanel({
   const renderSuggestion = (suggestion: DiagnosisSuggestion, index: number) => {
     const isExpanded = expandedDiagnosis === suggestion.id;
     const feedback = feedbackGiven[suggestion.id];
+    const rank = suggestion.severity_rank || (index + 1);
+    const severityColor = getSeverityColor(rank);
+    const severityLabel = getSeverityLabel(rank);
 
     return (
       <Card key={suggestion.id} style={styles.suggestionCard}>
         <Pressable onPress={() => setExpandedDiagnosis(isExpanded ? null : suggestion.id)}>
           <View style={styles.suggestionHeader}>
             <View style={styles.diagnosisRow}>
-              <View style={[styles.diagnosisNumber, { backgroundColor: getConfidenceColor(suggestion.confidence) }]}>
-                <Text style={styles.diagnosisNumberText}>{index + 1}</Text>
+              <View style={[styles.diagnosisNumber, { backgroundColor: severityColor }]}>
+                <Text style={styles.diagnosisNumberText}>{rank}</Text>
               </View>
-              <Text style={[styles.diagnosisText, { color: theme.text }]} numberOfLines={isExpanded ? undefined : 1}>
-                {suggestion.diagnosis}
-              </Text>
-              <View style={[styles.confidenceBadge, { backgroundColor: getConfidenceColor(suggestion.confidence) + "20" }]}>
-                <Text style={[styles.confidenceText, { color: getConfidenceColor(suggestion.confidence) }]}>
-                  {suggestion.confidence.toUpperCase()}
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.diagnosisText, { color: theme.text }]} numberOfLines={isExpanded ? undefined : 1}>
+                  {suggestion.diagnosis}
                 </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
+                  <View style={[styles.confidenceBadge, { backgroundColor: severityColor + "15" }]}>
+                    <Text style={[styles.confidenceText, { color: severityColor, fontSize: 9 }]}>
+                      {severityLabel}
+                    </Text>
+                  </View>
+                  <View style={[styles.confidenceBadge, { backgroundColor: getConfidenceColor(suggestion.confidence) + "20" }]}>
+                    <Text style={[styles.confidenceText, { color: getConfidenceColor(suggestion.confidence) }]}>
+                      {suggestion.confidence.toUpperCase()}
+                    </Text>
+                  </View>
+                </View>
               </View>
               <Feather name={isExpanded ? "chevron-up" : "chevron-down"} size={18} color={theme.textSecondary} />
             </View>
@@ -586,7 +621,7 @@ export function AIDiagnosisPanel({
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
             <Feather name="list" size={16} color={theme.text} />
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>Differential Diagnoses</Text>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Provisional Diagnoses (Severity Ranked)</Text>
           </View>
           {suggestions.map((s, i) => renderSuggestion(s, i))}
         </View>

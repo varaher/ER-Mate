@@ -33,6 +33,7 @@ export interface DiagnosisSuggestion {
   id: string;
   diagnosis: string;
   confidence: "high" | "moderate" | "low";
+  severity_rank: number;
   reasoning: string;
   keyFindings: string[];
   workup: string[];
@@ -171,11 +172,15 @@ export async function generateDiagnosisSuggestions(caseData: {
   const systemPrompt = `You are an expert emergency medicine physician and clinical decision support system. You have been trained on emergency medicine textbooks including Tintinalli's Emergency Medicine, Rosen's Emergency Medicine, and current clinical practice guidelines.
 
 Your role is to analyze the patient case using evidence-based medicine and provide:
-1. Up to 3 differential diagnoses ranked by likelihood with detailed reasoning
+1. EXACTLY 5 provisional diagnoses ranked by SEVERITY (most severe/life-threatening FIRST, least severe LAST)
 2. Red flags requiring immediate attention with specific time-sensitive actions
 3. For EACH diagnosis: key supporting findings, recommended workup, and initial management
 
 CRITICAL INSTRUCTIONS:
+- You MUST provide exactly 5 provisional diagnoses, no more, no less
+- Rank them by SEVERITY (1 = most severe/dangerous, 5 = least severe/benign), NOT by likelihood
+- The first diagnosis should be the most life-threatening condition to rule out
+- The last diagnosis should be the most benign possibility
 - Cite specific sources using reference numbers [1], [2], etc. from the provided medical literature search results
 - Each diagnosis reasoning MUST include inline citations like "According to [1], ..." or "Per Tintinalli's [2], ..."
 - Include specific diagnostic criteria, clinical decision rules, and guideline recommendations
@@ -185,18 +190,23 @@ CRITICAL INSTRUCTIONS:
 Patient is ${isPediatric ? "PEDIATRIC (age <= 16, use PALS protocols, weight-based dosing)" : "ADULT (use ATLS protocols)"}.
 ${sourcesContext}
 
-Respond in JSON format:
+Respond in JSON format with EXACTLY 5 suggestions ranked by severity (index 0 = most severe, index 4 = least severe):
 {
   "suggestions": [
     {
-      "diagnosis": "Primary diagnosis name",
+      "diagnosis": "Most severe/life-threatening diagnosis to rule out",
+      "severity_rank": 1,
       "confidence": "high|moderate|low",
       "reasoning": "Detailed clinical reasoning with inline citations [1], [2]. Explain the pathophysiology, why this patient's presentation matches, and key distinguishing features from the differential. Reference specific textbook chapters or guideline criteria.",
       "keyFindings": ["Finding 1 that supports this diagnosis", "Finding 2", "Finding 3"],
       "workup": ["Investigation 1 to order", "Investigation 2", "Lab/imaging 3"],
       "management": ["Initial management step 1", "Step 2", "Disposition consideration"],
       "citationRefs": [1, 3, 5]
-    }
+    },
+    { "diagnosis": "2nd most severe...", "severity_rank": 2, "confidence": "...", "reasoning": "...", "keyFindings": [], "workup": [], "management": [], "citationRefs": [] },
+    { "diagnosis": "3rd...", "severity_rank": 3, "confidence": "...", "reasoning": "...", "keyFindings": [], "workup": [], "management": [], "citationRefs": [] },
+    { "diagnosis": "4th...", "severity_rank": 4, "confidence": "...", "reasoning": "...", "keyFindings": [], "workup": [], "management": [], "citationRefs": [] },
+    { "diagnosis": "Least severe/most benign diagnosis", "severity_rank": 5, "confidence": "...", "reasoning": "...", "keyFindings": [], "workup": [], "management": [], "citationRefs": [] }
   ],
   "redFlags": [
     {
@@ -242,7 +252,7 @@ Analyze this case thoroughly. Provide differential diagnoses with evidence-based
 
     const parsed = JSON.parse(content);
 
-    const suggestions: DiagnosisSuggestion[] = (parsed.suggestions || []).map((s: any) => {
+    const suggestions: DiagnosisSuggestion[] = (parsed.suggestions || []).map((s: any, index: number) => {
       const citationRefs: number[] = s.citationRefs || [];
       const citations: Citation[] = citationRefs
         .filter((refNum: number) => refNum >= 1 && refNum <= searchResults.length)
@@ -265,6 +275,7 @@ Analyze this case thoroughly. Provide differential diagnoses with evidence-based
         id: randomUUID(),
         diagnosis: s.diagnosis,
         confidence: s.confidence as "high" | "moderate" | "low",
+        severity_rank: s.severity_rank || (index + 1),
         reasoning: s.reasoning,
         keyFindings: s.keyFindings || [],
         workup: s.workup || [],
