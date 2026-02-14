@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "748928941626",
+    "project_id": "ermate-99a7b",
+    "storage_bucket": "ermate-99a7b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:748928941626:android:703a6eef8468e166733f03",
+        "android_client_info": {
+          "package_name": "com.ermate.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "748928941626-p243s6m10cl8r340hd40huefsogmcg2q.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCU9OZkaChiCj_cPSnKyA7AfosfjKtbT8U"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "748928941626-p243s6m10cl8r340hd40huefsogmcg2q.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
