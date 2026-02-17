@@ -16,16 +16,8 @@ import * as Clipboard from "expo-clipboard";
 import * as Linking from "expo-linking";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
-import { fetchFromApi, apiPost } from "@/lib/api";
+import { getApiUrl } from "@/lib/query-client";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
-
-interface LinkedDevice {
-  id: string;
-  device_name: string;
-  device_type: string;
-  last_active: string;
-  is_current: boolean;
-}
 
 export default function LinkDevicesScreen() {
   const navigation = useNavigation();
@@ -36,48 +28,56 @@ export default function LinkDevicesScreen() {
   const [linkCode, setLinkCode] = useState<string | null>(null);
   const [linkUrl, setLinkUrl] = useState<string | null>(null);
   const [expiresIn, setExpiresIn] = useState(300);
-  const [devices, setDevices] = useState<LinkedDevice[]>([]);
-
-  useEffect(() => {
-    loadLinkedDevices();
-  }, []);
 
   useEffect(() => {
     if (expiresIn > 0 && linkCode) {
       const timer = setInterval(() => {
-        setExpiresIn((prev) => Math.max(0, prev - 1));
+        setExpiresIn((prev) => {
+          if (prev <= 1) {
+            setLinkCode(null);
+            setLinkUrl(null);
+            return 0;
+          }
+          return prev - 1;
+        });
       }, 1000);
       return () => clearInterval(timer);
     }
   }, [expiresIn, linkCode]);
 
-  const loadLinkedDevices = async () => {
-    try {
-      const response = await fetchFromApi<LinkedDevice[]>("/auth/devices");
-      setDevices(response || []);
-    } catch (err) {
-      setDevices([]);
-    }
-  };
-
   const generateLinkCode = async () => {
+    if (!user || !token) {
+      Alert.alert("Not Signed In", "Please sign in first to generate a link code.");
+      return;
+    }
+
     setLoading(true);
     try {
-      const response = await apiPost<{ code: string; url: string; expires_in: number }>(
-        "/auth/generate-link-code",
-        {}
-      );
-      if (response.data) {
-        setLinkCode(response.data.code);
-        setLinkUrl(response.data.url);
-        setExpiresIn(response.data.expires_in || 300);
+      const baseUrl = getApiUrl();
+      const response = await fetch(`${baseUrl}/api/auth/generate-link-code`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.id,
+          userEmail: user.email,
+          userName: user.name,
+          token,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success && result.data) {
+        setLinkCode(result.data.code);
+        setLinkUrl(result.data.url);
+        setExpiresIn(result.data.expires_in || 300);
       } else {
-        throw new Error(response.error || "Failed to generate link code");
+        throw new Error(result.error || "Failed to generate link code");
       }
     } catch (err: any) {
       Alert.alert(
         "Link Generation Failed",
-        "Unable to generate link code. This feature requires the web linking service to be available. Please try again later.",
+        err.message || "Unable to generate link code. Please try again.",
         [{ text: "OK" }]
       );
       setLinkCode(null);
@@ -87,10 +87,17 @@ export default function LinkDevicesScreen() {
     }
   };
 
+  const copyCode = async () => {
+    if (linkCode) {
+      await Clipboard.setStringAsync(linkCode);
+      Alert.alert("Copied!", "Link code copied to clipboard.");
+    }
+  };
+
   const copyLinkUrl = async () => {
     if (linkUrl) {
       await Clipboard.setStringAsync(linkUrl);
-      Alert.alert("Copied!", "Link copied to clipboard. Open it in your browser to connect.");
+      Alert.alert("Copied!", "Link URL copied to clipboard. Open it in your browser.");
     }
   };
 
@@ -104,46 +111,16 @@ export default function LinkDevicesScreen() {
     }
   };
 
-  const unlinkDevice = async (deviceId: string) => {
-    Alert.alert("Unlink Device", "Are you sure you want to remove this device?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Unlink",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await apiPost(`/auth/unlink-device`, { device_id: deviceId });
-            loadLinkedDevices();
-          } catch (err) {
-            setDevices((prev) => prev.filter((d) => d.id !== deviceId));
-          }
-        },
-      },
-    ]);
-  };
-
   const formatExpiry = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
-  const formatLastActive = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    
-    if (diffMins < 1) return "Just now";
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`;
-    return date.toLocaleDateString();
-  };
-
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundDefault }]}>
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingTop: insets.top + 60, paddingBottom: 40 }]}
+        contentContainerStyle={[styles.content, { paddingTop: Spacing.lg, paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={[styles.infoCard, { backgroundColor: theme.primaryLight }]}>
@@ -156,12 +133,12 @@ export default function LinkDevicesScreen() {
 
         <View style={[styles.section, { backgroundColor: theme.card }]}>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>Generate Link</Text>
-          
+
           {!linkCode ? (
             <Pressable
               style={({ pressed }) => [
                 styles.generateBtn,
-                { backgroundColor: theme.primary, opacity: pressed ? 0.8 : 1 },
+                { backgroundColor: theme.primary, opacity: pressed || loading ? 0.8 : 1 },
               ]}
               onPress={generateLinkCode}
               disabled={loading}
@@ -177,13 +154,14 @@ export default function LinkDevicesScreen() {
             </Pressable>
           ) : (
             <View style={styles.linkCodeContainer}>
-              <View style={[styles.codeBox, { backgroundColor: theme.backgroundDefault }]}>
+              <Pressable onPress={copyCode} style={[styles.codeBox, { backgroundColor: theme.backgroundDefault }]}>
                 <Text style={[styles.codeText, { color: theme.primary }]}>{linkCode}</Text>
                 <Text style={[styles.expiryText, { color: expiresIn < 60 ? TriageColors.red : theme.textSecondary }]}>
                   Expires in {formatExpiry(expiresIn)}
                 </Text>
-              </View>
-              
+                <Text style={[styles.tapToCopy, { color: theme.textMuted }]}>Tap to copy code</Text>
+              </Pressable>
+
               <View style={styles.linkActions}>
                 <Pressable
                   style={[styles.linkActionBtn, { backgroundColor: theme.primaryLight }]}
@@ -193,23 +171,21 @@ export default function LinkDevicesScreen() {
                   <Text style={[styles.linkActionText, { color: theme.primary }]}>Copy Link</Text>
                 </Pressable>
                 <Pressable
-                  style={[styles.linkActionBtn, { backgroundColor: theme.successLight }]}
+                  style={[styles.linkActionBtn, { backgroundColor: theme.successLight || theme.primaryLight }]}
                   onPress={openInBrowser}
                 >
-                  <Feather name="external-link" size={18} color={theme.success} />
-                  <Text style={[styles.linkActionText, { color: theme.success }]}>Open Web</Text>
+                  <Feather name="external-link" size={18} color={theme.success || theme.primary} />
+                  <Text style={[styles.linkActionText, { color: theme.success || theme.primary }]}>Open Web</Text>
                 </Pressable>
               </View>
 
-              {expiresIn === 0 ? (
-                <Pressable
-                  style={[styles.refreshBtn, { borderColor: theme.primary }]}
-                  onPress={generateLinkCode}
-                >
-                  <Feather name="refresh-cw" size={16} color={theme.primary} />
-                  <Text style={[styles.refreshText, { color: theme.primary }]}>Generate New Code</Text>
-                </Pressable>
-              ) : null}
+              <Pressable
+                style={[styles.refreshBtn, { borderColor: theme.primary }]}
+                onPress={generateLinkCode}
+              >
+                <Feather name="refresh-cw" size={16} color={theme.primary} />
+                <Text style={[styles.refreshText, { color: theme.primary }]}>Generate New Code</Text>
+              </Pressable>
             </View>
           )}
 
@@ -220,7 +196,7 @@ export default function LinkDevicesScreen() {
                 <Text style={[styles.stepNumberText, { color: theme.primary }]}>1</Text>
               </View>
               <Text style={[styles.stepText, { color: theme.textSecondary }]}>
-                Open ermate-web.replit.app in your browser
+                Open ErMate in your computer browser
               </Text>
             </View>
             <View style={styles.step}>
@@ -241,43 +217,6 @@ export default function LinkDevicesScreen() {
             </View>
           </View>
         </View>
-
-        {devices.length > 0 ? (
-          <View style={[styles.section, { backgroundColor: theme.card }]}>
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>Linked Devices</Text>
-            {devices.map((device) => (
-              <View
-                key={device.id}
-                style={[styles.deviceItem, { borderBottomColor: theme.border }]}
-              >
-                <View style={[styles.deviceIcon, { backgroundColor: theme.primaryLight }]}>
-                  <Feather
-                    name={device.device_type === "mobile" ? "smartphone" : "monitor"}
-                    size={20}
-                    color={theme.primary}
-                  />
-                </View>
-                <View style={styles.deviceInfo}>
-                  <Text style={[styles.deviceName, { color: theme.text }]}>
-                    {device.device_name}
-                    {device.is_current ? " (This device)" : ""}
-                  </Text>
-                  <Text style={[styles.deviceLastActive, { color: theme.textSecondary }]}>
-                    Last active: {formatLastActive(device.last_active)}
-                  </Text>
-                </View>
-                {!device.is_current ? (
-                  <Pressable
-                    style={[styles.unlinkBtn, { backgroundColor: theme.dangerLight }]}
-                    onPress={() => unlinkDevice(device.id)}
-                  >
-                    <Feather name="x" size={16} color={theme.danger} />
-                  </Pressable>
-                ) : null}
-              </View>
-            ))}
-          </View>
-        ) : null}
       </ScrollView>
     </View>
   );
@@ -316,9 +255,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing["3xl"],
     borderRadius: BorderRadius.lg,
     marginBottom: Spacing.md,
+    width: "100%",
   },
   codeText: { fontSize: 32, fontWeight: "700", letterSpacing: 8 },
   expiryText: { ...Typography.small, marginTop: Spacing.sm },
+  tapToCopy: { ...Typography.caption, marginTop: Spacing.xs },
   linkActions: {
     flexDirection: "row",
     gap: Spacing.md,
@@ -356,28 +297,4 @@ const styles = StyleSheet.create({
   },
   stepNumberText: { ...Typography.label },
   stepText: { ...Typography.body, flex: 1 },
-  deviceItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: Spacing.md,
-    borderBottomWidth: 1,
-  },
-  deviceIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: Spacing.md,
-  },
-  deviceInfo: { flex: 1 },
-  deviceName: { ...Typography.body },
-  deviceLastActive: { ...Typography.small },
-  unlinkBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: "center",
-    alignItems: "center",
-  },
 });

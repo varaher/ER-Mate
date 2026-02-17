@@ -126,7 +126,104 @@ function formatSecondaryAssessment(assessment: DischargeSummaryData["discharge_s
   return findings.length > 0 ? findings.join(", ") : "No significant findings";
 }
 
+const linkCodes = new Map<string, { userId: string; userEmail: string; userName: string; token: string; createdAt: number; expiresAt: number }>();
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [code, data] of linkCodes.entries()) {
+    if (now > data.expiresAt) {
+      linkCodes.delete(code);
+    }
+  }
+}, 60000);
+
+function generateCode(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let code = "";
+  for (let i = 0; i < 6; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return code;
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
+  app.post("/api/auth/generate-link-code", async (req: Request, res: Response) => {
+    try {
+      const { userId, userEmail, userName, token } = req.body;
+
+      if (!userId || !token) {
+        return res.status(400).json({ error: "userId and token are required" });
+      }
+
+      let code = generateCode();
+      while (linkCodes.has(code)) {
+        code = generateCode();
+      }
+
+      const now = Date.now();
+      const expiresIn = 300;
+      linkCodes.set(code, {
+        userId,
+        userEmail: userEmail || "",
+        userName: userName || "",
+        token,
+        createdAt: now,
+        expiresAt: now + expiresIn * 1000,
+      });
+
+      const domain = process.env.REPLIT_DEV_DOMAIN || process.env.REPL_SLUG + ".replit.app";
+      const url = `https://${domain}/link?code=${code}`;
+
+      res.json({
+        success: true,
+        data: {
+          code,
+          url,
+          expires_in: expiresIn,
+        },
+      });
+    } catch (error) {
+      console.error("[Link Code] Generate error:", error);
+      res.status(500).json({ error: "Failed to generate link code" });
+    }
+  });
+
+  app.get("/api/auth/verify-link-code", async (req: Request, res: Response) => {
+    try {
+      const code = (req.query.code as string || "").toUpperCase();
+
+      if (!code) {
+        return res.status(400).json({ error: "Code is required" });
+      }
+
+      const linkData = linkCodes.get(code);
+
+      if (!linkData) {
+        return res.status(404).json({ error: "Invalid or expired code" });
+      }
+
+      if (Date.now() > linkData.expiresAt) {
+        linkCodes.delete(code);
+        return res.status(410).json({ error: "Code has expired" });
+      }
+
+      linkCodes.delete(code);
+
+      res.json({
+        success: true,
+        access_token: linkData.token,
+        user: {
+          id: linkData.userId,
+          email: linkData.userEmail,
+          name: linkData.userName,
+        },
+      });
+    } catch (error) {
+      console.error("[Link Code] Verify error:", error);
+      res.status(500).json({ error: "Failed to verify link code" });
+    }
+  });
+
   app.post("/api/auth/google", async (req: Request, res: Response) => {
     try {
       const { idToken, accessToken, name, email } = req.body;
