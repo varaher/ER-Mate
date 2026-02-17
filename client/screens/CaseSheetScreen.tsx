@@ -2359,6 +2359,27 @@ export default function CaseSheetScreen() {
 
             <Text style={[styles.sectionHeading, { color: theme.text }]}>Adjuncts to Primary Survey</Text>
             <CollapsibleSection title="ABG / VBG" icon="+" iconColor={theme.primary}>
+              <Pressable style={[styles.fillNormalBtn, { backgroundColor: `${TriageColors.green}15`, borderColor: TriageColors.green }]} onPress={() => {
+                updateFormData("adjuncts", "abgPh", "7.40");
+                updateFormData("adjuncts", "abgPco2", "40");
+                updateFormData("adjuncts", "abgPo2", "95");
+                updateFormData("adjuncts", "abgHco3", "24");
+                updateFormData("adjuncts", "abgBe", "0");
+                updateFormData("adjuncts", "abgLactate", "1.0");
+                updateFormData("adjuncts", "abgSao2", "98");
+                updateFormData("adjuncts", "abgFio2", "21");
+                updateFormData("adjuncts", "abgNa", "140");
+                updateFormData("adjuncts", "abgK", "4.0");
+                updateFormData("adjuncts", "abgCl", "103");
+                updateFormData("adjuncts", "abgAnionGap", "12");
+                updateFormData("adjuncts", "abgGlucose", "100");
+                updateFormData("adjuncts", "abgHb", "14");
+                updateFormData("adjuncts", "abgAaGradient", "10");
+              }}>
+                <Feather name="check-circle" size={16} color={TriageColors.green} />
+                <Text style={[styles.fillNormalBtnText, { color: TriageColors.green }]}>Fill Normal Values</Text>
+              </Pressable>
+
               <View style={styles.abgRow}>
                 <View style={styles.abgHalfField}>
                   <DropdownField label="Sample Type" options={ABG_SAMPLE_TYPE_OPTIONS} value={formData.adjuncts.abgSampleType} onChange={(v) => updateFormData("adjuncts", "abgSampleType", v)} />
@@ -3224,6 +3245,8 @@ const styles = StyleSheet.create({
   abgNormalItem: { width: "48%", flexDirection: "row", justifyContent: "space-between", paddingVertical: 4 },
   abgNormalLabel: { ...Typography.caption },
   abgNormalValue: { ...Typography.caption, fontWeight: "600" },
+  fillNormalBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1, gap: Spacing.sm, marginBottom: Spacing.md },
+  fillNormalBtnText: { ...Typography.bodyMedium, fontWeight: "600" },
   aiInterpretBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, borderRadius: BorderRadius.md, gap: Spacing.sm, marginTop: Spacing.sm },
   aiInterpretBtnText: { ...Typography.bodyMedium, color: "#FFFFFF", fontWeight: "600" },
   abgInterpretationCard: { padding: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1, marginTop: Spacing.md },
