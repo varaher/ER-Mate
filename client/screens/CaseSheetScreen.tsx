@@ -2466,9 +2466,12 @@ export default function CaseSheetScreen() {
               </Pressable>
 
               {abgInterpretation && (
-                <View style={[styles.abgInterpretationCard, { backgroundColor: "#F3E8FF", borderColor: "#8B5CF6" }]}>
-                  <Text style={[styles.abgInterpretationTitle, { color: "#6B21A8" }]}>AI Interpretation</Text>
-                  <Text style={[styles.abgInterpretationText, { color: "#4C1D95" }]}>{abgInterpretation}</Text>
+                <View style={[styles.abgInterpretationCard, { backgroundColor: `${theme.primary}10`, borderColor: theme.primary }]}>
+                  <View style={styles.abgInterpretationHeader}>
+                    <Feather name="cpu" size={16} color={theme.primary} />
+                    <Text style={[styles.abgInterpretationTitle, { color: theme.primary }]}>AI Interpretation</Text>
+                  </View>
+                  <Text style={[styles.abgInterpretationText, { color: theme.text }]}>{abgInterpretation}</Text>
                 </View>
               )}
 
@@ -3224,7 +3227,8 @@ const styles = StyleSheet.create({
   aiInterpretBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, borderRadius: BorderRadius.md, gap: Spacing.sm, marginTop: Spacing.sm },
   aiInterpretBtnText: { ...Typography.bodyMedium, color: "#FFFFFF", fontWeight: "600" },
   abgInterpretationCard: { padding: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1, marginTop: Spacing.md },
-  abgInterpretationTitle: { ...Typography.bodyMedium, fontWeight: "700", marginBottom: Spacing.xs },
+  abgInterpretationHeader: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginBottom: Spacing.sm },
+  abgInterpretationTitle: { ...Typography.bodyMedium, fontWeight: "700" },
   abgInterpretationText: { ...Typography.body, lineHeight: 22 },
   checkbox: { width: 22, height: 22, borderWidth: 2, borderRadius: 4, justifyContent: "center", alignItems: "center" },
   procedureLabel: { ...Typography.body, flex: 1 },
