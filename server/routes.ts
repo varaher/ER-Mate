@@ -4,6 +4,7 @@ import PDFDocument from "pdfkit";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, BorderStyle } from "docx";
 import multer from "multer";
 import { generateDiagnosisSuggestions, recordFeedback, getFeedbackStats, getLearningInsights, generateCourseInHospital, extractClinicalDataFromVoice, transcribeAndExtractVoice, type AIFeedback, type FeedbackResult, type ExtractedClinicalData } from "./services/aiDiagnosis";
+import { getOrCreateSubscription, canCreateCase, incrementCaseCount, activatePremium, cancelSubscription, FREE_CASE_LIMIT, PREMIUM_PRICE_INR } from "./services/subscription";
 
 const upload = multer({ 
   storage: multer.memoryStorage(),
@@ -2056,6 +2057,97 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Treatment recommendations error:", error);
       res.status(500).json({ error: "Failed to get recommendations" });
+    }
+  });
+
+  app.get("/api/subscription/status", async (req: Request, res: Response) => {
+    try {
+      const userId = req.query.userId as string;
+      const userEmail = req.query.userEmail as string;
+
+      if (!userId) {
+        return res.status(400).json({ error: "userId is required" });
+      }
+
+      const sub = await getOrCreateSubscription(userId, userEmail || "");
+      res.json({
+        plan: sub.plan,
+        status: sub.status,
+        casesUsed: sub.casesUsed,
+        casesLimit: sub.casesLimit,
+        casesRemaining: sub.plan === "free" ? Math.max(0, sub.casesLimit - sub.casesUsed) : null,
+        currentPeriodEnd: sub.currentPeriodEnd,
+        priceInr: PREMIUM_PRICE_INR,
+        freeCaseLimit: FREE_CASE_LIMIT,
+      });
+    } catch (error) {
+      console.error("Subscription status error:", error);
+      res.status(500).json({ error: "Failed to get subscription status" });
+    }
+  });
+
+  app.post("/api/subscription/check-case", async (req: Request, res: Response) => {
+    try {
+      const { userId, userEmail } = req.body;
+
+      if (!userId) {
+        return res.status(400).json({ error: "userId is required" });
+      }
+
+      const result = await canCreateCase(userId, userEmail || "");
+      res.json(result);
+    } catch (error) {
+      console.error("Check case error:", error);
+      res.status(500).json({ error: "Failed to check case limit" });
+    }
+  });
+
+  app.post("/api/subscription/increment-case", async (req: Request, res: Response) => {
+    try {
+      const { userId, userEmail } = req.body;
+
+      if (!userId) {
+        return res.status(400).json({ error: "userId is required" });
+      }
+
+      const result = await incrementCaseCount(userId, userEmail || "");
+      res.json(result);
+    } catch (error) {
+      console.error("Increment case error:", error);
+      res.status(500).json({ error: "Failed to increment case count" });
+    }
+  });
+
+  app.post("/api/subscription/activate-premium", async (req: Request, res: Response) => {
+    try {
+      const { userId, stripeCustomerId, stripeSubscriptionId } = req.body;
+
+      if (!userId) {
+        return res.status(400).json({ error: "userId is required" });
+      }
+
+      await activatePremium(userId, stripeCustomerId, stripeSubscriptionId);
+      const sub = await getOrCreateSubscription(userId, "");
+      res.json({ success: true, subscription: sub });
+    } catch (error) {
+      console.error("Activate premium error:", error);
+      res.status(500).json({ error: "Failed to activate premium" });
+    }
+  });
+
+  app.post("/api/subscription/cancel", async (req: Request, res: Response) => {
+    try {
+      const { userId } = req.body;
+
+      if (!userId) {
+        return res.status(400).json({ error: "userId is required" });
+      }
+
+      await cancelSubscription(userId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Cancel subscription error:", error);
+      res.status(500).json({ error: "Failed to cancel subscription" });
     }
   });
 

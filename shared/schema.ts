@@ -66,3 +66,28 @@ export const insertTreatmentHistorySchema = createInsertSchema(treatmentHistory)
 
 export type TreatmentHistoryRecord = typeof treatmentHistory.$inferSelect;
 export type InsertTreatmentHistory = z.infer<typeof insertTreatmentHistorySchema>;
+
+export const subscriptions = pgTable("subscriptions", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  userEmail: text("user_email").notNull(),
+  plan: text("plan").notNull().default("free"),
+  status: text("status").notNull().default("active"),
+  casesUsed: integer("cases_used").notNull().default(0),
+  casesLimit: integer("cases_limit").notNull().default(10),
+  currentPeriodStart: timestamp("current_period_start").default(sql`CURRENT_TIMESTAMP`),
+  currentPeriodEnd: timestamp("current_period_end"),
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertSubscriptionSchema = createInsertSchema(subscriptions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type SubscriptionRecord = typeof subscriptions.$inferSelect;
+export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;

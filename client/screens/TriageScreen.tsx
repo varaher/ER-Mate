@@ -19,6 +19,7 @@ import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollV
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { apiPost, apiUpload, invalidateCases } from "@/lib/api";
+import { getApiUrl } from "@/lib/query-client";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { getVitalRanges, getAgeGroup, getAgeGroupLabel, isPediatric, type VitalRanges } from "@/lib/pediatricVitals";
@@ -567,17 +568,39 @@ export default function TriageScreen() {
   };
 
   const handleSave = async () => {
-    // Check ref value for name (ref has latest typed values)
     const currentName = formDataRef.current.name || formData.name;
     if (!currentName) {
       Alert.alert("Required", "Please enter patient name");
       return;
     }
 
-    const fd = getFormWithDefaults();
     setLoading(true);
 
     try {
+      if (user?.id) {
+        const baseUrl = getApiUrl();
+        const checkRes = await fetch(`${baseUrl}/api/subscription/check-case`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: user.id, userEmail: user.email || "" }),
+        });
+        const checkData = await checkRes.json();
+
+        if (!checkData.allowed) {
+          setLoading(false);
+          Alert.alert(
+            "Case Limit Reached",
+            `You have used all ${checkData.casesLimit} free cases. Upgrade to Premium for unlimited cases.`,
+            [
+              { text: "Upgrade", onPress: () => navigation.navigate("Upgrade" as any, { lockReason: "Case Limit Reached", lockMessage: `You have used ${checkData.casesUsed} of ${checkData.casesLimit} free cases.` }) },
+              { text: "Cancel", style: "cancel" },
+            ]
+          );
+          return;
+        }
+      }
+
+      const fd = getFormWithDefaults();
       const payload = {
         patient: {
           name: fd.name,
@@ -627,6 +650,20 @@ export default function TriageScreen() {
         console.log("[TriageScreen] Success! Case saved with id:", caseId);
         
         await invalidateCases();
+
+        if (user?.id) {
+          try {
+            const baseUrl = getApiUrl();
+            await fetch(`${baseUrl}/api/subscription/increment-case`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ userId: user.id, userEmail: user.email || "" }),
+            });
+          } catch (e) {
+            console.log("[TriageScreen] Failed to increment case count:", e);
+          }
+        }
+
         if (caseId) {
           setSavedCaseId(String(caseId));
         }
