@@ -267,15 +267,23 @@ export default function SmartDictation({
           Alert.alert('Permission Required', 'Microphone access is needed for voice recording');
           return;
         }
+
+        if (nativeRecordingRef.current) {
+          try {
+            await nativeRecordingRef.current.stopAndUnloadAsync();
+          } catch {}
+          nativeRecordingRef.current = null;
+        }
+
         await Audio.setAudioModeAsync({
           allowsRecordingIOS: true,
           playsInSilentModeIOS: true,
           staysActiveInBackground: false,
           shouldDuckAndroid: true,
         });
-        const recording = new Audio.Recording();
-        await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-        await recording.startAsync();
+        const { recording } = await Audio.Recording.createAsync(
+          Audio.RecordingOptionsPresets.HIGH_QUALITY
+        );
         nativeRecordingRef.current = recording;
         setStep('recording');
       }
