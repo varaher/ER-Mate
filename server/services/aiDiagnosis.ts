@@ -706,7 +706,9 @@ You MUST format your response EXACTLY as numbered sections using this structure:
 
 5. **Suggested actions:** [If critical values present, suggest immediate actions. If normal, state no urgent action needed.]
 
-Each section MUST start with the number and bold heading as shown above. Use **bold** for key findings and abnormal values within each section.`;
+Each section MUST start with the number and bold heading as shown above. Use **bold** for key findings and abnormal values within each section.
+
+IMPORTANT: After the 5 sections, add a final line starting with "SUMMARY:" followed by a single concise one-line clinical ABG diagnosis (e.g., "SUMMARY: Primary respiratory alkalosis with compensatory metabolic acidosis and mild hypoxemia"). This summary should be suitable as a final ABG diagnosis label.`;
 
   try {
     const response = await openai.chat.completions.create({
@@ -719,7 +721,7 @@ Each section MUST start with the number and bold heading as shown above. Use **b
         { role: "user", content: prompt },
       ],
       temperature: 0.3,
-      max_tokens: 800,
+      max_tokens: 900,
     });
 
     return response.choices[0]?.message?.content || "Unable to interpret ABG values";

@@ -761,6 +761,29 @@ export default function CaseSheetScreen() {
         }
         if (res.data.adjuncts) {
           Object.assign(newFormData.adjuncts, res.data.adjuncts);
+          if (res.data.adjuncts.abg) {
+            const abg = res.data.adjuncts.abg;
+            newFormData.adjuncts.abgSampleType = abg.sample_type || newFormData.adjuncts.abgSampleType || "";
+            newFormData.adjuncts.abgPh = abg.ph || newFormData.adjuncts.abgPh || "";
+            newFormData.adjuncts.abgPco2 = abg.pco2 || newFormData.adjuncts.abgPco2 || "";
+            newFormData.adjuncts.abgPo2 = abg.po2 || newFormData.adjuncts.abgPo2 || "";
+            newFormData.adjuncts.abgHco3 = abg.hco3 || newFormData.adjuncts.abgHco3 || "";
+            newFormData.adjuncts.abgBe = abg.be || newFormData.adjuncts.abgBe || "";
+            newFormData.adjuncts.abgLactate = abg.lactate || newFormData.adjuncts.abgLactate || "";
+            newFormData.adjuncts.abgSao2 = abg.sao2 || newFormData.adjuncts.abgSao2 || "";
+            newFormData.adjuncts.abgFio2 = abg.fio2 || newFormData.adjuncts.abgFio2 || "";
+            newFormData.adjuncts.abgNa = abg.na || newFormData.adjuncts.abgNa || "";
+            newFormData.adjuncts.abgK = abg.k || newFormData.adjuncts.abgK || "";
+            newFormData.adjuncts.abgCl = abg.cl || newFormData.adjuncts.abgCl || "";
+            newFormData.adjuncts.abgAnionGap = abg.anion_gap || newFormData.adjuncts.abgAnionGap || "";
+            newFormData.adjuncts.abgGlucose = abg.glucose || newFormData.adjuncts.abgGlucose || "";
+            newFormData.adjuncts.abgHb = abg.hb || newFormData.adjuncts.abgHb || "";
+            newFormData.adjuncts.abgAaGradient = abg.aa_gradient || newFormData.adjuncts.abgAaGradient || "";
+            newFormData.adjuncts.abgStatus = abg.status || newFormData.adjuncts.abgStatus || "";
+            newFormData.adjuncts.abgInterpretation = abg.interpretation || newFormData.adjuncts.abgInterpretation || "";
+            newFormData.adjuncts.abgFinalDiagnosis = abg.final_diagnosis || newFormData.adjuncts.abgFinalDiagnosis || "";
+            if (abg.ai_interpretation) setAbgInterpretation(abg.ai_interpretation);
+          }
         }
         if (res.data.sample) {
           Object.assign(newFormData.sample, res.data.sample);
@@ -1011,10 +1034,33 @@ export default function CaseSheetScreen() {
       },
       adjuncts: {
         ecg_findings: formData.adjuncts.ecgNotes || "",
+        ecg_status: formData.adjuncts.ecgStatus || "",
         bedside_echo: formData.adjuncts.echoNotes || "",
         additional_notes: formData.adjuncts.abgNotes || "",
         efast_status: formData.adjuncts.efastStatus || "",
         efast_notes: formData.adjuncts.efastNotes || "",
+        abg: {
+          sample_type: formData.adjuncts.abgSampleType || "",
+          ph: formData.adjuncts.abgPh || "",
+          pco2: formData.adjuncts.abgPco2 || "",
+          po2: formData.adjuncts.abgPo2 || "",
+          hco3: formData.adjuncts.abgHco3 || "",
+          be: formData.adjuncts.abgBe || "",
+          lactate: formData.adjuncts.abgLactate || "",
+          sao2: formData.adjuncts.abgSao2 || "",
+          fio2: formData.adjuncts.abgFio2 || "",
+          na: formData.adjuncts.abgNa || "",
+          k: formData.adjuncts.abgK || "",
+          cl: formData.adjuncts.abgCl || "",
+          anion_gap: formData.adjuncts.abgAnionGap || "",
+          glucose: formData.adjuncts.abgGlucose || "",
+          hb: formData.adjuncts.abgHb || "",
+          aa_gradient: formData.adjuncts.abgAaGradient || "",
+          status: formData.adjuncts.abgStatus || "",
+          interpretation: formData.adjuncts.abgInterpretation || "",
+          ai_interpretation: abgInterpretation || "",
+          final_diagnosis: formData.adjuncts.abgFinalDiagnosis || "",
+        },
       },
       sample: formData.sample,
       history: {
@@ -2586,7 +2632,7 @@ export default function CaseSheetScreen() {
                     <Feather name="cpu" size={16} color={theme.primary} />
                     <Text style={[styles.abgInterpretationTitle, { color: theme.primary }]}>AI Interpretation</Text>
                   </View>
-                  {abgInterpretation.split(/\n\n|\n(?=\d+\.)/).map((section, idx) => {
+                  {abgInterpretation.split(/\n\n|\n(?=\d+\.)/).filter(s => !s.trim().startsWith("SUMMARY:")).map((section, idx) => {
                     const cleaned = section.trim();
                     if (!cleaned) return null;
                     const parts = cleaned.split(/(\*\*[^*]+\*\*)/g);
@@ -2606,16 +2652,20 @@ export default function CaseSheetScreen() {
                   <Pressable
                     style={[styles.abgCopyDxBtn, { borderColor: theme.primary }]}
                     onPress={() => {
-                      const lines = abgInterpretation.replace(/\*\*/g, '').split('\n');
-                      const filtered: string[] = [];
-                      let sectionCount = 0;
-                      for (const line of lines) {
-                        if (/^\d+\.\s/.test(line.trim())) sectionCount++;
-                        if (sectionCount > 3) break;
-                        filtered.push(line);
+                      const summaryMatch = abgInterpretation.match(/SUMMARY:\s*(.+)/i);
+                      if (summaryMatch) {
+                        updateFormData("adjuncts", "abgFinalDiagnosis", summaryMatch[1].replace(/\*\*/g, '').trim());
+                      } else {
+                        const lines = abgInterpretation.replace(/\*\*/g, '').split('\n');
+                        const firstSection = lines.find(l => /^1\.\s/.test(l.trim()));
+                        if (firstSection) {
+                          const diagnosis = firstSection.replace(/^1\.\s*(Acid-base status:?\s*)?/i, '').trim();
+                          updateFormData("adjuncts", "abgFinalDiagnosis", diagnosis);
+                        } else {
+                          updateFormData("adjuncts", "abgFinalDiagnosis", abgInterpretation.replace(/\*\*/g, '').split('\n')[0].trim());
+                        }
                       }
-                      updateFormData("adjuncts", "abgFinalDiagnosis", filtered.join('\n').trim());
-                      Alert.alert("Copied", "First 3 sections copied to Final ABG Diagnosis.");
+                      Alert.alert("Copied", "ABG diagnosis copied to Final ABG Diagnosis.");
                     }}
                   >
                     <Feather name="copy" size={14} color={theme.primary} />
