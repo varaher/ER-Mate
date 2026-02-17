@@ -724,6 +724,91 @@ Be concise but clinically relevant. Format as a clear, readable paragraph.`;
   }
 }
 
+export interface ABGScanResult {
+  ph?: string;
+  pco2?: string;
+  po2?: string;
+  hco3?: string;
+  be?: string;
+  lactate?: string;
+  sao2?: string;
+  fio2?: string;
+  na?: string;
+  k?: string;
+  cl?: string;
+  anionGap?: string;
+  glucose?: string;
+  hb?: string;
+  aaGradient?: string;
+  sampleType?: string;
+}
+
+export async function extractABGFromImage(imageBase64: string): Promise<ABGScanResult> {
+  const openai = getOpenAIClient();
+  if (!openai) {
+    throw new Error("AI service not available");
+  }
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: `You are an expert at reading ABG (Arterial/Venous Blood Gas) machine printouts from devices like Radiometer ABL800, i-STAT, GEM Premier, etc. Extract ONLY the numeric values without units. Be precise - read the exact numbers from the printout. If a value is not visible or unreadable, omit it.`
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: `Extract all ABG/VBG values from this blood gas report printout. Return ONLY numeric values without units. Respond in JSON:
+{
+  "ph": "pH value (e.g. 7.438)",
+  "pco2": "pCO2 in mmHg (e.g. 31.1)",
+  "po2": "pO2 in mmHg (e.g. 64.5)",
+  "hco3": "HCO3/Bicarbonate in mEq/L - use cHCO3 or standard HCO3 (e.g. 22.5)",
+  "be": "Base Excess in mEq/L - use cBase(Ecf) or BE (e.g. -2.8)",
+  "lactate": "Lactate in mmol/L (e.g. 2.2)",
+  "sao2": "SaO2/sO2 percentage without % (e.g. 91.0)",
+  "fio2": "FiO2 percentage without % (e.g. 21.0)",
+  "na": "Sodium/cNa in mEq/L (e.g. 126)",
+  "k": "Potassium/cK in mEq/L (e.g. 4.1)",
+  "cl": "Chloride/cCl in mEq/L (e.g. 99)",
+  "anionGap": "Anion Gap value (e.g. 6.0)",
+  "glucose": "Glucose/cGlu in mg/dL (e.g. 177)",
+  "hb": "Hemoglobin/ctHb in g/dL (e.g. 13.2)",
+  "aaGradient": "A-a gradient if shown",
+  "sampleType": "Arterial or Venous if indicated"
+}
+Only include fields with actual values. Omit empty or unreadable fields.`
+            },
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:image/jpeg;base64,${imageBase64}`,
+                detail: "high"
+              }
+            }
+          ]
+        }
+      ],
+      max_tokens: 1000,
+      response_format: { type: "json_object" },
+    });
+
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      throw new Error("Empty response from AI");
+    }
+
+    return JSON.parse(content) as ABGScanResult;
+  } catch (error) {
+    console.error("ABG scan extraction error:", error);
+    throw new Error("Failed to extract ABG values from image");
+  }
+}
+
 export interface ImageExtractedData {
   chiefComplaint?: string;
   hpiNotes?: string;

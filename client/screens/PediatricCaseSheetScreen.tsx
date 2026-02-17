@@ -310,7 +310,7 @@ export default function PediatricCaseSheetScreen() {
   });
   const [efastData, setEfastData] = useState<EFASTFormData>({ heart: "", abdomen: "", lungs: "", pelvis: "" });
   const [abgData, setAbgData] = useState({
-    ph: "", pco2: "", po2: "", hco3: "", be: "", lactate: "", sao2: "", fio2: "", na: "", k: "", cl: "", anionGap: "", glucose: "", hb: "", aaGradient: "", notes: "", interpretation: ""
+    ph: "", pco2: "", po2: "", hco3: "", be: "", lactate: "", sao2: "", fio2: "", na: "", k: "", cl: "", anionGap: "", glucose: "", hb: "", aaGradient: "", notes: "", interpretation: "", finalDiagnosis: ""
   });
   const [abgInterpreting, setAbgInterpreting] = useState(false);
   const [abgInterpretation, setAbgInterpretation] = useState<string | null>(null);
@@ -392,7 +392,7 @@ export default function PediatricCaseSheetScreen() {
         be: abg.be || "", lactate: abg.lactate || "", sao2: abg.sao2 || "", fio2: abg.fio2 || "",
         na: abg.na || "", k: abg.k || "", cl: abg.cl || "", anionGap: abg.anionGap || "",
         glucose: abg.glucose || "", hb: abg.hb || "", aaGradient: abg.aaGradient || "",
-        notes: abg.notes || "", interpretation: abg.interpretation || "",
+        notes: abg.notes || "", interpretation: abg.interpretation || "", finalDiagnosis: abg.finalDiagnosis || "",
       });
     }
     if (caseSheetData.history) {
@@ -1497,7 +1497,7 @@ export default function PediatricCaseSheetScreen() {
                 setAbgData({
                   ph: "7.40", pco2: "40", po2: "95", hco3: "24", be: "0", lactate: "1.0",
                   sao2: "98", fio2: "21", na: "140", k: "4.0", cl: "103", anionGap: "12",
-                  glucose: "100", hb: "12", aaGradient: "10", notes: abgData.notes, interpretation: abgData.interpretation,
+                  glucose: "100", hb: "12", aaGradient: "10", notes: abgData.notes, interpretation: abgData.interpretation, finalDiagnosis: abgData.finalDiagnosis,
                 });
               }}>
                 <Feather name="check-circle" size={16} color={TriageColors.green} />
@@ -1606,10 +1606,38 @@ export default function PediatricCaseSheetScreen() {
                     <Feather name="cpu" size={16} color={theme.primary} />
                     <Text style={[styles.abgInterpretationTitle, { color: theme.primary }]}>AI Interpretation</Text>
                   </View>
-                  <Text style={[styles.abgInterpretationText, { color: theme.text }]}>{abgInterpretation}</Text>
+                  {abgInterpretation.split(/\n\n|\n(?=\d+\.)/).map((section, idx) => {
+                    const cleaned = section.trim();
+                    if (!cleaned) return null;
+                    const parts = cleaned.split(/(\*\*[^*]+\*\*)/g);
+                    return (
+                      <View key={idx} style={idx > 0 ? { marginTop: Spacing.sm } : undefined}>
+                        <Text style={[styles.abgInterpretationText, { color: theme.text }]}>
+                          {parts.map((part, pidx) => {
+                            if (part.startsWith("**") && part.endsWith("**")) {
+                              return <Text key={pidx} style={{ fontWeight: "700", color: theme.primary }}>{part.slice(2, -2)}</Text>;
+                            }
+                            return <Text key={pidx}>{part}</Text>;
+                          })}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                  <Pressable
+                    style={[styles.abgCopyDxBtn, { borderColor: theme.primary }]}
+                    onPress={() => {
+                      setAbgData((p) => ({ ...p, finalDiagnosis: abgInterpretation.replace(/\*\*/g, '') }));
+                      Alert.alert("Copied", "AI interpretation copied to Final ABG Diagnosis.");
+                    }}
+                  >
+                    <Feather name="copy" size={14} color={theme.primary} />
+                    <Text style={[styles.abgCopyDxBtnText, { color: theme.primary }]}>Copy to Final ABG Diagnosis</Text>
+                  </Pressable>
                 </View>
               )}
 
+              <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.md }]}>Final ABG Diagnosis</Text>
+              <TextInput style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="e.g. Mixed respiratory and metabolic acidosis with lactic acidosis" placeholderTextColor={theme.textMuted} value={abgData.finalDiagnosis || ""} onChangeText={(v) => setAbgData((p) => ({ ...p, finalDiagnosis: v }))} multiline numberOfLines={3} />
               <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.md }]}>Your Interpretation (Optional)</Text>
               <TextInput style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Your clinical interpretation of the ABG..." placeholderTextColor={theme.textMuted} value={abgData.interpretation} onChangeText={(v) => setAbgData((p) => ({ ...p, interpretation: v }))} multiline numberOfLines={2} />
             </View>
@@ -2270,6 +2298,8 @@ const styles = StyleSheet.create({
   abgInterpretationHeader: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginBottom: Spacing.sm },
   abgInterpretationTitle: { ...Typography.bodyMedium, fontWeight: "700" },
   abgInterpretationText: { ...Typography.body, lineHeight: 22 },
+  abgCopyDxBtn: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: Spacing.sm, paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1, marginTop: Spacing.md },
+  abgCopyDxBtnText: { ...Typography.small, fontWeight: "600" as const },
   dispositionOptions: { flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm, marginTop: Spacing.sm },
   dispositionBtn: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.md },
   generateSummaryBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: Spacing.lg, borderRadius: BorderRadius.md, gap: Spacing.sm, marginTop: Spacing.lg },

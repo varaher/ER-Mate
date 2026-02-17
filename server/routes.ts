@@ -1494,6 +1494,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/ai/scan-abg", async (req: Request, res: Response) => {
+    try {
+      const { imageBase64 } = req.body;
+      
+      if (!imageBase64) {
+        return res.status(400).json({ error: "Image data is required" });
+      }
+
+      const { extractABGFromImage } = await import("./services/aiDiagnosis");
+      const abgValues = await extractABGFromImage(imageBase64);
+      
+      res.json({ abgValues });
+    } catch (error) {
+      console.error("ABG scan error:", error);
+      res.status(500).json({ error: "Failed to extract ABG values from image" });
+    }
+  });
+
   app.post("/api/ai/extract-from-image", async (req: Request, res: Response) => {
     try {
       const { imageBase64, patientContext } = req.body;

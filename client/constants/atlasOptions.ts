@@ -365,6 +365,7 @@ export type ATLSFormData = {
     abgAnionGap: string;
     abgGlucose: string;
     abgHb: string;
+    abgFinalDiagnosis: string;
     abgInterpretation: string;
     ecgStatus: string;
     ecgNotes: string;
@@ -457,6 +458,7 @@ export const getDefaultATLSFormData = (): ATLSFormData => ({
     abgAnionGap: "",
     abgGlucose: "",
     abgHb: "",
+    abgFinalDiagnosis: "",
     abgInterpretation: "",
     ecgStatus: "not_done",
     ecgNotes: "",

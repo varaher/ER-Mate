@@ -17,6 +17,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { Audio } from "expo-av";
+import * as ImagePicker from "expo-image-picker";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import VoiceRecorder, { ExtractedClinicalData } from "@/components/VoiceRecorder";
 import { DocumentScanner } from "@/components/DocumentScanner";
@@ -522,6 +523,7 @@ export default function CaseSheetScreen() {
   const [caseData, setCaseData] = useState<any>(null);
   const [abgInterpreting, setAbgInterpreting] = useState(false);
   const [abgInterpretation, setAbgInterpretation] = useState<string | null>(null);
+  const [abgScanning, setAbgScanning] = useState(false);
   const [formData, setFormData] = useState<ATLSFormData>(getDefaultATLSFormData());
   const [examData, setExamData] = useState<ExamFormData>(getDefaultExamFormData());
   const [psychData, setPsychData] = useState<PsychFormData>(getDefaultPsychFormData());
@@ -1397,6 +1399,124 @@ export default function CaseSheetScreen() {
       Alert.alert("Error", "Failed to get AI interpretation. Please try again.");
     } finally {
       setAbgInterpreting(false);
+    }
+  };
+
+  const handleABGScan = async (imageBase64: string) => {
+    setAbgScanning(true);
+    try {
+      const baseUrl = getApiUrl().replace(/\/$/, '');
+      const response = await fetch(`${baseUrl}/api/ai/scan-abg`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageBase64 }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to scan ABG");
+      }
+
+      const data = await response.json();
+      const abg = data.abgValues;
+      if (abg) {
+        if (abg.ph) updateFormData("adjuncts", "abgPh", abg.ph);
+        if (abg.pco2) updateFormData("adjuncts", "abgPco2", abg.pco2);
+        if (abg.po2) updateFormData("adjuncts", "abgPo2", abg.po2);
+        if (abg.hco3) updateFormData("adjuncts", "abgHco3", abg.hco3);
+        if (abg.be) updateFormData("adjuncts", "abgBe", abg.be);
+        if (abg.lactate) updateFormData("adjuncts", "abgLactate", abg.lactate);
+        if (abg.sao2) updateFormData("adjuncts", "abgSao2", abg.sao2);
+        if (abg.fio2) updateFormData("adjuncts", "abgFio2", abg.fio2);
+        if (abg.na) updateFormData("adjuncts", "abgNa", abg.na);
+        if (abg.k) updateFormData("adjuncts", "abgK", abg.k);
+        if (abg.cl) updateFormData("adjuncts", "abgCl", abg.cl);
+        if (abg.anionGap) updateFormData("adjuncts", "abgAnionGap", abg.anionGap);
+        if (abg.glucose) updateFormData("adjuncts", "abgGlucose", abg.glucose);
+        if (abg.hb) updateFormData("adjuncts", "abgHb", abg.hb);
+        if (abg.aaGradient) updateFormData("adjuncts", "abgAaGradient", abg.aaGradient);
+        if (abg.sampleType) updateFormData("adjuncts", "abgSampleType", abg.sampleType);
+        Alert.alert("Scan Complete", "ABG values have been extracted and filled in. Please verify the values.");
+      }
+    } catch (error) {
+      console.error("ABG scan error:", error);
+      Alert.alert("Error", "Failed to extract ABG values from image. Please try again or enter manually.");
+    } finally {
+      setAbgScanning(false);
+    }
+  };
+
+  const convertImageToBase64 = async (uri: string): Promise<string> => {
+    if (Platform.OS === "web") {
+      const resp = await fetch(uri);
+      const blob = await resp.blob();
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const result = reader.result as string;
+          resolve(result.split(",")[1] || result);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } else {
+      const { readAsStringAsync, EncodingType } = await import("expo-file-system/next");
+      return await readAsStringAsync(uri, { encoding: EncodingType.Base64 });
+    }
+  };
+
+  const pickABGImage = async () => {
+    try {
+      Alert.alert(
+        "Scan ABG Report",
+        "Choose how to capture the ABG printout",
+        [
+          {
+            text: "Camera",
+            onPress: async () => {
+              const { status } = await ImagePicker.requestCameraPermissionsAsync();
+              if (status !== "granted") {
+                Alert.alert("Permission Required", "Camera access is needed to scan ABG reports.");
+                return;
+              }
+              const result = await ImagePicker.launchCameraAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                quality: 0.8,
+                base64: true,
+              });
+              if (!result.canceled && result.assets[0]) {
+                if (result.assets[0].base64) {
+                  handleABGScan(result.assets[0].base64);
+                } else {
+                  const base64 = await convertImageToBase64(result.assets[0].uri);
+                  handleABGScan(base64);
+                }
+              }
+            },
+          },
+          {
+            text: "Gallery",
+            onPress: async () => {
+              const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                quality: 0.8,
+                base64: true,
+              });
+              if (!result.canceled && result.assets[0]) {
+                if (result.assets[0].base64) {
+                  handleABGScan(result.assets[0].base64);
+                } else {
+                  const base64 = await convertImageToBase64(result.assets[0].uri);
+                  handleABGScan(base64);
+                }
+              }
+            },
+          },
+          { text: "Cancel", style: "cancel" },
+        ]
+      );
+    } catch (error) {
+      console.error("ABG image pick error:", error);
+      Alert.alert("Error", "Failed to capture image.");
     }
   };
 
@@ -2360,6 +2480,15 @@ export default function CaseSheetScreen() {
 
             <Text style={[styles.sectionHeading, { color: theme.text }]}>Adjuncts to Primary Survey</Text>
             <CollapsibleSection title="ABG / VBG" icon="+" iconColor={theme.primary}>
+              <View style={styles.abgActionRow}>
+                <Pressable style={[styles.fillNormalBtn, { backgroundColor: `${TriageColors.green}15`, borderColor: TriageColors.green, flex: 1 }]} onPress={() => {
+                  pickABGImage();
+                }}>
+                  <Feather name="camera" size={16} color={theme.primary} />
+                  <Text style={[styles.fillNormalBtnText, { color: theme.primary }]}>{abgScanning ? "Scanning..." : "Scan ABG Report"}</Text>
+                  {abgScanning ? <ActivityIndicator size="small" color={theme.primary} /> : null}
+                </Pressable>
+              </View>
               <Pressable style={[styles.fillNormalBtn, { backgroundColor: `${TriageColors.green}15`, borderColor: TriageColors.green }]} onPress={() => {
                 updateFormData("adjuncts", "abgPh", "7.40");
                 updateFormData("adjuncts", "abgPco2", "40");
@@ -2493,10 +2622,37 @@ export default function CaseSheetScreen() {
                     <Feather name="cpu" size={16} color={theme.primary} />
                     <Text style={[styles.abgInterpretationTitle, { color: theme.primary }]}>AI Interpretation</Text>
                   </View>
-                  <Text style={[styles.abgInterpretationText, { color: theme.text }]}>{abgInterpretation}</Text>
+                  {abgInterpretation.split(/\n\n|\n(?=\d+\.)/).map((section, idx) => {
+                    const cleaned = section.trim();
+                    if (!cleaned) return null;
+                    const parts = cleaned.split(/(\*\*[^*]+\*\*)/g);
+                    return (
+                      <View key={idx} style={idx > 0 ? { marginTop: Spacing.sm } : undefined}>
+                        <Text style={[styles.abgInterpretationText, { color: theme.text }]}>
+                          {parts.map((part, pidx) => {
+                            if (part.startsWith("**") && part.endsWith("**")) {
+                              return <Text key={pidx} style={{ fontWeight: "700", color: theme.primary }}>{part.slice(2, -2)}</Text>;
+                            }
+                            return <Text key={pidx}>{part}</Text>;
+                          })}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                  <Pressable
+                    style={[styles.abgCopyDxBtn, { borderColor: theme.primary }]}
+                    onPress={() => {
+                      updateFormData("adjuncts", "abgFinalDiagnosis", abgInterpretation.replace(/\*\*/g, ''));
+                      Alert.alert("Copied", "AI interpretation copied to Final ABG Diagnosis.");
+                    }}
+                  >
+                    <Feather name="copy" size={14} color={theme.primary} />
+                    <Text style={[styles.abgCopyDxBtnText, { color: theme.primary }]}>Copy to Final ABG Diagnosis</Text>
+                  </Pressable>
                 </View>
               )}
 
+              <TextInputField label="Final ABG Diagnosis" value={formData.adjuncts.abgFinalDiagnosis} onChangeText={(v) => updateFormData("adjuncts", "abgFinalDiagnosis", v)} placeholder="e.g. Mixed respiratory and metabolic acidosis with lactic acidosis" multiline numberOfLines={3} />
               <TextInputField label="Your Interpretation (Optional)" value={formData.adjuncts.abgInterpretation} onChangeText={(v) => updateFormData("adjuncts", "abgInterpretation", v)} placeholder="Your clinical interpretation of the ABG..." multiline numberOfLines={2} />
             </CollapsibleSection>
             <CollapsibleSection title="ECG" icon="+" iconColor={theme.primary}>
@@ -3254,6 +3410,9 @@ const styles = StyleSheet.create({
   abgInterpretationHeader: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginBottom: Spacing.sm },
   abgInterpretationTitle: { ...Typography.bodyMedium, fontWeight: "700" },
   abgInterpretationText: { ...Typography.body, lineHeight: 22 },
+  abgActionRow: { flexDirection: "row" as const, gap: Spacing.sm, marginTop: Spacing.sm },
+  abgCopyDxBtn: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: Spacing.sm, paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1, marginTop: Spacing.md },
+  abgCopyDxBtnText: { ...Typography.small, fontWeight: "600" as const },
   checkbox: { width: 22, height: 22, borderWidth: 2, borderRadius: 4, justifyContent: "center", alignItems: "center" },
   procedureLabel: { ...Typography.body, flex: 1 },
   dispositionOptions: { flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm, marginTop: Spacing.sm },
