@@ -1492,6 +1492,17 @@ export default function PediatricCaseSheetScreen() {
               <Text style={[styles.cardTitle, { color: theme.text }]}>ABG / VBG</Text>
               <Text style={[styles.cardSubtitle, { color: theme.textSecondary }]}>Arterial or Venous Blood Gas analysis</Text>
 
+              <Pressable style={[styles.fillNormalBtn, { backgroundColor: `${TriageColors.green}15`, borderColor: TriageColors.green }]} onPress={() => {
+                setAbgData({
+                  ph: "7.40", pco2: "40", po2: "95", hco3: "24", be: "0", lactate: "1.0",
+                  sao2: "98", fio2: "21", na: "140", k: "4.0", cl: "103", anionGap: "12",
+                  glucose: "100", hb: "12", aaGradient: "10", notes: abgData.notes, interpretation: abgData.interpretation,
+                });
+              }}>
+                <Feather name="check-circle" size={16} color={TriageColors.green} />
+                <Text style={[styles.fillNormalBtnText, { color: TriageColors.green }]}>Fill Normal Values</Text>
+              </Pressable>
+
               <View style={styles.abgNormalValuesCard}>
                 <Text style={[styles.abgNormalTitle, { color: theme.text }]}>Pediatric Normal Ranges</Text>
                 <View style={styles.abgNormalGrid}>
@@ -2250,6 +2261,8 @@ const styles = StyleSheet.create({
   abgSmallField: { width: "23%", minWidth: 70 },
   abgFieldLabel: { ...Typography.caption, marginBottom: 4 },
   abgInput: { height: 40, paddingHorizontal: Spacing.sm, borderRadius: BorderRadius.sm, borderWidth: 1, fontSize: 14, textAlign: "center" },
+  fillNormalBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1, gap: Spacing.sm, marginBottom: Spacing.md },
+  fillNormalBtnText: { ...Typography.bodyMedium, fontWeight: "600" },
   aiInterpretBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, borderRadius: BorderRadius.md, gap: Spacing.sm, marginTop: Spacing.sm },
   aiInterpretBtnText: { ...Typography.bodyMedium, color: "#FFFFFF", fontWeight: "600" },
   abgInterpretationCard: { padding: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1, marginTop: Spacing.md },
