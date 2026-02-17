@@ -27,6 +27,9 @@ import PrivacyScreen from "@/screens/PrivacyScreen";
 import HelpSupportScreen from "@/screens/HelpSupportScreen";
 import AboutScreen from "@/screens/AboutScreen";
 import PediatricDrugCalculatorScreen from "@/screens/PediatricDrugCalculatorScreen";
+import SimulationListScreen from "@/screens/SimulationListScreen";
+import SimulationScreen from "@/screens/SimulationScreen";
+import SimulationResultScreen from "@/screens/SimulationResultScreen";
 
 export type RootStackParamList = {
   Login: undefined;
@@ -50,6 +53,15 @@ export type RootStackParamList = {
   HelpSupport: undefined;
   About: undefined;
   PediatricDrugCalculator: { weight?: string } | undefined;
+  SimulationList: undefined;
+  Simulation: { caseId: string };
+  SimulationResult: {
+    caseId: string;
+    elapsedTime: number;
+    performedActions: string[];
+    selectedDifferential: string | null;
+    hasCrashed: boolean;
+  };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -231,6 +243,31 @@ export default function RootStackNavigator() {
             options={{
               presentation: "modal",
               headerTitle: "Pediatric Drug Calculator",
+            }}
+          />
+          <Stack.Screen
+            name="SimulationList"
+            component={SimulationListScreen}
+            options={{
+              presentation: "modal",
+              headerTitle: "Simulation Lab",
+            }}
+          />
+          <Stack.Screen
+            name="Simulation"
+            component={SimulationScreen}
+            options={{
+              headerShown: false,
+              gestureEnabled: false,
+            }}
+          />
+          <Stack.Screen
+            name="SimulationResult"
+            component={SimulationResultScreen}
+            options={{
+              presentation: "modal",
+              headerTitle: "Simulation Results",
+              gestureEnabled: false,
             }}
           />
         </>

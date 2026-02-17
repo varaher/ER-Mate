@@ -573,6 +573,25 @@ export default function DashboardScreen() {
           <Feather name="chevron-right" size={24} color="#06b6d4" />
         </Pressable>
 
+        <Pressable
+          style={({ pressed }) => [
+            styles.newPatientBtn,
+            { backgroundColor: theme.card, borderColor: TriageColors.red, opacity: pressed ? 0.9 : 1 },
+          ]}
+          onPress={() => navigation.navigate("SimulationList")}
+        >
+          <View style={[styles.newPatientIcon, { backgroundColor: TriageColors.red }]}>
+            <Feather name="monitor" size={24} color="#FFFFFF" />
+          </View>
+          <View style={styles.newPatientText}>
+            <Text style={[styles.newPatientTitle, { color: theme.text }]}>Simulation Lab</Text>
+            <Text style={[styles.newPatientSubtitle, { color: theme.textSecondary }]}>
+              Practice ER scenarios
+            </Text>
+          </View>
+          <Feather name="chevron-right" size={24} color={TriageColors.red} />
+        </Pressable>
+
         <View style={styles.statsRow}>
           {[
             { value: stats.total, label: "Today", color: theme.primary },
