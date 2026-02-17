@@ -1445,78 +1445,40 @@ export default function CaseSheetScreen() {
     }
   };
 
-  const convertImageToBase64 = async (uri: string): Promise<string> => {
-    if (Platform.OS === "web") {
-      const resp = await fetch(uri);
-      const blob = await resp.blob();
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const result = reader.result as string;
-          resolve(result.split(",")[1] || result);
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
+  const pickABGFromCamera = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permission Required", "Camera access is needed to scan ABG reports.");
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ["images"],
+        quality: 0.8,
+        base64: true,
       });
-    } else {
-      const { readAsStringAsync, EncodingType } = await import("expo-file-system/next");
-      return await readAsStringAsync(uri, { encoding: EncodingType.Base64 });
+      if (!result.canceled && result.assets[0]?.base64) {
+        handleABGScan(result.assets[0].base64);
+      }
+    } catch (error) {
+      console.error("ABG camera error:", error);
+      Alert.alert("Error", "Failed to capture image.");
     }
   };
 
-  const pickABGImage = async () => {
+  const pickABGFromGallery = async () => {
     try {
-      Alert.alert(
-        "Scan ABG Report",
-        "Choose how to capture the ABG printout",
-        [
-          {
-            text: "Camera",
-            onPress: async () => {
-              const { status } = await ImagePicker.requestCameraPermissionsAsync();
-              if (status !== "granted") {
-                Alert.alert("Permission Required", "Camera access is needed to scan ABG reports.");
-                return;
-              }
-              const result = await ImagePicker.launchCameraAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                quality: 0.8,
-                base64: true,
-              });
-              if (!result.canceled && result.assets[0]) {
-                if (result.assets[0].base64) {
-                  handleABGScan(result.assets[0].base64);
-                } else {
-                  const base64 = await convertImageToBase64(result.assets[0].uri);
-                  handleABGScan(base64);
-                }
-              }
-            },
-          },
-          {
-            text: "Gallery",
-            onPress: async () => {
-              const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                quality: 0.8,
-                base64: true,
-              });
-              if (!result.canceled && result.assets[0]) {
-                if (result.assets[0].base64) {
-                  handleABGScan(result.assets[0].base64);
-                } else {
-                  const base64 = await convertImageToBase64(result.assets[0].uri);
-                  handleABGScan(base64);
-                }
-              }
-            },
-          },
-          { text: "Cancel", style: "cancel" },
-        ]
-      );
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        quality: 0.8,
+        base64: true,
+      });
+      if (!result.canceled && result.assets[0]?.base64) {
+        handleABGScan(result.assets[0].base64);
+      }
     } catch (error) {
-      console.error("ABG image pick error:", error);
-      Alert.alert("Error", "Failed to capture image.");
+      console.error("ABG gallery error:", error);
+      Alert.alert("Error", "Failed to pick image.");
     }
   };
 
@@ -2481,12 +2443,14 @@ export default function CaseSheetScreen() {
             <Text style={[styles.sectionHeading, { color: theme.text }]}>Adjuncts to Primary Survey</Text>
             <CollapsibleSection title="ABG / VBG" icon="+" iconColor={theme.primary}>
               <View style={styles.abgActionRow}>
-                <Pressable style={[styles.fillNormalBtn, { backgroundColor: `${TriageColors.green}15`, borderColor: TriageColors.green, flex: 1 }]} onPress={() => {
-                  pickABGImage();
-                }}>
+                <Pressable style={[styles.fillNormalBtn, { backgroundColor: `${theme.primary}15`, borderColor: theme.primary, flex: 1 }]} onPress={pickABGFromCamera} disabled={abgScanning}>
                   <Feather name="camera" size={16} color={theme.primary} />
-                  <Text style={[styles.fillNormalBtnText, { color: theme.primary }]}>{abgScanning ? "Scanning..." : "Scan ABG Report"}</Text>
+                  <Text style={[styles.fillNormalBtnText, { color: theme.primary }]}>{abgScanning ? "Scanning..." : "Camera"}</Text>
                   {abgScanning ? <ActivityIndicator size="small" color={theme.primary} /> : null}
+                </Pressable>
+                <Pressable style={[styles.fillNormalBtn, { backgroundColor: `${theme.primary}15`, borderColor: theme.primary, flex: 1 }]} onPress={pickABGFromGallery} disabled={abgScanning}>
+                  <Feather name="image" size={16} color={theme.primary} />
+                  <Text style={[styles.fillNormalBtnText, { color: theme.primary }]}>Gallery</Text>
                 </Pressable>
               </View>
               <Pressable style={[styles.fillNormalBtn, { backgroundColor: `${TriageColors.green}15`, borderColor: TriageColors.green }]} onPress={() => {
