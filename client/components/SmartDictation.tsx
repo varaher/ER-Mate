@@ -154,7 +154,8 @@ export default function SmartDictation({
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [recordingUri, setRecordingUri] = useState<string | null>(null);
   const [webRecordingBlob, setWebRecordingBlob] = useState<Blob | null>(null);
-  const [transcript, setTranscript] = useState('');
+  const [segments, setSegments] = useState<string[]>([]);
+  const [currentSegmentText, setCurrentSegmentText] = useState('');
   const [editedTranscript, setEditedTranscript] = useState('');
   const [extractedData, setExtractedData] = useState<SmartDictationExtracted | null>(null);
   const [showResults, setShowResults] = useState(false);
@@ -169,6 +170,11 @@ export default function SmartDictation({
     stream: null,
   });
   const nativeRecordingRef = useRef<Audio.Recording | null>(null);
+
+  useEffect(() => {
+    const combined = [...segments, currentSegmentText].filter(Boolean).join(' ');
+    setEditedTranscript(combined);
+  }, [segments, currentSegmentText]);
 
   useEffect(() => {
     if (step === 'recording') {
@@ -214,7 +220,8 @@ export default function SmartDictation({
     setRecordingDuration(0);
     setRecordingUri(null);
     setWebRecordingBlob(null);
-    setTranscript('');
+    setSegments([]);
+    setCurrentSegmentText('');
     setEditedTranscript('');
     setExtractedData(null);
     setShowResults(false);
@@ -225,9 +232,7 @@ export default function SmartDictation({
   const startRecording = async () => {
     try {
       setRecordingDuration(0);
-      setTranscript('');
-      setEditedTranscript('');
-      setExtractedData(null);
+      setCurrentSegmentText('');
       setErrorMsg('');
 
       if (Platform.OS === 'web') {
@@ -255,7 +260,7 @@ export default function SmartDictation({
           if (webRecorderRef.current.stream) {
             webRecorderRef.current.stream.getTracks().forEach(track => track.stop());
           }
-          transcribeRecording(audioBlob, null);
+          transcribeSegment(audioBlob, null);
         };
 
         webRecorderRef.current.mediaRecorder = mediaRecorder;
@@ -304,7 +309,7 @@ export default function SmartDictation({
       } else {
         const recording = nativeRecordingRef.current;
         if (!recording) {
-          setStep('idle');
+          setStep(segments.length > 0 ? 'transcript_ready' : 'idle');
           setErrorMsg('No active recording found');
           return;
         }
@@ -314,20 +319,20 @@ export default function SmartDictation({
         nativeRecordingRef.current = null;
         if (uri) {
           setRecordingUri(uri);
-          transcribeRecording(null, uri);
+          transcribeSegment(null, uri);
         } else {
-          setStep('idle');
+          setStep(segments.length > 0 ? 'transcript_ready' : 'idle');
           setErrorMsg('Recording failed - no audio file created');
         }
       }
     } catch (err) {
       console.error('Failed to stop recording:', err);
       nativeRecordingRef.current = null;
-      setStep('idle');
+      setStep(segments.length > 0 ? 'transcript_ready' : 'idle');
     }
   };
 
-  const transcribeRecording = async (blob: Blob | null, uri: string | null) => {
+  const transcribeSegment = async (blob: Blob | null, uri: string | null) => {
     setStep('transcribing');
 
     try {
@@ -369,19 +374,19 @@ export default function SmartDictation({
       const text = result.transcript || '';
 
       if (!text.trim()) {
-        setErrorMsg('No speech detected. Please try recording again.');
-        setStep('idle');
+        setErrorMsg('No speech detected in this segment. Try again or use what you have.');
+        setStep('transcript_ready');
         return;
       }
 
-      setTranscript(text);
-      setEditedTranscript(text);
+      setSegments(prev => [...prev, text]);
+      setCurrentSegmentText('');
       setStep('transcript_ready');
     } catch (err) {
       const msg = (err as Error).message || 'Transcription failed';
       console.error('Transcription error:', msg);
       setErrorMsg(msg);
-      setStep('idle');
+      setStep(segments.length > 0 ? 'transcript_ready' : 'idle');
     }
   };
 
@@ -555,11 +560,15 @@ export default function SmartDictation({
     if (disabled) return;
     if (step === 'recording') {
       stopRecording();
-    } else if (step === 'idle') {
+    } else if (step === 'idle' || step === 'transcript_ready') {
+      if (step === 'transcript_ready') {
+        setErrorMsg('');
+      }
       startRecording();
     }
   };
 
+  const hasSegments = segments.length > 0;
   const populatedFields = getPopulatedFields();
 
   return (
@@ -578,9 +587,16 @@ export default function SmartDictation({
               Just talk naturally - AI will fill the case sheet
             </Text>
           </View>
+          {hasSegments ? (
+            <View style={[styles.segmentBadge, { backgroundColor: `${TriageColors.green}20` }]}>
+              <Text style={[styles.segmentBadgeText, { color: TriageColors.green }]}>
+                {segments.length} {segments.length === 1 ? 'part' : 'parts'}
+              </Text>
+            </View>
+          ) : null}
         </View>
 
-        {step === 'idle' && (
+        {step === 'idle' && !hasSegments ? (
           <View style={styles.mainArea}>
             <Pressable
               onPress={handleMicPress}
@@ -599,10 +615,22 @@ export default function SmartDictation({
               </View>
             ) : null}
           </View>
-        )}
+        ) : null}
 
         {step === 'recording' && (
           <View style={styles.mainArea}>
+            {hasSegments ? (
+              <View style={[styles.previousSegments, { backgroundColor: theme.backgroundSecondary, borderColor: theme.border }]}>
+                <Text style={[styles.previousLabel, { color: TriageColors.green }]}>
+                  Previous segments saved
+                </Text>
+                <ScrollView style={{ maxHeight: 60 }} nestedScrollEnabled>
+                  <Text style={[styles.previousText, { color: theme.textSecondary }]}>
+                    {segments.join(' ')}
+                  </Text>
+                </ScrollView>
+              </View>
+            ) : null}
             <Animated.View style={[
               styles.micButtonOuter,
               { transform: [{ scale: pulseAnim }], backgroundColor: 'rgba(239, 68, 68, 0.15)' }
@@ -621,17 +649,26 @@ export default function SmartDictation({
               </Text>
             </View>
             <Text style={[styles.recordingHint, { color: theme.textMuted }]}>
-              Speak the entire patient history naturally
+              {hasSegments ? 'Continue where you left off' : 'Speak the entire patient history naturally'}
             </Text>
           </View>
         )}
 
         {step === 'transcribing' && (
           <View style={styles.mainArea}>
+            {hasSegments ? (
+              <View style={[styles.previousSegments, { backgroundColor: theme.backgroundSecondary, borderColor: theme.border }]}>
+                <ScrollView style={{ maxHeight: 60 }} nestedScrollEnabled>
+                  <Text style={[styles.previousText, { color: theme.textSecondary }]}>
+                    {segments.join(' ')}
+                  </Text>
+                </ScrollView>
+              </View>
+            ) : null}
             <View style={[styles.processingBox, { backgroundColor: theme.backgroundSecondary }]}>
               <ActivityIndicator size="large" color="#7c3aed" />
               <Text style={[styles.processingTitle, { color: theme.text }]}>
-                Transcribing...
+                Transcribing segment...
               </Text>
               <Text style={[styles.processingSubtitle, { color: theme.textMuted }]}>
                 Converting speech to text
@@ -645,7 +682,7 @@ export default function SmartDictation({
             <View style={styles.transcriptHeader}>
               <Feather name="file-text" size={16} color={TriageColors.green} />
               <Text style={[styles.transcriptLabel, { color: TriageColors.green }]}>
-                Transcription Complete
+                {segments.length} {segments.length === 1 ? 'segment' : 'segments'} recorded
               </Text>
             </View>
             <View style={[styles.transcriptBox, { backgroundColor: theme.backgroundSecondary, borderColor: theme.border }]}>
@@ -659,20 +696,33 @@ export default function SmartDictation({
                 placeholderTextColor={theme.textMuted}
               />
             </View>
+
+            {errorMsg ? (
+              <View style={[styles.errorBox, { backgroundColor: `${TriageColors.red}15` }]}>
+                <Feather name="alert-circle" size={14} color={TriageColors.red} />
+                <Text style={[styles.errorText, { color: TriageColors.red }]}>{errorMsg}</Text>
+              </View>
+            ) : null}
+
             <Text style={[styles.editHint, { color: theme.textMuted }]}>
-              You can edit the text above before copying
+              You can edit the text above, record more, or copy to case sheet
             </Text>
 
             <View style={styles.actionRow}>
-              <Pressable onPress={resetAll} style={[styles.actionBtn, { backgroundColor: theme.backgroundSecondary }]}>
-                <Feather name="rotate-ccw" size={16} color={theme.textSecondary} />
-                <Text style={[styles.actionBtnText, { color: theme.textSecondary }]}>Re-record</Text>
+              <Pressable onPress={handleMicPress} style={[styles.actionBtn, { backgroundColor: `#7c3aed20` }]}>
+                <Feather name="mic" size={16} color="#7c3aed" />
+                <Text style={[styles.actionBtnText, { color: '#7c3aed' }]}>Record More</Text>
               </Pressable>
               <Pressable onPress={copyToCaseSheet} style={[styles.actionBtn, styles.copyBtn]}>
                 <Feather name="clipboard" size={16} color="#FFFFFF" />
                 <Text style={[styles.actionBtnText, { color: '#FFFFFF' }]}>Copy to Case Sheet</Text>
               </Pressable>
             </View>
+
+            <Pressable onPress={resetAll} style={styles.clearRow}>
+              <Feather name="trash-2" size={14} color={theme.textMuted} />
+              <Text style={[styles.clearText, { color: theme.textMuted }]}>Clear all and start over</Text>
+            </Pressable>
           </View>
         )}
 
@@ -788,6 +838,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
   },
+  segmentBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  segmentBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
   mainArea: {
     alignItems: 'center',
     paddingVertical: Spacing.md,
@@ -819,10 +878,27 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 8,
     marginTop: 4,
+    alignSelf: 'stretch',
   },
   errorText: {
     fontSize: 13,
     flex: 1,
+  },
+  previousSegments: {
+    alignSelf: 'stretch',
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 10,
+    marginBottom: 4,
+  },
+  previousLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  previousText: {
+    fontSize: 13,
+    lineHeight: 18,
   },
   recordingInfo: {
     flexDirection: 'row',
@@ -906,6 +982,16 @@ const styles = StyleSheet.create({
   actionBtnText: {
     fontSize: 14,
     fontWeight: '600',
+  },
+  clearRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 6,
+  },
+  clearText: {
+    fontSize: 12,
   },
   modalOverlay: {
     flex: 1,

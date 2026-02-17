@@ -9,6 +9,7 @@ import {
   Platform,
   ActivityIndicator,
   TextInput,
+  ScrollView,
 } from 'react-native';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
@@ -119,7 +120,8 @@ export default function VoiceRecorder({
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [recordingUri, setRecordingUri] = useState<string | null>(null);
   const [webRecordingBlob, setWebRecordingBlob] = useState<Blob | null>(null);
-  const [transcript, setTranscript] = useState('');
+  const [segments, setSegments] = useState<string[]>([]);
+  const [currentSegmentText, setCurrentSegmentText] = useState('');
   const [editedTranscript, setEditedTranscript] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -131,6 +133,13 @@ export default function VoiceRecorder({
     stream: null,
   });
   const nativeRecordingRef = useRef<Audio.Recording | null>(null);
+
+  const fullTranscript = [...segments, currentSegmentText].filter(Boolean).join(' ');
+
+  useEffect(() => {
+    const combined = [...segments, currentSegmentText].filter(Boolean).join(' ');
+    setEditedTranscript(combined);
+  }, [segments, currentSegmentText]);
 
   useEffect(() => {
     if (step === 'recording') {
@@ -169,7 +178,8 @@ export default function VoiceRecorder({
     setRecordingDuration(0);
     setRecordingUri(null);
     setWebRecordingBlob(null);
-    setTranscript('');
+    setSegments([]);
+    setCurrentSegmentText('');
     setEditedTranscript('');
     setErrorMsg('');
     webRecorderRef.current.audioChunks = [];
@@ -178,8 +188,7 @@ export default function VoiceRecorder({
   const startRecording = async () => {
     try {
       setRecordingDuration(0);
-      setTranscript('');
-      setEditedTranscript('');
+      setCurrentSegmentText('');
       setErrorMsg('');
 
       if (Platform.OS === 'web') {
@@ -207,7 +216,7 @@ export default function VoiceRecorder({
           if (webRecorderRef.current.stream) {
             webRecorderRef.current.stream.getTracks().forEach(track => track.stop());
           }
-          transcribeRecording(audioBlob, null);
+          transcribeSegment(audioBlob, null);
         };
 
         webRecorderRef.current.mediaRecorder = mediaRecorder;
@@ -257,7 +266,7 @@ export default function VoiceRecorder({
       } else {
         const recording = nativeRecordingRef.current;
         if (!recording) {
-          setStep('idle');
+          setStep('transcript_ready');
           setErrorMsg('No active recording found');
           return;
         }
@@ -267,20 +276,20 @@ export default function VoiceRecorder({
         nativeRecordingRef.current = null;
         if (uri) {
           setRecordingUri(uri);
-          transcribeRecording(null, uri);
+          transcribeSegment(null, uri);
         } else {
-          setStep('idle');
+          setStep(segments.length > 0 ? 'transcript_ready' : 'idle');
           setErrorMsg('Recording failed - no audio file created');
         }
       }
     } catch (err) {
       console.error('Failed to stop recording:', err);
       nativeRecordingRef.current = null;
-      setStep('idle');
+      setStep(segments.length > 0 ? 'transcript_ready' : 'idle');
     }
   };
 
-  const transcribeRecording = async (blob: Blob | null, uri: string | null) => {
+  const transcribeSegment = async (blob: Blob | null, uri: string | null) => {
     setStep('transcribing');
 
     try {
@@ -322,19 +331,20 @@ export default function VoiceRecorder({
       const text = result.transcript || '';
 
       if (!text.trim()) {
-        setErrorMsg('No speech detected. Please try again.');
-        setStep('idle');
+        setErrorMsg('No speech detected in this segment. Try again or use what you have.');
+        setStep('transcript_ready');
         return;
       }
 
-      setTranscript(text);
-      setEditedTranscript(text);
+      setCurrentSegmentText(text);
+      setSegments(prev => [...prev, text]);
+      setCurrentSegmentText('');
       setStep('transcript_ready');
     } catch (err) {
       const msg = (err as Error).message || 'Transcription failed';
       console.error('Transcription error:', msg);
       setErrorMsg(msg);
-      setStep('idle');
+      setStep(segments.length > 0 ? 'transcript_ready' : 'idle');
       onError?.(msg);
     }
   };
@@ -371,10 +381,15 @@ export default function VoiceRecorder({
     if (disabled) return;
     if (step === 'recording') {
       stopRecording();
-    } else if (step === 'idle') {
+    } else if (step === 'idle' || step === 'transcript_ready') {
+      if (step === 'transcript_ready') {
+        setErrorMsg('');
+      }
       startRecording();
     }
   };
+
+  const hasSegments = segments.length > 0;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.card }]}>
@@ -383,9 +398,16 @@ export default function VoiceRecorder({
         <Text style={[styles.title, { color: colors.text }]}>
           {mode === 'field' && fieldName ? `Voice: ${fieldName}` : 'Voice Input'}
         </Text>
+        {hasSegments ? (
+          <View style={[styles.segmentBadge, { backgroundColor: `${colors.primary}20` }]}>
+            <Text style={[styles.segmentBadgeText, { color: colors.primary }]}>
+              {segments.length} {segments.length === 1 ? 'segment' : 'segments'}
+            </Text>
+          </View>
+        ) : null}
       </View>
 
-      {step === 'idle' && (
+      {step === 'idle' && !hasSegments ? (
         <View style={styles.centerArea}>
           <Pressable
             onPress={handleMicPress}
@@ -395,7 +417,7 @@ export default function VoiceRecorder({
             <Feather name="mic" size={28} color="#fff" />
           </Pressable>
           <Text style={[styles.hintText, { color: colors.textSecondary }]}>
-            Tap to record
+            Tap to start dictating
           </Text>
           {errorMsg ? (
             <View style={[styles.errorBox, { backgroundColor: `${colors.danger}15` }]}>
@@ -404,10 +426,19 @@ export default function VoiceRecorder({
             </View>
           ) : null}
         </View>
-      )}
+      ) : null}
 
       {step === 'recording' && (
         <View style={styles.centerArea}>
+          {hasSegments ? (
+            <View style={[styles.previousSegments, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}>
+              <ScrollView style={{ maxHeight: 60 }} nestedScrollEnabled>
+                <Text style={[styles.previousText, { color: colors.textSecondary }]}>
+                  {segments.join(' ')}
+                </Text>
+              </ScrollView>
+            </View>
+          ) : null}
           <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
             <Pressable
               onPress={handleMicPress}
@@ -422,14 +453,26 @@ export default function VoiceRecorder({
               Recording {formatDuration(recordingDuration)}
             </Text>
           </View>
+          <Text style={[styles.hintText, { color: colors.textSecondary }]}>
+            Tap to pause and save this segment
+          </Text>
         </View>
       )}
 
       {step === 'transcribing' && (
         <View style={styles.centerArea}>
+          {hasSegments ? (
+            <View style={[styles.previousSegments, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}>
+              <ScrollView style={{ maxHeight: 60 }} nestedScrollEnabled>
+                <Text style={[styles.previousText, { color: colors.textSecondary }]}>
+                  {segments.join(' ')}
+                </Text>
+              </ScrollView>
+            </View>
+          ) : null}
           <ActivityIndicator size="small" color={colors.primary} />
           <Text style={[styles.processingText, { color: colors.textSecondary }]}>
-            Transcribing...
+            Transcribing segment...
           </Text>
         </View>
       )}
@@ -444,19 +487,32 @@ export default function VoiceRecorder({
               multiline
               textAlignVertical="top"
               placeholderTextColor={colors.textMuted}
+              placeholder="Your dictation will appear here..."
             />
           </View>
 
+          {errorMsg ? (
+            <View style={[styles.errorBox, { backgroundColor: `${colors.danger}15` }]}>
+              <Feather name="alert-circle" size={14} color={colors.danger} />
+              <Text style={[styles.errorText, { color: colors.danger }]}>{errorMsg}</Text>
+            </View>
+          ) : null}
+
           <View style={styles.actionRow}>
-            <Pressable onPress={resetAll} style={[styles.actionBtn, { backgroundColor: colors.backgroundSecondary }]}>
-              <Feather name="rotate-ccw" size={16} color={colors.textSecondary} />
-              <Text style={[styles.actionBtnText, { color: colors.textSecondary }]}>Redo</Text>
+            <Pressable onPress={handleMicPress} style={[styles.actionBtn, { backgroundColor: `${colors.primary}15` }]}>
+              <Feather name="mic" size={16} color={colors.primary} />
+              <Text style={[styles.actionBtnText, { color: colors.primary }]}>Continue</Text>
             </Pressable>
             <Pressable onPress={copyToField} style={[styles.actionBtn, styles.copyBtn, { backgroundColor: colors.success }]}>
               <Feather name="clipboard" size={16} color="#fff" />
               <Text style={[styles.actionBtnText, { color: '#fff' }]}>Copy to Field</Text>
             </Pressable>
           </View>
+
+          <Pressable onPress={resetAll} style={styles.clearRow}>
+            <Feather name="trash-2" size={14} color={colors.textMuted} />
+            <Text style={[styles.clearText, { color: colors.textMuted }]}>Clear all and start over</Text>
+          </Pressable>
         </View>
       )}
     </View>
@@ -477,6 +533,16 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 15,
+    fontWeight: '600',
+    flex: 1,
+  },
+  segmentBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  segmentBadgeText: {
+    fontSize: 11,
     fontWeight: '600',
   },
   centerArea: {
@@ -502,6 +568,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 8,
     marginTop: 4,
+    alignSelf: 'stretch',
   },
   errorText: {
     fontSize: 13,
@@ -524,6 +591,17 @@ const styles = StyleSheet.create({
   processingText: {
     fontSize: 14,
   },
+  previousSegments: {
+    alignSelf: 'stretch',
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 10,
+    marginBottom: 4,
+  },
+  previousText: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
   transcriptArea: {
     gap: 10,
   },
@@ -531,7 +609,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     minHeight: 80,
-    maxHeight: 150,
+    maxHeight: 160,
   },
   transcriptInput: {
     padding: 10,
@@ -557,5 +635,15 @@ const styles = StyleSheet.create({
   actionBtnText: {
     fontSize: 14,
     fontWeight: '600',
+  },
+  clearRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 6,
+  },
+  clearText: {
+    fontSize: 12,
   },
 });
