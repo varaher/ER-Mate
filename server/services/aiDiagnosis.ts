@@ -750,6 +750,75 @@ export async function extractABGFromImage(imageBase64: string): Promise<ABGScanR
   }
 
   try {
+    let ocrText = "";
+    
+    try {
+      const { isSarvamAvailable, sarvamParsePDF } = await import("./sarvamAI");
+      if (isSarvamAvailable()) {
+        console.log("[ABG Scan] Using Sarvam AI OCR for text extraction...");
+        const imageBuffer = Buffer.from(imageBase64, "base64");
+        const { default: PDFDocument } = await import("pdfkit");
+        const pdfBuffer = await new Promise<Buffer>((resolve, reject) => {
+          const doc = new PDFDocument({ size: "A4" });
+          const chunks: Buffer[] = [];
+          doc.on("data", (chunk: Buffer) => chunks.push(chunk));
+          doc.on("end", () => resolve(Buffer.concat(chunks)));
+          doc.on("error", reject);
+          doc.image(imageBuffer, 0, 0, { fit: [595, 842], align: "center", valign: "center" });
+          doc.end();
+        });
+        ocrText = await sarvamParsePDF(pdfBuffer, 1);
+        console.log("[ABG Scan] Sarvam OCR extracted text length:", ocrText.length);
+      }
+    } catch (sarvamErr) {
+      console.warn("[ABG Scan] Sarvam OCR failed, falling back to GPT-4o vision:", sarvamErr);
+    }
+
+    if (ocrText && ocrText.trim().length > 10) {
+      console.log("[ABG Scan] Extracting ABG values from OCR text using OpenAI...");
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: `You are an expert at reading ABG (Arterial/Venous Blood Gas) machine printouts from devices like Radiometer ABL800, i-STAT, GEM Premier, etc. You will receive OCR-extracted text from a blood gas report. Extract ONLY the numeric values without units. Be precise. If a value is not found in the text, omit it.`
+          },
+          {
+            role: "user",
+            content: `Here is OCR-extracted text from a blood gas report printout:\n\n${ocrText}\n\nExtract all ABG/VBG values. Return ONLY numeric values without units. Respond in JSON:
+{
+  "ph": "pH value (e.g. 7.438)",
+  "pco2": "pCO2 in mmHg (e.g. 31.1)",
+  "po2": "pO2 in mmHg (e.g. 64.5)",
+  "hco3": "HCO3/Bicarbonate in mEq/L - use cHCO3 or standard HCO3 (e.g. 22.5)",
+  "be": "Base Excess in mEq/L - use cBase(Ecf) or BE (e.g. -2.8)",
+  "lactate": "Lactate in mmol/L (e.g. 2.2)",
+  "sao2": "SaO2/sO2 percentage without % (e.g. 91.0)",
+  "fio2": "FiO2 percentage without % (e.g. 21.0)",
+  "na": "Sodium/cNa in mEq/L (e.g. 126)",
+  "k": "Potassium/cK in mEq/L (e.g. 4.1)",
+  "cl": "Chloride/cCl in mEq/L (e.g. 99)",
+  "anionGap": "Anion Gap value (e.g. 6.0)",
+  "glucose": "Glucose/cGlu in mg/dL (e.g. 177)",
+  "hb": "Hemoglobin/ctHb in g/dL (e.g. 13.2)",
+  "aaGradient": "A-a gradient if shown",
+  "sampleType": "Arterial or Venous if indicated"
+}
+Only include fields with actual values found in the text. Omit fields not present.`
+          }
+        ],
+        max_tokens: 1000,
+        response_format: { type: "json_object" },
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        throw new Error("Empty response from AI");
+      }
+      return JSON.parse(content) as ABGScanResult;
+    }
+
+    console.log("[ABG Scan] Falling back to GPT-4o vision for direct image reading...");
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
