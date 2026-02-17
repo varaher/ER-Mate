@@ -213,27 +213,36 @@ export default function SimulationScreen() {
   };
 
   const finishSimulation = () => {
-    Alert.alert(
-      "End Simulation",
-      "Are you sure you want to end this simulation? You'll see your results.",
-      [
-        { text: "Continue", style: "cancel" },
-        {
-          text: "End & Review",
-          style: "destructive",
-          onPress: () => {
-            setIsRunning(false);
-            navigation.navigate("SimulationResult", {
-              caseId,
-              elapsedTime,
-              performedActions: Array.from(performedActions),
-              selectedDifferential,
-              hasCrashed: false,
-            });
+    const navigateToResults = () => {
+      setIsRunning(false);
+      navigation.navigate("SimulationResult", {
+        caseId,
+        elapsedTime,
+        performedActions: Array.from(performedActions),
+        selectedDifferential,
+        hasCrashed: false,
+      });
+    };
+
+    if (Platform.OS === "web") {
+      const confirmed = window.confirm("Are you sure you want to end this simulation? You'll see your results.");
+      if (confirmed) {
+        navigateToResults();
+      }
+    } else {
+      Alert.alert(
+        "End Simulation",
+        "Are you sure you want to end this simulation? You'll see your results.",
+        [
+          { text: "Continue", style: "cancel" },
+          {
+            text: "End & Review",
+            style: "destructive",
+            onPress: navigateToResults,
           },
-        },
-      ]
-    );
+        ]
+      );
+    }
   };
 
   const formatTime = (seconds: number) => {
