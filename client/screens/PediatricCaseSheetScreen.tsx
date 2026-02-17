@@ -308,6 +308,11 @@ export default function PediatricCaseSheetScreen() {
     temperature: "", trauma: "", signsOfTraumaIllness: [], evidenceOfInfection: "", longBoneDeformities: "", extremities: "", immobilize: ""
   });
   const [efastData, setEfastData] = useState<EFASTFormData>({ heart: "", abdomen: "", lungs: "", pelvis: "" });
+  const [abgData, setAbgData] = useState({
+    ph: "", pco2: "", po2: "", hco3: "", be: "", lactate: "", sao2: "", fio2: "", na: "", k: "", cl: "", anionGap: "", glucose: "", hb: "", aaGradient: "", notes: "", interpretation: ""
+  });
+  const [abgInterpreting, setAbgInterpreting] = useState(false);
+  const [abgInterpretation, setAbgInterpretation] = useState<string | null>(null);
   const [historyData, setHistoryData] = useState<PediatricHistoryFormData>({
     allergies: "", currentMedications: "", lastDoseMedications: "", medicationsInEnvironment: "", healthHistory: "", underlyingConditions: "", immunizationStatus: "", lastMeal: "", lmp: "", events: "", treatmentBeforeArrival: "",
     signsAndSymptoms: { breathingDifficulty: false, fever: false, vomiting: false, timeCourse: "", decreasedOralIntake: false, notes: "" }
@@ -378,6 +383,16 @@ export default function PediatricCaseSheetScreen() {
     }
     if (caseSheetData.primary_assessment?.efast) {
       setEfastData(caseSheetData.primary_assessment.efast);
+    }
+    if (caseSheetData.primary_assessment?.abg) {
+      const abg = caseSheetData.primary_assessment.abg;
+      setAbgData({
+        ph: abg.ph || "", pco2: abg.pco2 || "", po2: abg.po2 || "", hco3: abg.hco3 || "",
+        be: abg.be || "", lactate: abg.lactate || "", sao2: abg.sao2 || "", fio2: abg.fio2 || "",
+        na: abg.na || "", k: abg.k || "", cl: abg.cl || "", anionGap: abg.anionGap || "",
+        glucose: abg.glucose || "", hb: abg.hb || "", aaGradient: abg.aaGradient || "",
+        notes: abg.notes || "", interpretation: abg.interpretation || "",
+      });
     }
     if (caseSheetData.history) {
       setHistoryData(caseSheetData.history);
@@ -577,6 +592,13 @@ export default function PediatricCaseSheetScreen() {
         disability: disabilityData,
         exposure: exposureData,
         efast: efastData,
+        abg: {
+          ph: abgData.ph, pco2: abgData.pco2, po2: abgData.po2, hco3: abgData.hco3,
+          be: abgData.be, lactate: abgData.lactate, sao2: abgData.sao2, fio2: abgData.fio2,
+          na: abgData.na, k: abgData.k, cl: abgData.cl, anionGap: abgData.anionGap,
+          glucose: abgData.glucose, hb: abgData.hb, aaGradient: abgData.aaGradient,
+          notes: abgData.notes, interpretation: abgData.interpretation,
+        },
         airway_status: airwayData.status || "Patent",
         breathing_rr: parseFloat(breathingData.respiratoryRate) || 20,
         breathing_spo2: parseFloat(breathingData.spo2) || 98,
@@ -806,6 +828,64 @@ export default function PediatricCaseSheetScreen() {
           routes: [{ name: "Main", params: { screen: "DashboardTab" } }],
         });
       }
+    }
+  };
+
+  const handleABGInterpretation = async () => {
+    const abgValuesArr: string[] = [];
+    if (abgData.ph) abgValuesArr.push(`pH: ${abgData.ph}`);
+    if (abgData.pco2) abgValuesArr.push(`pCO2: ${abgData.pco2} mmHg`);
+    if (abgData.po2) abgValuesArr.push(`pO2: ${abgData.po2} mmHg`);
+    if (abgData.hco3) abgValuesArr.push(`HCO3: ${abgData.hco3} mEq/L`);
+    if (abgData.be) abgValuesArr.push(`BE: ${abgData.be} mEq/L`);
+    if (abgData.lactate) abgValuesArr.push(`Lactate: ${abgData.lactate} mmol/L`);
+    if (abgData.sao2) abgValuesArr.push(`SaO2: ${abgData.sao2}%`);
+    if (abgData.fio2) abgValuesArr.push(`FiO2: ${abgData.fio2}%`);
+    if (abgData.na) abgValuesArr.push(`Na: ${abgData.na} mEq/L`);
+    if (abgData.k) abgValuesArr.push(`K: ${abgData.k} mEq/L`);
+    if (abgData.cl) abgValuesArr.push(`Cl: ${abgData.cl} mEq/L`);
+    if (abgData.anionGap) abgValuesArr.push(`AG: ${abgData.anionGap}`);
+    if (abgData.glucose) abgValuesArr.push(`Glucose: ${abgData.glucose} mg/dL`);
+    if (abgData.hb) abgValuesArr.push(`Hb: ${abgData.hb} g/dL`);
+    if (abgData.aaGradient) abgValuesArr.push(`A-a gradient: ${abgData.aaGradient} mmHg`);
+    if (abgData.notes) abgValuesArr.push(`Notes: ${abgData.notes}`);
+
+    const abgValues = abgValuesArr.join(", ");
+    if (abgValuesArr.length < 2) {
+      Alert.alert("Missing Values", "Please enter at least 2 ABG values (pH, pCO2, pO2, HCO3, BE, Lactate, etc.)");
+      return;
+    }
+
+    setAbgInterpreting(true);
+    setAbgInterpretation(null);
+
+    try {
+      const { getApiUrl } = await import("@/lib/query-client");
+      const response = await fetch(`${getApiUrl()}/api/ai/interpret-abg`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          abg_values: abgValues,
+          patient_context: {
+            age: patient?.age,
+            sex: patient?.sex,
+            presenting_complaint: triageData?.chiefComplaint,
+            pediatric: true,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to interpret ABG");
+      }
+
+      const data = await response.json();
+      setAbgInterpretation(data.interpretation || "Unable to interpret ABG values");
+    } catch (error) {
+      console.error("ABG interpretation error:", error);
+      Alert.alert("Error", "Failed to get AI interpretation. Please try again.");
+    } finally {
+      setAbgInterpreting(false);
     }
   };
 
@@ -1406,6 +1486,120 @@ export default function PediatricCaseSheetScreen() {
 
               <Text style={[styles.fieldLabel, { color: theme.text }]}>Pelvis</Text>
               <TextInput style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Check for pelvic fractures or injury..." placeholderTextColor={theme.textMuted} value={efastData.pelvis} onChangeText={(v) => setEfastData((p) => ({ ...p, pelvis: v }))} multiline />
+            </View>
+
+            <View style={[styles.card, { backgroundColor: theme.card }]}>
+              <Text style={[styles.cardTitle, { color: theme.text }]}>ABG / VBG</Text>
+              <Text style={[styles.cardSubtitle, { color: theme.textSecondary }]}>Arterial or Venous Blood Gas analysis</Text>
+
+              <View style={styles.abgNormalValuesCard}>
+                <Text style={[styles.abgNormalTitle, { color: theme.text }]}>Pediatric Normal Ranges</Text>
+                <View style={styles.abgNormalGrid}>
+                  <View style={styles.abgNormalItem}><Text style={[styles.abgNormalLabel, { color: theme.textSecondary }]}>pH</Text><Text style={[styles.abgNormalValue, { color: theme.text }]}>7.35 - 7.45</Text></View>
+                  <View style={styles.abgNormalItem}><Text style={[styles.abgNormalLabel, { color: theme.textSecondary }]}>pCO2</Text><Text style={[styles.abgNormalValue, { color: theme.text }]}>35 - 45 mmHg</Text></View>
+                  <View style={styles.abgNormalItem}><Text style={[styles.abgNormalLabel, { color: theme.textSecondary }]}>pO2</Text><Text style={[styles.abgNormalValue, { color: theme.text }]}>80 - 100 mmHg</Text></View>
+                  <View style={styles.abgNormalItem}><Text style={[styles.abgNormalLabel, { color: theme.textSecondary }]}>HCO3</Text><Text style={[styles.abgNormalValue, { color: theme.text }]}>22 - 26 mEq/L</Text></View>
+                  <View style={styles.abgNormalItem}><Text style={[styles.abgNormalLabel, { color: theme.textSecondary }]}>BE</Text><Text style={[styles.abgNormalValue, { color: theme.text }]}>-2 to +2</Text></View>
+                  <View style={styles.abgNormalItem}><Text style={[styles.abgNormalLabel, { color: theme.textSecondary }]}>Lactate</Text><Text style={[styles.abgNormalValue, { color: theme.text }]}>0.5 - 2.0 mmol/L</Text></View>
+                </View>
+              </View>
+
+              <Text style={[styles.abgSectionLabel, { color: theme.text }]}>Blood Gas Values</Text>
+              <View style={styles.abgGrid}>
+                <View style={styles.abgSmallField}>
+                  <Text style={[styles.abgFieldLabel, { color: theme.textSecondary }]}>pH</Text>
+                  <TextInput style={[styles.abgInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]} placeholder="7.40" placeholderTextColor={theme.textMuted} value={abgData.ph} onChangeText={(v) => setAbgData((p) => ({ ...p, ph: v }))} keyboardType="numeric" />
+                </View>
+                <View style={styles.abgSmallField}>
+                  <Text style={[styles.abgFieldLabel, { color: theme.textSecondary }]}>pCO2</Text>
+                  <TextInput style={[styles.abgInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]} placeholder="40" placeholderTextColor={theme.textMuted} value={abgData.pco2} onChangeText={(v) => setAbgData((p) => ({ ...p, pco2: v }))} keyboardType="numeric" />
+                </View>
+                <View style={styles.abgSmallField}>
+                  <Text style={[styles.abgFieldLabel, { color: theme.textSecondary }]}>pO2</Text>
+                  <TextInput style={[styles.abgInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]} placeholder="90" placeholderTextColor={theme.textMuted} value={abgData.po2} onChangeText={(v) => setAbgData((p) => ({ ...p, po2: v }))} keyboardType="numeric" />
+                </View>
+                <View style={styles.abgSmallField}>
+                  <Text style={[styles.abgFieldLabel, { color: theme.textSecondary }]}>HCO3</Text>
+                  <TextInput style={[styles.abgInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]} placeholder="24" placeholderTextColor={theme.textMuted} value={abgData.hco3} onChangeText={(v) => setAbgData((p) => ({ ...p, hco3: v }))} keyboardType="numeric" />
+                </View>
+              </View>
+              <View style={styles.abgGrid}>
+                <View style={styles.abgSmallField}>
+                  <Text style={[styles.abgFieldLabel, { color: theme.textSecondary }]}>BE</Text>
+                  <TextInput style={[styles.abgInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]} placeholder="0" placeholderTextColor={theme.textMuted} value={abgData.be} onChangeText={(v) => setAbgData((p) => ({ ...p, be: v }))} keyboardType="numeric" />
+                </View>
+                <View style={styles.abgSmallField}>
+                  <Text style={[styles.abgFieldLabel, { color: theme.textSecondary }]}>Lactate</Text>
+                  <TextInput style={[styles.abgInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]} placeholder="1.0" placeholderTextColor={theme.textMuted} value={abgData.lactate} onChangeText={(v) => setAbgData((p) => ({ ...p, lactate: v }))} keyboardType="numeric" />
+                </View>
+                <View style={styles.abgSmallField}>
+                  <Text style={[styles.abgFieldLabel, { color: theme.textSecondary }]}>SaO2</Text>
+                  <TextInput style={[styles.abgInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]} placeholder="98" placeholderTextColor={theme.textMuted} value={abgData.sao2} onChangeText={(v) => setAbgData((p) => ({ ...p, sao2: v }))} keyboardType="numeric" />
+                </View>
+                <View style={styles.abgSmallField}>
+                  <Text style={[styles.abgFieldLabel, { color: theme.textSecondary }]}>FiO2</Text>
+                  <TextInput style={[styles.abgInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]} placeholder="21" placeholderTextColor={theme.textMuted} value={abgData.fio2} onChangeText={(v) => setAbgData((p) => ({ ...p, fio2: v }))} keyboardType="numeric" />
+                </View>
+              </View>
+
+              <Text style={[styles.abgSectionLabel, { color: theme.text }]}>Electrolytes</Text>
+              <View style={styles.abgGrid}>
+                <View style={styles.abgSmallField}>
+                  <Text style={[styles.abgFieldLabel, { color: theme.textSecondary }]}>Na</Text>
+                  <TextInput style={[styles.abgInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]} placeholder="140" placeholderTextColor={theme.textMuted} value={abgData.na} onChangeText={(v) => setAbgData((p) => ({ ...p, na: v }))} keyboardType="numeric" />
+                </View>
+                <View style={styles.abgSmallField}>
+                  <Text style={[styles.abgFieldLabel, { color: theme.textSecondary }]}>K</Text>
+                  <TextInput style={[styles.abgInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]} placeholder="4.0" placeholderTextColor={theme.textMuted} value={abgData.k} onChangeText={(v) => setAbgData((p) => ({ ...p, k: v }))} keyboardType="numeric" />
+                </View>
+                <View style={styles.abgSmallField}>
+                  <Text style={[styles.abgFieldLabel, { color: theme.textSecondary }]}>Cl</Text>
+                  <TextInput style={[styles.abgInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]} placeholder="103" placeholderTextColor={theme.textMuted} value={abgData.cl} onChangeText={(v) => setAbgData((p) => ({ ...p, cl: v }))} keyboardType="numeric" />
+                </View>
+                <View style={styles.abgSmallField}>
+                  <Text style={[styles.abgFieldLabel, { color: theme.textSecondary }]}>AG</Text>
+                  <TextInput style={[styles.abgInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]} placeholder="12" placeholderTextColor={theme.textMuted} value={abgData.anionGap} onChangeText={(v) => setAbgData((p) => ({ ...p, anionGap: v }))} keyboardType="numeric" />
+                </View>
+              </View>
+              <View style={styles.abgGrid}>
+                <View style={styles.abgSmallField}>
+                  <Text style={[styles.abgFieldLabel, { color: theme.textSecondary }]}>Glucose</Text>
+                  <TextInput style={[styles.abgInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]} placeholder="100" placeholderTextColor={theme.textMuted} value={abgData.glucose} onChangeText={(v) => setAbgData((p) => ({ ...p, glucose: v }))} keyboardType="numeric" />
+                </View>
+                <View style={styles.abgSmallField}>
+                  <Text style={[styles.abgFieldLabel, { color: theme.textSecondary }]}>Hb</Text>
+                  <TextInput style={[styles.abgInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]} placeholder="12" placeholderTextColor={theme.textMuted} value={abgData.hb} onChangeText={(v) => setAbgData((p) => ({ ...p, hb: v }))} keyboardType="numeric" />
+                </View>
+                <View style={styles.abgSmallField}>
+                  <Text style={[styles.abgFieldLabel, { color: theme.textSecondary }]}>A-a Gradient</Text>
+                  <TextInput style={[styles.abgInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]} placeholder="10" placeholderTextColor={theme.textMuted} value={abgData.aaGradient} onChangeText={(v) => setAbgData((p) => ({ ...p, aaGradient: v }))} keyboardType="numeric" />
+                </View>
+              </View>
+
+              <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.md }]}>Notes</Text>
+              <TextInput style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Additional ABG notes..." placeholderTextColor={theme.textMuted} value={abgData.notes} onChangeText={(v) => setAbgData((p) => ({ ...p, notes: v }))} multiline />
+
+              <Pressable style={[styles.aiInterpretBtn, { backgroundColor: theme.primary }]} onPress={handleABGInterpretation} disabled={abgInterpreting}>
+                {abgInterpreting ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Feather name="cpu" size={16} color="#FFFFFF" />
+                )}
+                <Text style={styles.aiInterpretBtnText}>{abgInterpreting ? "Interpreting..." : "AI Interpret ABG"}</Text>
+              </Pressable>
+
+              {abgInterpretation && (
+                <View style={[styles.abgInterpretationCard, { backgroundColor: `${theme.primary}10`, borderColor: theme.primary }]}>
+                  <View style={styles.abgInterpretationHeader}>
+                    <Feather name="cpu" size={16} color={theme.primary} />
+                    <Text style={[styles.abgInterpretationTitle, { color: theme.primary }]}>AI Interpretation</Text>
+                  </View>
+                  <Text style={[styles.abgInterpretationText, { color: theme.text }]}>{abgInterpretation}</Text>
+                </View>
+              )}
+
+              <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.md }]}>Your Interpretation (Optional)</Text>
+              <TextInput style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Your clinical interpretation of the ABG..." placeholderTextColor={theme.textMuted} value={abgData.interpretation} onChangeText={(v) => setAbgData((p) => ({ ...p, interpretation: v }))} multiline numberOfLines={2} />
             </View>
           </>
         )}
@@ -2045,6 +2239,23 @@ const styles = StyleSheet.create({
   procedureRow: { flexDirection: "row", alignItems: "center", paddingVertical: Spacing.md, paddingHorizontal: Spacing.md, gap: Spacing.md },
   checkbox: { width: 22, height: 22, borderWidth: 2, borderRadius: 4, justifyContent: "center", alignItems: "center" },
   procedureLabel: { ...Typography.body, flex: 1 },
+  abgNormalValuesCard: { padding: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1, marginVertical: Spacing.sm },
+  abgNormalTitle: { ...Typography.bodyMedium, fontWeight: "600", marginBottom: Spacing.sm },
+  abgNormalGrid: { flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm },
+  abgNormalItem: { width: "48%", flexDirection: "row", justifyContent: "space-between", paddingVertical: 4 },
+  abgNormalLabel: { ...Typography.caption },
+  abgNormalValue: { ...Typography.caption, fontWeight: "600" },
+  abgSectionLabel: { ...Typography.bodyMedium, fontWeight: "600", marginTop: Spacing.md, marginBottom: Spacing.sm },
+  abgGrid: { flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm, marginBottom: Spacing.md },
+  abgSmallField: { width: "23%", minWidth: 70 },
+  abgFieldLabel: { ...Typography.caption, marginBottom: 4 },
+  abgInput: { height: 40, paddingHorizontal: Spacing.sm, borderRadius: BorderRadius.sm, borderWidth: 1, fontSize: 14, textAlign: "center" },
+  aiInterpretBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, borderRadius: BorderRadius.md, gap: Spacing.sm, marginTop: Spacing.sm },
+  aiInterpretBtnText: { ...Typography.bodyMedium, color: "#FFFFFF", fontWeight: "600" },
+  abgInterpretationCard: { padding: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1, marginTop: Spacing.md },
+  abgInterpretationHeader: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginBottom: Spacing.sm },
+  abgInterpretationTitle: { ...Typography.bodyMedium, fontWeight: "700" },
+  abgInterpretationText: { ...Typography.body, lineHeight: 22 },
   dispositionOptions: { flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm, marginTop: Spacing.sm },
   dispositionBtn: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.md },
   generateSummaryBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: Spacing.lg, borderRadius: BorderRadius.md, gap: Spacing.sm, marginTop: Spacing.lg },
