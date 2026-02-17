@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -7,30 +7,93 @@ import {
   Alert,
   ActivityIndicator,
   Pressable,
-  Image,
+  Platform,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
+import * as AuthSession from "expo-auth-session";
+import * as WebBrowser from "expo-web-browser";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Colors, Spacing, BorderRadius, Typography } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
+WebBrowser.maybeCompleteAuthSession();
+
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+
+const GOOGLE_CLIENT_ID = "748928941626-p243s6m10cl8r340hd40huefsogmcg2q.apps.googleusercontent.com";
 
 export default function LoginScreen() {
   const navigation = useNavigation<NavigationProp>();
-  const { login } = useAuth();
+  const { login, googleSignIn } = useAuth();
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  const discovery = AuthSession.useAutoDiscovery("https://accounts.google.com");
+
+  const redirectUri = AuthSession.makeRedirectUri({
+    scheme: "ermate",
+  });
+
+  const [request, response, promptAsync] = AuthSession.useAuthRequest(
+    {
+      clientId: GOOGLE_CLIENT_ID,
+      scopes: ["openid", "profile", "email"],
+      redirectUri,
+      responseType: AuthSession.ResponseType.Token,
+    },
+    discovery
+  );
+
+  useEffect(() => {
+    if (response?.type === "success") {
+      handleGoogleResponse(response);
+    } else if (response?.type === "error") {
+      setGoogleLoading(false);
+      Alert.alert("Sign-In Error", response.error?.message || "Google sign-in was cancelled");
+    } else if (response?.type === "dismiss") {
+      setGoogleLoading(false);
+    }
+  }, [response]);
+
+  const handleGoogleResponse = async (result: AuthSession.AuthSessionResult) => {
+    if (result.type !== "success") return;
+
+    setGoogleLoading(true);
+    try {
+      const { access_token } = result.params;
+
+      const userInfoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+        headers: { Authorization: `Bearer ${access_token}` },
+      });
+      const userInfo = await userInfoRes.json();
+
+      const signInResult = await googleSignIn({
+        name: userInfo.name || userInfo.given_name || "User",
+        email: userInfo.email,
+        accessToken: access_token,
+      });
+
+      if (!signInResult.success) {
+        Alert.alert("Sign-In Failed", signInResult.error || "Could not sign in with Google");
+      }
+    } catch (error) {
+      Alert.alert("Error", "Something went wrong during Google sign-in");
+      console.error("[LoginScreen] Google sign-in error:", error);
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -44,6 +107,16 @@ export default function LoginScreen() {
 
     if (!result.success) {
       Alert.alert("Login Failed", result.error || "Invalid credentials");
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setGoogleLoading(true);
+    try {
+      await promptAsync();
+    } catch (error) {
+      setGoogleLoading(false);
+      Alert.alert("Error", "Could not start Google sign-in");
     }
   };
 
@@ -64,6 +137,38 @@ export default function LoginScreen() {
           <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
             Emergency Room EMR
           </Text>
+        </View>
+
+        <Pressable
+          style={({ pressed }) => [
+            styles.googleButton,
+            {
+              backgroundColor: theme.card,
+              borderColor: theme.border,
+              opacity: pressed || googleLoading ? 0.8 : 1,
+            },
+          ]}
+          onPress={handleGoogleSignIn}
+          disabled={googleLoading || !request}
+        >
+          {googleLoading ? (
+            <ActivityIndicator color={theme.text} size="small" />
+          ) : (
+            <>
+              <View style={styles.googleIconContainer}>
+                <Text style={styles.googleG}>G</Text>
+              </View>
+              <Text style={[styles.googleButtonText, { color: theme.text }]}>
+                Sign in with Google
+              </Text>
+            </>
+          )}
+        </Pressable>
+
+        <View style={styles.dividerRow}>
+          <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
+          <Text style={[styles.dividerText, { color: theme.textMuted }]}>or</Text>
+          <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
         </View>
 
         <View style={styles.form}>
@@ -169,6 +274,44 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     ...Typography.body,
+  },
+  googleButton: {
+    height: Spacing.buttonHeight,
+    borderRadius: BorderRadius.md,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    gap: Spacing.md,
+  },
+  googleIconContainer: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#4285F4",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  googleG: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  googleButtonText: {
+    ...Typography.bodyMedium,
+  },
+  dividerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: Spacing.xl,
+    gap: Spacing.md,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+  },
+  dividerText: {
+    ...Typography.small,
   },
   form: {
     gap: Spacing.lg,
