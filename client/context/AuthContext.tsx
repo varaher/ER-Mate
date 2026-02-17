@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { apiPost, apiGet, setOnTokenExpiredCallback } from "@/lib/api";
+import { getApiUrl } from "@/lib/query-client";
 
 export interface User {
   id: string;
@@ -18,6 +19,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (data: RegisterData) => Promise<{ success: boolean; error?: string }>;
+  googleSignIn: (params: { name: string; email: string; idToken?: string; accessToken?: string }) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -114,6 +116,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const googleSignIn = async (params: { name: string; email: string; idToken?: string; accessToken?: string }) => {
+    try {
+      await AsyncStorage.removeItem("token");
+      await AsyncStorage.removeItem("user");
+
+      const baseUrl = getApiUrl();
+      const response = await fetch(`${baseUrl}/api/auth/google`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(params),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({ error: "Google sign-in failed" }));
+        return { success: false, error: errData.error || "Google sign-in failed" };
+      }
+
+      const data = await response.json();
+      const { access_token, user: userData } = data;
+
+      if (access_token && userData) {
+        await AsyncStorage.setItem("token", access_token);
+        await AsyncStorage.setItem("user", JSON.stringify(userData));
+        setToken(access_token);
+        setUser(userData);
+        return { success: true };
+      }
+
+      return { success: false, error: "Invalid response from server" };
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
+    }
+  };
+
   const logout = async () => {
     await AsyncStorage.removeItem("token");
     await AsyncStorage.removeItem("user");
@@ -144,6 +180,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated: !!token && !!user,
         login,
         register,
+        googleSignIn,
         logout,
         refreshUser,
       }}

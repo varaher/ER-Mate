@@ -127,6 +127,65 @@ function formatSecondaryAssessment(assessment: DischargeSummaryData["discharge_s
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  app.post("/api/auth/google", async (req: Request, res: Response) => {
+    try {
+      const { idToken, accessToken, name, email } = req.body;
+
+      if (!email) {
+        return res.status(400).json({ error: "Email is required" });
+      }
+
+      const EXTERNAL_API = "https://er-emr-backend.onrender.com/api";
+      const generatedPassword = `google_${Buffer.from(email).toString("base64").slice(0, 20)}_${Date.now()}`;
+
+      let loginRes = await fetch(`${EXTERNAL_API}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password: email }),
+      });
+
+      if (loginRes.ok) {
+        const loginData = await loginRes.json();
+        return res.json(loginData);
+      }
+
+      const registerRes = await fetch(`${EXTERNAL_API}/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name || email.split("@")[0],
+          email,
+          password: email,
+          role: "resident",
+        }),
+      });
+
+      if (registerRes.ok) {
+        const registerData = await registerRes.json();
+        return res.json(registerData);
+      }
+
+      const regError = await registerRes.text();
+      console.error("[Google Auth] Registration failed:", regError);
+
+      loginRes = await fetch(`${EXTERNAL_API}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password: email }),
+      });
+
+      if (loginRes.ok) {
+        const loginData = await loginRes.json();
+        return res.json(loginData);
+      }
+
+      return res.status(401).json({ error: "Google sign-in failed. Please try email/password login." });
+    } catch (error) {
+      console.error("[Google Auth] Error:", error);
+      res.status(500).json({ error: "Google sign-in failed" });
+    }
+  });
+
   app.post("/api/export/discharge-pdf", async (req: Request, res: Response) => {
     try {
       const data: DischargeSummaryData = req.body;
