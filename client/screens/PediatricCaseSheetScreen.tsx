@@ -13,6 +13,7 @@ import SmartDictation, { SmartDictationExtracted } from "@/components/SmartDicta
 import { AIDiagnosisPanel } from "@/components/AIDiagnosisPanel";
 import { useTheme } from "@/hooks/useTheme";
 import { apiGet, apiPatch, apiPut, invalidateCases } from "@/lib/api";
+import { getApiUrl } from "@/lib/query-client";
 import { cacheCasePayload } from "@/lib/caseCache";
 import { useCase } from "@/context/CaseContext";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
@@ -860,8 +861,8 @@ export default function PediatricCaseSheetScreen() {
     setAbgInterpretation(null);
 
     try {
-      const { getApiUrl } = await import("@/lib/query-client");
-      const response = await fetch(`${getApiUrl()}/api/ai/interpret-abg`, {
+      const baseUrl = getApiUrl().replace(/\/$/, '');
+      const response = await fetch(`${baseUrl}/api/ai/interpret-abg`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -29,6 +29,7 @@ import SmartDictation, { SmartDictationExtracted } from "@/components/SmartDicta
 import { useTheme } from "@/hooks/useTheme";
 import { useCase } from "@/context/CaseContext";
 import { apiGet, apiPatch, apiPut, apiUpload, invalidateCases } from "@/lib/api";
+import { getApiUrl } from "@/lib/query-client";
 import { cacheCasePayload } from "@/lib/caseCache";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
@@ -1371,8 +1372,8 @@ export default function CaseSheetScreen() {
     setAbgInterpretation(null);
     
     try {
-      const { getApiUrl } = await import("@/lib/query-client");
-      const response = await fetch(`${getApiUrl()}/api/ai/interpret-abg`, {
+      const baseUrl = getApiUrl().replace(/\/$/, '');
+      const response = await fetch(`${baseUrl}/api/ai/interpret-abg`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
