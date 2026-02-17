@@ -2606,8 +2606,16 @@ export default function CaseSheetScreen() {
                   <Pressable
                     style={[styles.abgCopyDxBtn, { borderColor: theme.primary }]}
                     onPress={() => {
-                      updateFormData("adjuncts", "abgFinalDiagnosis", abgInterpretation.replace(/\*\*/g, ''));
-                      Alert.alert("Copied", "AI interpretation copied to Final ABG Diagnosis.");
+                      const lines = abgInterpretation.replace(/\*\*/g, '').split('\n');
+                      const filtered: string[] = [];
+                      let sectionCount = 0;
+                      for (const line of lines) {
+                        if (/^\d+\.\s/.test(line.trim())) sectionCount++;
+                        if (sectionCount > 3) break;
+                        filtered.push(line);
+                      }
+                      updateFormData("adjuncts", "abgFinalDiagnosis", filtered.join('\n').trim());
+                      Alert.alert("Copied", "First 3 sections copied to Final ABG Diagnosis.");
                     }}
                   >
                     <Feather name="copy" size={14} color={theme.primary} />
