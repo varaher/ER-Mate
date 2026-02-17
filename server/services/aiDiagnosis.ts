@@ -687,13 +687,6 @@ ${patientContext?.age ? `Patient Age: ${patientContext.age}` : ""}
 ${patientContext?.sex ? `Patient Sex: ${patientContext.sex}` : ""}
 ${patientContext?.presenting_complaint ? `Presenting Complaint: ${patientContext.presenting_complaint}` : ""}
 
-Provide a concise interpretation including:
-1. Acid-base status (respiratory/metabolic acidosis/alkalosis, mixed disorder)
-2. Oxygenation assessment
-3. Compensation status (compensated, partially compensated, uncompensated)
-4. Clinical significance and likely causes
-5. Suggested actions if critical
-
 Use the stepwise approach:
 1. Check pH (acidemia <7.35, alkalemia >7.45)
 2. Check primary disorder (pCO2 for respiratory, HCO3 for metabolic)
@@ -701,7 +694,19 @@ Use the stepwise approach:
 4. Check anion gap if metabolic acidosis
 5. Consider delta ratio if high anion gap
 
-Be concise but clinically relevant. Format as a clear, readable paragraph.`;
+You MUST format your response EXACTLY as numbered sections using this structure:
+
+1. **Acid-base status:** [Describe the primary acid-base disorder - respiratory/metabolic acidosis/alkalosis, mixed disorder. Include specific values.]
+
+2. **Oxygenation assessment:** [Assess pO2, SaO2, FiO2, A-a gradient. Describe oxygenation status.]
+
+3. **Compensation status:** [Describe compensation - compensated, partially compensated, uncompensated. Use Winter's formula or expected changes.]
+
+4. **Clinical significance and likely causes:** [Clinical relevance, likely causes based on patient context, differential considerations.]
+
+5. **Suggested actions:** [If critical values present, suggest immediate actions. If normal, state no urgent action needed.]
+
+Each section MUST start with the number and bold heading as shown above. Use **bold** for key findings and abnormal values within each section.`;
 
   try {
     const response = await openai.chat.completions.create({
@@ -714,7 +719,7 @@ Be concise but clinically relevant. Format as a clear, readable paragraph.`;
         { role: "user", content: prompt },
       ],
       temperature: 0.3,
-      max_tokens: 500,
+      max_tokens: 800,
     });
 
     return response.choices[0]?.message?.content || "Unable to interpret ABG values";
