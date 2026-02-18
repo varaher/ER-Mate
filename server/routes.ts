@@ -5,6 +5,7 @@ import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, Bord
 import multer from "multer";
 import { generateDiagnosisSuggestions, recordFeedback, getFeedbackStats, getLearningInsights, generateCourseInHospital, extractClinicalDataFromVoice, transcribeAndExtractVoice, type AIFeedback, type FeedbackResult, type ExtractedClinicalData } from "./services/aiDiagnosis";
 import { getOrCreateSubscription, canCreateCase, incrementCaseCount, activatePremium, cancelSubscription, FREE_CASE_LIMIT, PREMIUM_PRICE_INR } from "./services/subscription";
+import { getEMReferenceResponse, EM_TOPICS, type EMReferenceMessage } from "./services/emReference";
 
 const upload = multer({ 
   storage: multer.memoryStorage(),
@@ -2304,6 +2305,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Cancel subscription error:", error);
       res.status(500).json({ error: "Failed to cancel subscription" });
+    }
+  });
+
+  app.get("/api/em-reference/topics", (_req: Request, res: Response) => {
+    res.json(EM_TOPICS);
+  });
+
+  app.post("/api/em-reference/chat", async (req: Request, res: Response) => {
+    try {
+      const { messages, topic } = req.body as {
+        messages: EMReferenceMessage[];
+        topic?: string;
+      };
+
+      if (!messages || !Array.isArray(messages) || messages.length === 0) {
+        return res.status(400).json({ error: "messages array is required" });
+      }
+
+      const response = await getEMReferenceResponse(messages, topic);
+      res.json({ response });
+    } catch (error) {
+      console.error("[EMReference] Chat error:", error);
+      res.status(500).json({ error: "Failed to generate response" });
     }
   });
 
