@@ -11,6 +11,7 @@ import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 import DashboardScreen from "@/screens/DashboardScreen";
 import CasesScreen from "@/screens/CasesScreen";
+import LearnScreen from "@/screens/LearnScreen";
 import LogsScreen from "@/screens/LogsScreen";
 import ProfileScreen from "@/screens/ProfileScreen";
 
@@ -18,6 +19,7 @@ export type MainTabParamList = {
   DashboardTab: undefined;
   CasesTab: undefined;
   NewPatient: undefined;
+  LearnTab: undefined;
   LogsTab: undefined;
   ProfileTab: undefined;
 };
@@ -106,6 +108,16 @@ export default function MainTabNavigator() {
         options={{
           title: "",
           tabBarButton: () => <NewPatientButton />,
+        }}
+      />
+      <Tab.Screen
+        name="LearnTab"
+        component={LearnScreen}
+        options={{
+          title: "Learn",
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="book-open" size={size} color={color} />
+          ),
         }}
       />
       <Tab.Screen
