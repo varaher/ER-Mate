@@ -679,19 +679,39 @@ IMPORTANT RULES:
 
 export async function interpretABG(
   abgValues: string,
-  patientContext?: { age?: string | number; sex?: string; presenting_complaint?: string }
+  patientContext?: { 
+    age?: string | number; 
+    sex?: string; 
+    presenting_complaint?: string;
+    vitals?: string;
+    abcde?: string;
+    history?: string;
+    examination?: string;
+    diagnosis?: string;
+  }
 ): Promise<string> {
   const openai = getOpenAIClient();
   if (!openai) {
     return "AI interpretation unavailable - OpenAI API not configured. Manual interpretation required.";
   }
 
+  const clinicalContextParts: string[] = [];
+  if (patientContext?.age) clinicalContextParts.push(`Age: ${patientContext.age}`);
+  if (patientContext?.sex) clinicalContextParts.push(`Sex: ${patientContext.sex}`);
+  if (patientContext?.presenting_complaint) clinicalContextParts.push(`Chief Complaint: ${patientContext.presenting_complaint}`);
+  if (patientContext?.vitals) clinicalContextParts.push(`Vitals: ${patientContext.vitals}`);
+  if (patientContext?.abcde) clinicalContextParts.push(`Primary Survey (ABCDE): ${patientContext.abcde}`);
+  if (patientContext?.history) clinicalContextParts.push(`History: ${patientContext.history}`);
+  if (patientContext?.examination) clinicalContextParts.push(`Examination: ${patientContext.examination}`);
+  if (patientContext?.diagnosis) clinicalContextParts.push(`Working Diagnosis: ${patientContext.diagnosis}`);
+
+  const hasRichContext = clinicalContextParts.length > 2;
+
   const prompt = `You are an expert emergency medicine physician. Interpret the following ABG/VBG values and provide a clear clinical interpretation.
 
 ABG Values: ${abgValues}
-${patientContext?.age ? `Patient Age: ${patientContext.age}` : ""}
-${patientContext?.sex ? `Patient Sex: ${patientContext.sex}` : ""}
-${patientContext?.presenting_complaint ? `Presenting Complaint: ${patientContext.presenting_complaint}` : ""}
+
+${clinicalContextParts.length > 0 ? `CLINICAL CONTEXT:\n${clinicalContextParts.join("\n")}` : "No patient context provided."}
 
 Use the stepwise approach:
 1. Check pH (acidemia <7.35, alkalemia >7.45)
@@ -704,13 +724,13 @@ You MUST format your response EXACTLY as numbered sections using this structure:
 
 1. **Acid-base status:** [Describe the primary acid-base disorder - respiratory/metabolic acidosis/alkalosis, mixed disorder. Include specific values.]
 
-2. **Oxygenation assessment:** [Assess pO2, SaO2, FiO2, A-a gradient. Describe oxygenation status.]
+2. **Oxygenation assessment:** [Assess pO2, SaO2, FiO2, A-a gradient. Describe oxygenation status.${hasRichContext ? " Correlate with the patient's SpO2, oxygen supplementation, and respiratory status from the clinical context." : ""}]
 
 3. **Compensation status:** [Describe compensation - compensated, partially compensated, uncompensated. Use Winter's formula or expected changes.]
 
-4. **Clinical significance and likely causes:** [Clinical relevance, likely causes based on patient context, differential considerations.]
+4. **Clinical significance and likely causes:** [Clinical relevance, likely causes${hasRichContext ? " — correlate ABG findings with the chief complaint, vitals, ABCDE assessment, history, and examination findings provided. Explain how the ABG fits the overall clinical picture" : " based on patient context"}, differential considerations.]
 
-5. **Suggested actions:** [If critical values present, suggest immediate actions. If normal, state no urgent action needed.]
+5. **Suggested actions:** [If critical values present, suggest immediate actions.${hasRichContext ? " Consider what interventions are already in place (from ABCDE) and suggest further steps." : ""} If normal, state no urgent action needed.]
 
 Each section MUST start with the number and bold heading as shown above. Use **bold** for key findings and abnormal values within each section.
 
@@ -722,12 +742,12 @@ IMPORTANT: After the 5 sections, add a final line starting with "SUMMARY:" follo
       messages: [
         { 
           role: "system", 
-          content: "You are an expert emergency medicine physician providing ABG interpretation. Be concise, clinically relevant, and actionable." 
+          content: "You are an expert emergency medicine physician providing ABG interpretation. Be concise, clinically relevant, and actionable. When clinical context is provided (chief complaint, vitals, ABCDE assessment, history, examination), you MUST correlate the ABG findings with the full clinical picture to give a contextual interpretation, not just a standalone ABG analysis." 
         },
         { role: "user", content: prompt },
       ],
       temperature: 0.3,
-      max_tokens: 900,
+      max_tokens: 1200,
     });
 
     return response.choices[0]?.message?.content || "Unable to interpret ABG values";

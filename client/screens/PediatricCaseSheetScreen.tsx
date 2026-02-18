@@ -862,6 +862,32 @@ export default function PediatricCaseSheetScreen() {
 
     try {
       const baseUrl = getApiUrl().replace(/\/$/, '');
+      const vitalsParts: string[] = [];
+      if (circulationData.heartRate) vitalsParts.push(`HR: ${circulationData.heartRate}`);
+      if (circulationData.bloodPressure) vitalsParts.push(`BP: ${circulationData.bloodPressure}`);
+      if (breathingData.respiratoryRate) vitalsParts.push(`RR: ${breathingData.respiratoryRate}`);
+      if (breathingData.spo2) vitalsParts.push(`SpO2: ${breathingData.spo2}%`);
+      if (exposureData.temperature) vitalsParts.push(`Temp: ${exposureData.temperature}`);
+      if (disabilityData.glucose) vitalsParts.push(`GRBS: ${disabilityData.glucose}`);
+
+      const abcdeParts: string[] = [];
+      if (airwayData.status) abcdeParts.push(`Airway: ${airwayData.status}${airwayData.intervention ? ` (${airwayData.intervention})` : ""}`);
+      if (breathingData.workOfBreathing?.length) abcdeParts.push(`Breathing: WOB ${breathingData.workOfBreathing.join(", ")}, Air entry ${breathingData.airEntry || "Equal"}${breathingData.intervention ? ` (${breathingData.intervention})` : ""}`);
+      if (circulationData.crt) abcdeParts.push(`Circulation: CRT ${circulationData.crt}, Skin ${circulationData.skinColorTemp || "Normal"}${circulationData.intervention ? ` (${circulationData.intervention})` : ""}`);
+      if (disabilityData.avpuGcs) abcdeParts.push(`Disability: ${disabilityData.avpuGcs}, Pupils: ${disabilityData.pupils || "Normal"}`);
+
+      const historyParts: string[] = [];
+      if (patient?.chief_complaint) historyParts.push(`Chief Complaint: ${patient.chief_complaint}`);
+      if (historyData.events) historyParts.push(`Events/HOPI: ${historyData.events}`);
+      if (historyData.healthHistory) historyParts.push(`PMH: ${historyData.healthHistory}`);
+      if (historyData.allergies) historyParts.push(`Allergies: ${historyData.allergies}`);
+      if (historyData.currentMedications) historyParts.push(`Medications: ${historyData.currentMedications}`);
+
+      const examParts: string[] = [];
+      if (examData.respiratory) examParts.push(`Respiratory: ${examData.respiratory}`);
+      if (examData.cardiovascular) examParts.push(`CVS: ${examData.cardiovascular}`);
+      if (examData.abdomen) examParts.push(`Abdomen: ${examData.abdomen}`);
+
       const response = await fetch(`${baseUrl}/api/ai/interpret-abg`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -870,8 +896,12 @@ export default function PediatricCaseSheetScreen() {
           patient_context: {
             age: patient?.age,
             sex: patient?.sex,
-            presenting_complaint: triageData?.chiefComplaint,
-            pediatric: true,
+            presenting_complaint: patient?.chief_complaint || triageData?.chiefComplaint,
+            vitals: vitalsParts.length > 0 ? vitalsParts.join(", ") : undefined,
+            abcde: abcdeParts.length > 0 ? abcdeParts.join("; ") : undefined,
+            history: historyParts.length > 0 ? historyParts.join(". ") : undefined,
+            examination: examParts.length > 0 ? examParts.join(". ") : undefined,
+            diagnosis: treatmentData.primaryDiagnosis || undefined,
           },
         }),
       });

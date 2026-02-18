@@ -1421,6 +1421,36 @@ export default function CaseSheetScreen() {
     
     try {
       const baseUrl = getApiUrl().replace(/\/$/, '');
+      const vitalsParts: string[] = [];
+      if (formData.circulation.hr) vitalsParts.push(`HR: ${formData.circulation.hr}`);
+      if (formData.circulation.bpSystolic && formData.circulation.bpDiastolic) vitalsParts.push(`BP: ${formData.circulation.bpSystolic}/${formData.circulation.bpDiastolic}`);
+      if (formData.breathing.rr) vitalsParts.push(`RR: ${formData.breathing.rr}`);
+      if (formData.breathing.spo2) vitalsParts.push(`SpO2: ${formData.breathing.spo2}%`);
+      if (formData.exposure.temperature) vitalsParts.push(`Temp: ${formData.exposure.temperature}`);
+      if (formData.disability.glucose) vitalsParts.push(`GRBS: ${formData.disability.glucose}`);
+
+      const abcdeParts: string[] = [];
+      if (formData.airway.status) abcdeParts.push(`Airway: ${formData.airway.status}${formData.airway.notes ? ` - ${formData.airway.notes}` : ""}`);
+      if (formData.breathing.effort) abcdeParts.push(`Breathing: WOB ${formData.breathing.effort}, Air entry ${formData.breathing.airEntry || "Equal"}${formData.breathing.o2Device ? `, O2: ${formData.breathing.o2Device} @ ${formData.breathing.o2Flow}L` : ""}${formData.breathing.notes ? ` - ${formData.breathing.notes}` : ""}`);
+      if (formData.circulation.capillaryRefill) abcdeParts.push(`Circulation: CRT ${formData.circulation.capillaryRefill}${formData.circulation.notes ? ` - ${formData.circulation.notes}` : ""}`);
+      const gcsTotal = (parseInt(formData.disability.gcsE) || 4) + (parseInt(formData.disability.gcsV) || 5) + (parseInt(formData.disability.gcsM) || 6);
+      abcdeParts.push(`Disability: GCS ${gcsTotal} (E${formData.disability.gcsE || 4}V${formData.disability.gcsV || 5}M${formData.disability.gcsM || 6}), AVPU: ${formData.disability.motorResponse || "Alert"}`);
+      if (formData.exposure.notes) abcdeParts.push(`Exposure: ${formData.exposure.notes}`);
+
+      const historyParts: string[] = [];
+      if (formData.sample.signsSymptoms) historyParts.push(`Signs/Symptoms: ${formData.sample.signsSymptoms}`);
+      if (formData.sample.eventsHopi) historyParts.push(`HOPI: ${formData.sample.eventsHopi}`);
+      if (formData.sample.pastMedicalHistory) historyParts.push(`PMH: ${formData.sample.pastMedicalHistory}`);
+      if (formData.sample.allergies) historyParts.push(`Allergies: ${formData.sample.allergies}`);
+      if (formData.sample.medications) historyParts.push(`Medications: ${formData.sample.medications}`);
+
+      const examParts: string[] = [];
+      if (examData.general.notes) examParts.push(`General: ${examData.general.notes}`);
+      if (examData.cvs.notes) examParts.push(`CVS: ${examData.cvs.notes}`);
+      if (examData.respiratory.notes) examParts.push(`Respiratory: ${examData.respiratory.notes}`);
+      if (examData.abdomen.notes) examParts.push(`Abdomen: ${examData.abdomen.notes}`);
+      if (examData.cns.notes) examParts.push(`CNS: ${examData.cns.notes}`);
+
       const response = await fetch(`${baseUrl}/api/ai/interpret-abg`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1429,7 +1459,12 @@ export default function CaseSheetScreen() {
           patient_context: {
             age: caseData?.patient?.age,
             sex: caseData?.patient?.sex,
-            presenting_complaint: caseData?.presenting_complaint?.text,
+            presenting_complaint: caseData?.presenting_complaint?.text || formData.sample.signsSymptoms,
+            vitals: vitalsParts.length > 0 ? vitalsParts.join(", ") : undefined,
+            abcde: abcdeParts.length > 0 ? abcdeParts.join("; ") : undefined,
+            history: historyParts.length > 0 ? historyParts.join(". ") : undefined,
+            examination: examParts.length > 0 ? examParts.join(". ") : undefined,
+            diagnosis: treatmentData.primaryDiagnosis || undefined,
           },
         }),
       });
