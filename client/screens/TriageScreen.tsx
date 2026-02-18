@@ -8,22 +8,20 @@ import {
   ActivityIndicator,
   Pressable,
   Switch,
-  Platform,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
-import { Audio } from "expo-av";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
-import { apiPost, apiUpload, invalidateCases } from "@/lib/api";
+import { apiPost, invalidateCases } from "@/lib/api";
 import { getApiUrl } from "@/lib/query-client";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { getVitalRanges, getAgeGroup, getAgeGroupLabel, isPediatric, type VitalRanges } from "@/lib/pediatricVitals";
-import VoiceRecorder, { ExtractedClinicalData } from "@/components/VoiceRecorder";
+import SmartDictation, { SmartDictationExtracted } from "@/components/SmartDictation";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -152,21 +150,14 @@ export default function TriageScreen() {
   const insets = useSafeAreaInsets();
 
   const [loading, setLoading] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [transcribing, setTranscribing] = useState(false);
-  const [voiceText, setVoiceText] = useState("");
-  const recordingRef = useRef<Audio.Recording | null>(null);
 
   const [patientType, setPatientType] = useState<"adult" | "pediatric">("adult");
   const [mlc, setMlc] = useState(false);
   const [selectedTriageColor, setSelectedTriageColor] = useState<TriageCategory>("green");
   const [selectedSymptoms, setSelectedSymptoms] = useState<Set<string>>(new Set(["normal_no_symptoms"]));
-  const [isContinuousRecording, setIsContinuousRecording] = useState(false);
   const [savedCaseId, setSavedCaseId] = useState<string | null>(null);
   const [vitalRanges, setVitalRanges] = useState<VitalRanges>(getVitalRanges(30));
   const [ageGroupLabel, setAgeGroupLabel] = useState<string>("Adult (18+ years)");
-  const transcriptionIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const isContinuousRecordingRef = useRef(false);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -218,31 +209,12 @@ export default function TriageScreen() {
 
   useEffect(() => {
     return () => {
-      isContinuousRecordingRef.current = false;
-      if (transcriptionIntervalRef.current) {
-        clearTimeout(transcriptionIntervalRef.current);
-        transcriptionIntervalRef.current = null;
-      }
       if (ageDebounceRef.current) {
         clearTimeout(ageDebounceRef.current);
         ageDebounceRef.current = null;
       }
-      const recording = recordingRef.current;
-      if (recording) {
-        recordingRef.current = null;
-        (async () => {
-          try {
-            await recording.stopAndUnloadAsync();
-          } catch {
-          }
-        })();
-      }
     };
   }, []);
-
-  useEffect(() => {
-    isContinuousRecordingRef.current = isContinuousRecording;
-  }, [isContinuousRecording]);
 
   const updateField = useCallback((field: string, value: string) => {
     // Update ref for smooth typing (no re-renders)
@@ -347,140 +319,6 @@ export default function TriageScreen() {
     });
   }, [formData.chief_complaint, recalculateTriageColor]);
 
-  const startContinuousRecording = async () => {
-    try {
-      const { status } = await Audio.requestPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert("Permission Required", "Microphone access is needed for voice input");
-        return;
-      }
-
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
-
-      setIsContinuousRecording(true);
-      isContinuousRecordingRef.current = true;
-      recordChunk();
-    } catch (err) {
-      console.error("Recording error:", err);
-      Alert.alert("Error", "Failed to start recording");
-    }
-  };
-
-  const recordChunk = async () => {
-    if (!isContinuousRecordingRef.current) return;
-    
-    try {
-      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      recordingRef.current = recording;
-      setIsRecording(true);
-      
-      transcriptionIntervalRef.current = setTimeout(async () => {
-        if (recordingRef.current && isContinuousRecordingRef.current) {
-          await recordingRef.current.stopAndUnloadAsync();
-          const uri = recordingRef.current.getURI();
-          recordingRef.current = null;
-          setIsRecording(false);
-          
-          if (uri) {
-            await transcribeAudio(uri);
-          }
-          
-          if (isContinuousRecordingRef.current) {
-            recordChunk();
-          }
-        }
-      }, 5000);
-    } catch (err) {
-      console.error("Chunk recording error:", err);
-    }
-  };
-
-  const stopContinuousRecording = async () => {
-    setIsContinuousRecording(false);
-    isContinuousRecordingRef.current = false;
-    if (transcriptionIntervalRef.current) {
-      clearTimeout(transcriptionIntervalRef.current);
-      transcriptionIntervalRef.current = null;
-    }
-    if (recordingRef.current) {
-      try {
-        await recordingRef.current.stopAndUnloadAsync();
-        const uri = recordingRef.current.getURI();
-        recordingRef.current = null;
-        setIsRecording(false);
-        if (uri) {
-          await transcribeAudio(uri);
-        }
-      } catch (err) {
-        console.error("Stop recording error:", err);
-      }
-    }
-  };
-
-  const startRecording = async () => {
-    try {
-      const { status } = await Audio.requestPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert("Permission Required", "Microphone access is needed for voice input");
-        return;
-      }
-
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
-
-      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      recordingRef.current = recording;
-      setIsRecording(true);
-    } catch (err) {
-      console.error("Recording error:", err);
-      Alert.alert("Error", "Failed to start recording");
-    }
-  };
-
-  const stopRecording = async () => {
-    if (!recordingRef.current) return;
-
-    setIsRecording(false);
-    await recordingRef.current.stopAndUnloadAsync();
-    const uri = recordingRef.current.getURI();
-    recordingRef.current = null;
-
-    if (uri) {
-      await transcribeAudio(uri);
-    }
-  };
-
-  const transcribeAudio = async (uri: string) => {
-    try {
-      setTranscribing(true);
-
-      const formData = new FormData();
-      formData.append("file", {
-        uri,
-        name: "voice.m4a",
-        type: "audio/m4a",
-      } as any);
-      formData.append("engine", "auto");
-      formData.append("language", "en");
-
-      const res = await apiUpload<{ transcription: string }>("/ai/voice-to-text", formData);
-
-      if (res.success && res.data?.transcription) {
-        setVoiceText((prev) => (prev ? `${prev}\n${res.data!.transcription}` : res.data!.transcription));
-        formDataRef.current.chief_complaint = res.data!.transcription;
-        setFormData(prev => ({ ...prev, chief_complaint: res.data!.transcription }));
-      }
-    } catch (err) {
-      console.error("Transcription error:", err);
-    } finally {
-      setTranscribing(false);
-    }
-  };
 
   const getFormWithDefaults = () => {
     // Merge ref values with state (ref has latest typed values)
@@ -503,19 +341,14 @@ export default function TriageScreen() {
     };
   };
 
-  const handleVoiceExtraction = (data: ExtractedClinicalData) => {
+  const handleSmartDictation = (data: SmartDictationExtracted) => {
     if (data.chiefComplaint) {
-      const current = formDataRef.current.chief_complaint;
-      const newValue = current ? current + " " + data.chiefComplaint : data.chiefComplaint;
-      formDataRef.current.chief_complaint = newValue;
-      setFormData(prev => ({ ...prev, chief_complaint: newValue }));
+      formDataRef.current.chief_complaint = data.chiefComplaint;
+      setFormData(prev => ({ ...prev, chief_complaint: data.chiefComplaint! }));
     }
-    if (data.triageData?.chiefComplaint) {
-      const current = formDataRef.current.chief_complaint;
-      if (!current) {
-        formDataRef.current.chief_complaint = data.triageData.chiefComplaint;
-        setFormData(prev => ({ ...prev, chief_complaint: data.triageData!.chiefComplaint! }));
-      }
+    if (data.historyOfPresentIllness && !formDataRef.current.chief_complaint) {
+      formDataRef.current.chief_complaint = data.historyOfPresentIllness;
+      setFormData(prev => ({ ...prev, chief_complaint: data.historyOfPresentIllness! }));
     }
     if (data.vitalsSuggested) {
       const vs = data.vitalsSuggested;
@@ -539,12 +372,18 @@ export default function TriageScreen() {
         formDataRef.current.grbs = vs.grbs;
         setFormData(prev => ({ ...prev, grbs: vs.grbs! }));
       }
+      if (vs.bp) {
+        const bpParts = vs.bp.split("/");
+        if (bpParts.length === 2) {
+          formDataRef.current.bp_systolic = bpParts[0].trim();
+          formDataRef.current.bp_diastolic = bpParts[1].trim();
+          setFormData(prev => ({ ...prev, bp_systolic: bpParts[0].trim(), bp_diastolic: bpParts[1].trim() }));
+        }
+      }
     }
-    if (data.rawTranscription && !data.chiefComplaint && !data.triageData?.chiefComplaint) {
-      const current = formDataRef.current.chief_complaint;
-      const newValue = current ? current + " " + data.rawTranscription : data.rawTranscription;
-      formDataRef.current.chief_complaint = newValue;
-      setFormData(prev => ({ ...prev, chief_complaint: newValue }));
+    if (data.rawTranscription && !data.chiefComplaint && !data.historyOfPresentIllness) {
+      formDataRef.current.chief_complaint = data.rawTranscription;
+      setFormData(prev => ({ ...prev, chief_complaint: data.rawTranscription! }));
     }
   };
 
@@ -641,7 +480,7 @@ export default function TriageScreen() {
           grbs: parseFloat(fd.grbs) || 100,
         },
         presenting_complaint: {
-          text: fd.chief_complaint || voiceText,
+          text: fd.chief_complaint || "",
           onset_type: "Sudden",
           course: "Progressive",
           duration: "Recent onset",
@@ -758,43 +597,16 @@ export default function TriageScreen() {
           ))}
         </View>
 
-        <View style={[styles.voiceSection, { backgroundColor: theme.card }]}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Voice Input (Continuous)</Text>
-          <View style={styles.voiceBtnRow}>
-            <Pressable
-              style={[
-                styles.voiceBtn,
-                { 
-                  backgroundColor: isContinuousRecording ? TriageColors.red : theme.primary,
-                  flex: 1,
-                },
-              ]}
-              onPress={isContinuousRecording ? stopContinuousRecording : startContinuousRecording}
-              disabled={transcribing}
-            >
-              {transcribing ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <>
-                  <Feather name={isContinuousRecording ? "mic-off" : "mic"} size={24} color="#FFFFFF" />
-                  <Text style={styles.voiceBtnText}>
-                    {isContinuousRecording ? "Stop" : "Start Continuous"}
-                  </Text>
-                </>
-              )}
-            </Pressable>
-          </View>
-          {isRecording ? (
-            <View style={styles.recordingIndicator}>
-              <View style={[styles.recordingDot, { backgroundColor: TriageColors.red }]} />
-              <Text style={[styles.recordingText, { color: TriageColors.red }]}>Recording...</Text>
-            </View>
-          ) : null}
-          {voiceText ? (
-            <View style={[styles.transcriptBox, { backgroundColor: theme.backgroundSecondary }]}>
-              <Text style={[styles.transcriptText, { color: theme.text }]}>{voiceText}</Text>
-            </View>
-          ) : null}
+        <View style={[styles.section, { backgroundColor: theme.card }]}>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Voice Dictation</Text>
+          <SmartDictation
+            onDataExtracted={handleSmartDictation}
+            patientContext={{
+              age: parseFloat(formDataRef.current.age) || undefined,
+              sex: formData.sex,
+              chiefComplaint: formData.chief_complaint,
+            }}
+          />
         </View>
 
         <View style={[styles.section, { backgroundColor: theme.card }]}>
@@ -1000,15 +812,6 @@ export default function TriageScreen() {
             numberOfLines={4}
             textAlignVertical="top"
           />
-          <VoiceRecorder
-            onExtractedData={handleVoiceExtraction}
-            patientContext={{
-              age: parseFloat(formDataRef.current.age) || undefined,
-              sex: formData.sex,
-              chiefComplaint: formData.chief_complaint,
-            }}
-            mode="full"
-          />
         </View>
 
         <View style={[styles.section, { backgroundColor: theme.card }]}>
@@ -1091,23 +894,7 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
     gap: Spacing.sm,
   },
-  voiceSection: { padding: Spacing.lg, borderRadius: BorderRadius.lg, marginBottom: Spacing.lg },
   sectionTitle: { ...Typography.h4, marginBottom: Spacing.md },
-  voiceBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: Spacing.lg,
-    borderRadius: BorderRadius.md,
-    gap: Spacing.sm,
-  },
-  voiceBtnText: { color: "#FFFFFF", ...Typography.bodyMedium },
-  voiceBtnRow: { flexDirection: "row", gap: Spacing.sm },
-  recordingIndicator: { flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: Spacing.sm, gap: Spacing.xs },
-  recordingDot: { width: 10, height: 10, borderRadius: 5 },
-  recordingText: { ...Typography.small, fontWeight: "600" },
-  transcriptBox: { padding: Spacing.md, borderRadius: BorderRadius.sm, marginTop: Spacing.md },
-  transcriptText: { ...Typography.small, fontStyle: "italic" },
   section: { padding: Spacing.lg, borderRadius: BorderRadius.lg, marginBottom: Spacing.lg },
   sectionSubtitle: { ...Typography.small, marginBottom: Spacing.md },
   vitalReferenceCard: {
