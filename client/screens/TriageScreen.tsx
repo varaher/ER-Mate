@@ -578,25 +578,37 @@ export default function TriageScreen() {
 
     try {
       if (user?.id) {
-        const baseUrl = getApiUrl();
-        const checkRes = await fetch(`${baseUrl}/api/subscription/check-case`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userId: user.id, userEmail: user.email || "" }),
-        });
-        const checkData = await checkRes.json();
+        try {
+          const baseUrl = getApiUrl();
+          const subUrl = new URL("/api/subscription/check-case", baseUrl).href;
+          const checkRes = await fetch(subUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId: user.id, userEmail: user.email || "" }),
+          });
+          const checkText = await checkRes.text();
+          let checkData: any;
+          try {
+            checkData = JSON.parse(checkText);
+          } catch {
+            console.warn("[TriageScreen] Subscription check returned non-JSON:", checkText.substring(0, 200));
+            checkData = { allowed: true };
+          }
 
-        if (!checkData.allowed) {
-          setLoading(false);
-          Alert.alert(
-            "Case Limit Reached",
-            `You have used all ${checkData.casesLimit} free cases. Upgrade to Premium for unlimited cases.`,
-            [
-              { text: "Upgrade", onPress: () => navigation.navigate("Upgrade" as any, { lockReason: "Case Limit Reached", lockMessage: `You have used ${checkData.casesUsed} of ${checkData.casesLimit} free cases.` }) },
-              { text: "Cancel", style: "cancel" },
-            ]
-          );
-          return;
+          if (!checkData.allowed) {
+            setLoading(false);
+            Alert.alert(
+              "Case Limit Reached",
+              `You have used all ${checkData.casesLimit} free cases. Upgrade to Premium for unlimited cases.`,
+              [
+                { text: "Upgrade", onPress: () => navigation.navigate("Upgrade" as any, { lockReason: "Case Limit Reached", lockMessage: `You have used ${checkData.casesUsed} of ${checkData.casesLimit} free cases.` }) },
+                { text: "Cancel", style: "cancel" },
+              ]
+            );
+            return;
+          }
+        } catch (subErr) {
+          console.warn("[TriageScreen] Subscription check failed, proceeding:", subErr);
         }
       }
 

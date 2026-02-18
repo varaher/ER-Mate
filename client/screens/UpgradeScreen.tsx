@@ -52,10 +52,16 @@ export default function UpgradeScreen() {
     }
     try {
       const baseUrl = getApiUrl();
-      const res = await fetch(
-        `${baseUrl}/api/subscription/status?userId=${encodeURIComponent(user.id)}&userEmail=${encodeURIComponent(user.email || "")}`
-      );
-      const data = await res.json();
+      const statusUrl = new URL(`/api/subscription/status?userId=${encodeURIComponent(user.id)}&userEmail=${encodeURIComponent(user.email || "")}`, baseUrl).href;
+      const res = await fetch(statusUrl);
+      const text = await res.text();
+      let data: any;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        console.warn("[UpgradeScreen] Subscription status returned non-JSON:", text.substring(0, 200));
+        data = { plan: "free", casesUsed: 0, casesLimit: 10, casesRemaining: 10, priceInr: 559, freeCaseLimit: 10, status: "active", currentPeriodEnd: null };
+      }
       setSubStatus(data);
     } catch (err) {
       console.error("Failed to fetch subscription status:", err);
