@@ -33,7 +33,7 @@ export default function ProfileScreen() {
 
   const menuItems = [
     { icon: "monitor", label: "Link to Web", onPress: () => navigation.navigate("LinkDevices"), locked: false },
-    { icon: "star", label: "Upgrade Plan", onPress: () => {}, locked: true },
+    { icon: "star", label: "Upgrade Plan", onPress: () => navigation.navigate("Upgrade", {}), locked: false },
     { icon: "bell", label: "Notifications", onPress: () => navigation.navigate("Notifications"), locked: false },
     { icon: "shield", label: "Privacy", onPress: () => navigation.navigate("Privacy"), locked: false },
     { icon: "help-circle", label: "Help & Support", onPress: () => navigation.navigate("HelpSupport"), locked: false },
