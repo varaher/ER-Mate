@@ -30,6 +30,7 @@ import PediatricDrugCalculatorScreen from "@/screens/PediatricDrugCalculatorScre
 import SimulationListScreen from "@/screens/SimulationListScreen";
 import SimulationScreen from "@/screens/SimulationScreen";
 import SimulationResultScreen from "@/screens/SimulationResultScreen";
+import EMReferenceScreen from "@/screens/EMReferenceScreen";
 
 export type RootStackParamList = {
   Login: undefined;
@@ -55,6 +56,7 @@ export type RootStackParamList = {
   PediatricDrugCalculator: { weight?: string } | undefined;
   SimulationList: undefined;
   Simulation: { caseId: string };
+  EMReference: undefined;
   SimulationResult: {
     caseId: string;
     elapsedTime: number;
@@ -243,6 +245,14 @@ export default function RootStackNavigator() {
             options={{
               presentation: "modal",
               headerTitle: "Pediatric Drug Calculator",
+            }}
+          />
+          <Stack.Screen
+            name="EMReference"
+            component={EMReferenceScreen}
+            options={{
+              presentation: "modal",
+              headerTitle: "EM Reference Library",
             }}
           />
           <Stack.Screen

@@ -25,6 +25,14 @@ const learnSections = [
     color: TriageColors.red,
     route: "SimulationList" as const,
   },
+  {
+    id: "em-reference",
+    title: "EM Reference Library",
+    subtitle: "AI-powered clinical knowledge with textbook and guideline references",
+    icon: "book-open" as const,
+    color: TriageColors.blue,
+    route: "EMReference" as const,
+  },
 ];
 
 export default function LearnScreen() {
@@ -70,13 +78,13 @@ export default function LearnScreen() {
 
         <View style={[styles.comingSoon, { backgroundColor: theme.card }]}>
           <View style={[styles.comingSoonIcon, { backgroundColor: theme.cardElevated }]}>
-            <Feather name="book" size={24} color={theme.textMuted} />
+            <Feather name="compass" size={24} color={theme.textMuted} />
           </View>
           <Text style={[styles.comingSoonTitle, { color: theme.textSecondary }]}>
-            More topics coming soon
+            More modules coming soon
           </Text>
           <Text style={[styles.comingSoonSubtitle, { color: theme.textMuted }]}>
-            Short notes, protocols, and quick references
+            Protocols, clinical pathways, and more
           </Text>
         </View>
       </ScrollView>
