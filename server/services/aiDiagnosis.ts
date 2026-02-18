@@ -578,6 +578,7 @@ export interface ExtractedClinicalData {
   investigationsOrdered?: string;
   imagingOrdered?: string;
   rawTranscription?: string;
+  restAllNormal?: boolean;
 }
 
 export async function extractClinicalDataFromVoice(
@@ -1129,6 +1130,7 @@ export interface SmartDictationResult {
   imagingOrdered?: string;
   rawTranscription?: string;
   fieldsPopulated?: string[];
+  restAllNormal?: boolean;
 }
 
 export async function extractSmartDictation(

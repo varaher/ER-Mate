@@ -82,6 +82,7 @@ export interface SmartDictationExtracted {
   imagingOrdered?: string;
   rawTranscription?: string;
   fieldsPopulated?: string[];
+  restAllNormal?: boolean;
 }
 
 interface SmartDictationProps {
