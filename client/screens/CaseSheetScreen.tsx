@@ -2029,15 +2029,19 @@ export default function CaseSheetScreen() {
               </View>
             )}
 
-            <SmartDictation
-              onDataExtracted={handleSmartDictation}
-              patientContext={{
-                age: caseData?.patient?.age ? parseFloat(caseData.patient.age) : undefined,
-                sex: caseData?.patient?.sex,
-                chiefComplaint: caseData?.presenting_complaint?.text,
-                caseType: 'adult',
-              }}
-            />
+            <View style={[styles.card, { backgroundColor: theme.card }]}>
+              <Text style={[styles.cardTitle, { color: theme.text }]}>Case Sheet Dictation</Text>
+              <Text style={[styles.cardSubtitle, { color: theme.textSecondary }]}>Dictate full patient history, exam findings, and plan.</Text>
+              <SmartDictation
+                onDataExtracted={handleSmartDictation}
+                patientContext={{
+                  age: caseData?.patient?.age ? parseFloat(caseData.patient.age) : undefined,
+                  sex: caseData?.patient?.sex,
+                  chiefComplaint: caseData?.presenting_complaint?.text,
+                  caseType: 'adult',
+                }}
+              />
+            </View>
 
             <View style={[styles.card, { backgroundColor: theme.card }]}>
               <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Mode of Arrival</Text>

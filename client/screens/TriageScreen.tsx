@@ -598,7 +598,8 @@ export default function TriageScreen() {
         </View>
 
         <View style={[styles.section, { backgroundColor: theme.card }]}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Voice Dictation</Text>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Triage Dictation</Text>
+          <Text style={[styles.sectionSubtitle, { color: theme.textSecondary }]}>Brief complaint and vitals only. Use Case Sheet Dictation for full history.</Text>
           <SmartDictation
             onDataExtracted={handleSmartDictation}
             patientContext={{

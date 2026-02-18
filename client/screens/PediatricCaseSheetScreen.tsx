@@ -1354,15 +1354,19 @@ export default function PediatricCaseSheetScreen() {
               <Text style={[styles.fieldValue, { color: theme.textSecondary }]}>{patient.informant_name || "Not specified"}{patient.informant_reliability ? ` (${patient.informant_reliability})` : ""}</Text>
             </View>
 
-            <SmartDictation
-              onDataExtracted={handleSmartDictation}
-              patientContext={{
-                age: patient?.age,
-                sex: patient?.sex,
-                chiefComplaint: patient?.chief_complaint,
-                caseType: 'pediatric',
-              }}
-            />
+            <View style={[styles.card, { backgroundColor: theme.card }]}>
+              <Text style={[styles.cardTitle, { color: theme.text }]}>Case Sheet Dictation</Text>
+              <Text style={[styles.cardSubtitle, { color: theme.textSecondary }]}>Dictate full patient history, exam findings, and plan.</Text>
+              <SmartDictation
+                onDataExtracted={handleSmartDictation}
+                patientContext={{
+                  age: patient?.age,
+                  sex: patient?.sex,
+                  chiefComplaint: patient?.chief_complaint,
+                  caseType: 'pediatric',
+                }}
+              />
+            </View>
           </View>
         )}
 
