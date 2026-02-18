@@ -636,7 +636,8 @@ Respond in JSON format:
   ],
   "investigationsOrdered": "Labs ordered (CBC, RFT, LFT, etc.)",
   "imagingOrdered": "Imaging ordered (X-ray, CT, USG, etc.)",
-  "treatmentNotes": "Any other treatment plans or notes not captured above"
+  "treatmentNotes": "Any other treatment plans or notes not captured above",
+  "restAllNormal": false
 }
 
 IMPORTANT RULES:
@@ -644,7 +645,8 @@ IMPORTANT RULES:
 2. CRITICAL: Only include fields that have ACTUAL content mentioned in the transcript. Do NOT include fields with values like "Not mentioned", "None", "N/A", "Unknown", or empty strings. Simply OMIT the field entirely if no relevant information was mentioned.
 3. For "historyOfPresentIllness": Construct a proper narrative from ALL relevant clinical details the doctor mentions - the presenting complaint, what happened, timeline, symptoms, relevant context. This should read like a clinical HPI paragraph. If the doctor describes the case, this field should contain the full narrative.
 4. For "painDetails": Only include specific subfields (location, severity, character, etc.) where the doctor ACTUALLY describes pain characteristics. Do NOT include subfields with "Not mentioned" values. Omit the entire painDetails object if pain is not relevant to the presentation.
-5. For "chiefComplaint": Extract the main reason the patient came to the ER. This should be a brief phrase like "Vomiting and loose stools" or "Chest pain" or "Difficulty breathing".`;
+5. For "chiefComplaint": Extract the main reason the patient came to the ER. This should be a brief phrase like "Vomiting and loose stools" or "Chest pain" or "Difficulty breathing".
+6. "REST ALL NORMAL" DETECTION: If the doctor says phrases like "rest all examination normal", "other systems normal", "rest all systems within normal limits", "systemic examination otherwise normal", "rest of examination unremarkable", or any similar wording indicating unmentioned exam systems should be considered normal — set "restAllNormal" to true. The examFindings should still contain any SPECIFIC findings mentioned, and restAllNormal covers everything else.`;
 
   try {
     const response = await openai.chat.completions.create({
@@ -1222,8 +1224,12 @@ Respond in JSON format:
   "treatmentNotes": "Any treatment plans or medications given if mentioned",
   "investigationsOrdered": "Labs ordered if mentioned (CBC, RFT, etc.)",
   "imagingOrdered": "Imaging ordered if mentioned (X-ray, CT, USG, etc.)",
+  "restAllNormal": false,
   "fieldsPopulated": ["Array of field names that were populated"]
-}`;
+}
+
+SPECIAL INSTRUCTION - "REST ALL NORMAL" DETECTION:
+8. If the doctor says phrases like "rest all examination normal", "other systems normal", "rest all systems within normal limits", "systemic examination otherwise normal", "rest of examination unremarkable", "per abdomen soft non-tender rest all normal", "o/e NAD rest normal", or any similar wording indicating that examination systems NOT specifically mentioned with abnormal findings should be considered normal — set "restAllNormal" to true. This tells the app to auto-fill normal findings for all exam sections that don't have specific abnormalities documented. The examFindings should still contain any SPECIFIC findings the doctor mentioned (both normal details and abnormalities), and restAllNormal covers everything else.`;
 
   try {
     const response = await openai.chat.completions.create({
