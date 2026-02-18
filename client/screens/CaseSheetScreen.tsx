@@ -1625,12 +1625,13 @@ export default function CaseSheetScreen() {
     }
     if (data.painDetails) {
       const pd = data.painDetails;
+      const isActual = (v?: string) => v && !["not mentioned", "none", "n/a", "unknown", ""].includes(v.toLowerCase().trim());
       const parts = [];
-      if (pd.location) parts.push(`Location: ${pd.location}`);
-      if (pd.severity) parts.push(`Severity: ${pd.severity}`);
-      if (pd.character) parts.push(`Character: ${pd.character}`);
-      if (pd.aggravatingFactors) parts.push(`Aggravating: ${pd.aggravatingFactors}`);
-      if (pd.relievingFactors) parts.push(`Relieving: ${pd.relievingFactors}`);
+      if (isActual(pd.location)) parts.push(`Location: ${pd.location}`);
+      if (isActual(pd.severity)) parts.push(`Severity: ${pd.severity}`);
+      if (isActual(pd.character)) parts.push(`Character: ${pd.character}`);
+      if (isActual(pd.aggravatingFactors)) parts.push(`Aggravating: ${pd.aggravatingFactors}`);
+      if (isActual(pd.relievingFactors)) parts.push(`Relieving: ${pd.relievingFactors}`);
       if (parts.length > 0) {
         const painText = parts.join(". ");
         updateFormData("sample", "eventsHopi", (formData.sample.eventsHopi ? formData.sample.eventsHopi + ". Pain: " : "Pain: ") + painText);

@@ -638,9 +638,12 @@ Respond in JSON format:
   "treatmentNotes": "Any other treatment plans or notes not captured above"
 }
 
-IMPORTANT: When the doctor mentions prescribing or administering medications (e.g., "give paracetamol 1g IV", "start on Tab Pantoprazole 40mg OD"), extract them into "prescribedMedications" array. When IV fluids or continuous infusions are mentioned (e.g., "start NS at 100ml/hr", "Dopamine drip"), extract them into "prescribedInfusions" array. "medications" field is ONLY for the patient's current/home medications (medication history).
-
-Only include fields that have actual content from the transcript. Omit empty or irrelevant fields.`;
+IMPORTANT RULES:
+1. When the doctor mentions prescribing or administering medications (e.g., "give paracetamol 1g IV", "start on Tab Pantoprazole 40mg OD"), extract them into "prescribedMedications" array. When IV fluids or continuous infusions are mentioned (e.g., "start NS at 100ml/hr", "Dopamine drip"), extract them into "prescribedInfusions" array. "medications" field is ONLY for the patient's current/home medications (medication history).
+2. CRITICAL: Only include fields that have ACTUAL content mentioned in the transcript. Do NOT include fields with values like "Not mentioned", "None", "N/A", "Unknown", or empty strings. Simply OMIT the field entirely if no relevant information was mentioned.
+3. For "historyOfPresentIllness": Construct a proper narrative from ALL relevant clinical details the doctor mentions - the presenting complaint, what happened, timeline, symptoms, relevant context. This should read like a clinical HPI paragraph. If the doctor describes the case, this field should contain the full narrative.
+4. For "painDetails": Only include specific subfields (location, severity, character, etc.) where the doctor ACTUALLY describes pain characteristics. Do NOT include subfields with "Not mentioned" values. Omit the entire painDetails object if pain is not relevant to the presentation.
+5. For "chiefComplaint": Extract the main reason the patient came to the ER. This should be a brief phrase like "Vomiting and loose stools" or "Chest pain" or "Difficulty breathing".`;
 
   try {
     const response = await openai.chat.completions.create({
