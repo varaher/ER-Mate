@@ -86,6 +86,7 @@ export interface ExtractedClinicalData {
     suggestedTriageLevel?: string;
   };
   rawTranscription?: string;
+  restAllNormal?: boolean;
 }
 
 interface VoiceRecorderProps {

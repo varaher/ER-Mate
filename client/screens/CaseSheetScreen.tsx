@@ -1575,6 +1575,29 @@ export default function CaseSheetScreen() {
         updateExamData("cns", "notes", (examData.cns.notes ? examData.cns.notes + " " : "") + data.examFindings.cns);
       }
     }
+    if (data.restAllNormal) {
+      const ef = data.examFindings || {};
+      setExamData((prev) => {
+        const updated = { ...prev };
+        if (!ef.general) {
+          updated.general = { pallor: false, icterus: false, cyanosis: false, clubbing: false, lymphadenopathy: false, edema: false, notes: prev.general.notes || "NAD" };
+        }
+        if (!ef.cvs) {
+          updated.cvs = { ...prev.cvs, status: "Normal", s1s2: "Normal", pulse: "Regular", apexBeat: "Normal", precordialHeave: false, addedSounds: "", murmurs: "", notes: prev.cvs.notes || "S1S2 heard, no murmurs" };
+        }
+        if (!ef.respiratory) {
+          updated.respiratory = { ...prev.respiratory, status: "Normal", expansion: "Equal", percussion: "Resonant", breathSounds: "Vesicular", vocalResonance: "Normal", addedSounds: "", notes: prev.respiratory.notes || "B/L air entry equal, no added sounds" };
+        }
+        if (!ef.abdomen) {
+          updated.abdomen = { ...prev.abdomen, status: "Normal", umbilical: "Normal", percussion: "Tympanic", bowelSounds: "Present", organomegaly: "", externalGenitalia: "Normal", hernialOrifices: "Normal", notes: prev.abdomen.notes || "Soft, non-tender, no organomegaly" };
+        }
+        if (!ef.cns) {
+          updated.cns = { ...prev.cns, status: "Normal", higherMentalFunctions: "Intact", cranialNerves: "Intact", sensorySystem: "Intact", motorSystem: "Normal", reflexes: "Normal", rombergSign: "Negative", cerebellarSigns: "Normal", notes: prev.cns.notes || "No focal deficit" };
+        }
+        updated.extremities = { ...prev.extremities, status: "Normal", pulses: "Present", edema: false, deformity: false, notes: prev.extremities.notes || "" };
+        return updated;
+      });
+    }
     if (data.diagnosis && data.diagnosis.length > 0) {
       const diagnosisText = data.diagnosis.join(", ");
       setTreatmentData((prev) => ({ ...prev, primaryDiagnosis: prev.primaryDiagnosis ? prev.primaryDiagnosis + ", " + diagnosisText : diagnosisText }));
@@ -1653,6 +1676,29 @@ export default function CaseSheetScreen() {
       if (data.examFindings.cns) {
         updateExamData("cns", "notes", (examData.cns.notes ? examData.cns.notes + " " : "") + data.examFindings.cns);
       }
+    }
+    if (data.restAllNormal) {
+      const ef = data.examFindings || {};
+      setExamData((prev) => {
+        const updated = { ...prev };
+        if (!ef.general) {
+          updated.general = { pallor: false, icterus: false, cyanosis: false, clubbing: false, lymphadenopathy: false, edema: false, notes: prev.general.notes || "NAD" };
+        }
+        if (!ef.cvs) {
+          updated.cvs = { ...prev.cvs, status: "Normal", s1s2: "Normal", pulse: "Regular", apexBeat: "Normal", precordialHeave: false, addedSounds: "", murmurs: "", notes: prev.cvs.notes || "S1S2 heard, no murmurs" };
+        }
+        if (!ef.respiratory) {
+          updated.respiratory = { ...prev.respiratory, status: "Normal", expansion: "Equal", percussion: "Resonant", breathSounds: "Vesicular", vocalResonance: "Normal", addedSounds: "", notes: prev.respiratory.notes || "B/L air entry equal, no added sounds" };
+        }
+        if (!ef.abdomen) {
+          updated.abdomen = { ...prev.abdomen, status: "Normal", umbilical: "Normal", percussion: "Tympanic", bowelSounds: "Present", organomegaly: "", externalGenitalia: "Normal", hernialOrifices: "Normal", notes: prev.abdomen.notes || "Soft, non-tender, no organomegaly" };
+        }
+        if (!ef.cns) {
+          updated.cns = { ...prev.cns, status: "Normal", higherMentalFunctions: "Intact", cranialNerves: "Intact", sensorySystem: "Intact", motorSystem: "Normal", reflexes: "Normal", rombergSign: "Negative", cerebellarSigns: "Normal", notes: prev.cns.notes || "No focal deficit" };
+        }
+        updated.extremities = { ...prev.extremities, status: "Normal", pulses: "Present", edema: false, deformity: false, notes: prev.extremities.notes || "" };
+        return updated;
+      });
     }
     if (data.diagnosis && data.diagnosis.length > 0) {
       const diagnosisText = data.diagnosis.join(", ");

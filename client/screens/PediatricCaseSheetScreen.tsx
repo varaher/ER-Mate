@@ -1019,6 +1019,29 @@ export default function PediatricCaseSheetScreen() {
         setExamData((prev) => ({ ...prev, extremities: (prev.extremities ? prev.extremities + ". CNS: " : "CNS: ") + data.examFindings!.cns }));
       }
     }
+    if (data.restAllNormal) {
+      const ef = data.examFindings || {};
+      setExamData((prev) => {
+        const updated = { ...prev };
+        if (!ef.general && !ef.heent) {
+          updated.heent = { head: prev.heent.head || "Normocephalic", eyes: prev.heent.eyes || "PERRL, no pallor", ears: prev.heent.ears || "Normal", nose: prev.heent.nose || "Normal", throat: prev.heent.throat || "Normal", lymphNodes: prev.heent.lymphNodes || "No lymphadenopathy" };
+        }
+        if (!ef.respiratory) {
+          updated.respiratory = prev.respiratory || "B/L air entry equal, no added sounds";
+        }
+        if (!ef.cvs) {
+          updated.cardiovascular = prev.cardiovascular || "S1S2 heard, no murmurs, well perfused";
+        }
+        if (!ef.abdomen) {
+          updated.abdomen = prev.abdomen || "Soft, non-tender, no organomegaly";
+        }
+        if (!ef.cns) {
+          updated.extremities = prev.extremities || "No focal deficit, moving all limbs";
+        }
+        updated.back = prev.back || "No spinal tenderness";
+        return updated;
+      });
+    }
     if (data.diagnosis && data.diagnosis.length > 0) {
       const diagnosisText = data.diagnosis.join(", ");
       setTreatmentData((prev) => ({ ...prev, primaryDiagnosis: (prev.primaryDiagnosis ? prev.primaryDiagnosis + ", " : "") + diagnosisText }));
