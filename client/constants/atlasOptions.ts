@@ -342,6 +342,7 @@ export type ATLSFormData = {
   };
   exposure: {
     temperature: string;
+    painScore: string;
     findings: string[];
     interventions: string[];
     notes: string;
@@ -435,6 +436,7 @@ export const getDefaultATLSFormData = (): ATLSFormData => ({
   },
   exposure: {
     temperature: "",
+    painScore: "",
     findings: [],
     interventions: [],
     notes: "",

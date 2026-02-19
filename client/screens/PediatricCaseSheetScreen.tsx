@@ -81,6 +81,7 @@ interface PatientInfo {
     gcs_v: string;
     gcs_m: string;
     grbs: string;
+    pain_score: string;
   };
 }
 
@@ -130,6 +131,7 @@ interface DisabilityFormData {
 
 interface ExposureFormData {
   temperature: string;
+  painScore: string;
   trauma: string;
   signsOfTraumaIllness: string[];
   evidenceOfInfection: string;
@@ -306,7 +308,7 @@ export default function PediatricCaseSheetScreen() {
   });
   const [disabilityData, setDisabilityData] = useState<DisabilityFormData>({ avpuGcs: "", pupils: "", abnormalResponses: "", glucose: "" });
   const [exposureData, setExposureData] = useState<ExposureFormData>({
-    temperature: "", trauma: "", signsOfTraumaIllness: [], evidenceOfInfection: "", longBoneDeformities: "", extremities: "", immobilize: ""
+    temperature: "", painScore: "", trauma: "", signsOfTraumaIllness: [], evidenceOfInfection: "", longBoneDeformities: "", extremities: "", immobilize: ""
   });
   const [efastData, setEfastData] = useState<EFASTFormData>({ heart: "", abdomen: "", lungs: "", pelvis: "" });
   const [abgData, setAbgData] = useState({
@@ -494,6 +496,7 @@ export default function PediatricCaseSheetScreen() {
             gcs_v: String(vitalsData.gcs_v || triageData.gcs_v || "5"),
             gcs_m: String(vitalsData.gcs_m || triageData.gcs_m || "6"),
             grbs: String(vitalsData.grbs || triageData.grbs || ""),
+            pain_score: String(vitalsData.pain_score || triageData.pain_score || ""),
           },
         });
       } else {
@@ -529,6 +532,7 @@ export default function PediatricCaseSheetScreen() {
               gcs_v: String(vitalsData.gcs_v || "5"),
               gcs_m: String(vitalsData.gcs_m || "6"),
               grbs: String(vitalsData.grbs || ""),
+              pain_score: String(vitalsData.pain_score || ""),
             },
           });
         }
@@ -584,6 +588,7 @@ export default function PediatricCaseSheetScreen() {
         gcs_m: gcsM,
         gcs_total: gcsTotal,
         grbs: parseFloat(triageVitals.grbs) || parseFloat(disabilityData.glucose) || 100,
+        pain_score: parseFloat(triageVitals.pain_score) || parseFloat(exposureData.painScore) || 0,
       },
       primary_assessment: {
         pat: patData,
@@ -935,7 +940,7 @@ export default function PediatricCaseSheetScreen() {
     });
     setDisabilityData({ avpuGcs: "Alert", pupils: "Equal, round, reactive", abnormalResponses: "None noted", glucose: "" });
     setExposureData({
-      temperature: "36.8", trauma: "No signs of trauma", signsOfTraumaIllness: [], evidenceOfInfection: "None", longBoneDeformities: "None", extremities: "Normal", immobilize: "Not required"
+      temperature: "36.8", painScore: "", trauma: "No signs of trauma", signsOfTraumaIllness: [], evidenceOfInfection: "None", longBoneDeformities: "None", extremities: "Normal", immobilize: "Not required"
     });
     setEfastData({ heart: "Normal", abdomen: "No free fluid", lungs: "No pneumothorax", pelvis: "Normal" });
     setExamData({
@@ -1322,6 +1327,7 @@ export default function PediatricCaseSheetScreen() {
               <View style={styles.vitalItem}><Text style={[styles.vitalValue, { color: theme.text }]}>{patient.vitals.rr || "--"}</Text><Text style={[styles.vitalLabel, { color: theme.textSecondary }]}>RR</Text></View>
               <View style={styles.vitalItem}><Text style={[styles.vitalValue, { color: theme.text }]}>{patient.vitals.spo2 || "--"}%</Text><Text style={[styles.vitalLabel, { color: theme.textSecondary }]}>SpO2</Text></View>
               <View style={styles.vitalItem}><Text style={[styles.vitalValue, { color: theme.text }]}>{patient.vitals.temperature || "--"}</Text><Text style={[styles.vitalLabel, { color: theme.textSecondary }]}>Temp</Text></View>
+              <View style={styles.vitalItem}><Text style={[styles.vitalValue, { color: theme.text }]}>{patient.vitals?.pain_score || "--"}</Text><Text style={[styles.vitalLabel, { color: theme.textSecondary }]}>Pain</Text></View>
             </View>
 
             <View style={[styles.weightSection, { backgroundColor: theme.backgroundSecondary, borderColor: TriageColors.blue }]}>
@@ -1503,6 +1509,9 @@ export default function PediatricCaseSheetScreen() {
               <CollapsibleSection title="E - Exposure" icon="thermometer" iconColor={TriageColors.blue}>
                 <Text style={[styles.fieldLabel, { color: theme.text }]}>Temperature</Text>
                 <TextInput style={[styles.inputField, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Check for fever/hypothermia" placeholderTextColor={theme.textMuted} value={exposureData.temperature} onChangeText={(v) => setExposureData((p) => ({ ...p, temperature: v }))} />
+
+                <Text style={[styles.fieldLabel, { color: theme.text }]}>Pain Score</Text>
+                <TextInput style={[styles.inputField, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="0-10" placeholderTextColor={theme.textMuted} value={exposureData.painScore} onChangeText={(v) => setExposureData((p) => ({ ...p, painScore: v }))} keyboardType="decimal-pad" />
 
                 <View style={styles.fieldWithVoice}>
                   <Text style={[styles.fieldLabel, { color: theme.text }]}>Trauma</Text>

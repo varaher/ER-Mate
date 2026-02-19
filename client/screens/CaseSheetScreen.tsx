@@ -579,6 +579,7 @@ export default function CaseSheetScreen() {
       newFormData.disability.gcsM = String(caseSheetData.vitals_at_arrival.gcs_m || "6");
       newFormData.disability.glucose = String(caseSheetData.vitals_at_arrival.grbs || "");
       newFormData.exposure.temperature = String(caseSheetData.vitals_at_arrival.temperature || "");
+      newFormData.exposure.painScore = String(caseSheetData.vitals_at_arrival.pain_score || "");
     }
     if (caseSheetData.abcde) {
       Object.assign(newFormData.airway, caseSheetData.abcde.airway || {});
@@ -751,6 +752,7 @@ export default function CaseSheetScreen() {
           newFormData.disability.gcsM = String(res.data.vitals_at_arrival.gcs_m || "6");
           newFormData.disability.glucose = String(res.data.vitals_at_arrival.grbs || "");
           newFormData.exposure.temperature = String(res.data.vitals_at_arrival.temperature || "");
+          newFormData.exposure.painScore = String(res.data.vitals_at_arrival.pain_score || "");
         }
         if (res.data.abcde) {
           Object.assign(newFormData.airway, res.data.abcde.airway || {});
@@ -991,6 +993,7 @@ export default function CaseSheetScreen() {
         rr: parseFloat(formData.breathing.rr) || 16,
         spo2: parseFloat(formData.breathing.spo2) || 98,
         temperature: parseFloat(formData.exposure.temperature) || 36.8,
+        pain_score: parseFloat(formData.exposure.painScore) || 0,
         gcs_e: gcsE,
         gcs_v: gcsV,
         gcs_m: gcsM,
@@ -2025,6 +2028,8 @@ export default function CaseSheetScreen() {
                   <View style={styles.vitalItem}><Text style={[styles.vitalLabel, { color: theme.textMuted }]}>SpO2</Text><Text style={[styles.vitalValue, { color: theme.text }]}>{caseData.vitals_at_arrival?.spo2 || "-"}%</Text></View>
                   <View style={styles.vitalItem}><Text style={[styles.vitalLabel, { color: theme.textMuted }]}>Temp</Text><Text style={[styles.vitalValue, { color: theme.text }]}>{caseData.vitals_at_arrival?.temperature || "-"}</Text></View>
                   <View style={styles.vitalItem}><Text style={[styles.vitalLabel, { color: theme.textMuted }]}>GCS</Text><Text style={[styles.vitalValue, { color: theme.text }]}>{(caseData.vitals_at_arrival?.gcs_e || 0) + (caseData.vitals_at_arrival?.gcs_v || 0) + (caseData.vitals_at_arrival?.gcs_m || 0) || "-"}/15</Text></View>
+                  <View style={styles.vitalItem}><Text style={[styles.vitalLabel, { color: theme.textMuted }]}>Pain</Text><Text style={[styles.vitalValue, { color: theme.text }]}>{caseData.vitals_at_arrival?.pain_score || "-"}/10</Text></View>
+                  <View style={styles.vitalItem}><Text style={[styles.vitalLabel, { color: theme.textMuted }]}>GRBS</Text><Text style={[styles.vitalValue, { color: theme.text }]}>{caseData.vitals_at_arrival?.grbs || "-"}</Text></View>
                 </View>
               </View>
             )}
@@ -2526,6 +2531,7 @@ export default function CaseSheetScreen() {
 
               <View style={styles.abcdeVitalsRow}>
                 <View style={{ flex: 1 }}><TextInputField label="Temp" value={formData.exposure.temperature} onChangeText={(v) => updateFormData("exposure", "temperature", v)} keyboardType="decimal-pad" suffix="\u00B0C" /></View>
+                <View style={{ flex: 1 }}><TextInputField label="Pain (0-10)" value={formData.exposure.painScore} onChangeText={(v) => updateFormData("exposure", "painScore", v)} keyboardType="decimal-pad" suffix="/10" /></View>
               </View>
 
               {abcdeStatus.exposure === "Normal" && (
