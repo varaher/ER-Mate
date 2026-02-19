@@ -188,11 +188,13 @@ export default function TriageScreen() {
   const formDataRef = useRef({
     name: "",
     age: "",
+    sex: "Male",
     phone: "",
     address: "",
     brought_by: "",
     informant_name: "",
     informant_reliability: "",
+    mode_of_arrival: "Walk-in",
     chief_complaint: "",
     hr: "",
     bp_systolic: "",
