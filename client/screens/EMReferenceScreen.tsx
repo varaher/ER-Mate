@@ -51,6 +51,8 @@ export default function EMReferenceScreen() {
   const [loading, setLoading] = useState(false);
   const [activeTopic, setActiveTopic] = useState<string | undefined>();
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+  const [feedbackGiven, setFeedbackGiven] = useState<Record<string, "helpful" | "not_helpful">>({});
+  const [feedbackSending, setFeedbackSending] = useState<string | null>(null);
 
   useEffect(() => {
     fetchTopics();
@@ -129,11 +131,46 @@ export default function EMReferenceScreen() {
     sendMessage(`Tell me about ${topic} in emergency medicine.`, topic);
   };
 
+  const submitFeedback = useCallback(
+    async (msgId: string, type: "helpful" | "not_helpful") => {
+      if (feedbackGiven[msgId] || feedbackSending) return;
+      setFeedbackSending(msgId);
+
+      const assistantMsg = messages.find((m) => m.id === msgId);
+      const msgIndex = messages.findIndex((m) => m.id === msgId);
+      const userMsg = msgIndex > 0 ? messages[msgIndex - 1] : null;
+
+      try {
+        const baseUrl = getApiUrl();
+        const url = new URL("/api/em-reference/feedback", baseUrl);
+        await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            messageId: msgId,
+            query: userMsg?.content || "",
+            response: assistantMsg?.content || "",
+            topic: activeTopic || null,
+            feedbackType: type,
+          }),
+        });
+        setFeedbackGiven((prev) => ({ ...prev, [msgId]: type }));
+      } catch (e) {
+        console.error("Feedback error:", e);
+      } finally {
+        setFeedbackSending(null);
+      }
+    },
+    [messages, activeTopic, feedbackGiven, feedbackSending]
+  );
+
   const startNewChat = () => {
     setMessages([]);
     setActiveTopic(undefined);
     setView("topics");
     setExpandedCategory(null);
+    setFeedbackGiven({});
   };
 
   const renderMarkdown = (text: string) => {
@@ -381,21 +418,69 @@ export default function EMReferenceScreen() {
                 <Feather name="book" size={14} color="#FFFFFF" />
               </View>
             ) : null}
-            <View
-              style={[
-                styles.msgBubble,
-                msg.role === "user"
-                  ? [styles.userBubble, { backgroundColor: theme.primary }]
-                  : [styles.aiBubble, { backgroundColor: theme.card }],
-              ]}
-            >
-              {msg.role === "user" ? (
-                <Text style={[styles.userText, { color: "#FFFFFF" }]}>
-                  {msg.content}
-                </Text>
-              ) : (
-                <View>{renderMarkdown(msg.content)}</View>
-              )}
+            <View style={msg.role === "assistant" ? styles.aiBubbleWrap : undefined}>
+              <View
+                style={[
+                  styles.msgBubble,
+                  msg.role === "user"
+                    ? [styles.userBubble, { backgroundColor: theme.primary }]
+                    : [styles.aiBubble, { backgroundColor: theme.card }],
+                ]}
+              >
+                {msg.role === "user" ? (
+                  <Text style={[styles.userText, { color: "#FFFFFF" }]}>
+                    {msg.content}
+                  </Text>
+                ) : (
+                  <View>{renderMarkdown(msg.content)}</View>
+                )}
+              </View>
+              {msg.role === "assistant" ? (
+                <View style={styles.feedbackRow}>
+                  {feedbackGiven[msg.id] ? (
+                    <View style={styles.feedbackDone}>
+                      <Feather
+                        name={feedbackGiven[msg.id] === "helpful" ? "thumbs-up" : "thumbs-down"}
+                        size={13}
+                        color={feedbackGiven[msg.id] === "helpful" ? TriageColors.green : TriageColors.orange}
+                      />
+                      <Text style={[styles.feedbackDoneText, {
+                        color: feedbackGiven[msg.id] === "helpful" ? TriageColors.green : TriageColors.orange,
+                      }]}>
+                        {feedbackGiven[msg.id] === "helpful" ? "Helpful" : "Not helpful"} - Thanks!
+                      </Text>
+                    </View>
+                  ) : (
+                    <>
+                      <Text style={[styles.feedbackLabel, { color: theme.textMuted }]}>
+                        Was this helpful?
+                      </Text>
+                      <Pressable
+                        onPress={() => submitFeedback(msg.id, "helpful")}
+                        disabled={feedbackSending === msg.id}
+                        style={({ pressed }) => [
+                          styles.feedbackBtn,
+                          { backgroundColor: pressed ? theme.card : "transparent" },
+                        ]}
+                        hitSlop={6}
+                      >
+                        <Feather name="thumbs-up" size={14} color={theme.textMuted} />
+                      </Pressable>
+                      <Pressable
+                        onPress={() => submitFeedback(msg.id, "not_helpful")}
+                        disabled={feedbackSending === msg.id}
+                        style={({ pressed }) => [
+                          styles.feedbackBtn,
+                          { backgroundColor: pressed ? theme.card : "transparent" },
+                        ]}
+                        hitSlop={6}
+                      >
+                        <Feather name="thumbs-down" size={14} color={theme.textMuted} />
+                      </Pressable>
+                    </>
+                  )}
+                </View>
+              ) : null}
             </View>
           </View>
         ))}
@@ -728,5 +813,33 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     borderTopWidth: 1,
     marginBottom: 4,
+  },
+  aiBubbleWrap: {
+    maxWidth: "85%",
+    flex: 1,
+  },
+  feedbackRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 6,
+    paddingLeft: 2,
+  },
+  feedbackLabel: {
+    fontSize: 12,
+    marginRight: 2,
+  },
+  feedbackBtn: {
+    padding: 4,
+    borderRadius: 12,
+  },
+  feedbackDone: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  feedbackDoneText: {
+    fontSize: 12,
+    fontWeight: "500",
   },
 });

@@ -6,6 +6,9 @@ import multer from "multer";
 import { generateDiagnosisSuggestions, recordFeedback, getFeedbackStats, getLearningInsights, generateCourseInHospital, extractClinicalDataFromVoice, transcribeAndExtractVoice, type AIFeedback, type FeedbackResult, type ExtractedClinicalData } from "./services/aiDiagnosis";
 import { getOrCreateSubscription, canCreateCase, incrementCaseCount, activatePremium, cancelSubscription, FREE_CASE_LIMIT, PREMIUM_PRICE_INR } from "./services/subscription";
 import { getEMReferenceResponse, EM_TOPICS, type EMReferenceMessage } from "./services/emReference";
+import { getDb } from "./db";
+import { emReferenceFeedback } from "@shared/schema";
+import { eq, desc, count, sql as drizzleSql } from "drizzle-orm";
 
 const upload = multer({ 
   storage: multer.memoryStorage(),
@@ -2328,6 +2331,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("[EMReference] Chat error:", error);
       res.status(500).json({ error: "Failed to generate response" });
+    }
+  });
+
+  app.post("/api/em-reference/feedback", async (req: Request, res: Response) => {
+    try {
+      const { messageId, query, response, topic, feedbackType, feedbackComment, userId } = req.body;
+
+      if (!messageId || !query || !response || !feedbackType) {
+        return res.status(400).json({ error: "messageId, query, response, and feedbackType are required" });
+      }
+
+      if (!["helpful", "not_helpful"].includes(feedbackType)) {
+        return res.status(400).json({ error: "feedbackType must be 'helpful' or 'not_helpful'" });
+      }
+
+      const db = getDb()!;
+      await db.insert(emReferenceFeedback).values({
+        messageId,
+        query,
+        response,
+        topic: topic || null,
+        feedbackType,
+        feedbackComment: feedbackComment || null,
+        userId: userId || null,
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[EMReference] Feedback error:", error);
+      res.status(500).json({ error: "Failed to save feedback" });
+    }
+  });
+
+  app.get("/api/em-reference/feedback/stats", async (_req: Request, res: Response) => {
+    try {
+      const db = getDb()!;
+      const helpful = await db.select({ count: count() }).from(emReferenceFeedback).where(eq(emReferenceFeedback.feedbackType, "helpful"));
+      const notHelpful = await db.select({ count: count() }).from(emReferenceFeedback).where(eq(emReferenceFeedback.feedbackType, "not_helpful"));
+
+      res.json({
+        helpful: helpful[0]?.count || 0,
+        notHelpful: notHelpful[0]?.count || 0,
+        total: (helpful[0]?.count || 0) + (notHelpful[0]?.count || 0),
+      });
+    } catch (error) {
+      console.error("[EMReference] Feedback stats error:", error);
+      res.status(500).json({ error: "Failed to get feedback stats" });
     }
   });
 

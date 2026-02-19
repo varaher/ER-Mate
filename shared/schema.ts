@@ -67,6 +67,26 @@ export const insertTreatmentHistorySchema = createInsertSchema(treatmentHistory)
 export type TreatmentHistoryRecord = typeof treatmentHistory.$inferSelect;
 export type InsertTreatmentHistory = z.infer<typeof insertTreatmentHistorySchema>;
 
+export const emReferenceFeedback = pgTable("em_reference_feedback", {
+  id: serial("id").primaryKey(),
+  messageId: text("message_id").notNull(),
+  query: text("query").notNull(),
+  response: text("response").notNull(),
+  topic: text("topic"),
+  feedbackType: text("feedback_type").notNull(),
+  feedbackComment: text("feedback_comment"),
+  userId: text("user_id"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertEMReferenceFeedbackSchema = createInsertSchema(emReferenceFeedback).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type EMReferenceFeedbackRecord = typeof emReferenceFeedback.$inferSelect;
+export type InsertEMReferenceFeedback = z.infer<typeof insertEMReferenceFeedbackSchema>;
+
 export const subscriptions = pgTable("subscriptions", {
   id: serial("id").primaryKey(),
   userId: text("user_id").notNull(),
