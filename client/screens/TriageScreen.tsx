@@ -36,6 +36,7 @@ const DEFAULT_VITALS = {
   gcs_v: "5",
   gcs_m: "6",
   grbs: "100",
+  pain_score: "",
 };
 
 const SEX_OPTIONS = ["Male", "Female", "Other"];
@@ -180,6 +181,7 @@ export default function TriageScreen() {
     gcs_v: "",
     gcs_m: "",
     grbs: "",
+    pain_score: "",
   });
 
   // Ref to hold form values for smooth typing without re-renders
@@ -202,6 +204,7 @@ export default function TriageScreen() {
     gcs_v: "",
     gcs_m: "",
     grbs: "",
+    pain_score: "",
   });
 
   // Debounce timer ref for age field
@@ -338,6 +341,7 @@ export default function TriageScreen() {
       gcs_v: merged.gcs_v || DEFAULT_VITALS.gcs_v,
       gcs_m: merged.gcs_m || DEFAULT_VITALS.gcs_m,
       grbs: merged.grbs || DEFAULT_VITALS.grbs,
+      pain_score: merged.pain_score || "",
     };
   };
 
@@ -497,6 +501,7 @@ export default function TriageScreen() {
           gcs_v: parseInt(fd.gcs_v) || 5,
           gcs_m: parseInt(fd.gcs_m) || 6,
           grbs: parseFloat(fd.grbs) || 100,
+          pain_score: parseFloat(fd.pain_score) || 0,
         },
         presenting_complaint: {
           text: fd.chief_complaint || "",
@@ -743,10 +748,16 @@ export default function TriageScreen() {
               {renderInputField("GRBS", "grbs", "numeric", "100")}
             </View>
             <View style={{ flex: 1 }}>
+              {renderInputField("Pain Score (0-10)", "pain_score", "numeric", "")}
+            </View>
+          </View>
+          <View style={styles.row}>
+            <View style={{ flex: 1 }}>
               <Text style={[styles.label, { color: theme.textSecondary }]}>
                 GCS Total: {parseInt(formData.gcs_e || "4") + parseInt(formData.gcs_v || "5") + parseInt(formData.gcs_m || "6")}/15
               </Text>
             </View>
+            <View style={{ flex: 1 }} />
           </View>
           <View style={styles.row}>
             <View style={{ flex: 1 }}>
