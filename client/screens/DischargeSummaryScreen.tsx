@@ -729,8 +729,18 @@ export default function DischargeSummaryScreen() {
     }
   };
 
-  const handleGoToDashboard = () => {
-    navigation.popToTop();
+  const handleGoToDashboard = async () => {
+    try {
+      await cacheDischargeSummary(caseId, summaryRef.current);
+      await apiPut(`/cases/${caseId}`, {
+        discharge_summary: summaryRef.current,
+        status: "completed",
+      });
+      await invalidateCases();
+    } catch (err) {
+      // still navigate even if save fails
+    }
+    navigation.reset({ index: 0, routes: [{ name: "Main" as any, params: { screen: "DashboardTab" } }] });
   };
 
   const exportPDF = async () => {

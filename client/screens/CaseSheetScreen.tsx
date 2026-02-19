@@ -1184,17 +1184,13 @@ export default function CaseSheetScreen() {
       return;
     }
     
-    const effectiveDraftId = currentDraftId || localDraftIdRef.current;
-    if (!effectiveDraftId) {
-      console.error("Cannot save: No draft initialized");
-      if (!silent) Alert.alert("Error", "Please wait for the case to load completely before saving.");
-      return;
-    }
-    
     setSaving(true);
     try {
       const payload = buildPayload();
-      await saveToDraft(payload);
+      const effectiveDraftId = currentDraftId || localDraftIdRef.current;
+      if (effectiveDraftId) {
+        try { await saveToDraft(payload); } catch (draftErr) { console.warn("Draft save failed, using cache:", draftErr); }
+      }
       await cacheCasePayload(caseId, payload);
       setLastSaved(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
       if (!silent) Alert.alert("Saved Locally", "Data saved locally. It will be submitted when you click Finish in Disposition.");

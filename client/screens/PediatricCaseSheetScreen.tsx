@@ -700,17 +700,14 @@ export default function PediatricCaseSheetScreen() {
       return;
     }
     
-    const effectiveDraftId = currentDraftId || localDraftIdRef.current;
-    if (!effectiveDraftId) {
-      console.error("Cannot save: No draft initialized");
-      if (!silent) Alert.alert("Error", "Please wait for the case to load completely before saving.");
-      return;
-    }
-    
     try {
       setSaving(true);
       const payload = buildPayload();
-      await saveToDraft(payload);
+      const effectiveDraftId = currentDraftId || localDraftIdRef.current;
+      if (effectiveDraftId) {
+        try { await saveToDraft(payload); } catch (draftErr) { console.warn("Draft save failed, using cache:", draftErr); }
+      }
+      await cacheCasePayload(caseId, payload);
       setLastSaved(new Date());
       if (!silent) Alert.alert("Saved Locally", "Data saved locally. It will be submitted when you click Finish.");
     } catch (error) {
