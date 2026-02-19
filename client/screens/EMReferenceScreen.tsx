@@ -9,8 +9,10 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  BackHandler,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, TriageColors } from "@/constants/theme";
@@ -41,6 +43,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 export default function EMReferenceScreen() {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
   const scrollRef = useRef<ScrollView>(null);
   const inputRef = useRef<TextInput>(null);
 
@@ -53,6 +56,35 @@ export default function EMReferenceScreen() {
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const [feedbackGiven, setFeedbackGiven] = useState<Record<string, "helpful" | "not_helpful">>({});
   const [feedbackSending, setFeedbackSending] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (view !== "chat") return;
+
+    const unsubscribe = navigation.addListener("beforeRemove", (e) => {
+      e.preventDefault();
+      setMessages([]);
+      setActiveTopic(undefined);
+      setView("topics");
+      setFeedbackGiven({});
+    });
+
+    return unsubscribe;
+  }, [view, navigation]);
+
+  useEffect(() => {
+    if (view !== "chat") return;
+
+    const onBack = () => {
+      setMessages([]);
+      setActiveTopic(undefined);
+      setView("topics");
+      setFeedbackGiven({});
+      return true;
+    };
+
+    const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
+    return () => sub.remove();
+  }, [view]);
 
   useEffect(() => {
     fetchTopics();
