@@ -342,6 +342,25 @@ export default function TriageScreen() {
   };
 
   const handleSmartDictation = (data: SmartDictationExtracted) => {
+    if (data.patientName) {
+      formDataRef.current.name = data.patientName;
+      setFormData(prev => ({ ...prev, name: data.patientName! }));
+    }
+    if (data.patientAge) {
+      const ageNum = data.patientAge.replace(/[^0-9.]/g, '');
+      if (ageNum) {
+        formDataRef.current.age = ageNum;
+        setFormData(prev => ({ ...prev, age: ageNum }));
+      }
+    }
+    if (data.patientSex) {
+      const sexVal = data.patientSex.toLowerCase();
+      const mapped = sexVal.includes('female') ? 'Female' : sexVal.includes('male') ? 'Male' : sexVal.includes('other') ? 'Other' : '';
+      if (mapped) {
+        formDataRef.current.sex = mapped;
+        setFormData(prev => ({ ...prev, sex: mapped }));
+      }
+    }
     if (data.chiefComplaint) {
       formDataRef.current.chief_complaint = data.chiefComplaint;
       setFormData(prev => ({ ...prev, chief_complaint: data.chiefComplaint! }));
@@ -601,6 +620,7 @@ export default function TriageScreen() {
           <Text style={[styles.sectionTitle, { color: theme.text }]}>Triage Dictation</Text>
           <Text style={[styles.sectionSubtitle, { color: theme.textSecondary }]}>Brief complaint and vitals only. Use Case Sheet Dictation for full history.</Text>
           <SmartDictation
+            mode="triage"
             onDataExtracted={handleSmartDictation}
             patientContext={{
               age: parseFloat(formDataRef.current.age) || undefined,

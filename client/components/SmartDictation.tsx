@@ -26,6 +26,9 @@ interface WebRecorderState {
 }
 
 export interface SmartDictationExtracted {
+  patientName?: string;
+  patientAge?: string;
+  patientSex?: string;
   chiefComplaint?: string;
   historyOfPresentIllness?: string;
   onset?: string;
@@ -94,9 +97,13 @@ interface SmartDictationProps {
     caseType?: string;
   };
   disabled?: boolean;
+  mode?: 'triage' | 'casesheet';
 }
 
 const FIELD_LABELS: Record<string, string> = {
+  patientName: 'Patient Name',
+  patientAge: 'Patient Age',
+  patientSex: 'Patient Sex',
   chiefComplaint: 'Chief Complaint',
   historyOfPresentIllness: 'History of Present Illness',
   onset: 'Onset',
@@ -129,6 +136,9 @@ const FIELD_LABELS: Record<string, string> = {
 };
 
 const FIELD_ICONS: Record<string, string> = {
+  patientName: 'user',
+  patientAge: 'calendar',
+  patientSex: 'users',
   chiefComplaint: 'alert-circle',
   historyOfPresentIllness: 'file-text',
   pastMedicalHistory: 'clock',
@@ -145,10 +155,15 @@ const FIELD_ICONS: Record<string, string> = {
 
 type FlowStep = 'idle' | 'recording' | 'transcribing' | 'transcript_ready' | 'extracting' | 'review';
 
+const TRIAGE_FIELDS = new Set([
+  'patientName', 'patientAge', 'patientSex', 'chiefComplaint', 'vitalsSuggested',
+]);
+
 export default function SmartDictation({
   onDataExtracted,
   patientContext,
   disabled = false,
+  mode = 'casesheet',
 }: SmartDictationProps) {
   const { theme } = useTheme();
   const [step, setStep] = useState<FlowStep>('idle');
@@ -465,8 +480,10 @@ export default function SmartDictation({
   const getPopulatedFields = (): { key: string; label: string; value: string }[] => {
     if (!extractedData) return [];
     const fields: { key: string; label: string; value: string }[] = [];
+    const isTriage = mode === 'triage';
 
-    const simple = ['chiefComplaint', 'historyOfPresentIllness', 'onset', 'duration', 'progression',
+    const simple = ['patientName', 'patientAge', 'patientSex',
+      'chiefComplaint', 'historyOfPresentIllness', 'onset', 'duration', 'progression',
       'associatedSymptoms', 'negativeSymptoms', 'pastMedicalHistory', 'pastSurgicalHistory',
       'allergies', 'currentMedications', 'familyHistory', 'socialHistory', 'menstrualHistory',
       'immunizationHistory', 'birthHistory', 'feedingHistory', 'developmentalHistory',
@@ -474,21 +491,22 @@ export default function SmartDictation({
 
     for (const key of simple) {
       const val = (extractedData as any)[key];
+      if (isTriage && !TRIAGE_FIELDS.has(key)) continue;
       if (val && typeof val === 'string' && val.trim()) {
         fields.push({ key, label: FIELD_LABELS[key] || key, value: val });
       }
     }
 
-    if (extractedData.symptoms && extractedData.symptoms.length > 0) {
+    if (!isTriage && extractedData.symptoms && extractedData.symptoms.length > 0) {
       fields.push({ key: 'symptoms', label: 'Symptoms', value: extractedData.symptoms.join(', ') });
     }
-    if (extractedData.diagnosis && extractedData.diagnosis.length > 0) {
+    if (!isTriage && extractedData.diagnosis && extractedData.diagnosis.length > 0) {
       fields.push({ key: 'diagnosis', label: 'Diagnosis', value: extractedData.diagnosis.join(', ') });
     }
-    if (extractedData.differentialDiagnosis && extractedData.differentialDiagnosis.length > 0) {
+    if (!isTriage && extractedData.differentialDiagnosis && extractedData.differentialDiagnosis.length > 0) {
       fields.push({ key: 'differentialDiagnosis', label: 'Differential Diagnosis', value: extractedData.differentialDiagnosis.join(', ') });
     }
-    if (extractedData.prescribedMedications && extractedData.prescribedMedications.length > 0) {
+    if (!isTriage && extractedData.prescribedMedications && extractedData.prescribedMedications.length > 0) {
       const medsText = extractedData.prescribedMedications.map((m) => {
         const parts = [m.name];
         if (m.dose) parts.push(m.dose);
@@ -498,7 +516,7 @@ export default function SmartDictation({
       }).join(', ');
       fields.push({ key: 'prescribedMedications', label: 'Prescribed Medications', value: medsText });
     }
-    if (extractedData.prescribedInfusions && extractedData.prescribedInfusions.length > 0) {
+    if (!isTriage && extractedData.prescribedInfusions && extractedData.prescribedInfusions.length > 0) {
       const infText = extractedData.prescribedInfusions.map((i) => {
         const parts = [i.name];
         if (i.dose) parts.push(i.dose);
@@ -509,7 +527,7 @@ export default function SmartDictation({
       fields.push({ key: 'prescribedInfusions', label: 'Infusions / IV Fluids', value: infText });
     }
 
-    if (extractedData.painDetails) {
+    if (!isTriage && extractedData.painDetails) {
       const pd = extractedData.painDetails;
       const parts = [];
       if (pd.location) parts.push(`Location: ${pd.location}`);
@@ -524,7 +542,7 @@ export default function SmartDictation({
       }
     }
 
-    if (extractedData.examFindings) {
+    if (!isTriage && extractedData.examFindings) {
       const ef = extractedData.examFindings;
       const parts = [];
       if (ef.general) parts.push(`General: ${ef.general}`);
@@ -746,7 +764,9 @@ export default function SmartDictation({
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: theme.backgroundDefault }]}>
             <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
-              <Text style={[styles.modalTitle, { color: theme.text }]}>Review Before Applying</Text>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>
+                {mode === 'triage' ? 'Review Triage Fields' : 'Review Before Applying'}
+              </Text>
               <Pressable onPress={() => { setShowResults(false); setStep('transcript_ready'); }} style={styles.modalClose}>
                 <Feather name="x" size={24} color={theme.text} />
               </Pressable>

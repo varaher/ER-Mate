@@ -1193,9 +1193,13 @@ IMPORTANT INSTRUCTIONS:
 5. Only include fields that have actual content from the transcript. Omit empty fields entirely.
 6. Be precise - do not invent or assume information not stated.
 7. Include a "fieldsPopulated" array listing which fields you filled, so the UI can show what was auto-populated.
+8. ALWAYS extract patient name and age if mentioned. Doctors often start with "Patient name Raju, 45 year old male..." or "Name: Meena, Age 32" or similar patterns. Extract these into patientName and patientAge fields.
 
 Respond in JSON format:
 {
+  "patientName": "Patient's name if mentioned in dictation",
+  "patientAge": "Patient's age if mentioned (just the number as string, e.g. '45')",
+  "patientSex": "Patient's sex/gender if mentioned (Male/Female/Other)",
   "chiefComplaint": "Main presenting complaint(s) - what the patient came in for",
   "historyOfPresentIllness": "Detailed narrative of the current illness episode - onset, progression, character, associated/aggravating/relieving factors",
   "onset": "When symptoms started (e.g., '2 days ago', 'sudden onset')",
