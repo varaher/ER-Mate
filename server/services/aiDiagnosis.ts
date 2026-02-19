@@ -607,7 +607,7 @@ Extract and categorize any mentioned clinical information into the following str
 Respond in JSON format:
 {
   "chiefComplaint": "Main presenting complaint if mentioned",
-  "historyOfPresentIllness": "Detailed HPI narrative if mentioned",
+  "historyOfPresentIllness": "A complete NARRATIVE clinical story in third person prose. Weave onset, duration, progression, character, location, severity, aggravating/relieving factors, associated symptoms, and pertinent negatives into flowing text. Do NOT use labels or bullet points. Example: 'Patient presented with severe epigastric pain of 6 hours duration, burning in character, aggravated by food intake and relieved by antacids. Associated with nausea and two episodes of non-bilious vomiting. No hematemesis or melena.'",
   "pastMedicalHistory": "PMH if mentioned (diabetes, hypertension, etc.)",
   "allergies": "Drug/food allergies if mentioned",
   "medications": "Current medications if mentioned",
@@ -643,8 +643,8 @@ Respond in JSON format:
 IMPORTANT RULES:
 1. When the doctor mentions prescribing or administering medications (e.g., "give paracetamol 1g IV", "start on Tab Pantoprazole 40mg OD"), extract them into "prescribedMedications" array. When IV fluids or continuous infusions are mentioned (e.g., "start NS at 100ml/hr", "Dopamine drip"), extract them into "prescribedInfusions" array. "medications" field is ONLY for the patient's current/home medications (medication history).
 2. CRITICAL: Only include fields that have ACTUAL content mentioned in the transcript. Do NOT include fields with values like "Not mentioned", "None", "N/A", "Unknown", or empty strings. Simply OMIT the field entirely if no relevant information was mentioned.
-3. For "historyOfPresentIllness": Construct a proper narrative from ALL relevant clinical details the doctor mentions - the presenting complaint, what happened, timeline, symptoms, relevant context. This should read like a clinical HPI paragraph. If the doctor describes the case, this field should contain the full narrative.
-4. For "painDetails": Only include specific subfields (location, severity, character, etc.) where the doctor ACTUALLY describes pain characteristics. Do NOT include subfields with "Not mentioned" values. Omit the entire painDetails object if pain is not relevant to the presentation.
+3. For "historyOfPresentIllness": Construct a complete NARRATIVE clinical story in flowing third-person prose. Weave ALL clinical details (onset, duration, progression, character, location, severity, aggravating/relieving factors, associated symptoms, pertinent negatives) into a cohesive paragraph. Do NOT use labels like "Onset:", "Duration:", etc. Example: "Patient presented with severe retrosternal chest pain of sudden onset 2 hours ago while climbing stairs. The pain is crushing in nature, radiating to the left arm, aggravated by exertion and partially relieved by rest. Associated with profuse sweating and breathlessness. No history of vomiting or syncope."
+4. For "painDetails": Only include specific subfields (location, severity, character, etc.) where the doctor ACTUALLY describes pain characteristics. Do NOT include subfields with "Not mentioned" values. Omit the entire painDetails object if pain is not relevant to the presentation. Pain details should ALSO be woven into the historyOfPresentIllness narrative.
 5. For "chiefComplaint": Extract the main reason the patient came to the ER. This should be a brief phrase like "Vomiting and loose stools" or "Chest pain" or "Difficulty breathing".
 6. "REST ALL NORMAL" DETECTION: If the doctor says phrases like "rest all examination normal", "other systems normal", "rest all systems within normal limits", "systemic examination otherwise normal", "rest of examination unremarkable", or any similar wording indicating unmentioned exam systems should be considered normal — set "restAllNormal" to true. The examFindings should still contain any SPECIFIC findings mentioned, and restAllNormal covers everything else.`;
 
@@ -1201,12 +1201,12 @@ Respond in JSON format:
   "patientAge": "Patient's age if mentioned (just the number as string, e.g. '45')",
   "patientSex": "Patient's sex/gender if mentioned (Male/Female/Other)",
   "chiefComplaint": "Main presenting complaint(s) - what the patient came in for",
-  "historyOfPresentIllness": "Detailed narrative of the current illness episode - onset, progression, character, associated/aggravating/relieving factors",
-  "onset": "When symptoms started (e.g., '2 days ago', 'sudden onset')",
-  "duration": "Duration of symptoms",
-  "progression": "How symptoms progressed (gradual, sudden, worsening, etc.)",
-  "associatedSymptoms": "Symptoms that accompany the chief complaint",
-  "negativeSymptoms": "Pertinent negatives explicitly mentioned (e.g., 'no vomiting, no loose stools')",
+  "historyOfPresentIllness": "A complete NARRATIVE clinical story written in the third person. MUST weave ALL of the following into flowing prose (do NOT use labels or bullet points): onset and timing, duration, progression, character/nature of symptoms, location (if pain), severity, aggravating/relieving factors, associated symptoms, pertinent negatives. Example: 'A 45-year-old male presented to the ER with complaints of severe retrosternal chest pain of sudden onset approximately 2 hours ago while climbing stairs. The pain is crushing in nature, radiating to the left arm, aggravated by exertion, and partially relieved by rest. It is associated with profuse sweating and breathlessness. There is no history of vomiting, syncope, or palpitations.' Write it as a clinical HPI paragraph that a doctor would write in medical records.",
+  "onset": "When symptoms started (e.g., '2 days ago', 'sudden onset') - ALSO weave this into historyOfPresentIllness narrative",
+  "duration": "Duration of symptoms - ALSO weave this into historyOfPresentIllness narrative",
+  "progression": "How symptoms progressed - ALSO weave this into historyOfPresentIllness narrative",
+  "associatedSymptoms": "Symptoms that accompany the chief complaint - ALSO weave this into historyOfPresentIllness narrative",
+  "negativeSymptoms": "Pertinent negatives explicitly mentioned - ALSO weave this into historyOfPresentIllness narrative",
   "pastMedicalHistory": "Known medical conditions (diabetes, hypertension, asthma, etc.)",
   "pastSurgicalHistory": "Previous surgeries if mentioned",
   "allergies": "Drug or food allergies if mentioned",

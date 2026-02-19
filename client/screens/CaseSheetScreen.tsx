@@ -1651,13 +1651,7 @@ export default function CaseSheetScreen() {
       updateFormData("sample", "signsSymptoms", (formData.sample.signsSymptoms ? formData.sample.signsSymptoms + ", " : "") + data.chiefComplaint);
     }
     if (data.historyOfPresentIllness) {
-      let hpi = data.historyOfPresentIllness;
-      if (data.onset) hpi += ` Onset: ${data.onset}.`;
-      if (data.duration) hpi += ` Duration: ${data.duration}.`;
-      if (data.progression) hpi += ` Progression: ${data.progression}.`;
-      if (data.associatedSymptoms) hpi += ` Associated symptoms: ${data.associatedSymptoms}.`;
-      if (data.negativeSymptoms) hpi += ` Pertinent negatives: ${data.negativeSymptoms}.`;
-      updateFormData("sample", "eventsHopi", (formData.sample.eventsHopi ? formData.sample.eventsHopi + " " : "") + hpi);
+      updateFormData("sample", "eventsHopi", (formData.sample.eventsHopi ? formData.sample.eventsHopi + " " : "") + data.historyOfPresentIllness);
     }
     if (data.pastMedicalHistory) {
       updateFormData("sample", "pastMedicalHistory", (formData.sample.pastMedicalHistory ? formData.sample.pastMedicalHistory + ", " : "") + data.pastMedicalHistory);
@@ -1684,18 +1678,18 @@ export default function CaseSheetScreen() {
       const symptomsText = data.symptoms.join(", ");
       updateFormData("sample", "signsSymptoms", (formData.sample.signsSymptoms ? formData.sample.signsSymptoms + ", " : "") + symptomsText);
     }
-    if (data.painDetails) {
+    if (data.painDetails && !data.historyOfPresentIllness) {
       const pd = data.painDetails;
       const isActual = (v?: string) => v && !["not mentioned", "none", "n/a", "unknown", ""].includes(v.toLowerCase().trim());
       const parts = [];
-      if (isActual(pd.location)) parts.push(`Location: ${pd.location}`);
-      if (isActual(pd.severity)) parts.push(`Severity: ${pd.severity}`);
-      if (isActual(pd.character)) parts.push(`Character: ${pd.character}`);
-      if (isActual(pd.aggravatingFactors)) parts.push(`Aggravating: ${pd.aggravatingFactors}`);
-      if (isActual(pd.relievingFactors)) parts.push(`Relieving: ${pd.relievingFactors}`);
+      if (isActual(pd.location)) parts.push(`${pd.location} pain`);
+      if (isActual(pd.character)) parts.push(`${pd.character} in nature`);
+      if (isActual(pd.severity)) parts.push(`severity ${pd.severity}`);
+      if (isActual(pd.aggravatingFactors)) parts.push(`aggravated by ${pd.aggravatingFactors}`);
+      if (isActual(pd.relievingFactors)) parts.push(`relieved by ${pd.relievingFactors}`);
       if (parts.length > 0) {
-        const painText = parts.join(". ");
-        updateFormData("sample", "eventsHopi", (formData.sample.eventsHopi ? formData.sample.eventsHopi + ". Pain: " : "Pain: ") + painText);
+        const painNarrative = `Patient complains of ${parts.join(", ")}.`;
+        updateFormData("sample", "eventsHopi", (formData.sample.eventsHopi ? formData.sample.eventsHopi + " " : "") + painNarrative);
       }
     }
     if (data.examFindings) {
