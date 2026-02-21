@@ -7,10 +7,12 @@ import {
   Pressable,
   Animated,
   Dimensions,
+  Platform,
 } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import type { NativeStackNavigationProp, NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useHeaderHeight } from "@react-navigation/elements";
 import { Feather } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius } from "@/constants/theme";
@@ -40,6 +42,7 @@ export default function TriviaQuizScreen() {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
 
+  const headerHeight = useHeaderHeight();
   const { categories, difficulty, questionCount } = route.params;
 
   const [questions] = useState<TriviaQuestion[]>(() =>
@@ -154,9 +157,10 @@ export default function TriviaQuizScreen() {
       <ScrollView
         ref={scrollRef}
         style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingTop: headerHeight + Spacing.sm, paddingBottom: insets.bottom + 120 }]}
         showsVerticalScrollIndicator={true}
         scrollIndicatorInsets={{ bottom: insets.bottom + 80 }}
+        automaticallyAdjustContentInsets={false}
       >
         <View style={[styles.progressBar, { backgroundColor: theme.card }]}>
           <View
@@ -339,7 +343,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   scrollView: { flex: 1 },
-  scrollContent: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.md },
+  scrollContent: { paddingHorizontal: Spacing.lg },
   caseCard: {
     padding: Spacing.lg,
     borderRadius: BorderRadius.xl,
