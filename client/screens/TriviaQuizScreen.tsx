@@ -53,6 +53,7 @@ export default function TriviaQuizScreen() {
   const [quizStartTime] = useState(Date.now());
 
   const fadeAnim = useRef(new Animated.Value(1)).current;
+  const scrollRef = useRef<ScrollView>(null);
 
   const currentQuestion = questions[currentIndex];
   const isLastQuestion = currentIndex === questions.length - 1;
@@ -66,6 +67,7 @@ export default function TriviaQuizScreen() {
   const handleConfirm = () => {
     if (selectedOption === null) return;
     setShowAnswer(true);
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
     const timeTaken = (Date.now() - questionStartTime) / 1000;
     const answer: QuizAnswer = {
       questionId: currentQuestion.id,
@@ -99,6 +101,7 @@ export default function TriviaQuizScreen() {
     setSelectedOption(null);
     setShowAnswer(false);
     setQuestionStartTime(Date.now());
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
   };
 
   const getOptionStyle = (index: number) => {
@@ -169,6 +172,7 @@ export default function TriviaQuizScreen() {
       </View>
 
       <ScrollView
+        ref={scrollRef}
         style={styles.scrollView}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
         showsVerticalScrollIndicator={false}
@@ -334,7 +338,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   scrollView: { flex: 1 },
-  scrollContent: { paddingHorizontal: Spacing.lg },
+  scrollContent: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm },
   caseCard: {
     padding: Spacing.lg,
     borderRadius: BorderRadius.xl,
