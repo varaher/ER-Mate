@@ -1,0 +1,891 @@
+export interface TriviaQuestion {
+  id: string;
+  casePresentation: string;
+  question: string;
+  options: string[];
+  correctAnswer: number;
+  explanation: string;
+  reference: string;
+  category: TriviaCategory;
+  difficulty: TriviaDifficulty;
+}
+
+export type TriviaCategory =
+  | "pediatric_em"
+  | "surgical_em"
+  | "medical_em"
+  | "trauma"
+  | "toxicology"
+  | "cardiology_em"
+  | "neuro_em"
+  | "obs_gyn_em"
+  | "applied_basic_science";
+
+export type TriviaDifficulty = "beginner" | "intermediate" | "advanced";
+
+export const CATEGORY_INFO: Record<TriviaCategory, { label: string; icon: string; color: string }> = {
+  pediatric_em: { label: "Pediatric EM", icon: "heart", color: "#ec4899" },
+  surgical_em: { label: "Surgical EM", icon: "scissors", color: "#ef4444" },
+  medical_em: { label: "Medical EM", icon: "thermometer", color: "#3b82f6" },
+  trauma: { label: "Trauma", icon: "alert-triangle", color: "#f97316" },
+  toxicology: { label: "Toxicology", icon: "alert-circle", color: "#8b5cf6" },
+  cardiology_em: { label: "Cardiology EM", icon: "activity", color: "#e11d48" },
+  neuro_em: { label: "Neuro EM", icon: "zap", color: "#6366f1" },
+  obs_gyn_em: { label: "Obs/Gyn EM", icon: "user", color: "#d946ef" },
+  applied_basic_science: { label: "Basic Science", icon: "book", color: "#14b8a6" },
+};
+
+export const DIFFICULTY_INFO: Record<TriviaDifficulty, { label: string; color: string; points: number }> = {
+  beginner: { label: "Beginner", color: "#22c55e", points: 1 },
+  intermediate: { label: "Intermediate", color: "#eab308", points: 2 },
+  advanced: { label: "Advanced", color: "#ef4444", points: 3 },
+};
+
+export const TRIVIA_QUESTIONS: TriviaQuestion[] = [
+  // ===== PEDIATRIC EM =====
+  {
+    id: "ped_1",
+    casePresentation: "A 28-day-old neonate is brought to the ED with refractory seizures, bulging fontanelle, irritability, and poor feeding for the past 12 hours. Temperature is 39.2°C.",
+    question: "What is the most critical initial investigation for this neonate?",
+    options: [
+      "CT scan of the brain",
+      "Lumbar puncture with CSF analysis",
+      "Blood glucose level",
+      "Serum electrolytes only",
+    ],
+    correctAnswer: 1,
+    explanation: "In a neonate with fever, seizures, and bulging fontanelle, neonatal meningoencephalitis is the top differential. Lumbar puncture with CSF analysis (cell count, protein, glucose, culture, and PCR for HSV) is the most critical investigation. While CT may be needed to rule out raised ICP before LP, CSF analysis remains the definitive diagnostic step. Blood glucose should be checked but is not the primary investigation here.",
+    reference: "Nelson Textbook of Pediatrics, 21st Ed; AAP Guidelines for Neonatal Meningitis; Red Book (AAP Infectious Diseases)",
+    category: "pediatric_em",
+    difficulty: "advanced",
+  },
+  {
+    id: "ped_2",
+    casePresentation: "A 28-day-old neonate with suspected meningoencephalitis has CSF showing pleocytosis with lymphocytic predominance, elevated protein, and low glucose.",
+    question: "What antimicrobial regimen should be initiated empirically?",
+    options: [
+      "Ceftriaxone alone",
+      "Ampicillin + Cefotaxime + Acyclovir",
+      "Vancomycin + Meropenem",
+      "Amoxicillin + Gentamicin",
+    ],
+    correctAnswer: 1,
+    explanation: "For neonatal meningoencephalitis (age <1 month), the empiric regimen is Ampicillin (covers Listeria monocytogenes and Group B Streptococcus) + Cefotaxime (covers gram-negative organisms including E. coli) + Acyclovir (covers HSV encephalitis which is devastating if missed). Ceftriaxone is avoided in neonates due to bilirubin displacement risk. Note: Cefotaxime is preferred over ceftriaxone in neonates.",
+    reference: "AAP Red Book 2024; NICE Neonatal Meningitis Guidelines; Nelson Pediatrics 21st Ed Ch. 621",
+    category: "pediatric_em",
+    difficulty: "advanced",
+  },
+  {
+    id: "ped_3",
+    casePresentation: "A 3-year-old boy presents with high fever, stridor, drooling, and sitting in a tripod position. He appears toxic and anxious.",
+    question: "What is the most appropriate immediate action?",
+    options: [
+      "Attempt direct laryngoscopy at bedside",
+      "Obtain a lateral neck X-ray",
+      "Keep the child calm, prepare for controlled airway management in OR",
+      "Start nebulized epinephrine immediately",
+    ],
+    correctAnswer: 2,
+    explanation: "This is classic acute epiglottitis. The priority is to avoid agitating the child (no tongue depressors, no unnecessary procedures). The child should be kept calm, allowed to maintain their position of comfort, and taken to the operating room for controlled airway management (intubation by experienced anesthesiologist/ENT under inhalation anesthesia). Nebulized epinephrine is for croup, not epiglottitis. Lateral neck X-ray (thumbprint sign) can confirm but should not delay airway management if clinical suspicion is high.",
+    reference: "PALS Provider Manual (AHA); Tintinalli's Emergency Medicine 9th Ed Ch. 123; ATLS 10th Ed",
+    category: "pediatric_em",
+    difficulty: "intermediate",
+  },
+  {
+    id: "ped_4",
+    casePresentation: "A 3-year-old with suspected epiglottitis. Lateral neck X-ray shows the 'thumbprint sign.'",
+    question: "Which organism is the most common cause of epiglottitis in an unvaccinated child?",
+    options: [
+      "Streptococcus pyogenes",
+      "Haemophilus influenzae type b",
+      "Staphylococcus aureus",
+      "Moraxella catarrhalis",
+    ],
+    correctAnswer: 1,
+    explanation: "Haemophilus influenzae type b (Hib) is the classic and most common cause of epiglottitis in unvaccinated children. The incidence has dramatically decreased with widespread Hib vaccination. In vaccinated children, other organisms (Strep pyogenes, Staph aureus) should be considered. Antibiotic therapy with a third-generation cephalosporin (cefotaxime/ceftriaxone) should cover Hib.",
+    reference: "Nelson Textbook of Pediatrics 21st Ed; Harrison's Principles of Internal Medicine 21st Ed; CDC Hib Guidelines",
+    category: "pediatric_em",
+    difficulty: "beginner",
+  },
+  {
+    id: "ped_5",
+    casePresentation: "A 10-year-old child presents with breathlessness, hepatomegaly, and fatigue following a viral illness 2 weeks ago. ECG shows diffuse ST-segment changes and low-voltage QRS complexes.",
+    question: "What is the most likely diagnosis?",
+    options: [
+      "Acute rheumatic fever",
+      "Viral myocarditis",
+      "Dilated cardiomyopathy",
+      "Pericardial effusion",
+    ],
+    correctAnswer: 1,
+    explanation: "Post-viral myocarditis presents with heart failure symptoms (breathlessness, hepatomegaly, fatigue) following a viral prodrome. ECG findings of diffuse ST changes and low-voltage QRS are characteristic. Bedside echocardiography would show reduced ejection fraction with global hypokinesis. Troponin and BNP/NT-proBNP are elevated. ICU admission is indicated for hemodynamic monitoring, inotropic support if needed, and potential ECMO in refractory cases.",
+    reference: "AHA Scientific Statement on Myocarditis 2021; PALS Provider Manual; Nelson Pediatrics 21st Ed Ch. 468",
+    category: "pediatric_em",
+    difficulty: "intermediate",
+  },
+  {
+    id: "ped_6",
+    casePresentation: "A 6-year-old presents with sudden facial swelling, hoarseness, and abdominal pain. There is no history of allergy, insect bites, or new food exposure. Family history reveals his father had similar episodes.",
+    question: "What is the most likely diagnosis?",
+    options: [
+      "Anaphylaxis",
+      "Hereditary Angioedema (HAE)",
+      "Allergic angioedema",
+      "Nephrotic syndrome",
+    ],
+    correctAnswer: 1,
+    explanation: "Hereditary Angioedema (HAE) presents with recurrent episodes of non-pruritic, non-urticarial swelling of face, extremities, and abdominal viscera without allergic triggers. Family history of similar episodes is a key clue (autosomal dominant inheritance). Unlike allergic angioedema, HAE does NOT respond to epinephrine, antihistamines, or corticosteroids. Emergency management includes C1-inhibitor concentrate, icatibant, or ecallantide. Airway management is critical if laryngeal edema develops.",
+    reference: "WAO/EAACI Guidelines on HAE 2022; Tintinalli's EM 9th Ed; ACEP Clinical Policy on Angioedema",
+    category: "pediatric_em",
+    difficulty: "advanced",
+  },
+  {
+    id: "ped_7",
+    casePresentation: "A 2-week-old male presents in shock with hyponatremia (Na+ 118), hyperkalemia (K+ 7.2), and ambiguous genitalia.",
+    question: "What is the most likely diagnosis?",
+    options: [
+      "Pyloric stenosis",
+      "Congenital Adrenal Hyperplasia (salt-wasting type)",
+      "Renal tubular acidosis",
+      "Bartter syndrome",
+    ],
+    correctAnswer: 1,
+    explanation: "The triad of shock + electrolyte abnormalities (hyponatremia with hyperkalemia) + ambiguous genitalia in a neonate is pathognomonic for salt-wasting Congenital Adrenal Hyperplasia (21-hydroxylase deficiency). The shock is due to cortisol and aldosterone deficiency. Emergency management includes IV normal saline bolus, IV hydrocortisone (stress dose: 25 mg IV), and correction of hyperkalemia. Glucose monitoring is essential as hypoglycemia is common.",
+    reference: "Endocrine Society Clinical Practice Guidelines on CAH 2018; Nelson Pediatrics 21st Ed Ch. 594; PALS Guidelines",
+    category: "pediatric_em",
+    difficulty: "intermediate",
+  },
+  {
+    id: "ped_8",
+    casePresentation: "A 2-year-old is eating grapes and suddenly starts choking, turning cyanotic. He is conscious but unable to cough or cry.",
+    question: "What is the immediate management?",
+    options: [
+      "Heimlich maneuver (abdominal thrusts)",
+      "5 back blows followed by 5 chest thrusts",
+      "Blind finger sweep of the oropharynx",
+      "Emergency cricothyrotomy",
+    ],
+    correctAnswer: 1,
+    explanation: "For a conscious choking child aged 1-8 years with complete airway obstruction (unable to cough/cry/speak), the AHA/PALS recommends alternating 5 back blows and 5 chest thrusts (for infants <1 year) or abdominal thrusts/Heimlich maneuver (for children >1 year). However, for children aged 1-2 years, back blows + chest thrusts remain the preferred technique. Blind finger sweeps are contraindicated as they may push the object deeper. If the child becomes unresponsive, begin CPR and look for the object before each rescue breath.",
+    reference: "AHA/PALS Guidelines 2020; Pediatric First Aid Guidelines; Tintinalli's EM 9th Ed Ch. 124",
+    category: "pediatric_em",
+    difficulty: "beginner",
+  },
+  {
+    id: "ped_9",
+    casePresentation: "A 5-day-old neonate presents with bilious vomiting, abdominal distension, and lethargy. Abdominal X-ray shows a 'double bubble sign' with distal gas.",
+    question: "What is the most likely diagnosis?",
+    options: [
+      "Duodenal atresia",
+      "Midgut volvulus",
+      "Pyloric stenosis",
+      "Necrotizing enterocolitis",
+    ],
+    correctAnswer: 1,
+    explanation: "Bilious vomiting in a neonate is a surgical emergency until proven otherwise. A double bubble sign WITH distal gas suggests midgut volvulus (malrotation with volvulus) rather than duodenal atresia (which shows double bubble WITHOUT distal gas). Upper GI contrast study is the gold standard to confirm malrotation. This requires emergent surgical consultation for Ladd's procedure. Delay in diagnosis can lead to massive bowel necrosis.",
+    reference: "Schwartz's Principles of Surgery 11th Ed; Nelson Pediatrics 21st Ed; APSA Guidelines for Malrotation",
+    category: "pediatric_em",
+    difficulty: "intermediate",
+  },
+  {
+    id: "ped_10",
+    casePresentation: "A 7-year-old boy presents with profuse sweating, vomiting, agitation, and hypertension (160/100 mmHg) after a sting on his toe while playing in a field.",
+    question: "What is the most likely cause and appropriate treatment?",
+    options: [
+      "Bee sting anaphylaxis - IM Epinephrine",
+      "Scorpion envenomation - IV Prazosin",
+      "Snake bite - Anti-snake venom",
+      "Spider bite - IV Dantrolene",
+    ],
+    correctAnswer: 1,
+    explanation: "This presentation (autonomic storm: sweating, vomiting, agitation, hypertension after a sting to the extremity) is classic for scorpion envenomation. IV Prazosin is the drug of choice for managing autonomic storm in scorpion sting (alpha-blocker that reduces afterload and prevents pulmonary edema). Dose: 30 mcg/kg every 3 hours until resolution. Scorpion antivenom may be used in severe cases. ICU admission is indicated for children with cardiovascular complications.",
+    reference: "Indian National Guidelines on Scorpion Sting Management; Tintinalli's EM 9th Ed; WHO Guidelines on Envenomation",
+    category: "pediatric_em",
+    difficulty: "intermediate",
+  },
+
+  // ===== SURGICAL EM =====
+  {
+    id: "surg_1",
+    casePresentation: "A large-scale stampede has occurred during a religious mass gathering. Multiple casualties are being brought to your ED. You are the duty emergency physician.",
+    question: "What triage system is most appropriate for this mass casualty incident?",
+    options: [
+      "Manchester Triage System",
+      "START (Simple Triage and Rapid Treatment)",
+      "Canadian Triage and Acuity Scale",
+      "Emergency Severity Index",
+    ],
+    correctAnswer: 1,
+    explanation: "The START triage system is specifically designed for mass casualty incidents (MCIs). It categorizes patients into Immediate (Red), Delayed (Yellow), Minor (Green), and Deceased (Black) based on ability to walk, respirations, pulse, and mental status. It can be performed in <60 seconds per patient. Manchester and ESI are for individual ED triage, not field MCIs. Scene safety assessment, incident command activation, and resource mobilization should happen simultaneously.",
+    reference: "ATLS 10th Edition; ACEP MCI Guidelines; FEMA National Incident Management System (NIMS)",
+    category: "surgical_em",
+    difficulty: "beginner",
+  },
+  {
+    id: "surg_2",
+    casePresentation: "A 52-year-old male presents with a rapidly enlarging, tender swelling in the right groin, nausea, and vomiting for the past 6 hours. The swelling is irreducible and erythematous.",
+    question: "What is the most likely diagnosis and immediate concern?",
+    options: [
+      "Inguinal lymphadenitis",
+      "Strangulated inguinal hernia",
+      "Femoral artery aneurysm",
+      "Testicular torsion",
+    ],
+    correctAnswer: 1,
+    explanation: "An irreducible, tender, erythematous groin swelling with obstructive symptoms (nausea, vomiting) is highly suggestive of a strangulated inguinal hernia. Red flags include signs of bowel obstruction, peritonitis, and systemic toxicity. This is a surgical emergency requiring urgent operative intervention. Key initial steps: IV fluids, NG tube decompression, IV antibiotics, and emergent surgical consultation. Do NOT attempt forceful reduction of a strangulated hernia.",
+    reference: "Sabiston Textbook of Surgery 21st Ed; ATLS 10th Ed; Bailey & Love's Short Practice of Surgery 28th Ed",
+    category: "surgical_em",
+    difficulty: "beginner",
+  },
+  {
+    id: "surg_3",
+    casePresentation: "A 45-year-old diabetic female presents with severe perineal pain, swelling, and crepitus. She is hypotensive (BP 80/50) and febrile (40.1°C).",
+    question: "What is the diagnosis and the most critical intervention?",
+    options: [
+      "Perianal abscess - I&D under local anesthesia",
+      "Fournier's gangrene - Emergency surgical debridement",
+      "Bartholin cyst - Marsupialization",
+      "Perineal cellulitis - IV antibiotics alone",
+    ],
+    correctAnswer: 1,
+    explanation: "Fournier's gangrene is a life-threatening necrotizing fasciitis of the perineum/genital area. The triad of perineal pain + crepitus + systemic sepsis (hypotension, fever) in a diabetic patient is classic. Mortality is 20-40% even with treatment. Management: Aggressive fluid resuscitation, broad-spectrum IV antibiotics (covering aerobes, anaerobes, and MRSA), and EMERGENCY surgical debridement within hours. Delay in surgery increases mortality significantly. Serial debridements are often required.",
+    reference: "Surviving Sepsis Campaign Guidelines 2021; Sabiston Surgery 21st Ed; WSES Guidelines for Skin and Soft Tissue Infections",
+    category: "surgical_em",
+    difficulty: "advanced",
+  },
+  {
+    id: "surg_4",
+    casePresentation: "A 58-year-old male with atrial fibrillation presents with sudden onset of pain and coldness in the right lower limb. On examination, the limb is pale, pulseless, and paralyzed.",
+    question: "What is the most likely diagnosis?",
+    options: [
+      "Deep vein thrombosis",
+      "Acute limb ischemia (arterial embolism)",
+      "Peripheral neuropathy",
+      "Compartment syndrome",
+    ],
+    correctAnswer: 1,
+    explanation: "The 6 P's of acute limb ischemia: Pain, Pallor, Pulselessness, Paralysis, Paresthesia, and Poikilothermia. A patient with atrial fibrillation is at high risk for arterial embolism. This is a vascular emergency - limb viability is threatened if not revascularized within 6 hours (golden period). Emergency management includes IV heparin anticoagulation, urgent vascular surgery consultation for embolectomy (Fogarty catheter), or catheter-directed thrombolysis.",
+    reference: "Rutherford's Vascular Surgery 9th Ed; ESVS Guidelines on Acute Limb Ischemia 2020; ATLS 10th Ed",
+    category: "surgical_em",
+    difficulty: "intermediate",
+  },
+  {
+    id: "surg_5",
+    casePresentation: "A 60-year-old diabetic male presents with a swollen, erythematous foot that is foul-smelling and tender. He is febrile (39.5°C), hypotensive (85/55), and appears toxic.",
+    question: "What is your emergency approach to this patient?",
+    options: [
+      "Oral antibiotics and outpatient wound care",
+      "Aggressive resuscitation, IV antibiotics, urgent surgical debridement",
+      "Topical antiseptics and compression bandage",
+      "MRI foot followed by elective surgery",
+    ],
+    correctAnswer: 1,
+    explanation: "This is a diabetic foot emergency with sepsis (fever, hypotension, toxic appearance). The diagnosis is a complicated diabetic foot infection with septic shock. Emergency management follows the Surviving Sepsis Campaign: (1) Aggressive IV fluid resuscitation (30 ml/kg crystalloid), (2) Broad-spectrum IV antibiotics within 1 hour (piperacillin-tazobactam or meropenem + vancomycin), (3) Blood cultures before antibiotics, (4) Vasopressors if fluids inadequate, (5) Urgent surgical debridement/drainage. Source control (surgery) is critical in this infected foot.",
+    reference: "Surviving Sepsis Campaign 2021; IDSA Diabetic Foot Infection Guidelines 2023; ADA Standards of Care",
+    category: "surgical_em",
+    difficulty: "intermediate",
+  },
+  {
+    id: "surg_6",
+    casePresentation: "A 45-year-old woman presents to the ED with lower abdominal pain, dizziness, and delayed menses. She is hypotensive (BP 80/60), appears pale, and has abdominal guarding.",
+    question: "What is the most likely diagnosis?",
+    options: [
+      "Acute appendicitis",
+      "Ruptured ectopic pregnancy",
+      "Ovarian torsion",
+      "Pelvic inflammatory disease",
+    ],
+    correctAnswer: 1,
+    explanation: "The triad of lower abdominal pain + delayed menses + hemodynamic instability in a woman of reproductive age is ruptured ectopic pregnancy until proven otherwise. This is a life-threatening gynecological emergency. Immediate actions: Two large-bore IV access, aggressive fluid resuscitation, type and crossmatch, bedside FAST/transvaginal ultrasound (free fluid in Morrison's pouch/pouch of Douglas), and urine beta-hCG. Urgent OB/GYN consultation for emergency laparotomy/laparoscopy.",
+    reference: "ACOG Practice Bulletin on Ectopic Pregnancy 2023; Williams Obstetrics 26th Ed; Tintinalli's EM 9th Ed",
+    category: "obs_gyn_em",
+    difficulty: "beginner",
+  },
+  {
+    id: "surg_7",
+    casePresentation: "A 50-year-old man with a prior episode of pancreatitis presents with gradual abdominal fullness, upper abdominal pain, and low-grade fever. A mass is felt in the epigastrium.",
+    question: "What is the most likely diagnosis?",
+    options: [
+      "Pancreatic pseudocyst",
+      "Pancreatic carcinoma",
+      "Aortic aneurysm",
+      "Gastric volvulus",
+    ],
+    correctAnswer: 0,
+    explanation: "A palpable epigastric mass following an episode of pancreatitis is most likely a pancreatic pseudocyst. These are encapsulated collections of pancreatic fluid that develop 4-6 weeks after acute pancreatitis. Contrast-enhanced CT abdomen is the investigation of choice. Most resolve spontaneously. Intervention (endoscopic or surgical drainage) is needed for: size >6 cm, infection, hemorrhage, biliary/gastric obstruction, or persistence >6 weeks. Emergency complications include rupture, hemorrhage, and infection.",
+    reference: "ACG Guidelines on Acute Pancreatitis 2024; Sabiston Surgery 21st Ed; AGA Technical Review on Pancreatic Cysts",
+    category: "surgical_em",
+    difficulty: "intermediate",
+  },
+  {
+    id: "surg_8",
+    casePresentation: "A 35-year-old male presents with abdominal distension and hypotension following a stab wound to the lower chest. Breath sounds are equal bilaterally, but the abdomen is tense and rigid.",
+    question: "What is the most likely diagnosis?",
+    options: [
+      "Tension pneumothorax",
+      "Diaphragmatic injury with intra-abdominal hemorrhage",
+      "Cardiac tamponade",
+      "Simple hemothorax",
+    ],
+    correctAnswer: 1,
+    explanation: "A stab wound to the lower chest (nipple to costal margin zone) can injure the diaphragm and abdominal organs. Equal breath sounds rule out pneumothorax. A rigid, distended abdomen with hypotension indicates intra-abdominal hemorrhage from diaphragmatic injury with possible splenic/hepatic/mesenteric vessel injury. FAST ultrasound will show free intra-abdominal fluid. This requires urgent exploratory laparotomy. The thoracoabdominal zone (T4-T12) mandates evaluation of both chest and abdomen.",
+    reference: "ATLS 10th Edition; Mattox Trauma 9th Ed; Eastern Association for Surgery of Trauma (EAST) Guidelines",
+    category: "trauma",
+    difficulty: "advanced",
+  },
+
+  // ===== TRAUMA =====
+  {
+    id: "trauma_1",
+    casePresentation: "A 22-year-old male presents with altered sensorium and shortness of breath two days after a long bone fracture. Petechiae are visible on his chest and conjunctivae.",
+    question: "What is the most likely diagnosis?",
+    options: [
+      "Pulmonary embolism",
+      "Fat embolism syndrome",
+      "DIC from sepsis",
+      "Tension pneumothorax",
+    ],
+    correctAnswer: 1,
+    explanation: "The classic triad of Fat Embolism Syndrome (FES): (1) Respiratory distress (dyspnea, hypoxia), (2) Neurological dysfunction (altered sensorium, confusion), and (3) Petechial rash (chest, axillae, conjunctivae). It typically occurs 24-72 hours after long bone fractures. Diagnosis is clinical (Gurd's criteria). Treatment is supportive: supplemental oxygen, mechanical ventilation if needed, fluid resuscitation, and early fracture fixation. There is no specific antidote. Corticosteroids may be considered prophylactically in high-risk patients.",
+    reference: "ATLS 10th Ed; Tintinalli's EM 9th Ed; Journal of Bone & Joint Surgery Reviews on FES",
+    category: "trauma",
+    difficulty: "intermediate",
+  },
+  {
+    id: "trauma_2",
+    casePresentation: "A 30-year-old woman presents with severe pelvic pain, fever, and purulent vaginal discharge. Her abdomen is rigid, and she is hypotensive (BP 85/55).",
+    question: "What is the most likely diagnosis?",
+    options: [
+      "Appendicitis",
+      "Ruptured tubo-ovarian abscess with peritonitis",
+      "Ovarian cyst rupture",
+      "Endometriosis",
+    ],
+    correctAnswer: 1,
+    explanation: "Severe pelvic pain + purulent discharge + peritonitis (rigid abdomen) + sepsis (fever, hypotension) strongly suggests a ruptured tubo-ovarian abscess (TOA). This is a life-threatening complication of pelvic inflammatory disease. Management: Aggressive fluid resuscitation, IV broad-spectrum antibiotics (cefoxitin + doxycycline, or clindamycin + gentamicin), blood cultures, and urgent surgical consultation for possible drainage/laparotomy. CT pelvis with contrast will show the abscess and free fluid.",
+    reference: "ACOG Practice Bulletin on PID/TOA; CDC STI Treatment Guidelines 2021; Tintinalli's EM 9th Ed",
+    category: "obs_gyn_em",
+    difficulty: "advanced",
+  },
+  {
+    id: "trauma_3",
+    casePresentation: "A trauma patient is in hypovolemic shock after a motor vehicle accident. BP is 70/40, HR 130, and the patient is confused and pale.",
+    question: "What is the initial fluid resuscitation strategy?",
+    options: [
+      "2 liters of D5W over 2 hours",
+      "1-2 liters of isotonic crystalloid (warm), then reassess + activate massive transfusion protocol",
+      "Colloids (albumin) 500ml bolus",
+      "Hypertonic saline 250ml bolus",
+    ],
+    correctAnswer: 1,
+    explanation: "Per ATLS, initial resuscitation for hemorrhagic shock involves 1-2 liters of warm isotonic crystalloid (Ringer's Lactate or Normal Saline) through two large-bore (16G or larger) IV cannulae. If the patient remains hemodynamically unstable after initial bolus, activate the Massive Transfusion Protocol (1:1:1 ratio of pRBCs:FFP:Platelets). Permissive hypotension (target SBP 80-90) is acceptable in penetrating trauma until surgical control. D5W has no volume-expanding capacity. TXA should be given within 3 hours of injury.",
+    reference: "ATLS 10th Edition; Surviving Sepsis Campaign 2021; CRASH-2 Trial (Lancet); European Trauma Guidelines",
+    category: "trauma",
+    difficulty: "beginner",
+  },
+
+  // ===== MEDICAL EM =====
+  {
+    id: "med_1",
+    casePresentation: "A 55-year-old chronic alcoholic presents to the ED with confusion, ataxia, and bilateral lateral rectus palsy (ophthalmoplegia).",
+    question: "What is the diagnosis and the most critical immediate treatment?",
+    options: [
+      "Hepatic encephalopathy - Lactulose",
+      "Wernicke's encephalopathy - IV Thiamine (Vitamin B1)",
+      "Alcohol withdrawal seizures - IV Benzodiazepines",
+      "Subdural hematoma - Urgent CT head",
+    ],
+    correctAnswer: 1,
+    explanation: "The classic triad of Wernicke's encephalopathy: Confusion + Ataxia + Ophthalmoplegia (lateral rectus palsy/nystagmus). This is due to thiamine (Vitamin B1) deficiency common in chronic alcoholics. CRITICAL: IV Thiamine must be given BEFORE any glucose-containing fluids, as glucose metabolism consumes thiamine and can precipitate or worsen Wernicke's. Dose: Thiamine 500mg IV three times daily for 2-3 days, then 250mg IV daily for 3-5 days. Untreated Wernicke's progresses to irreversible Korsakoff syndrome (permanent amnesia).",
+    reference: "European Federation of Neurological Societies (EFNS) Guidelines; Tintinalli's EM 9th Ed; NICE Guidelines CG100",
+    category: "medical_em",
+    difficulty: "intermediate",
+  },
+  {
+    id: "med_2",
+    casePresentation: "A patient with severe hypoglycemia (blood glucose 25 mg/dL) is brought unresponsive to the ED.",
+    question: "What are the counter-regulatory hormones activated in severe hypoglycemia?",
+    options: [
+      "Insulin and leptin",
+      "Glucagon, cortisol, and epinephrine",
+      "TSH and prolactin",
+      "ADH and oxytocin",
+    ],
+    correctAnswer: 1,
+    explanation: "In hypoglycemia, the counter-regulatory response involves: (1) Glucagon (from pancreatic alpha cells) - stimulates hepatic glycogenolysis and gluconeogenesis, (2) Epinephrine (from adrenal medulla) - stimulates glycogenolysis, lipolysis, and causes symptoms of autonomic activation, (3) Cortisol (from adrenal cortex) - promotes gluconeogenesis and reduces peripheral glucose utilization, (4) Growth hormone - similar to cortisol. Emergency treatment: IV Dextrose 50% (50ml) or IM Glucagon 1mg if no IV access.",
+    reference: "Guyton & Hall Textbook of Medical Physiology 14th Ed; ADA Standards of Medical Care in Diabetes; Tintinalli's EM 9th Ed",
+    category: "applied_basic_science",
+    difficulty: "beginner",
+  },
+  {
+    id: "med_3",
+    casePresentation: "A septic patient in the ICU has elevated lactate levels (8.2 mmol/L). The physician is monitoring lactate clearance as a prognostic marker.",
+    question: "What is the primary mechanism of lactate elevation in septic shock?",
+    options: [
+      "Excessive hepatic production",
+      "Anaerobic glycolysis due to tissue hypoperfusion",
+      "Renal failure with decreased clearance",
+      "Excessive oral intake",
+    ],
+    correctAnswer: 1,
+    explanation: "In septic shock, tissue hypoperfusion leads to cellular hypoxia. Without adequate oxygen, cells switch from aerobic to anaerobic glycolysis. Pyruvate cannot enter the Krebs cycle (TCA cycle) and is instead converted to lactate by lactate dehydrogenase (LDH). The Cori cycle normally converts lactate back to glucose in the liver, but in severe sepsis, hepatic function is impaired. Lactate >4 mmol/L defines severe sepsis. Lactate clearance (>10% per 2 hours) is a key resuscitation target per the Surviving Sepsis Campaign.",
+    reference: "Surviving Sepsis Campaign Guidelines 2021; Ganong's Review of Medical Physiology; Tintinalli's EM 9th Ed",
+    category: "applied_basic_science",
+    difficulty: "intermediate",
+  },
+  {
+    id: "med_4",
+    casePresentation: "A diabetic patient presents with black nasal discharge, proptosis, and facial pain. CT shows opacification of sinuses with bony erosion.",
+    question: "What is the causative organism and the most critical intervention?",
+    options: [
+      "Aspergillus fumigatus - IV Voriconazole",
+      "Mucor/Rhizopus species - IV Amphotericin B + Surgical debridement",
+      "Staphylococcus aureus - IV Vancomycin",
+      "Pseudomonas aeruginosa - IV Ceftazidime",
+    ],
+    correctAnswer: 1,
+    explanation: "Rhinocerebral mucormycosis (zygomycosis) in a diabetic patient presents with the classic triad: black nasal eschar (tissue necrosis from angioinvasion) + proptosis (orbital involvement) + cranial nerve palsies. Causative agents are Mucor/Rhizopus species (order Mucorales). These fungi thrive in acidotic, hyperglycemic environments. Treatment requires: (1) IV Amphotericin B (liposomal form preferred, 5-10 mg/kg/day), (2) Aggressive surgical debridement, (3) Correction of diabetic ketoacidosis, (4) Reversal of immunosuppression. Mortality is 40-80% even with treatment.",
+    reference: "ECMM/ISHAM Guidelines on Mucormycosis 2022; Harrison's IM 21st Ed; Mandell's Infectious Diseases 9th Ed",
+    category: "medical_em",
+    difficulty: "advanced",
+  },
+  {
+    id: "med_5",
+    casePresentation: "A patient with gram-negative septicemia develops petechiae, prolonged PT/aPTT, low fibrinogen, and elevated D-dimer.",
+    question: "What is the underlying pathophysiology?",
+    options: [
+      "Immune thrombocytopenic purpura (ITP)",
+      "Disseminated Intravascular Coagulation (DIC)",
+      "Hemophilia A",
+      "Von Willebrand disease",
+    ],
+    correctAnswer: 1,
+    explanation: "DIC is triggered by gram-negative endotoxin (LPS from bacterial cell wall) which activates the coagulation cascade systemically. The endotoxin causes: (1) Release of tissue factor from damaged endothelium, (2) Widespread microthrombi formation (consumption of clotting factors and platelets), (3) Secondary fibrinolysis (elevated D-dimer/FDPs), resulting in a paradox of simultaneous clotting AND bleeding. Lab hallmarks: low platelets, prolonged PT/aPTT, low fibrinogen, elevated D-dimer. Treatment: Treat underlying cause + supportive (FFP, cryoprecipitate, platelets as needed).",
+    reference: "ISTH Guidelines on DIC Diagnosis and Management; Harrison's IM 21st Ed; Robbins Pathologic Basis of Disease 10th Ed",
+    category: "applied_basic_science",
+    difficulty: "advanced",
+  },
+
+  // ===== CARDIOLOGY EM =====
+  {
+    id: "card_1",
+    casePresentation: "A 65-year-old male presents with crushing chest pain radiating to the left arm, diaphoresis, and nausea. ECG shows ST elevation in leads II, III, and aVF.",
+    question: "What is the diagnosis and the door-to-balloon time target?",
+    options: [
+      "Unstable angina - 24 hours",
+      "Inferior STEMI - 90 minutes",
+      "Pericarditis - No time target",
+      "Aortic dissection - 120 minutes",
+    ],
+    correctAnswer: 1,
+    explanation: "ST elevation in leads II, III, aVF indicates an Inferior STEMI (Right Coronary Artery territory). The AHA/ACC target for door-to-balloon (percutaneous coronary intervention) time is 90 minutes. If PCI is not available within 120 minutes, fibrinolytic therapy should be given within 30 minutes of arrival (door-to-needle time). Immediate management: Aspirin 325mg, P2Y12 inhibitor (ticagrelor/clopidogrel), IV heparin, morphine only if pain persists despite nitrates, supplemental O2 only if SpO2 <90%. Right-sided ECG (V4R) should be done to check for RV infarction (contraindication to nitrates).",
+    reference: "AHA/ACC STEMI Guidelines 2023; ESC Guidelines on ACS 2023; ACLS Provider Manual",
+    category: "cardiology_em",
+    difficulty: "beginner",
+  },
+  {
+    id: "card_2",
+    casePresentation: "A 50-year-old woman is found unresponsive. She has no pulse and no respirations. The cardiac monitor shows a disorganized rhythm with no identifiable P waves, QRS, or T waves.",
+    question: "What is the rhythm and the initial management?",
+    options: [
+      "Ventricular tachycardia - Synchronized cardioversion",
+      "Ventricular fibrillation - Immediate defibrillation",
+      "Asystole - IV Epinephrine",
+      "PEA - Treat reversible causes",
+    ],
+    correctAnswer: 1,
+    explanation: "A disorganized rhythm with no identifiable waves in a pulseless patient is ventricular fibrillation (VF). VF is a shockable rhythm. Per ACLS: (1) Begin high-quality CPR immediately, (2) Defibrillate as soon as available (biphasic 120-200J or monophasic 360J), (3) Resume CPR for 2 minutes, (4) Epinephrine 1mg IV every 3-5 minutes, (5) Amiodarone 300mg IV after 3rd shock (then 150mg). The key principle: early defibrillation is the definitive treatment for VF. Survival decreases 7-10% per minute without defibrillation.",
+    reference: "AHA ACLS Guidelines 2020; ERC Resuscitation Guidelines 2021; Tintinalli's EM 9th Ed",
+    category: "cardiology_em",
+    difficulty: "beginner",
+  },
+
+  // ===== TOXICOLOGY =====
+  {
+    id: "tox_1",
+    casePresentation: "A 4-year-old accidentally ingests his grandmother's iron tablets. He presents 4 hours later with bloody vomiting, diarrhea, and metabolic acidosis.",
+    question: "What is the specific antidote for iron poisoning?",
+    options: [
+      "N-acetylcysteine",
+      "Deferoxamine (Desferrioxamine)",
+      "Dimercaprol (BAL)",
+      "EDTA",
+    ],
+    correctAnswer: 1,
+    explanation: "Deferoxamine (Desferrioxamine) is the specific chelating agent for iron poisoning. It binds free iron to form ferrioxamine, which is renally excreted (turns urine 'vin rosé' or reddish-brown color). Iron toxicity has 5 phases: (1) GI phase (0-6h: vomiting, diarrhea, GI bleeding), (2) Apparent recovery (6-24h), (3) Systemic toxicity (12-48h: shock, metabolic acidosis, hepatic failure), (4) Hepatotoxicity (2-3 days), (5) GI scarring (2-8 weeks). Indications for deferoxamine: serum iron >500 mcg/dL, metabolic acidosis, or clinical toxicity.",
+    reference: "Goldfrank's Toxicologic Emergencies 11th Ed; AAP Guidelines on Iron Poisoning; Nelson Pediatrics 21st Ed",
+    category: "toxicology",
+    difficulty: "beginner",
+  },
+  {
+    id: "tox_2",
+    casePresentation: "A 30-year-old farmer is brought unconscious with pinpoint pupils, excessive salivation, bradycardia, and muscle fasciculations after spraying crops.",
+    question: "What is the diagnosis and the appropriate antidote?",
+    options: [
+      "Organophosphate poisoning - IV Atropine + Pralidoxime (2-PAM)",
+      "Carbamate poisoning - IV Physostigmine",
+      "Pyrethroid poisoning - Supportive care only",
+      "Paraquat poisoning - IV N-acetylcysteine",
+    ],
+    correctAnswer: 0,
+    explanation: "This is organophosphate (OP) poisoning presenting with cholinergic crisis (DUMBBBELS: Diarrhea, Urination, Miosis, Bradycardia, Bronchorrhea, Bronchospasm, Emesis, Lacrimation, Salivation). Treatment: (1) Decontamination (remove clothing, wash skin), (2) IV Atropine - competitive muscarinic receptor antagonist (loading dose 2-5mg IV, doubled every 5 minutes until secretions dry), (3) Pralidoxime (2-PAM) - reactivates acetylcholinesterase before 'aging' occurs (1-2g IV over 15-30 minutes). Atropine must be given before 2-PAM. There is no maximum dose of atropine - titrate to effect (dried secretions).",
+    reference: "WHO Guidelines on OP Poisoning; Goldfrank's Toxicologic Emergencies 11th Ed; Tintinalli's EM 9th Ed",
+    category: "toxicology",
+    difficulty: "intermediate",
+  },
+  {
+    id: "tox_3",
+    casePresentation: "A 25-year-old college student presents 4 hours after ingesting an unknown number of acetaminophen (paracetamol) tablets in a suicide attempt. Serum acetaminophen level is 250 mcg/mL.",
+    question: "What is the treatment protocol?",
+    options: [
+      "Activated charcoal only",
+      "IV N-acetylcysteine (NAC) per Rumack-Matthew nomogram",
+      "Hemodialysis",
+      "Forced alkaline diuresis",
+    ],
+    correctAnswer: 1,
+    explanation: "For acetaminophen overdose, plot the serum level on the Rumack-Matthew nomogram (level vs time since ingestion). At 4 hours, the treatment line threshold is ~150 mcg/mL. A level of 250 mcg/mL at 4 hours is above the treatment line, indicating high risk of hepatotoxicity. N-acetylcysteine (NAC) is the specific antidote - it replenishes glutathione stores and provides the sulfhydryl groups needed to detoxify NAPQI (the toxic metabolite). IV NAC protocol: 150 mg/kg over 1 hour, then 50 mg/kg over 4 hours, then 100 mg/kg over 16 hours. NAC is most effective within 8 hours but should be given even if presentation is delayed.",
+    reference: "Rumack-Matthew Nomogram; ACT Guidelines on Acetaminophen Overdose; Goldfrank's Toxicologic Emergencies 11th Ed",
+    category: "toxicology",
+    difficulty: "intermediate",
+  },
+
+  // ===== NEURO EM =====
+  {
+    id: "neuro_1",
+    casePresentation: "A 60-year-old hypertensive male presents with sudden onset worst headache of his life, neck stiffness, and photophobia. GCS is 14 (E4V4M6). CT head is normal.",
+    question: "What is the next step?",
+    options: [
+      "Reassure and discharge with analgesics",
+      "Lumbar puncture to look for xanthochromia",
+      "MRI brain",
+      "Start IV antibiotics for meningitis",
+    ],
+    correctAnswer: 1,
+    explanation: "The 'thunderclap headache' (sudden onset, worst ever) with meningismus raises suspicion for subarachnoid hemorrhage (SAH). CT head sensitivity is ~98% within 6 hours but decreases with time. A normal CT does NOT rule out SAH if clinical suspicion is high. Lumbar puncture looking for xanthochromia (yellowish discoloration of CSF from bilirubin, indicating blood breakdown) is the next step. Xanthochromia takes 6-12 hours to develop. If LP is positive, CT angiography (CTA) is needed to identify the aneurysm. If SAH is confirmed, urgent neurosurgical consultation for clipping or endovascular coiling is required.",
+    reference: "AHA/ASA Guidelines for SAH Management 2023; ACEP Clinical Policy on Headache; Tintinalli's EM 9th Ed",
+    category: "neuro_em",
+    difficulty: "intermediate",
+  },
+  {
+    id: "neuro_2",
+    casePresentation: "A 45-year-old male presents with sudden right-sided weakness and aphasia. Symptoms started 2 hours ago. CT head shows no hemorrhage.",
+    question: "What is the recommended treatment within the time window?",
+    options: [
+      "Aspirin 325mg and observation",
+      "IV Alteplase (tPA) within 4.5 hours of symptom onset",
+      "Emergent surgical decompression",
+      "IV Heparin infusion",
+    ],
+    correctAnswer: 1,
+    explanation: "This is an acute ischemic stroke presenting within the 4.5-hour window for IV thrombolysis. IV Alteplase (tPA) at 0.9 mg/kg (max 90mg), with 10% as bolus and 90% infused over 1 hour, is the standard of care. Door-to-needle target is 60 minutes. Contraindications include: active bleeding, recent surgery (<14 days), BP >185/110 despite treatment, platelets <100,000, INR >1.7. For large vessel occlusion (LVO) within 24 hours, mechanical thrombectomy should also be considered. NIHSS scoring guides severity and treatment decisions.",
+    reference: "AHA/ASA Acute Stroke Guidelines 2019; ESO Guidelines on Stroke; NINDS tPA Stroke Study",
+    category: "neuro_em",
+    difficulty: "intermediate",
+  },
+
+  // ===== APPLIED BASIC SCIENCE =====
+  {
+    id: "abs_1",
+    casePresentation: "A construction worker falls and lands on his shoulder, presenting with arm weakness and sensory loss. Examination reveals wrist drop and loss of sensation over the lateral forearm.",
+    question: "Which nerve root is most likely injured?",
+    options: [
+      "C5 (upper trunk)",
+      "C7 (middle trunk/radial nerve)",
+      "T1 (lower trunk)",
+      "C3-C4 (cervical plexus)",
+    ],
+    correctAnswer: 1,
+    explanation: "Wrist drop (inability to extend the wrist and fingers) indicates radial nerve injury, which derives primarily from the C7 nerve root (middle trunk of the brachial plexus, posterior cord). The lateral forearm sensory loss (lateral cutaneous nerve of forearm) adds to the C5-C7 distribution involvement. In clinical practice, Erb-Duchenne palsy (C5-C6 upper trunk) causes waiter's tip position, while Klumpke's palsy (C8-T1 lower trunk) causes claw hand. The radial nerve is the most commonly injured nerve in humeral shaft fractures.",
+    reference: "Gray's Anatomy 42nd Ed; Netter's Atlas of Human Anatomy; Campbell's Operative Orthopaedics 14th Ed",
+    category: "applied_basic_science",
+    difficulty: "intermediate",
+  },
+  {
+    id: "abs_2",
+    casePresentation: "A knife injury to the base of the neck causes dyspnea and hypotension. The wound is at the level of the cricoid cartilage, just above the clavicle.",
+    question: "Which anatomical zone of the neck is injured?",
+    options: [
+      "Zone I (clavicle to cricoid cartilage)",
+      "Zone II (cricoid to angle of mandible)",
+      "Zone III (angle of mandible to skull base)",
+      "Zone IV (posterior triangle)",
+    ],
+    correctAnswer: 0,
+    explanation: "Neck Zone I extends from the clavicle/sternal notch to the cricoid cartilage. This zone contains: subclavian vessels, common carotid artery origin, vertebral arteries, trachea, esophagus, lung apices, thoracic duct (left side), and brachial plexus roots. Zone I injuries are the most dangerous due to difficult surgical access and proximity to great vessels. Management: CTA is mandatory for Zone I and III injuries for surgical planning. Zone II injuries (cricoid to angle of mandible) traditionally went directly to surgical exploration, though CT angiography is now often used for selective management.",
+    reference: "ATLS 10th Edition; Mattox Trauma 9th Ed; EAST Guidelines on Penetrating Neck Trauma",
+    category: "applied_basic_science",
+    difficulty: "advanced",
+  },
+  {
+    id: "abs_3",
+    casePresentation: "A patient presents with CSF rhinorrhea after head trauma. CT shows a fracture through the anterior cranial fossa.",
+    question: "Which bone is most commonly fractured in anterior cranial fossa fractures causing CSF leak?",
+    options: [
+      "Frontal bone",
+      "Cribriform plate of the ethmoid bone",
+      "Greater wing of sphenoid",
+      "Temporal bone",
+    ],
+    correctAnswer: 1,
+    explanation: "The cribriform plate of the ethmoid bone is the thinnest bone in the anterior cranial fossa floor and the most common site of fracture causing CSF rhinorrhea. The olfactory nerve fibers (CN I) pass through the foramina of the cribriform plate, so anosmia is a common associated finding. CSF rhinorrhea increases the risk of ascending meningitis. Management: elevate head of bed 30°, avoid nose blowing, avoid nasal packing, prophylactic antibiotics are controversial. Surgical repair is indicated for persistent leaks (>7 days) or recurrent meningitis.",
+    reference: "Gray's Anatomy 42nd Ed; Greenberg's Handbook of Neurosurgery 9th Ed; ATLS 10th Ed",
+    category: "applied_basic_science",
+    difficulty: "intermediate",
+  },
+
+  // ===== MORE QUICK-FIRE QUESTIONS =====
+  {
+    id: "qf_1",
+    casePresentation: "Quick clinical question:",
+    question: "What is the first drug of choice in pediatric status epilepticus?",
+    options: [
+      "Phenytoin",
+      "IV/rectal Diazepam or IV Midazolam",
+      "Phenobarbital",
+      "Valproic acid",
+    ],
+    correctAnswer: 1,
+    explanation: "Per PALS and AAP guidelines, benzodiazepines are the first-line treatment for status epilepticus in children. IV Lorazepam (0.1 mg/kg) or IV Diazepam (0.2 mg/kg) are preferred. If no IV access: IM Midazolam (0.2 mg/kg), rectal Diazepam, or intranasal Midazolam. If seizures persist after 2 doses of benzodiazepines, second-line agents include IV Fosphenytoin/Phenytoin, Levetiracetam, or Valproic acid. The ESETT trial showed equivalent efficacy of fosphenytoin, valproate, and levetiracetam as second-line agents.",
+    reference: "PALS Guidelines 2020; AAP Status Epilepticus Guidelines; ESETT Trial (NEJM 2019)",
+    category: "pediatric_em",
+    difficulty: "beginner",
+  },
+  {
+    id: "qf_2",
+    casePresentation: "Quick clinical question:",
+    question: "What is the most common site for intraosseous (IO) access in children?",
+    options: [
+      "Distal femur",
+      "Proximal tibia (anteromedial surface, 1-2 cm below tibial tuberosity)",
+      "Sternum",
+      "Iliac crest",
+    ],
+    correctAnswer: 1,
+    explanation: "The proximal tibia is the preferred site for IO access in children. Specifically, the anteromedial surface, 1-2 cm below the tibial tuberosity (to avoid the growth plate in children). Alternative sites include distal tibia (above medial malleolus), distal femur, and humeral head (more common in adults). IO access provides rapid vascular access when IV access fails within 60-90 seconds. All IV medications and fluids can be given via IO route. The Broselow tape is used for children up to approximately 36 kg (roughly 12 years of age) for equipment sizing.",
+    reference: "PALS Provider Manual 2020; ERC Pediatric Life Support Guidelines; Tintinalli's EM 9th Ed",
+    category: "pediatric_em",
+    difficulty: "beginner",
+  },
+  {
+    id: "qf_3",
+    casePresentation: "Quick clinical question:",
+    question: "What is the most common cardiac arrest rhythm in infants?",
+    options: [
+      "Ventricular fibrillation",
+      "Asystole / PEA (non-shockable rhythms)",
+      "Ventricular tachycardia",
+      "Supraventricular tachycardia",
+    ],
+    correctAnswer: 1,
+    explanation: "Unlike adults (where VF/VT predominates), pediatric cardiac arrest is most commonly caused by respiratory failure or shock leading to bradycardia and then asystole/PEA (non-shockable rhythms). This is why the PALS approach emphasizes airway, breathing, and oxygenation as the primary interventions. Shockable rhythms (VF/pVT) account for only about 5-15% of pediatric cardiac arrests. This fundamental difference drives the PALS algorithm: effective ventilation and compressions with epinephrine, rather than early defibrillation as in adult ACLS.",
+    reference: "AHA PALS Guidelines 2020; Circulation 2020; Pediatric Resuscitation Science",
+    category: "pediatric_em",
+    difficulty: "beginner",
+  },
+  {
+    id: "qf_4",
+    casePresentation: "Quick clinical question:",
+    question: "What is the typical ECG finding in myocarditis?",
+    options: [
+      "Peaked T waves",
+      "Diffuse ST-segment changes with low-voltage QRS",
+      "Delta waves",
+      "Osborn (J) waves",
+    ],
+    correctAnswer: 1,
+    explanation: "Myocarditis typically shows diffuse ST-segment changes (elevation or depression, not confined to a single coronary territory unlike MI) and low-voltage QRS complexes (due to myocardial edema). Other ECG findings include: sinus tachycardia, PR prolongation (first-degree AV block), arrhythmias (VT/VF in severe cases), and T-wave inversions. These changes are diffuse and may mimic pericarditis or ACS. Echocardiography and cardiac MRI are essential for diagnosis. Troponin is typically elevated.",
+    reference: "AHA Scientific Statement on Myocarditis 2021; ESC Guidelines on Myocarditis; Braunwald's Heart Disease 12th Ed",
+    category: "cardiology_em",
+    difficulty: "beginner",
+  },
+  {
+    id: "qf_5",
+    casePresentation: "Quick clinical question:",
+    question: "What is the classic electrolyte pattern in pyloric stenosis?",
+    options: [
+      "Hyperkalemic metabolic acidosis",
+      "Hypochloremic, hypokalemic metabolic alkalosis",
+      "Hypernatremic metabolic acidosis",
+      "Normal electrolytes with respiratory alkalosis",
+    ],
+    correctAnswer: 1,
+    explanation: "Pyloric stenosis causes persistent non-bilious projectile vomiting, leading to loss of HCl (hydrochloric acid) from the stomach. This results in: (1) Hypochloremia (loss of Cl-), (2) Hypokalemia (renal K+ wasting as kidneys try to retain H+ via K+/H+ exchange), (3) Metabolic alkalosis (loss of H+ ions). The kidneys attempt to compensate by retaining H+ and excreting HCO3-, but eventually switch to paradoxical aciduria. This electrolyte pattern is pathognomonic. Treatment: fluid resuscitation with NS + KCl correction before pyloromyotomy (Ramstedt's procedure).",
+    reference: "Nelson Textbook of Pediatrics 21st Ed; Sabiston Surgery 21st Ed; Schwartz's Surgery 11th Ed",
+    category: "pediatric_em",
+    difficulty: "intermediate",
+  },
+  {
+    id: "qf_6",
+    casePresentation: "Quick clinical question:",
+    question: "In Congenital Adrenal Hyperplasia (CAH), shock is due to deficiency of which hormone?",
+    options: [
+      "Testosterone",
+      "Aldosterone (and cortisol)",
+      "Estrogen",
+      "Growth hormone",
+    ],
+    correctAnswer: 1,
+    explanation: "In salt-wasting CAH (21-hydroxylase deficiency), both cortisol and aldosterone synthesis are impaired. Aldosterone deficiency leads to sodium wasting and potassium retention (hyponatremia + hyperkalemia), causing dehydration and hypovolemic shock. Cortisol deficiency impairs the stress response and cardiovascular function. The accumulated precursors (17-OH progesterone) are shunted to androgen synthesis, causing virilization (ambiguous genitalia in females). Emergency treatment: IV normal saline bolus + IV hydrocortisone 25mg (which has both glucocorticoid and mineralocorticoid effects at stress doses).",
+    reference: "Endocrine Society CAH Guidelines 2018; Nelson Pediatrics 21st Ed; Guyton & Hall Physiology 14th Ed",
+    category: "pediatric_em",
+    difficulty: "intermediate",
+  },
+  {
+    id: "qf_7",
+    casePresentation: "Quick clinical question:",
+    question: "What is the normal lower limit of systolic blood pressure in children older than 10 years?",
+    options: [
+      "60 mmHg",
+      "90 mmHg",
+      "70 mmHg",
+      "100 mmHg",
+    ],
+    correctAnswer: 1,
+    explanation: "Per PALS guidelines, the lower limit of normal systolic BP in children can be estimated by the formula: 70 + (2 x age in years) mmHg for children aged 1-10 years. For children >10 years, the lower limit is 90 mmHg (same as adults). Hypotension in children is a LATE sign of shock (children compensate well through tachycardia and increased SVR before BP drops). For example: 5-year-old lower limit = 70 + (2x5) = 80 mmHg. The Broselow tape also provides age-appropriate vital sign ranges.",
+    reference: "PALS Provider Manual 2020; AAP Pediatric Vital Signs Reference; Tintinalli's EM 9th Ed",
+    category: "pediatric_em",
+    difficulty: "beginner",
+  },
+  {
+    id: "qf_8",
+    casePresentation: "Quick clinical question:",
+    question: "What is the preferred imaging modality in suspected midgut volvulus?",
+    options: [
+      "Abdominal X-ray",
+      "Upper GI contrast study (barium/gastrografin)",
+      "CT abdomen",
+      "Ultrasound abdomen",
+    ],
+    correctAnswer: 1,
+    explanation: "The upper GI contrast study is the gold standard for diagnosing malrotation with midgut volvulus. It demonstrates: (1) Abnormal position of the duodenojejunal junction (ligament of Treitz) which should normally be to the left of the midline at the level of the pylorus, (2) 'Corkscrew' or 'spiral' appearance of the jejunum (in volvulus), (3) Bird's beak sign (obstruction point). While ultrasound may show the 'whirlpool sign' (twisted mesenteric vessels) and is increasingly used, the UGI remains the definitive diagnostic test. Plain X-ray may show gasless abdomen or double bubble with distal gas.",
+    reference: "ACR Appropriateness Criteria; Nelson Pediatrics 21st Ed; Schwartz's Surgery 11th Ed",
+    category: "pediatric_em",
+    difficulty: "intermediate",
+  },
+  {
+    id: "qf_9",
+    casePresentation: "Quick clinical question:",
+    question: "What is the age cutoff for use of the Broselow tape?",
+    options: [
+      "Up to 18 years",
+      "Up to approximately 36 kg (roughly 12 years)",
+      "Up to 5 years only",
+      "Up to 25 kg (roughly 8 years)",
+    ],
+    correctAnswer: 1,
+    explanation: "The Broselow-Luten tape is a length-based resuscitation aid used in pediatric emergencies. It is designed for children up to approximately 36 kg, which corresponds to roughly 12 years of age or 143 cm in length. The tape provides color-coded weight estimates and corresponding drug doses, equipment sizes, and fluid volumes. For children exceeding the tape's range, adult protocols and weight-based calculations should be used. The tape is particularly valuable in emergency situations where an accurate weight cannot be obtained quickly.",
+    reference: "PALS Provider Manual 2020; Broselow Pediatric Emergency Tape Manual; AAP Policy Statement",
+    category: "pediatric_em",
+    difficulty: "beginner",
+  },
+
+  // ===== MORE MEDICAL EM =====
+  {
+    id: "med_6",
+    casePresentation: "A 40-year-old presents with severe epigastric pain radiating to the back, nausea, and vomiting. Serum lipase is 5x the upper limit of normal. He has a history of heavy alcohol use.",
+    question: "What is the Ranson's criteria component that indicates severe pancreatitis at admission?",
+    options: [
+      "Serum calcium >10 mg/dL",
+      "WBC >16,000/mm3, Blood glucose >200 mg/dL, Age >55, LDH >350, AST >250",
+      "Normal lipase levels",
+      "Low serum amylase",
+    ],
+    correctAnswer: 1,
+    explanation: "Ranson's criteria at admission (GA-LAW): Age >55, Glucose >200 mg/dL (>10 mmol/L), AST >250 IU/L, LDH >350 IU/L, WBC >16,000/mm3. At 48 hours: calcium <8, Hct drop >10%, PaO2 <60, BUN increase >5, base deficit >4, fluid sequestration >6L. A score of >=3 indicates severe pancreatitis with increased mortality. Modern scoring (BISAP, APACHE II) is also used. Management: aggressive IV fluid resuscitation (goal-directed), pain control, NPO initially, and monitoring for organ failure. ERCP is indicated for biliary pancreatitis with cholangitis.",
+    reference: "ACG Guidelines on Acute Pancreatitis 2024; Revised Atlanta Classification 2012; Sabiston Surgery 21st Ed",
+    category: "medical_em",
+    difficulty: "advanced",
+  },
+  {
+    id: "med_7",
+    casePresentation: "A 28-year-old type 1 diabetic presents with Kussmaul breathing, fruity breath odor, blood glucose 450 mg/dL, pH 7.1, and serum bicarbonate 8 mEq/L.",
+    question: "What is the most dangerous complication to monitor during treatment of DKA?",
+    options: [
+      "Hypernatremia",
+      "Hypokalemia (as insulin shifts K+ intracellularly)",
+      "Hypercalcemia",
+      "Hypermagnesemia",
+    ],
+    correctAnswer: 1,
+    explanation: "During DKA treatment, insulin administration drives potassium into cells, causing potentially fatal hypokalemia. Total body potassium is always depleted in DKA (despite initially normal or high serum K+ due to acidosis-induced shift out of cells). CRITICAL RULE: Do NOT give insulin if serum K+ <3.3 mEq/L - replete K+ first. If K+ 3.3-5.3: add 20-40 mEq KCl to each liter of IV fluids. If K+ >5.3: hold K+ but recheck every 2 hours. Monitor ECG continuously. Other complications: cerebral edema (especially in children), hypoglycemia, and fluid overload.",
+    reference: "ADA DKA Management Protocol 2024; JBDS-IP DKA Guidelines; Tintinalli's EM 9th Ed",
+    category: "medical_em",
+    difficulty: "intermediate",
+  },
+
+  // ===== MORE ADVANCED QUESTIONS =====
+  {
+    id: "adv_1",
+    casePresentation: "A 70-year-old male on warfarin (INR 8.5) presents with massive GI bleeding. He is hemodynamically unstable with BP 75/45 and HR 125.",
+    question: "What is the most rapid reversal strategy?",
+    options: [
+      "Oral Vitamin K alone",
+      "IV Vitamin K + 4-Factor Prothrombin Complex Concentrate (4F-PCC)",
+      "Fresh Frozen Plasma only",
+      "Withhold warfarin and wait",
+    ],
+    correctAnswer: 1,
+    explanation: "For life-threatening bleeding on warfarin with supratherapeutic INR, the fastest reversal strategy is: (1) IV Vitamin K 10mg slow infusion (takes 6-24 hours for full effect but provides sustained reversal), AND (2) 4-Factor PCC (Kcentra) which provides immediate reversal within 15-30 minutes by replacing factors II, VII, IX, X. 4F-PCC is preferred over FFP because: faster onset, smaller volume (reduces fluid overload risk), no need for thawing, and no need for ABO typing. Dose: 25-50 IU/kg based on INR. For DOACs, specific reversal agents exist (idarucizumab for dabigatran, andexanet alfa for factor Xa inhibitors).",
+    reference: "AHA/ACC Anticoagulation Reversal Guidelines 2023; CHEST Guidelines on VTE; Tintinalli's EM 9th Ed",
+    category: "medical_em",
+    difficulty: "advanced",
+  },
+  {
+    id: "adv_2",
+    casePresentation: "A 35-year-old presents with sudden tearing chest pain radiating to the back, with a BP of 200/120 in the right arm and 160/90 in the left arm.",
+    question: "What is the most likely diagnosis?",
+    options: [
+      "Acute MI",
+      "Acute aortic dissection (Stanford Type A)",
+      "Pulmonary embolism",
+      "Esophageal rupture (Boerhaave syndrome)",
+    ],
+    correctAnswer: 1,
+    explanation: "The triad of: (1) Sudden tearing/ripping chest pain radiating to the back, (2) Blood pressure differential >20 mmHg between arms, and (3) Hypertension is classic for acute aortic dissection. Stanford Type A involves the ascending aorta (surgical emergency). Type B involves descending aorta only (medical management usually). Immediate management: IV esmolol or labetalol to target HR <60 and SBP 100-120 mmHg (reduce aortic wall stress). CT angiography of chest/abdomen/pelvis is the diagnostic study of choice. Avoid anticoagulation (unlike ACS). Emergent cardiothoracic surgery consultation for Type A.",
+    reference: "AHA/ACC Aortic Disease Guidelines 2022; ESC Guidelines on Aortic Diseases; Tintinalli's EM 9th Ed",
+    category: "cardiology_em",
+    difficulty: "advanced",
+  },
+  {
+    id: "adv_3",
+    casePresentation: "A 50-year-old male presents with acute onset severe headache, confusion, and left hemiplegia. CT head shows a large right basal ganglia intracerebral hemorrhage (60 mL volume). GCS is 8.",
+    question: "What is the critical blood pressure target?",
+    options: [
+      "SBP <180 mmHg",
+      "SBP <140 mmHg (intensive BP lowering within the first hour)",
+      "SBP <120 mmHg",
+      "No BP target needed",
+    ],
+    correctAnswer: 1,
+    explanation: "Per the AHA/ASA Guidelines for Spontaneous ICH and the INTERACT2 trial, intensive early blood pressure lowering to SBP <140 mmHg within 1 hour of presentation is safe and may improve functional outcomes by reducing hematoma expansion. Use IV nicardipine or clevidipine infusion for rapid, titratable BP control. For ICH volume >30 mL, GCS <=8, and infratentorial location, neurosurgical consultation for possible evacuation is indicated. The ICH Score predicts 30-day mortality. Reversal of any anticoagulation should be performed emergently.",
+    reference: "AHA/ASA ICH Guidelines 2022; INTERACT2 Trial (NEJM 2013); ATACH-2 Trial",
+    category: "neuro_em",
+    difficulty: "advanced",
+  },
+];
+
+export function getQuestionsByCategory(category: TriviaCategory): TriviaQuestion[] {
+  return TRIVIA_QUESTIONS.filter((q) => q.category === category);
+}
+
+export function getQuestionsByDifficulty(difficulty: TriviaDifficulty): TriviaQuestion[] {
+  return TRIVIA_QUESTIONS.filter((q) => q.difficulty === difficulty);
+}
+
+export function getFilteredQuestions(
+  categories: TriviaCategory[],
+  difficulty: TriviaDifficulty | "all",
+  count: number = 10
+): TriviaQuestion[] {
+  let pool = TRIVIA_QUESTIONS.filter((q) => categories.includes(q.category));
+  if (difficulty !== "all") {
+    pool = pool.filter((q) => q.difficulty === difficulty);
+  }
+  const shuffled = [...pool].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, Math.min(count, shuffled.length));
+}
+
+export function getAllCategories(): TriviaCategory[] {
+  return Object.keys(CATEGORY_INFO) as TriviaCategory[];
+}
