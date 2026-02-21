@@ -151,32 +151,32 @@ export default function TriviaQuizScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundDefault }]}>
-      <View style={[styles.progressBar, { backgroundColor: theme.card }]}>
-        <View
-          style={[styles.progressFill, { width: `${progress * 100}%`, backgroundColor: theme.primary }]}
-        />
-      </View>
-
-      <View style={styles.topRow}>
-        <Text style={[styles.questionCounter, { color: theme.textSecondary }]}>
-          {currentIndex + 1} / {questions.length}
-        </Text>
-        <View style={styles.badges}>
-          <View style={[styles.badge, { backgroundColor: `${categoryInfo.color}20` }]}>
-            <Text style={[styles.badgeText, { color: categoryInfo.color }]}>{categoryInfo.label}</Text>
-          </View>
-          <View style={[styles.badge, { backgroundColor: `${difficultyInfo.color}20` }]}>
-            <Text style={[styles.badgeText, { color: difficultyInfo.color }]}>{difficultyInfo.label}</Text>
-          </View>
-        </View>
-      </View>
-
       <ScrollView
         ref={scrollRef}
         style={styles.scrollView}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
         showsVerticalScrollIndicator={false}
       >
+        <View style={[styles.progressBar, { backgroundColor: theme.card }]}>
+          <View
+            style={[styles.progressFill, { width: `${progress * 100}%`, backgroundColor: theme.primary }]}
+          />
+        </View>
+
+        <View style={styles.topRow}>
+          <Text style={[styles.questionCounter, { color: theme.textSecondary }]}>
+            {currentIndex + 1} / {questions.length}
+          </Text>
+          <View style={styles.badges}>
+            <View style={[styles.badge, { backgroundColor: `${categoryInfo.color}20` }]}>
+              <Text style={[styles.badgeText, { color: categoryInfo.color }]}>{categoryInfo.label}</Text>
+            </View>
+            <View style={[styles.badge, { backgroundColor: `${difficultyInfo.color}20` }]}>
+              <Text style={[styles.badgeText, { color: difficultyInfo.color }]}>{difficultyInfo.label}</Text>
+            </View>
+          </View>
+        </View>
+
         <Animated.View style={{ opacity: fadeAnim }}>
           {currentQuestion.casePresentation !== "Quick clinical question:" ? (
             <View style={[styles.caseCard, { backgroundColor: theme.card }]}>
