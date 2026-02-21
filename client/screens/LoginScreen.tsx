@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as AuthSession from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
+import * as Crypto from "expo-crypto";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -39,62 +40,9 @@ export default function LoginScreen() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  const discovery = AuthSession.useAutoDiscovery("https://accounts.google.com");
-
   const redirectUri = AuthSession.makeRedirectUri({
     scheme: "ermate",
   });
-
-  const [request, response, promptAsync] = AuthSession.useAuthRequest(
-    {
-      clientId: GOOGLE_CLIENT_ID,
-      scopes: ["openid", "profile", "email"],
-      redirectUri,
-      responseType: AuthSession.ResponseType.Token,
-      usePKCE: false,
-    },
-    discovery
-  );
-
-  useEffect(() => {
-    if (response?.type === "success") {
-      handleGoogleResponse(response);
-    } else if (response?.type === "error") {
-      setGoogleLoading(false);
-      Alert.alert("Sign-In Error", response.error?.message || "Google sign-in was cancelled");
-    } else if (response?.type === "dismiss") {
-      setGoogleLoading(false);
-    }
-  }, [response]);
-
-  const handleGoogleResponse = async (result: AuthSession.AuthSessionResult) => {
-    if (result.type !== "success") return;
-
-    setGoogleLoading(true);
-    try {
-      const { access_token } = result.params;
-
-      const userInfoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-        headers: { Authorization: `Bearer ${access_token}` },
-      });
-      const userInfo = await userInfoRes.json();
-
-      const signInResult = await googleSignIn({
-        name: userInfo.name || userInfo.given_name || "User",
-        email: userInfo.email,
-        accessToken: access_token,
-      });
-
-      if (!signInResult.success) {
-        Alert.alert("Sign-In Failed", signInResult.error || "Could not sign in with Google");
-      }
-    } catch (error) {
-      Alert.alert("Error", "Something went wrong during Google sign-in");
-      console.error("[LoginScreen] Google sign-in error:", error);
-    } finally {
-      setGoogleLoading(false);
-    }
-  };
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -111,15 +59,63 @@ export default function LoginScreen() {
     }
   };
 
-  const handleGoogleSignIn = async () => {
+  const handleGoogleSignIn = useCallback(async () => {
     setGoogleLoading(true);
     try {
-      await promptAsync();
+      const state = Crypto.randomUUID();
+      const nonce = Crypto.randomUUID();
+
+      const params = new URLSearchParams({
+        client_id: GOOGLE_CLIENT_ID,
+        redirect_uri: redirectUri,
+        response_type: "token",
+        scope: "openid profile email",
+        state,
+        nonce,
+        include_granted_scopes: "true",
+      });
+
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+
+      const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri);
+
+      if (result.type === "success" && result.url) {
+        const hashFragment = result.url.split("#")[1];
+        if (hashFragment) {
+          const responseParams = new URLSearchParams(hashFragment);
+          const accessToken = responseParams.get("access_token");
+
+          if (accessToken) {
+            const userInfoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+              headers: { Authorization: `Bearer ${accessToken}` },
+            });
+            const userInfo = await userInfoRes.json();
+
+            const signInResult = await googleSignIn({
+              name: userInfo.name || userInfo.given_name || "User",
+              email: userInfo.email,
+              accessToken,
+            });
+
+            if (!signInResult.success) {
+              Alert.alert("Sign-In Failed", signInResult.error || "Could not sign in with Google");
+            }
+          } else {
+            Alert.alert("Sign-In Error", "No access token received from Google");
+          }
+        } else {
+          Alert.alert("Sign-In Error", "Invalid response from Google");
+        }
+      } else if (result.type === "cancel" || result.type === "dismiss") {
+        // user cancelled
+      }
     } catch (error) {
+      console.error("[LoginScreen] Google sign-in error:", error);
+      Alert.alert("Error", "Something went wrong during Google sign-in");
+    } finally {
       setGoogleLoading(false);
-      Alert.alert("Error", "Could not start Google sign-in");
     }
-  };
+  }, [redirectUri, googleSignIn]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundDefault }]}>
@@ -150,7 +146,7 @@ export default function LoginScreen() {
             },
           ]}
           onPress={handleGoogleSignIn}
-          disabled={googleLoading || !request}
+          disabled={googleLoading}
         >
           {googleLoading ? (
             <ActivityIndicator color={theme.text} size="small" />
