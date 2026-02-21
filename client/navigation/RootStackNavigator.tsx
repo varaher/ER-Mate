@@ -31,6 +31,11 @@ import SimulationListScreen from "@/screens/SimulationListScreen";
 import SimulationScreen from "@/screens/SimulationScreen";
 import SimulationResultScreen from "@/screens/SimulationResultScreen";
 import EMReferenceScreen from "@/screens/EMReferenceScreen";
+import TriviaHomeScreen from "@/screens/TriviaHomeScreen";
+import TriviaQuizScreen from "@/screens/TriviaQuizScreen";
+import TriviaResultScreen from "@/screens/TriviaResultScreen";
+import type { QuizAnswer } from "@/screens/TriviaQuizScreen";
+import type { TriviaCategory, TriviaDifficulty } from "@/data/triviaQuestions";
 
 export type RootStackParamList = {
   Login: undefined;
@@ -57,6 +62,19 @@ export type RootStackParamList = {
   SimulationList: undefined;
   Simulation: { caseId: string };
   EMReference: undefined;
+  TriviaHome: undefined;
+  TriviaQuiz: {
+    categories: TriviaCategory[];
+    difficulty: TriviaDifficulty | "all";
+    questionCount: number;
+  };
+  TriviaResult: {
+    questions: string[];
+    answers: QuizAnswer[];
+    totalTime: number;
+    categories: TriviaCategory[];
+    difficulty: TriviaDifficulty | "all";
+  };
   SimulationResult: {
     caseId: string;
     elapsedTime: number;
@@ -253,6 +271,32 @@ export default function RootStackNavigator() {
             options={{
               presentation: "modal",
               headerTitle: "EM Reference Library",
+            }}
+          />
+          <Stack.Screen
+            name="TriviaHome"
+            component={TriviaHomeScreen}
+            options={{
+              presentation: "modal",
+              headerTitle: "Trivia Time",
+            }}
+          />
+          <Stack.Screen
+            name="TriviaQuiz"
+            component={TriviaQuizScreen}
+            options={{
+              presentation: "modal",
+              headerTitle: "Quiz",
+              gestureEnabled: false,
+            }}
+          />
+          <Stack.Screen
+            name="TriviaResult"
+            component={TriviaResultScreen}
+            options={{
+              presentation: "modal",
+              headerTitle: "Results",
+              gestureEnabled: false,
             }}
           />
           <Stack.Screen
