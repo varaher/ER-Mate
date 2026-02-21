@@ -41,24 +41,26 @@ async function handleTokenExpiry() {
 }
 
 async function handleResponse<T>(res: Response): Promise<ApiResponse<T>> {
+  const responseText = await res.text();
+  
   if (!res.ok) {
-    const errorText = await res.text();
     let errorMessage: string = "Request failed";
-    let errorData: any = null;
     try {
-      const errorJson = JSON.parse(errorText);
-      errorData = errorJson;
-      const rawError = errorJson.detail || errorJson.message || errorJson.error || errorText;
+      const errorJson = JSON.parse(responseText);
+      const rawError = errorJson.detail || errorJson.message || errorJson.error || responseText;
       if (typeof rawError === 'string') {
         errorMessage = rawError;
       } else if (typeof rawError === 'object' && rawError !== null) {
         errorMessage = rawError.message || rawError.detail || (typeof rawError.error === 'string' ? rawError.error : JSON.stringify(rawError));
-        errorData = rawError;
       } else {
         errorMessage = JSON.stringify(rawError);
       }
     } catch {
-      errorMessage = errorText || res.statusText;
+      if (responseText.trim().startsWith("<") || responseText.includes("<!DOCTYPE")) {
+        errorMessage = "Server is temporarily unavailable. Please try again in a moment.";
+      } else {
+        errorMessage = responseText || res.statusText;
+      }
     }
     
     const currentToken = await getToken();
@@ -69,9 +71,17 @@ async function handleResponse<T>(res: Response): Promise<ApiResponse<T>> {
     
     return { success: false, error: errorMessage };
   }
-  const data = await res.json();
+
+  let data: any;
+  try {
+    data = JSON.parse(responseText);
+  } catch {
+    if (responseText.trim().startsWith("<") || responseText.includes("<!DOCTYPE")) {
+      return { success: false, error: "Server returned an unexpected response. It may be restarting — please try again in a moment." };
+    }
+    return { success: false, error: "Server returned an invalid response." };
+  }
   
-  // Also check for token expired in successful response body (some APIs do this)
   if (data && typeof data === 'object' && data.error) {
     const errorStr = typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
     if (isTokenExpiredError(errorStr, 200)) {
@@ -94,19 +104,28 @@ export async function fetchFromApi<T>(endpoint: string): Promise<T> {
     },
   });
 
+  const responseText = await res.text();
+
   if (!res.ok) {
-    const errorText = await res.text();
     let errorMessage = "Request failed";
     try {
-      const errorJson = JSON.parse(errorText);
-      errorMessage = errorJson.detail || errorJson.message || errorText;
+      const errorJson = JSON.parse(responseText);
+      errorMessage = errorJson.detail || errorJson.message || responseText;
     } catch {
-      errorMessage = errorText || res.statusText;
+      if (responseText.trim().startsWith("<") || responseText.includes("<!DOCTYPE")) {
+        errorMessage = "Server is temporarily unavailable. Please try again in a moment.";
+      } else {
+        errorMessage = responseText || res.statusText;
+      }
     }
     throw new Error(errorMessage);
   }
 
-  return res.json();
+  try {
+    return JSON.parse(responseText);
+  } catch {
+    throw new Error("Server returned an unexpected response. It may be restarting — please try again.");
+  }
 }
 
 export async function apiGet<T>(endpoint: string): Promise<ApiResponse<T>> {
