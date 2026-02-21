@@ -9,6 +9,7 @@ import {
 import { useNavigation, useRoute } from "@react-navigation/native";
 import type { NativeStackNavigationProp, NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useHeaderHeight } from "@react-navigation/elements";
 import { Feather } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius } from "@/constants/theme";
@@ -29,6 +30,7 @@ export default function TriviaResultScreen() {
   const route = useRoute<RouteProps>();
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
 
   const { questions: questionIds, answers, totalTime } = route.params;
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
@@ -80,8 +82,9 @@ export default function TriviaResultScreen() {
     <View style={[styles.container, { backgroundColor: theme.backgroundDefault }]}>
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 120 }]}
-        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.content, { paddingTop: headerHeight + Spacing.md, paddingBottom: insets.bottom + 120 }]}
+        showsVerticalScrollIndicator={true}
+        scrollIndicatorInsets={{ bottom: insets.bottom + 80 }}
       >
         <View style={[styles.scoreCard, { backgroundColor: gradeInfo.color }]}>
           <Feather name={gradeInfo.icon as any} size={48} color="#FFFFFF" />
@@ -288,7 +291,7 @@ export default function TriviaResultScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   scrollView: { flex: 1 },
-  content: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.md },
+  content: { paddingHorizontal: Spacing.lg },
   scoreCard: {
     borderRadius: BorderRadius.xl,
     padding: Spacing.xl,
