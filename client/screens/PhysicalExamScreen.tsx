@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
@@ -39,6 +40,7 @@ export default function PhysicalExamScreen() {
   const route = useRoute<RouteProps>();
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
   const { caseId } = route.params;
 
   const [loading, setLoading] = useState(true);
@@ -139,7 +141,7 @@ export default function PhysicalExamScreen() {
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundDefault }]}>
       <KeyboardAwareScrollViewCompat
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing["4xl"] }]}
+        contentContainerStyle={[styles.content, { paddingTop: headerHeight + Spacing.md, paddingBottom: insets.bottom + Spacing["4xl"] }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.headerRow}>

@@ -9,6 +9,7 @@ import {
   Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useHeaderHeight } from "@react-navigation/elements";
 import { Feather } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "@/hooks/useTheme";
@@ -35,6 +36,7 @@ export default function PrivacyScreen() {
   const { theme } = useTheme();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
   const [prefs, setPrefs] = useState<PrivacyPrefs>(DEFAULT_PREFS);
 
   useEffect(() => {
@@ -138,7 +140,7 @@ export default function PrivacyScreen() {
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundDefault }]}>
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
+        contentContainerStyle={[styles.content, { paddingTop: headerHeight + 12, paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={[styles.infoCard, { backgroundColor: theme.primaryLight }]}>

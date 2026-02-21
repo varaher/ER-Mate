@@ -9,6 +9,7 @@ import {
   Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useHeaderHeight } from "@react-navigation/elements";
 import { Feather } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "@/hooks/useTheme";
@@ -41,6 +42,7 @@ const DEFAULT_PREFS: NotificationPrefs = {
 export default function NotificationsScreen() {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
   const [prefs, setPrefs] = useState<NotificationPrefs>(DEFAULT_PREFS);
 
   useEffect(() => {
@@ -140,7 +142,7 @@ export default function NotificationsScreen() {
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundDefault }]}>
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
+        contentContainerStyle={[styles.content, { paddingTop: headerHeight + 12, paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={[styles.infoCard, { backgroundColor: theme.primaryLight }]}>
@@ -192,7 +194,7 @@ export default function NotificationsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg },
+  content: { paddingHorizontal: Spacing.lg },
   infoCard: {
     flexDirection: "row",
     alignItems: "center",

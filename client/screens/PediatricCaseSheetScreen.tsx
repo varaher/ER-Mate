@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { View, Text, TextInput, StyleSheet, Pressable, ActivityIndicator, ScrollView, Switch, Alert, Modal, FlatList } from "react-native";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { Audio } from "expo-av";
@@ -286,6 +287,7 @@ export default function PediatricCaseSheetScreen() {
   const route = useRoute<PediatricCaseSheetRouteProp>();
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
 
   const { caseId, triageData } = route.params;
   const [loading, setLoading] = useState(true);
@@ -1303,7 +1305,7 @@ export default function PediatricCaseSheetScreen() {
         </ScrollView>
       </View>
 
-      <KeyboardAwareScrollViewCompat contentContainerStyle={styles.content}>
+      <KeyboardAwareScrollViewCompat contentContainerStyle={[styles.content, { paddingTop: headerHeight + Spacing.md }]}>
         {activeTab === "patient" && patient && (
           <View style={[styles.card, { backgroundColor: theme.card }]}>
             <View style={styles.patientHeader}>

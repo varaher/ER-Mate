@@ -12,6 +12,7 @@ import {
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useHeaderHeight } from "@react-navigation/elements";
 import { Feather } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
 import { apiGet, apiPut } from "@/lib/api";
@@ -27,6 +28,7 @@ export default function AddendumNotesScreen() {
   const route = useRoute<RouteProps>();
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
   const { caseId } = route.params;
 
   const [loading, setLoading] = useState(true);
@@ -117,7 +119,7 @@ export default function AddendumNotesScreen() {
     <View style={[styles.container, { backgroundColor: theme.backgroundDefault }]}>
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={{ paddingTop: Spacing.lg, paddingBottom: insets.bottom + 100 }}
+        contentContainerStyle={{ paddingTop: headerHeight + 12, paddingBottom: insets.bottom + 100 }}
         keyboardShouldPersistTaps="handled"
       >
         <View style={[styles.header, { backgroundColor: theme.card, borderColor: theme.border }]}>

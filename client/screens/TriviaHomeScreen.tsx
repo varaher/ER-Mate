@@ -8,6 +8,7 @@ import {
   Alert,
 } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
+import { useHeaderHeight } from "@react-navigation/elements";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -29,6 +30,7 @@ export default function TriviaHomeScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
 
   const [selectedCategories, setSelectedCategories] = useState<TriviaCategory[]>([]);
   const [selectedDifficulty, setSelectedDifficulty] = useState<TriviaDifficulty | "all">("all");
@@ -76,7 +78,7 @@ export default function TriviaHomeScreen() {
     <View style={[styles.container, { backgroundColor: theme.backgroundDefault }]}>
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 120 }]}
+        contentContainerStyle={[styles.content, { paddingTop: headerHeight + 12, paddingBottom: insets.bottom + 120 }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={[styles.heroCard, { backgroundColor: theme.primary }]}>

@@ -9,6 +9,7 @@ import {
   Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useHeaderHeight } from "@react-navigation/elements";
 import { Feather } from "@expo/vector-icons";
 import * as Linking from "expo-linking";
 import { useTheme } from "@/hooks/useTheme";
@@ -38,6 +39,7 @@ const OPEN_SOURCE_LIBS = [
 export default function AboutScreen() {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
 
   const handleOpenLink = (url: string, label: string) => {
     Alert.alert(label, "This page will be available soon. Stay tuned!");
@@ -46,7 +48,7 @@ export default function AboutScreen() {
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundDefault }]}>
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
+        contentContainerStyle={[styles.content, { paddingTop: headerHeight + 12, paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={[styles.heroCard, { backgroundColor: theme.primaryLight }]}>
@@ -164,7 +166,7 @@ export default function AboutScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg },
+  content: { paddingHorizontal: Spacing.lg },
   heroCard: {
     alignItems: "center",
     padding: Spacing.xl,

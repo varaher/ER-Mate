@@ -15,6 +15,7 @@ import {
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useHeaderHeight } from "@react-navigation/elements";
 import { Feather } from "@expo/vector-icons";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
@@ -220,6 +221,7 @@ export default function DischargeSummaryScreen() {
   const route = useRoute<RouteProps>();
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
   const { caseId } = route.params;
 
   const [loading, setLoading] = useState(true);
@@ -920,7 +922,7 @@ export default function DischargeSummaryScreen() {
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundDefault }]}>
       <KeyboardAwareScrollViewCompat
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing["4xl"] }]}
+        contentContainerStyle={[styles.content, { paddingTop: headerHeight + 12, paddingBottom: insets.bottom + Spacing["4xl"] }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={[styles.patientCard, { backgroundColor: theme.card }]}>

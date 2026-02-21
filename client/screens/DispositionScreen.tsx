@@ -11,6 +11,7 @@ import {
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useHeaderHeight } from "@react-navigation/elements";
 import { Feather } from "@expo/vector-icons";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useTheme } from "@/hooks/useTheme";
@@ -36,6 +37,7 @@ export default function DispositionScreen() {
   const route = useRoute<RouteProps>();
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
   const { caseId } = route.params;
 
   const [loading, setLoading] = useState(true);
@@ -125,7 +127,7 @@ export default function DispositionScreen() {
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundDefault }]}>
       <KeyboardAwareScrollViewCompat
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing["4xl"] }]}
+        contentContainerStyle={[styles.content, { paddingTop: headerHeight + 12, paddingBottom: insets.bottom + Spacing["4xl"] }]}
         showsVerticalScrollIndicator={false}
       >
         <Text style={[styles.heading, { color: theme.text }]}>Patient Disposition</Text>

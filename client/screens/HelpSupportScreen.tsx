@@ -10,6 +10,7 @@ import {
   Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useHeaderHeight } from "@react-navigation/elements";
 import { Feather } from "@expo/vector-icons";
 import * as Linking from "expo-linking";
 import { useTheme } from "@/hooks/useTheme";
@@ -47,6 +48,7 @@ export default function HelpSupportScreen() {
   const { theme } = useTheme();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
   const [feedbackText, setFeedbackText] = useState("");
   const [feedbackSent, setFeedbackSent] = useState(false);
@@ -85,7 +87,7 @@ export default function HelpSupportScreen() {
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundDefault }]}>
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
+        contentContainerStyle={[styles.content, { paddingTop: headerHeight + 12, paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={[styles.contactCard, { backgroundColor: theme.primaryLight }]}>
@@ -199,7 +201,7 @@ export default function HelpSupportScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg },
+  content: { paddingHorizontal: Spacing.lg },
   contactCard: {
     alignItems: "center",
     padding: Spacing.xl,

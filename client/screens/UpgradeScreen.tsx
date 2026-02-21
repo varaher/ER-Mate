@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
+import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
@@ -35,6 +36,7 @@ export default function UpgradeScreen() {
   const route = useRoute<RouteProps>();
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
   const { user } = useAuth();
 
   const { lockReason, lockMessage } = route.params || {};
@@ -104,7 +106,7 @@ export default function UpgradeScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.content,
-          { paddingTop: Spacing.lg, paddingBottom: insets.bottom + Spacing["4xl"] },
+          { paddingTop: headerHeight + 12, paddingBottom: insets.bottom + Spacing["4xl"] },
         ]}
         showsVerticalScrollIndicator={false}
       >

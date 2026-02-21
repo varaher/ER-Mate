@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useHeaderHeight } from "@react-navigation/elements";
 import { Feather } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import * as Linking from "expo-linking";
@@ -24,6 +25,7 @@ export default function LinkDevicesScreen() {
   const { theme } = useTheme();
   const { user, token } = useAuth();
   const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
   const [loading, setLoading] = useState(false);
   const [linkCode, setLinkCode] = useState<string | null>(null);
   const [linkUrl, setLinkUrl] = useState<string | null>(null);
@@ -120,7 +122,7 @@ export default function LinkDevicesScreen() {
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundDefault }]}>
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingTop: Spacing.lg, paddingBottom: insets.bottom + 40 }]}
+        contentContainerStyle={[styles.content, { paddingTop: headerHeight + 12, paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={[styles.infoCard, { backgroundColor: theme.primaryLight }]}>
