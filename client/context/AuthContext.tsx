@@ -128,12 +128,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify(params),
       });
 
+      const responseText = await response.text();
+
       if (!response.ok) {
-        const errData = await response.json().catch(() => ({ error: "Google sign-in failed" }));
-        return { success: false, error: errData.error || "Google sign-in failed" };
+        let errorMsg = "Google sign-in failed";
+        try {
+          const errData = JSON.parse(responseText);
+          errorMsg = errData.error || errData.message || errorMsg;
+        } catch {
+          if (responseText.trim().startsWith("<")) {
+            errorMsg = "Server is temporarily unavailable. Please try again in a moment.";
+          }
+        }
+        return { success: false, error: errorMsg };
       }
 
-      const data = await response.json();
+      let data: any;
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        return { success: false, error: "Server returned an unexpected response. Please try again." };
+      }
+
       const { access_token, user: userData } = data;
 
       if (access_token && userData) {

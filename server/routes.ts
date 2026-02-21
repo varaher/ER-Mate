@@ -237,7 +237,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const EXTERNAL_API = "https://er-emr-backend.onrender.com/api";
-      const generatedPassword = `google_${Buffer.from(email).toString("base64").slice(0, 20)}_${Date.now()}`;
+
+      const safeJsonParse = async (response: globalThis.Response) => {
+        const text = await response.text();
+        try {
+          return JSON.parse(text);
+        } catch {
+          console.warn("[Google Auth] Non-JSON response:", text.substring(0, 200));
+          return null;
+        }
+      };
 
       let loginRes = await fetch(`${EXTERNAL_API}/auth/login`, {
         method: "POST",
@@ -246,8 +255,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       if (loginRes.ok) {
-        const loginData = await loginRes.json();
-        return res.json(loginData);
+        const loginData = await safeJsonParse(loginRes);
+        if (loginData) return res.json(loginData);
       }
 
       const registerRes = await fetch(`${EXTERNAL_API}/auth/register`, {
@@ -262,11 +271,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       if (registerRes.ok) {
-        const registerData = await registerRes.json();
-        return res.json(registerData);
+        const registerData = await safeJsonParse(registerRes);
+        if (registerData) return res.json(registerData);
       }
 
-      const regError = await registerRes.text();
+      const regError = await registerRes.text().catch(() => "Unknown error");
       console.error("[Google Auth] Registration failed:", regError);
 
       loginRes = await fetch(`${EXTERNAL_API}/auth/login`, {
@@ -276,14 +285,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       if (loginRes.ok) {
-        const loginData = await loginRes.json();
-        return res.json(loginData);
+        const loginData = await safeJsonParse(loginRes);
+        if (loginData) return res.json(loginData);
       }
 
-      return res.status(401).json({ error: "Google sign-in failed. Please try email/password login." });
+      return res.status(401).json({ error: "Google sign-in failed. The server may be temporarily unavailable — please try again in a moment." });
     } catch (error) {
       console.error("[Google Auth] Error:", error);
-      res.status(500).json({ error: "Google sign-in failed" });
+      res.status(500).json({ error: "Google sign-in failed. Please try again." });
     }
   });
 
