@@ -7,6 +7,7 @@ import {
   Pressable,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useHeaderHeight } from "@react-navigation/elements";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RouteProp } from "@react-navigation/native";
@@ -20,6 +21,7 @@ import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 export default function SimulationResultScreen() {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<RootStackParamList, "SimulationResult">>();
   const { caseId, elapsedTime, performedActions, selectedDifferential, hasCrashed } = route.params;
@@ -159,7 +161,7 @@ export default function SimulationResultScreen() {
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundDefault }]}>
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingTop: Spacing.lg, paddingBottom: insets.bottom + 100 }]}
+        contentContainerStyle={[styles.content, { paddingTop: headerHeight + Spacing.md, paddingBottom: insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={[styles.scoreCard, { backgroundColor: hasCrashed ? TriageColors.red + "15" : theme.card }]}>
