@@ -155,7 +155,8 @@ export default function TriviaQuizScreen() {
         ref={scrollRef}
         style={styles.scrollView}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={true}
+        scrollIndicatorInsets={{ bottom: insets.bottom + 80 }}
       >
         <View style={[styles.progressBar, { backgroundColor: theme.card }]}>
           <View
@@ -338,7 +339,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   scrollView: { flex: 1 },
-  scrollContent: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm },
+  scrollContent: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.md },
   caseCard: {
     padding: Spacing.lg,
     borderRadius: BorderRadius.xl,
