@@ -356,20 +356,51 @@ export default function UpgradeScreen() {
 
         <View style={[styles.creditInfoCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
           <Text style={[styles.creditInfoTitle, { color: theme.text }]}>How AI Credits Work</Text>
+          <Text style={[styles.creditInfoSubtitle, { color: theme.primary }]}>Every AI action = 1 Credit. Simple.</Text>
+
+          <Text style={[styles.creditSectionLabel, { color: theme.text }]}>Uses 1 Credit Each:</Text>
+          {[
+            "Smart Dictation (record & auto-fill)",
+            "ABG AI Interpretation",
+            "Provisional AI Diagnosis",
+            "AI Differential Reasoning Panel",
+            "Generate Discharge Summary (AI)",
+            "Course in Hospital AI Generation",
+            "Document OCR Scan",
+          ].map((item, i) => (
+            <View key={i} style={styles.creditInfoRow}>
+              <Feather name="zap" size={14} color={theme.primary} />
+              <Text style={[styles.creditInfoText, { color: theme.textSecondary }]}>{item}</Text>
+            </View>
+          ))}
+
+          <View style={[styles.creditDivider, { backgroundColor: theme.border }]} />
+
+          <Text style={[styles.creditSectionLabel, { color: theme.text }]}>Always Free (0 Credits):</Text>
+          {[
+            "Manual typing & editing",
+            "Case save & storage",
+            "View cases & dashboard",
+            "Export to PDF / DOCX",
+          ].map((item, i) => (
+            <View key={i} style={styles.creditInfoRow}>
+              <Feather name="check-circle" size={14} color={TriageColors.green} />
+              <Text style={[styles.creditInfoText, { color: theme.textSecondary }]}>{item}</Text>
+            </View>
+          ))}
+
+          <View style={[styles.creditDivider, { backgroundColor: theme.border }]} />
+
           <View style={styles.creditInfoRow}>
-            <Feather name="zap" size={16} color={theme.primary} />
-            <Text style={[styles.creditInfoText, { color: theme.textSecondary }]}>1 AI action = 1 credit (Dictation, ABG, Diagnosis, Discharge AI)</Text>
+            <Feather name="refresh-cw" size={14} color={theme.primary} />
+            <Text style={[styles.creditInfoText, { color: theme.textSecondary }]}>+20 credits added every month with active subscription</Text>
           </View>
           <View style={styles.creditInfoRow}>
-            <Feather name="refresh-cw" size={16} color={theme.primary} />
-            <Text style={[styles.creditInfoText, { color: theme.textSecondary }]}>20 credits added every month with active subscription</Text>
-          </View>
-          <View style={styles.creditInfoRow}>
-            <Feather name="clock" size={16} color={theme.primary} />
+            <Feather name="clock" size={14} color={theme.primary} />
             <Text style={[styles.creditInfoText, { color: theme.textSecondary }]}>Unused credits roll over forever - they never expire</Text>
           </View>
           <View style={styles.creditInfoRow}>
-            <Feather name="shield" size={16} color={theme.primary} />
+            <Feather name="shield" size={14} color={theme.primary} />
             <Text style={[styles.creditInfoText, { color: theme.textSecondary }]}>Credits usable only while subscription is active</Text>
           </View>
         </View>
@@ -569,7 +600,10 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
     gap: Spacing.md,
   },
-  creditInfoTitle: { ...Typography.bodyMedium, marginBottom: Spacing.xs },
+  creditInfoTitle: { ...Typography.bodyMedium, marginBottom: 0 },
+  creditInfoSubtitle: { fontSize: 13, fontWeight: "700", marginBottom: Spacing.md },
+  creditSectionLabel: { fontSize: 13, fontWeight: "700", marginBottom: Spacing.xs },
+  creditDivider: { height: 1, marginVertical: Spacing.xs },
   creditInfoRow: {
     flexDirection: "row",
     alignItems: "flex-start",
