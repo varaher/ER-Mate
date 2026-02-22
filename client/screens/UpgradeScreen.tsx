@@ -29,7 +29,16 @@ interface SubscriptionStatus {
   currentPeriodEnd: string | null;
   priceInr: number;
   freeCaseLimit: number;
+  credits_balance?: number;
+  total_credits_purchased?: number;
+  total_credits_used?: number;
 }
+
+const CREDIT_PACKS = [
+  { credits: 50, price: 499, popular: false },
+  { credits: 100, price: 899, popular: true },
+  { credits: 300, price: 2499, popular: false },
+];
 
 export default function UpgradeScreen() {
   const navigation = useNavigation();
@@ -62,7 +71,7 @@ export default function UpgradeScreen() {
         data = JSON.parse(text);
       } catch {
         console.warn("[UpgradeScreen] Subscription status returned non-JSON:", text.substring(0, 200));
-        data = { plan: "free", casesUsed: 0, casesLimit: 10, casesRemaining: 10, priceInr: 559, freeCaseLimit: 10, status: "active", currentPeriodEnd: null };
+        data = { plan: "free", casesUsed: 0, casesLimit: 10, casesRemaining: 10, priceInr: 799, freeCaseLimit: 10, status: "active", currentPeriodEnd: null, credits_balance: 0 };
       }
       setSubStatus(data);
     } catch (err) {
@@ -73,15 +82,24 @@ export default function UpgradeScreen() {
   };
 
   const isPremium = subStatus?.plan === "premium";
+  const creditsBalance = subStatus?.credits_balance ?? 0;
   const casesUsed = subStatus?.casesUsed ?? 0;
   const casesLimit = subStatus?.casesLimit ?? 10;
   const casesRemaining = isPremium ? null : Math.max(0, casesLimit - casesUsed);
 
   const handleUpgrade = () => {
     Alert.alert(
-      "Upgrade to Premium",
-      "Payment integration is being set up. For early access, please contact support@ermate.app to activate your premium plan.",
+      "Upgrade to Base Plan",
+      "Payment integration is being set up. For early access, please contact support@ermate.app to activate your plan.",
       [{ text: "OK" }]
+    );
+  };
+
+  const handleBuyCredits = (pack: typeof CREDIT_PACKS[0]) => {
+    Alert.alert(
+      "Buy AI Credits",
+      `Purchase ${pack.credits} AI credits for Rs. ${pack.price}?\n\nPayment integration is being set up. Please contact support@ermate.app for credit purchases.`,
+      [{ text: "Cancel" }, { text: "OK" }]
     );
   };
 
@@ -123,15 +141,42 @@ export default function UpgradeScreen() {
         ) : null}
 
         <Text style={[styles.heading, { color: theme.text }]}>
-          {isPremium ? "Your Premium Plan" : "Upgrade to Premium"}
+          {isPremium ? "Your Base Plan" : "Upgrade to Base Plan"}
         </Text>
         <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
           {isPremium
-            ? "You have unlimited access to all features"
-            : "Get unlimited cases and full access to all features"}
+            ? "Unlimited EMR with AI-powered features"
+            : "Get unlimited EMR and 20 AI credits every month"}
         </Text>
 
-        {!isPremium ? (
+        {isPremium ? (
+          <View style={[styles.creditsCard, { backgroundColor: theme.card, borderColor: theme.primary }]}>
+            <View style={styles.creditsHeader}>
+              <Feather name="cpu" size={22} color={theme.primary} />
+              <Text style={[styles.creditsTitle, { color: theme.text }]}>AI Credits</Text>
+            </View>
+            <Text style={[styles.creditsBalance, { color: theme.primary }]}>{creditsBalance}</Text>
+            <Text style={[styles.creditsLabel, { color: theme.textSecondary }]}>Credits Remaining</Text>
+            {creditsBalance > 0 && creditsBalance <= 10 ? (
+              <View style={[styles.creditWarning, { backgroundColor: "#fef3c7" }]}>
+                <Feather name="alert-triangle" size={14} color="#d97706" />
+                <Text style={styles.creditWarningText}>Low credits - consider buying more</Text>
+              </View>
+            ) : null}
+            {creditsBalance === 0 ? (
+              <View style={[styles.creditWarning, { backgroundColor: "#fef2f2" }]}>
+                <Feather name="alert-circle" size={14} color="#ef4444" />
+                <Text style={[styles.creditWarningText, { color: "#ef4444" }]}>AI Credits exhausted</Text>
+              </View>
+            ) : null}
+            <Text style={[styles.creditsNote, { color: theme.textMuted }]}>
+              1 AI Action = 1 Credit  |  Credits never expire
+            </Text>
+            <Text style={[styles.creditsNote, { color: theme.textMuted }]}>
+              +20 credits added every month with active subscription
+            </Text>
+          </View>
+        ) : (
           <View style={[styles.usageCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <View style={styles.usageHeader}>
               <Feather name="bar-chart-2" size={20} color={theme.primary} />
@@ -162,40 +207,39 @@ export default function UpgradeScreen() {
               </Text>
             ) : null}
           </View>
-        ) : null}
+        )}
 
-        <View style={[styles.planCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <Text style={[styles.planLabel, { color: theme.textSecondary }]}>FREE</Text>
-          <View style={styles.priceRow}>
-            <Text style={[styles.priceAmount, { color: theme.text }]}>Rs. 0</Text>
-          </View>
-          <View style={styles.featuresList}>
-            {[
-              `${casesLimit} cases total`,
-              "All clinical features",
-              "Voice input & AI diagnosis",
-              "Document scanning",
-              "Export to PDF/DOCX",
-            ].map((feature, i) => (
-              <View key={i} style={styles.featureRow}>
-                <Feather name="check" size={16} color={TriageColors.green} />
-                <Text style={[styles.featureText, { color: theme.text }]}>{feature}</Text>
-              </View>
-            ))}
-          </View>
-          {!isPremium ? (
+        {!isPremium ? (
+          <View style={[styles.planCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <Text style={[styles.planLabel, { color: theme.textSecondary }]}>FREE</Text>
+            <View style={styles.priceRow}>
+              <Text style={[styles.priceAmount, { color: theme.text }]}>Rs. 0</Text>
+            </View>
+            <View style={styles.featuresList}>
+              {[
+                `${casesLimit} cases total`,
+                "All clinical features",
+                "Voice input & AI diagnosis",
+                "Document scanning",
+                "Export to PDF/DOCX",
+              ].map((feature, i) => (
+                <View key={i} style={styles.featureRow}>
+                  <Feather name="check" size={16} color={TriageColors.green} />
+                  <Text style={[styles.featureText, { color: theme.text }]}>{feature}</Text>
+                </View>
+              ))}
+            </View>
             <View style={[styles.currentBadge, { backgroundColor: theme.backgroundDefault }]}>
               <Text style={[styles.currentBadgeText, { color: theme.textSecondary }]}>
                 CURRENT PLAN
               </Text>
             </View>
-          ) : null}
-        </View>
+          </View>
+        ) : null}
 
         <View
           style={[
             styles.planCard,
-            styles.premiumCard,
             {
               backgroundColor: theme.card,
               borderColor: isPremium ? TriageColors.green : theme.primary,
@@ -208,21 +252,22 @@ export default function UpgradeScreen() {
               {isPremium ? "ACTIVE" : "RECOMMENDED"}
             </Text>
           </View>
-          <Text style={[styles.planLabel, { color: theme.textSecondary }]}>PREMIUM</Text>
+          <Text style={[styles.planLabel, { color: theme.textSecondary }]}>BASE PLAN</Text>
           <View style={styles.priceRow}>
-            <Text style={[styles.priceAmount, { color: theme.primary }]}>Rs. 559</Text>
+            <Text style={[styles.priceAmount, { color: theme.primary }]}>Rs. 799</Text>
             <Text style={[styles.pricePeriod, { color: theme.textSecondary }]}>/month</Text>
           </View>
           <View style={styles.featuresList}>
             {[
-              "Unlimited cases",
-              "All clinical features",
-              "Voice input & AI diagnosis",
+              "Unlimited manual EMR",
+              "Case storage",
+              "PDF/DOCX export",
+              "20 AI credits every month",
+              "Credits roll over (never expire)",
+              "Voice input & Smart Dictation",
+              "AI diagnosis & ABG scan",
               "Document scanning",
-              "Smart Dictation",
-              "ABG scan & interpretation",
               "Pediatric drug calculator",
-              "Export to PDF/DOCX",
               "Priority support",
             ].map((feature, i) => (
               <View key={i} style={styles.featureRow}>
@@ -238,6 +283,65 @@ export default function UpgradeScreen() {
               </Text>
             </View>
           ) : null}
+        </View>
+
+        {isPremium ? (
+          <>
+            <Text style={[styles.sectionHeading, { color: theme.text }]}>Buy More AI Credits</Text>
+            <Text style={[styles.sectionSubtext, { color: theme.textSecondary }]}>
+              Credits are added instantly and never expire
+            </Text>
+
+            <View style={styles.packsContainer}>
+              {CREDIT_PACKS.map((pack, i) => (
+                <Pressable
+                  key={i}
+                  style={({ pressed }) => [
+                    styles.packCard,
+                    {
+                      backgroundColor: theme.card,
+                      borderColor: pack.popular ? theme.primary : theme.border,
+                      borderWidth: pack.popular ? 2 : 1,
+                      opacity: pressed ? 0.9 : 1,
+                    },
+                  ]}
+                  onPress={() => handleBuyCredits(pack)}
+                >
+                  {pack.popular ? (
+                    <View style={[styles.popularBadge, { backgroundColor: theme.primary }]}>
+                      <Text style={styles.popularText}>BEST VALUE</Text>
+                    </View>
+                  ) : null}
+                  <Text style={[styles.packCredits, { color: theme.text }]}>{pack.credits}</Text>
+                  <Text style={[styles.packLabel, { color: theme.textSecondary }]}>Credits</Text>
+                  <Text style={[styles.packPrice, { color: theme.primary }]}>Rs. {pack.price}</Text>
+                  <Text style={[styles.packPer, { color: theme.textMuted }]}>
+                    Rs. {(pack.price / pack.credits).toFixed(1)}/credit
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </>
+        ) : null}
+
+        <View style={[styles.creditInfoCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <Text style={[styles.creditInfoTitle, { color: theme.text }]}>How AI Credits Work</Text>
+          <View style={styles.creditInfoRow}>
+            <Feather name="zap" size={16} color={theme.primary} />
+            <Text style={[styles.creditInfoText, { color: theme.textSecondary }]}>1 AI action = 1 credit (Dictation, ABG, Diagnosis, Discharge AI)</Text>
+          </View>
+          <View style={styles.creditInfoRow}>
+            <Feather name="refresh-cw" size={16} color={theme.primary} />
+            <Text style={[styles.creditInfoText, { color: theme.textSecondary }]}>20 credits added every month with active subscription</Text>
+          </View>
+          <View style={styles.creditInfoRow}>
+            <Feather name="clock" size={16} color={theme.primary} />
+            <Text style={[styles.creditInfoText, { color: theme.textSecondary }]}>Unused credits roll over forever - they never expire</Text>
+          </View>
+          <View style={styles.creditInfoRow}>
+            <Feather name="shield" size={16} color={theme.primary} />
+            <Text style={[styles.creditInfoText, { color: theme.textSecondary }]}>Credits usable only while subscription is active</Text>
+          </View>
         </View>
 
         {isPremium ? (
@@ -259,13 +363,13 @@ export default function UpgradeScreen() {
             onPress={handleUpgrade}
           >
             <Feather name="zap" size={20} color="#FFFFFF" />
-            <Text style={styles.upgradeBtnText}>Upgrade to Premium - Rs. 559/mo</Text>
+            <Text style={styles.upgradeBtnText}>Upgrade to Base Plan - Rs. 799/mo</Text>
           </Pressable>
         )}
 
         <Text style={[styles.terms, { color: theme.textMuted }]}>
           By subscribing, you agree to our Terms of Service and Privacy Policy.
-          Cancel anytime.
+          Cancel anytime. Credits remain stored if subscription is paused.
         </Text>
       </ScrollView>
     </View>
@@ -289,6 +393,33 @@ const styles = StyleSheet.create({
   lockMessage: { ...Typography.small, marginTop: Spacing.xs },
   heading: { ...Typography.h2, marginBottom: Spacing.xs },
   subtitle: { ...Typography.body, marginBottom: Spacing.xl },
+  creditsCard: {
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1.5,
+    marginBottom: Spacing.lg,
+    alignItems: "center",
+  },
+  creditsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  creditsTitle: { ...Typography.bodyMedium, fontSize: 16 },
+  creditsBalance: { fontSize: 48, fontWeight: "800" },
+  creditsLabel: { ...Typography.small, marginBottom: Spacing.sm },
+  creditWarning: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.sm,
+    marginTop: Spacing.sm,
+  },
+  creditWarningText: { fontSize: 12, fontWeight: "600", color: "#d97706" },
+  creditsNote: { ...Typography.caption, marginTop: Spacing.xs, textAlign: "center" },
   usageCard: {
     padding: Spacing.lg,
     borderRadius: BorderRadius.lg,
@@ -322,14 +453,13 @@ const styles = StyleSheet.create({
     position: "relative",
     overflow: "hidden",
   },
-  premiumCard: {},
   planLabel: { ...Typography.caption, fontWeight: "700", letterSpacing: 1, marginBottom: Spacing.xs },
   priceRow: { flexDirection: "row", alignItems: "baseline", marginBottom: Spacing.md },
   priceAmount: { fontSize: 32, fontWeight: "700" },
   pricePeriod: { ...Typography.body, marginLeft: Spacing.xs },
   featuresList: { gap: Spacing.sm },
   featureRow: { flexDirection: "row", alignItems: "center", gap: Spacing.sm },
-  featureText: { ...Typography.small },
+  featureText: { ...Typography.small, flex: 1 },
   recommendedBadge: {
     position: "absolute",
     top: 0,
@@ -347,6 +477,48 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
   },
   currentBadgeText: { fontSize: 11, fontWeight: "700", letterSpacing: 0.5 },
+  sectionHeading: { ...Typography.h3, marginTop: Spacing.lg, marginBottom: Spacing.xs },
+  sectionSubtext: { ...Typography.small, marginBottom: Spacing.md },
+  packsContainer: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    marginBottom: Spacing.lg,
+  },
+  packCard: {
+    flex: 1,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    alignItems: "center",
+    position: "relative",
+    overflow: "hidden",
+  },
+  popularBadge: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    paddingVertical: 2,
+    alignItems: "center",
+  },
+  popularText: { color: "#FFFFFF", fontSize: 8, fontWeight: "800", letterSpacing: 0.5 },
+  packCredits: { fontSize: 28, fontWeight: "800", marginTop: Spacing.md },
+  packLabel: { fontSize: 11, fontWeight: "600", marginBottom: Spacing.sm },
+  packPrice: { fontSize: 16, fontWeight: "700" },
+  packPer: { fontSize: 10, marginTop: 2 },
+  creditInfoCard: {
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    marginBottom: Spacing.md,
+    gap: Spacing.md,
+  },
+  creditInfoTitle: { ...Typography.bodyMedium, marginBottom: Spacing.xs },
+  creditInfoRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: Spacing.sm,
+  },
+  creditInfoText: { ...Typography.small, flex: 1 },
   upgradeBtn: {
     height: Spacing.buttonHeight,
     borderRadius: BorderRadius.md,

@@ -79,12 +79,34 @@ export default function DashboardScreen() {
   const [selectedCase, setSelectedCase] = useState<CaseItem | null>(null);
   const [exporting, setExporting] = useState(false);
   const [draftsMap, setDraftsMap] = useState<Record<string, DraftCase>>({});
+  const [aiCredits, setAiCredits] = useState<number | null>(null);
 
   const { data: cases = [], isLoading: loading, error: queryError, refetch, isRefetching } = useQuery<CaseItem[]>({
     queryKey: ["cases"],
     queryFn: () => fetchFromApi<CaseItem[]>("/cases"),
     refetchOnMount: true,
   });
+
+  useEffect(() => {
+    const fetchCredits = async () => {
+      if (!user?.id) return;
+      try {
+        const baseUrl = getApiUrl();
+        const url = new URL(`/api/subscription/status?userId=${encodeURIComponent(user.id)}&userEmail=${encodeURIComponent(user.email || "")}`, baseUrl).href;
+        const res = await fetch(url);
+        const text = await res.text();
+        try {
+          const data = JSON.parse(text);
+          setAiCredits(data.credits_balance ?? 20);
+        } catch {
+          setAiCredits(20);
+        }
+      } catch {
+        setAiCredits(20);
+      }
+    };
+    fetchCredits();
+  }, [user?.id]);
 
   useEffect(() => {
     const checkDrafts = async () => {
@@ -587,6 +609,36 @@ export default function DashboardScreen() {
           ))}
         </View>
 
+        {aiCredits !== null ? (
+          <Pressable
+            style={({ pressed }) => [
+              styles.creditsWidget,
+              {
+                backgroundColor: theme.card,
+                borderColor: aiCredits === 0 ? TriageColors.red : aiCredits <= 10 ? "#d97706" : theme.primary,
+                opacity: pressed ? 0.9 : 1,
+              },
+            ]}
+            onPress={() => navigation.navigate("Upgrade", {})}
+          >
+            <View style={styles.creditsWidgetLeft}>
+              <Feather name="cpu" size={20} color={theme.primary} />
+              <View>
+                <Text style={[styles.creditsWidgetTitle, { color: theme.text }]}>AI Credits</Text>
+                {aiCredits === 0 ? (
+                  <Text style={[styles.creditsWidgetStatus, { color: TriageColors.red }]}>Exhausted</Text>
+                ) : aiCredits <= 10 ? (
+                  <Text style={[styles.creditsWidgetStatus, { color: "#d97706" }]}>Low balance</Text>
+                ) : null}
+              </View>
+            </View>
+            <View style={styles.creditsWidgetRight}>
+              <Text style={[styles.creditsWidgetValue, { color: aiCredits === 0 ? TriageColors.red : theme.primary }]}>{aiCredits}</Text>
+              <Text style={[styles.creditsWidgetLabel, { color: theme.textSecondary }]}>remaining</Text>
+            </View>
+          </Pressable>
+        ) : null}
+
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: theme.text }]}>Today's Patients</Text>
@@ -945,4 +997,24 @@ const styles = StyleSheet.create({
   },
   downloadBtnText: { ...Typography.label },
   downloadNote: { ...Typography.small, textAlign: "center" as const },
+  creditsWidget: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1.5,
+    marginHorizontal: Spacing.lg,
+    marginTop: Spacing.md,
+  },
+  creditsWidgetLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  creditsWidgetTitle: { ...Typography.bodyMedium, fontSize: 14 },
+  creditsWidgetStatus: { fontSize: 11, fontWeight: "600" },
+  creditsWidgetRight: { alignItems: "flex-end" },
+  creditsWidgetValue: { fontSize: 24, fontWeight: "800" },
+  creditsWidgetLabel: { fontSize: 10, fontWeight: "500" },
 });

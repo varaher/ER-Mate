@@ -1,0 +1,530 @@
+ErMate Pricing Model – Final Draft
+💼 Base Plan – ₹799/month
+
+Includes:
+
+Unlimited manual EMR
+
+Case storage
+
+PDF/DOCX export
+
+20 AI credits every month
+
+Unused credits → roll over forever
+
+🎟 AI Credit Rules
+
+👉 1 AI Action = 1 Credit
+👉 Credits never expire
+👉 Credits accumulate
+
+🔹 How Credit Balance Works
+
+Each month:
+
+credits_total = previous_balance + 20
+
+So mathematically:
+
+𝑁
+𝑒
+𝑤
+𝐵
+𝑎
+𝑙
+𝑎
+𝑛
+𝑐
+𝑒
+=
+𝑂
+𝑙
+𝑑
+𝐵
+𝑎
+𝑙
+𝑎
+𝑛
+𝑐
+𝑒
++
+20
+NewBalance=OldBalance+20
+
+If doctor didn’t use AI for 3 months:
+
+Month 1 → 20
+Month 2 → 40
+Month 3 → 60
+
+This creates psychological safety.
+
+🔹 What Happens When Doctor Uses AI?
+
+Example:
+
+Doctor has 50 credits.
+
+Uses:
+
+Dictation → 1
+
+ABG AI → 1
+
+Provisional AI → 1
+
+Discharge AI → 1
+
+Remaining:
+
+𝑅
+𝑒
+𝑚
+𝑎
+𝑖
+𝑛
+𝑖
+𝑛
+𝑔
+𝐶
+𝑟
+𝑒
+𝑑
+𝑖
+𝑡
+𝑠
+=
+50
+−
+4
+=
+46
+RemainingCredits=50−4=46
+
+Very simple.
+
+🔹 Buying Extra Credits
+
+Credits also roll over.
+
+Example:
+
+Buy 100 credits at ₹899
+
+New formula:
+
+𝑇
+𝑜
+𝑡
+𝑎
+𝑙
+𝐶
+𝑟
+𝑒
+𝑑
+𝑖
+𝑡
+𝑠
+=
+𝐸
+𝑥
+𝑖
+𝑠
+𝑡
+𝑖
+𝑛
+𝑔
+𝐵
+𝑎
+𝑙
+𝑎
+𝑛
+𝑐
+𝑒
++
+𝑃
+𝑢
+𝑟
+𝑐
+ℎ
+𝑎
+𝑠
+𝑒
+𝑑
+𝐶
+𝑟
+𝑒
+𝑑
+𝑖
+𝑡
+𝑠
+TotalCredits=ExistingBalance+PurchasedCredits
+
+If doctor had 30 credits
+Buys 100
+
+Now → 130 credits
+
+No expiry.
+
+This makes doctors comfortable spending more.
+
+🔥 Why Rollover Is Smart
+
+Because:
+
+1️⃣ Doctors don’t feel pressure
+2️⃣ They won’t rush to “use AI before expiry”
+3️⃣ They won’t feel cheated
+4️⃣ It builds premium brand trust
+
+It aligns with your personality — long-term vision, not quick monetization.
+
+🧠 Very Important Protection Rule (You Must Add)
+
+Even with rollover, add:
+
+⚠ Credits only valid while subscription active
+
+Meaning:
+
+If doctor cancels subscription:
+
+Credits remain stored
+
+But AI usage blocked
+
+When subscription resumes → credits usable again
+
+Otherwise someone can:
+
+Subscribe 1 month
+
+Collect 20 credits
+
+Cancel
+
+Come back 6 months later and use 120 credits
+
+So rule:
+
+Credits accumulate only during active subscription.
+
+🔐 Backend Structure (Clean Version)
+
+User table:
+
+{
+  user_id,
+  subscription_status,
+  credits_balance,
+  total_credits_purchased,
+  total_credits_used
+}
+
+Every AI action:
+
+if credits_balance > 0:
+    deduct 1
+else:
+    show buy credits
+📊 Financial Reality Check
+
+Let’s say:
+
+Average doctor uses 60 AI actions/month.
+
+Base gives 20.
+
+Extra needed = 40 credits.
+
+If 50 credits pack = ₹499
+
+Total monthly revenue:
+
+₹799 + ₹499 = ₹1298
+
+Very healthy model.
+
+💡 Strategic Advantage
+
+You are not forcing usage.
+
+You are building:
+
+“Pay only for intelligence you use.”
+
+This is fair, scalable SaaS logic.
+
+Now one last important question before we lock this model:
+
+Do you want:
+
+A) Credits visible clearly on dashboard
+OR
+B) Hide credits inside settings (less visible)?
+
+Visibility affects usage behavior.
+
+yes clearly
+
+Perfect 👏
+Visible credits = smart SaaS psychology.
+
+Now let’s design this properly so ErMate feels premium and transparent.
+
+🏥 Final Model – Clean & Clear
+💼 Base Plan – ₹799/month
+
+Includes:
+
+Unlimited manual EMR
+
+Storage
+
+Export
+
+20 AI Credits per month
+
+Credits roll over forever (while subscription active)
+
+🎟 Credit System – Final Rules
+👉 1 AI Action = 1 Credit
+
+(Simple. Predictable. No confusion.)
+
+👉 Credits Visible on Dashboard
+
+Doctors should see clearly:
+
+AI Credits: 46 remaining
+
+Not hidden.
+
+🧠 How Credits Accumulate
+
+Each month:
+
+𝑁
+𝑒
+𝑤
+𝐵
+𝑎
+𝑙
+𝑎
+𝑛
+𝑐
+𝑒
+=
+𝑃
+𝑟
+𝑒
+𝑣
+𝑖
+𝑜
+𝑢
+𝑠
+𝐵
+𝑎
+𝑙
+𝑎
+𝑛
+𝑐
+𝑒
++
+20
+NewBalance=PreviousBalance+20
+
+If doctor doesn’t use AI for 4 months:
+
+Month 1 → 20
+Month 2 → 40
+Month 3 → 60
+Month 4 → 80
+
+This creates trust and psychological comfort.
+
+📊 How Usage Deducts
+
+Every AI trigger:
+
+𝑅
+𝑒
+𝑚
+𝑎
+𝑖
+𝑛
+𝑖
+𝑛
+𝑔
+𝐶
+𝑟
+𝑒
+𝑑
+𝑖
+𝑡
+𝑠
+=
+𝐶
+𝑢
+𝑟
+𝑟
+𝑒
+𝑛
+𝑡
+𝐵
+𝑎
+𝑙
+𝑎
+𝑛
+𝑐
+𝑒
+−
+1
+RemainingCredits=CurrentBalance−1
+
+Example:
+
+Balance = 25
+Doctor uses:
+
+Dictation → 1
+
+ABG AI → 1
+
+Provisional AI → 1
+
+Discharge AI → 1
+
+Remaining:
+
+25
+−
+4
+=
+21
+25−4=21
+
+Very transparent.
+
+📱 How It Should Look in UI
+
+On Dashboard top section:
+
+🧠 AI Credits
+21 Remaining
+
+[ Buy Credits ]
+
+When below 10 credits:
+
+Show subtle warning:
+
+⚠ Low AI Credits – 8 remaining
+
+When 0:
+
+🚫 AI Credits exhausted
+[ Buy Credits ]
+
+💳 Buying Credits Packs
+
+Keep simple:
+
+Pack	Price
+50 Credits	₹499
+100 Credits	₹899
+300 Credits	₹2499
+
+Credits added instantly.
+
+𝑇
+𝑜
+𝑡
+𝑎
+𝑙
+𝐶
+𝑟
+𝑒
+𝑑
+𝑖
+𝑡
+𝑠
+=
+𝐸
+𝑥
+𝑖
+𝑠
+𝑡
+𝑖
+𝑛
+𝑔
+𝐶
+𝑟
+𝑒
+𝑑
+𝑖
+𝑡
+𝑠
++
+𝑃
+𝑢
+𝑟
+𝑐
+ℎ
+𝑎
+𝑠
+𝑒
+𝑑
+𝐶
+𝑟
+𝑒
+𝑑
+𝑖
+𝑡
+𝑠
+TotalCredits=ExistingCredits+PurchasedCredits
+🔐 Important Rule (Protect Yourself)
+
+Credits usable only when subscription active.
+
+If subscription paused:
+
+Credits stored
+
+AI locked
+
+Resume → AI works again
+
+🎯 Why Visible Credits Is Powerful
+
+Because doctors:
+
+Use AI consciously
+
+Value each action
+
+Don’t feel cheated
+
+Trust billing
+
+Feel in control
+
+Hidden billing = distrust.
+
+Transparent billing = premium.
+
+🚀 Long-Term Strategic Advantage
+
+This model allows:
+
+Predictable revenue
+
+Controlled AI cost
+
+No unlimited abuse
+
+Premium positioning
+
+Easy scaling
