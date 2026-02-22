@@ -89,8 +89,8 @@ export default function UpgradeScreen() {
 
   const handleUpgrade = () => {
     Alert.alert(
-      "Upgrade to Base Plan",
-      "Payment integration is being set up. For early access, please contact support@ermate.app to activate your plan.",
+      "Start Free Trial",
+      "Get your first month FREE - no charges for 30 days!\n\nPayment integration is being set up. For early access, please contact support@ermate.app to activate your free trial.",
       [{ text: "OK" }]
     );
   };
@@ -148,6 +148,20 @@ export default function UpgradeScreen() {
             ? "Unlimited EMR with AI-powered features"
             : "Get unlimited EMR and 20 AI credits every month"}
         </Text>
+
+        {!isPremium ? (
+          <View style={[styles.freeTrialBanner, { backgroundColor: "#ecfdf5", borderColor: TriageColors.green }]}>
+            <View style={[styles.freeTrialIcon, { backgroundColor: TriageColors.green }]}>
+              <Feather name="gift" size={18} color="#FFFFFF" />
+            </View>
+            <View style={styles.freeTrialText}>
+              <Text style={[styles.freeTrialTitle, { color: "#065f46" }]}>First Month FREE</Text>
+              <Text style={[styles.freeTrialDesc, { color: "#047857" }]}>
+                Try the full Base Plan free for 30 days. No charge until your second month.
+              </Text>
+            </View>
+          </View>
+        ) : null}
 
         {isPremium ? (
           <View style={[styles.creditsCard, { backgroundColor: theme.card, borderColor: theme.primary }]}>
@@ -254,11 +268,27 @@ export default function UpgradeScreen() {
           </View>
           <Text style={[styles.planLabel, { color: theme.textSecondary }]}>BASE PLAN</Text>
           <View style={styles.priceRow}>
-            <Text style={[styles.priceAmount, { color: theme.primary }]}>Rs. 799</Text>
-            <Text style={[styles.pricePeriod, { color: theme.textSecondary }]}>/month</Text>
+            {!isPremium ? (
+              <>
+                <Text style={[styles.priceStrikethrough, { color: theme.textMuted }]}>Rs. 799</Text>
+                <Text style={[styles.priceAmount, { color: TriageColors.green }]}>FREE</Text>
+                <Text style={[styles.pricePeriod, { color: theme.textSecondary }]}>for 1st month</Text>
+              </>
+            ) : (
+              <>
+                <Text style={[styles.priceAmount, { color: theme.primary }]}>Rs. 799</Text>
+                <Text style={[styles.pricePeriod, { color: theme.textSecondary }]}>/month</Text>
+              </>
+            )}
           </View>
+          {!isPremium ? (
+            <Text style={[styles.priceAfterTrial, { color: theme.textSecondary }]}>
+              Then Rs. 799/month. Cancel anytime.
+            </Text>
+          ) : null}
           <View style={styles.featuresList}>
             {[
+              !isPremium ? "First month completely free" : null,
               "Unlimited manual EMR",
               "Case storage",
               "PDF/DOCX export",
@@ -269,7 +299,7 @@ export default function UpgradeScreen() {
               "Document scanning",
               "Pediatric drug calculator",
               "Priority support",
-            ].map((feature, i) => (
+            ].filter(Boolean).map((feature, i) => (
               <View key={i} style={styles.featureRow}>
                 <Feather name="check" size={16} color={theme.primary} />
                 <Text style={[styles.featureText, { color: theme.text }]}>{feature}</Text>
@@ -362,14 +392,15 @@ export default function UpgradeScreen() {
             ]}
             onPress={handleUpgrade}
           >
-            <Feather name="zap" size={20} color="#FFFFFF" />
-            <Text style={styles.upgradeBtnText}>Upgrade to Base Plan - Rs. 799/mo</Text>
+            <Feather name="gift" size={20} color="#FFFFFF" />
+            <Text style={styles.upgradeBtnText}>Start Free Trial - Rs. 0 for 1st Month</Text>
           </Pressable>
         )}
 
         <Text style={[styles.terms, { color: theme.textMuted }]}>
-          By subscribing, you agree to our Terms of Service and Privacy Policy.
-          Cancel anytime. Credits remain stored if subscription is paused.
+          {isPremium
+            ? "By subscribing, you agree to our Terms of Service and Privacy Policy. Cancel anytime. Credits remain stored if subscription is paused."
+            : "First month is completely free. You will only be charged Rs. 799/month starting from the second month. Cancel anytime during the trial at no cost."}
         </Text>
       </ScrollView>
     </View>
@@ -392,7 +423,33 @@ const styles = StyleSheet.create({
   lockTitle: { ...Typography.bodyMedium },
   lockMessage: { ...Typography.small, marginTop: Spacing.xs },
   heading: { ...Typography.h2, marginBottom: Spacing.xs },
-  subtitle: { ...Typography.body, marginBottom: Spacing.xl },
+  subtitle: { ...Typography.body, marginBottom: Spacing.md },
+  freeTrialBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1.5,
+    marginBottom: Spacing.lg,
+    gap: Spacing.md,
+  },
+  freeTrialIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  freeTrialText: { flex: 1 },
+  freeTrialTitle: { fontSize: 16, fontWeight: "700" },
+  freeTrialDesc: { ...Typography.small, marginTop: 2 },
+  priceStrikethrough: {
+    fontSize: 18,
+    fontWeight: "500",
+    textDecorationLine: "line-through",
+    marginRight: Spacing.sm,
+  },
+  priceAfterTrial: { ...Typography.small, marginBottom: Spacing.md, marginTop: -Spacing.xs },
   creditsCard: {
     padding: Spacing.lg,
     borderRadius: BorderRadius.lg,
