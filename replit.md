@@ -36,6 +36,30 @@ Preferred communication style: Simple, everyday language.
 **Document Export System**: Supports export of Case Sheets and Discharge Summaries in PDF and DOCX formats, with platform-aware file handling for web and mobile.
 **Device Linking**: Provides a secure WhatsApp-style web linking feature for accessing the web application, generating temporary, expiring link codes.
 
+### Learn Section
+
+The app includes a dedicated "Learn" tab (`client/screens/LearnScreen.tsx`) in the main navigation with three educational modules:
+
+**Simulation-Based Teaching** (`client/screens/SimulationListScreen.tsx`, `SimulationScreen.tsx`, `SimulationResultScreen.tsx`): Interactive clinical case simulations where users work through emergency scenarios step-by-step. Presents clinical vignettes with decision points. Results screen shows performance score and feedback.
+
+**EM Reference Library** (`client/screens/EMReferenceScreen.tsx`): Emergency Medicine reference resource with AI-powered chat for looking up clinical guidelines, protocols, and medical information.
+
+**Trivia Time** (`client/screens/TriviaHomeScreen.tsx`, `TriviaQuizScreen.tsx`, `TriviaResultScreen.tsx`, `client/data/triviaQuestions.ts`): Case-based MCQ quiz system covering all medical specialties. Features three difficulty levels (Easy, Medium, Hard), category selection, detailed explanations with reliable medical references for each question, and a results screen with score breakdown.
+
+### Subscription & AI Credits Model
+
+**Pricing**:
+- **Free Plan**: 10 cases total, all clinical features included, no AI credits.
+- **Base Plan**: Rs. 799/month with **first month free** for new users. Unlimited manual EMR, case storage, PDF/DOCX export, and 20 AI credits per month.
+- **Credit Packs**: 50 credits / Rs. 499, 100 credits / Rs. 899 (best value), 300 credits / Rs. 2499.
+
+**AI Credit System** (1 AI action = 1 credit, no exceptions):
+- **Uses 1 credit**: Smart Dictation, ABG AI Interpretation, Provisional AI Diagnosis, AI Differential Reasoning Panel, Generate Discharge Summary (AI), Course in Hospital AI Generation, Document OCR Scan.
+- **Always free (0 credits)**: Manual typing & editing, case save & storage, view cases & dashboard, export to PDF/DOCX.
+- Credits roll over forever (never expire), +20 added monthly with active subscription, usable only while subscription is active.
+
+**Implementation**: `client/screens/UpgradeScreen.tsx` handles plan display, free trial banner, credit balance, credit pack purchases, and the "How AI Credits Work" info section. Dashboard (`client/screens/DashboardScreen.tsx`) shows an AI Credits widget with color-coded warnings (green = healthy, amber = low at ≤10, red = exhausted). Subscription status fetched from `/api/subscription/status` endpoint on the external backend.
+
 ## External Dependencies
 
 **External Backend API**:
