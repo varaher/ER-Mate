@@ -54,8 +54,8 @@ The app includes a dedicated "Learn" tab (`client/screens/LearnScreen.tsx`) in t
 - **Credit Packs**: 50 credits / Rs. 499, 100 credits / Rs. 899 (best value), 300 credits / Rs. 2499.
 
 **AI Credit System** (1 AI action = 1 credit, no exceptions):
-- **Uses 1 credit**: Smart Dictation, ABG AI Interpretation, Provisional AI Diagnosis, AI Differential Reasoning Panel, Generate Discharge Summary (AI), Course in Hospital AI Generation, Document OCR Scan.
-- **Always free (0 credits)**: Manual typing & editing, case save & storage, view cases & dashboard, export to PDF/DOCX.
+- **Uses 1 credit**: Smart Dictation, ABG AI Interpretation, Provisional AI Diagnosis, AI Differential Reasoning Panel, Generate Discharge Summary (AI), Course in Hospital AI Generation, Document OCR Scan, EM Reference Ask AI (per query), EM Reference Continue after 3 replies.
+- **Always free (0 credits)**: Manual typing & editing, case save & storage, view cases & dashboard, export to PDF/DOCX, browse EM Reference library, simulation cases (static), trivia quizzes.
 - Credits roll over forever (never expire), +20 added monthly with active subscription, usable only while subscription is active.
 
 **Implementation**: `client/screens/UpgradeScreen.tsx` handles plan display, free trial banner, credit balance, credit pack purchases, and the "How AI Credits Work" info section. Dashboard (`client/screens/DashboardScreen.tsx`) shows an AI Credits widget with color-coded warnings (green = healthy, amber = low at ≤10, red = exhausted). Subscription status fetched from `/api/subscription/status` endpoint on the external backend.

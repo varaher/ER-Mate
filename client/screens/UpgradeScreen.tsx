@@ -367,6 +367,8 @@ export default function UpgradeScreen() {
             "Generate Discharge Summary (AI)",
             "Course in Hospital AI Generation",
             "Document OCR Scan",
+            "EM Reference - Ask AI (per query)",
+            "EM Reference - Continue after 3 replies",
           ].map((item, i) => (
             <View key={i} style={styles.creditInfoRow}>
               <Feather name="zap" size={14} color={theme.primary} />
@@ -382,6 +384,9 @@ export default function UpgradeScreen() {
             "Case save & storage",
             "View cases & dashboard",
             "Export to PDF / DOCX",
+            "Browse EM Reference library",
+            "Simulation cases",
+            "Trivia quizzes",
           ].map((item, i) => (
             <View key={i} style={styles.creditInfoRow}>
               <Feather name="check-circle" size={14} color={TriageColors.green} />
