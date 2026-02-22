@@ -513,7 +513,7 @@ const CHIP_OPTIONS = {
 export default function CaseSheetScreen() {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RouteProps>();
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const { caseId } = route.params;
@@ -2075,7 +2075,7 @@ export default function CaseSheetScreen() {
                 <View style={styles.field}>
                   <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Nature of Incident</Text>
                   <TextInput
-                    style={[styles.inputField, { backgroundColor: "#FFFFFF", color: theme.text, borderColor: "#FFB300" }]}
+                    style={[styles.inputField, { backgroundColor: theme.card, color: theme.text, borderColor: "#FFB300" }]}
                     value={mlcDetails.natureOfIncident}
                     onChangeText={(v) => setMLCDetails((prev) => ({ ...prev, natureOfIncident: v }))}
                     placeholder="e.g., Road Traffic Accident, Assault"
@@ -2086,7 +2086,7 @@ export default function CaseSheetScreen() {
                 <View style={styles.field}>
                   <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Date & Time of Incident</Text>
                   <TextInput
-                    style={[styles.inputField, { backgroundColor: "#FFFFFF", color: theme.text, borderColor: "#FFB300" }]}
+                    style={[styles.inputField, { backgroundColor: theme.card, color: theme.text, borderColor: "#FFB300" }]}
                     value={mlcDetails.dateTimeOfIncident}
                     onChangeText={(v) => setMLCDetails((prev) => ({ ...prev, dateTimeOfIncident: v }))}
                     placeholder="DD/MM/YYYY HH:MM"
@@ -2097,7 +2097,7 @@ export default function CaseSheetScreen() {
                 <View style={styles.field}>
                   <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Place of Incident</Text>
                   <TextInput
-                    style={[styles.inputField, { backgroundColor: "#FFFFFF", color: theme.text, borderColor: "#FFB300" }]}
+                    style={[styles.inputField, { backgroundColor: theme.card, color: theme.text, borderColor: "#FFB300" }]}
                     value={mlcDetails.placeOfIncident}
                     onChangeText={(v) => setMLCDetails((prev) => ({ ...prev, placeOfIncident: v }))}
                     placeholder="Location where incident occurred"
@@ -2108,7 +2108,7 @@ export default function CaseSheetScreen() {
                 <View style={styles.field}>
                   <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Identification Mark</Text>
                   <TextInput
-                    style={[styles.inputField, { backgroundColor: "#FFFFFF", color: theme.text, borderColor: "#FFB300" }]}
+                    style={[styles.inputField, { backgroundColor: theme.card, color: theme.text, borderColor: "#FFB300" }]}
                     value={mlcDetails.identificationMark}
                     onChangeText={(v) => setMLCDetails((prev) => ({ ...prev, identificationMark: v }))}
                     placeholder="Any identifying marks"
@@ -2119,7 +2119,7 @@ export default function CaseSheetScreen() {
                 <View style={styles.field}>
                   <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Informant/Brought By</Text>
                   <TextInput
-                    style={[styles.inputField, { backgroundColor: "#FFFFFF", color: theme.text, borderColor: "#FFB300" }]}
+                    style={[styles.inputField, { backgroundColor: theme.card, color: theme.text, borderColor: "#FFB300" }]}
                     value={mlcDetails.informantBroughtBy}
                     onChangeText={(v) => setMLCDetails((prev) => ({ ...prev, informantBroughtBy: v }))}
                     placeholder="Self"
@@ -2136,14 +2136,14 @@ export default function CaseSheetScreen() {
             <CollapsibleSection title="A - AIRWAY" icon="*" iconColor={TriageColors.red} defaultExpanded>
               <View style={styles.normalAbnormalRow}>
                 <Pressable
-                  style={[styles.normalBtn, { backgroundColor: abcdeStatus.airway === "Normal" ? "#E8F5E9" : theme.backgroundSecondary }]}
+                  style={[styles.normalBtn, { backgroundColor: abcdeStatus.airway === "Normal" ? (isDark ? '#1B2D1E' : '#E8F5E9') : theme.backgroundSecondary }]}
                   onPress={() => setABCDEStatus((prev) => ({ ...prev, airway: "Normal" }))}
                 >
                   <Feather name="check-circle" size={16} color={abcdeStatus.airway === "Normal" ? TriageColors.green : theme.textMuted} />
                   <Text style={{ color: abcdeStatus.airway === "Normal" ? TriageColors.green : theme.textMuted, fontWeight: "600" }}>Normal</Text>
                 </Pressable>
                 <Pressable
-                  style={[styles.abnormalBtn, { backgroundColor: abcdeStatus.airway === "Abnormal" ? "#FEE2E2" : theme.backgroundSecondary }]}
+                  style={[styles.abnormalBtn, { backgroundColor: abcdeStatus.airway === "Abnormal" ? (isDark ? '#4A2020' : '#FEE2E2') : theme.backgroundSecondary }]}
                   onPress={() => setABCDEStatus((prev) => ({ ...prev, airway: "Abnormal" }))}
                 >
                   <Feather name="alert-circle" size={16} color={abcdeStatus.airway === "Abnormal" ? TriageColors.red : theme.textMuted} />
@@ -2152,7 +2152,7 @@ export default function CaseSheetScreen() {
               </View>
 
               {abcdeStatus.airway === "Normal" && (
-                <View style={[styles.normalDescriptionBox, { backgroundColor: "#E8F5E9", borderColor: TriageColors.green }]}>
+                <View style={[styles.normalDescriptionBox, { backgroundColor: isDark ? '#1B2D1E' : '#E8F5E9', borderColor: TriageColors.green }]}>
                   <Text style={[styles.normalDescriptionText, { color: TriageColors.green }]}>
                     Patent airway, self-maintained, no obstruction, speech clear, no stridor
                   </Text>
@@ -2160,11 +2160,11 @@ export default function CaseSheetScreen() {
               )}
 
               {abcdeStatus.airway === "Abnormal" && (
-                <View style={styles.abnormalSection}>
+                <View style={[styles.abnormalSection, { backgroundColor: isDark ? '#2D1B1B' : '#FFF5F5' }]}>
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Position</Text>
                   <View style={styles.chipRow}>
                     {CHIP_OPTIONS.airwayMaintenance.map((opt) => (
-                      <Pressable key={opt.value} style={[styles.chip, formData.airway.maintenance === opt.value && styles.chipSelected, { backgroundColor: formData.airway.maintenance === opt.value ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => updateFormData("airway", "maintenance", opt.value)}>
+                      <Pressable key={opt.value} style={[styles.chip, formData.airway.maintenance === opt.value && styles.chipSelected, { backgroundColor: formData.airway.maintenance === opt.value ? (isDark ? '#4A2020' : '#FEE2E2') : theme.card }]} onPress={() => updateFormData("airway", "maintenance", opt.value)}>
                         <Text style={[styles.chipText, { color: formData.airway.maintenance === opt.value ? TriageColors.red : theme.text }]}>{opt.label}</Text>
                       </Pressable>
                     ))}
@@ -2173,7 +2173,7 @@ export default function CaseSheetScreen() {
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Patency</Text>
                   <View style={styles.chipRow}>
                     {CHIP_OPTIONS.airwayStatus.map((opt) => (
-                      <Pressable key={opt.value} style={[styles.chip, formData.airway.status === opt.value && styles.chipSelected, { backgroundColor: formData.airway.status === opt.value ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => updateFormData("airway", "status", opt.value)}>
+                      <Pressable key={opt.value} style={[styles.chip, formData.airway.status === opt.value && styles.chipSelected, { backgroundColor: formData.airway.status === opt.value ? (isDark ? '#4A2020' : '#FEE2E2') : theme.card }]} onPress={() => updateFormData("airway", "status", opt.value)}>
                         <Text style={[styles.chipText, { color: formData.airway.status === opt.value ? TriageColors.red : theme.text }]}>{opt.label}</Text>
                       </Pressable>
                     ))}
@@ -2182,7 +2182,7 @@ export default function CaseSheetScreen() {
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Cause</Text>
                   <View style={styles.chipRow}>
                     {CHIP_OPTIONS.airwayCause.map((opt) => (
-                      <Pressable key={opt.value} style={[styles.chip, formData.airway.obstructionCause === opt.value && styles.chipSelected, { backgroundColor: formData.airway.obstructionCause === opt.value ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => updateFormData("airway", "obstructionCause", opt.value)}>
+                      <Pressable key={opt.value} style={[styles.chip, formData.airway.obstructionCause === opt.value && styles.chipSelected, { backgroundColor: formData.airway.obstructionCause === opt.value ? (isDark ? '#4A2020' : '#FEE2E2') : theme.card }]} onPress={() => updateFormData("airway", "obstructionCause", opt.value)}>
                         <Text style={[styles.chipText, { color: formData.airway.obstructionCause === opt.value ? TriageColors.red : theme.text }]}>{opt.label}</Text>
                       </Pressable>
                     ))}
@@ -2191,7 +2191,7 @@ export default function CaseSheetScreen() {
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Speech</Text>
                   <View style={styles.chipRow}>
                     {CHIP_OPTIONS.airwaySpeech.map((opt) => (
-                      <Pressable key={opt.value} style={[styles.chip, formData.airway.speech === opt.value && styles.chipSelected, { backgroundColor: formData.airway.speech === opt.value ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => updateFormData("airway", "speech", opt.value)}>
+                      <Pressable key={opt.value} style={[styles.chip, formData.airway.speech === opt.value && styles.chipSelected, { backgroundColor: formData.airway.speech === opt.value ? (isDark ? '#4A2020' : '#FEE2E2') : theme.card }]} onPress={() => updateFormData("airway", "speech", opt.value)}>
                         <Text style={[styles.chipText, { color: formData.airway.speech === opt.value ? TriageColors.red : theme.text }]}>{opt.label}</Text>
                       </Pressable>
                     ))}
@@ -2221,11 +2221,11 @@ export default function CaseSheetScreen() {
 
             <CollapsibleSection title="B - BREATHING" icon="*" iconColor={TriageColors.orange}>
               <View style={styles.normalAbnormalRow}>
-                <Pressable style={[styles.normalBtn, { backgroundColor: abcdeStatus.breathing === "Normal" ? "#E8F5E9" : theme.backgroundSecondary }]} onPress={() => setABCDEStatus((prev) => ({ ...prev, breathing: "Normal" }))}>
+                <Pressable style={[styles.normalBtn, { backgroundColor: abcdeStatus.breathing === "Normal" ? (isDark ? '#1B2D1E' : '#E8F5E9') : theme.backgroundSecondary }]} onPress={() => setABCDEStatus((prev) => ({ ...prev, breathing: "Normal" }))}>
                   <Feather name="check-circle" size={16} color={abcdeStatus.breathing === "Normal" ? TriageColors.green : theme.textMuted} />
                   <Text style={{ color: abcdeStatus.breathing === "Normal" ? TriageColors.green : theme.textMuted, fontWeight: "600" }}>Normal</Text>
                 </Pressable>
-                <Pressable style={[styles.abnormalBtn, { backgroundColor: abcdeStatus.breathing === "Abnormal" ? "#FEE2E2" : theme.backgroundSecondary }]} onPress={() => setABCDEStatus((prev) => ({ ...prev, breathing: "Abnormal" }))}>
+                <Pressable style={[styles.abnormalBtn, { backgroundColor: abcdeStatus.breathing === "Abnormal" ? (isDark ? '#4A2020' : '#FEE2E2') : theme.backgroundSecondary }]} onPress={() => setABCDEStatus((prev) => ({ ...prev, breathing: "Abnormal" }))}>
                   <Feather name="alert-circle" size={16} color={abcdeStatus.breathing === "Abnormal" ? TriageColors.red : theme.textMuted} />
                   <Text style={{ color: abcdeStatus.breathing === "Abnormal" ? TriageColors.red : theme.textMuted, fontWeight: "600" }}>Abnormal</Text>
                 </Pressable>
@@ -2246,11 +2246,11 @@ export default function CaseSheetScreen() {
               )}
 
               {abcdeStatus.breathing === "Abnormal" && (
-                <View style={styles.abnormalSection}>
+                <View style={[styles.abnormalSection, { backgroundColor: isDark ? '#2D1B1B' : '#FFF5F5' }]}>
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Effort</Text>
                   <View style={styles.chipRow}>
                     {CHIP_OPTIONS.breathingEffort.map((opt) => (
-                      <Pressable key={opt.value} style={[styles.chip, formData.breathing.effort === opt.value && styles.chipSelected, { backgroundColor: formData.breathing.effort === opt.value ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => updateFormData("breathing", "effort", opt.value)}>
+                      <Pressable key={opt.value} style={[styles.chip, formData.breathing.effort === opt.value && styles.chipSelected, { backgroundColor: formData.breathing.effort === opt.value ? (isDark ? '#4A2020' : '#FEE2E2') : theme.card }]} onPress={() => updateFormData("breathing", "effort", opt.value)}>
                         <Text style={[styles.chipText, { color: formData.breathing.effort === opt.value ? TriageColors.red : theme.text }]}>{opt.label}</Text>
                       </Pressable>
                     ))}
@@ -2259,7 +2259,7 @@ export default function CaseSheetScreen() {
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>O2 Device</Text>
                   <View style={styles.chipRow}>
                     {CHIP_OPTIONS.breathingO2Device.map((opt) => (
-                      <Pressable key={opt.value} style={[styles.chip, formData.breathing.o2Device === opt.value && styles.chipSelected, { backgroundColor: formData.breathing.o2Device === opt.value ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => updateFormData("breathing", "o2Device", opt.value)}>
+                      <Pressable key={opt.value} style={[styles.chip, formData.breathing.o2Device === opt.value && styles.chipSelected, { backgroundColor: formData.breathing.o2Device === opt.value ? (isDark ? '#4A2020' : '#FEE2E2') : theme.card }]} onPress={() => updateFormData("breathing", "o2Device", opt.value)}>
                         <Text style={[styles.chipText, { color: formData.breathing.o2Device === opt.value ? TriageColors.red : theme.text }]}>{opt.label}</Text>
                       </Pressable>
                     ))}
@@ -2268,7 +2268,7 @@ export default function CaseSheetScreen() {
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Pattern</Text>
                   <View style={styles.chipRow}>
                     {CHIP_OPTIONS.breathingPattern.map((opt) => (
-                      <Pressable key={opt.value} style={[styles.chip, formData.breathing.pattern === opt.value && styles.chipSelected, { backgroundColor: formData.breathing.pattern === opt.value ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => updateFormData("breathing", "pattern", opt.value)}>
+                      <Pressable key={opt.value} style={[styles.chip, formData.breathing.pattern === opt.value && styles.chipSelected, { backgroundColor: formData.breathing.pattern === opt.value ? (isDark ? '#4A2020' : '#FEE2E2') : theme.card }]} onPress={() => updateFormData("breathing", "pattern", opt.value)}>
                         <Text style={[styles.chipText, { color: formData.breathing.pattern === opt.value ? TriageColors.red : theme.text }]}>{opt.label}</Text>
                       </Pressable>
                     ))}
@@ -2277,7 +2277,7 @@ export default function CaseSheetScreen() {
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Chest Expansion</Text>
                   <View style={styles.chipRow}>
                     {CHIP_OPTIONS.breathingChestExpansion.map((opt) => (
-                      <Pressable key={opt.value} style={[styles.chip, formData.breathing.chestExpansion === opt.value && styles.chipSelected, { backgroundColor: formData.breathing.chestExpansion === opt.value ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => updateFormData("breathing", "chestExpansion", opt.value)}>
+                      <Pressable key={opt.value} style={[styles.chip, formData.breathing.chestExpansion === opt.value && styles.chipSelected, { backgroundColor: formData.breathing.chestExpansion === opt.value ? (isDark ? '#4A2020' : '#FEE2E2') : theme.card }]} onPress={() => updateFormData("breathing", "chestExpansion", opt.value)}>
                         <Text style={[styles.chipText, { color: formData.breathing.chestExpansion === opt.value ? TriageColors.red : theme.text }]}>{opt.label}</Text>
                       </Pressable>
                     ))}
@@ -2286,7 +2286,7 @@ export default function CaseSheetScreen() {
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Air Entry</Text>
                   <View style={styles.chipRow}>
                     {CHIP_OPTIONS.breathingAirEntry.map((opt) => (
-                      <Pressable key={opt.value} style={[styles.chip, formData.breathing.airEntry === opt.value && styles.chipSelected, { backgroundColor: formData.breathing.airEntry === opt.value ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => updateFormData("breathing", "airEntry", opt.value)}>
+                      <Pressable key={opt.value} style={[styles.chip, formData.breathing.airEntry === opt.value && styles.chipSelected, { backgroundColor: formData.breathing.airEntry === opt.value ? (isDark ? '#4A2020' : '#FEE2E2') : theme.card }]} onPress={() => updateFormData("breathing", "airEntry", opt.value)}>
                         <Text style={[styles.chipText, { color: formData.breathing.airEntry === opt.value ? TriageColors.red : theme.text }]}>{opt.label}</Text>
                       </Pressable>
                     ))}
@@ -2295,7 +2295,7 @@ export default function CaseSheetScreen() {
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Added Sounds</Text>
                   <View style={styles.chipRow}>
                     {CHIP_OPTIONS.breathingAddedSounds.map((opt) => (
-                      <Pressable key={opt.value} style={[styles.chip, formData.breathing.addedSounds === opt.value && styles.chipSelected, { backgroundColor: formData.breathing.addedSounds === opt.value ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => updateFormData("breathing", "addedSounds", opt.value)}>
+                      <Pressable key={opt.value} style={[styles.chip, formData.breathing.addedSounds === opt.value && styles.chipSelected, { backgroundColor: formData.breathing.addedSounds === opt.value ? (isDark ? '#4A2020' : '#FEE2E2') : theme.card }]} onPress={() => updateFormData("breathing", "addedSounds", opt.value)}>
                         <Text style={[styles.chipText, { color: formData.breathing.addedSounds === opt.value ? TriageColors.red : theme.text }]}>{opt.label}</Text>
                       </Pressable>
                     ))}
@@ -2325,11 +2325,11 @@ export default function CaseSheetScreen() {
 
             <CollapsibleSection title="C - CIRCULATION" icon="*" iconColor={TriageColors.yellow}>
               <View style={styles.normalAbnormalRow}>
-                <Pressable style={[styles.normalBtn, { backgroundColor: abcdeStatus.circulation === "Normal" ? "#E8F5E9" : theme.backgroundSecondary }]} onPress={() => setABCDEStatus((prev) => ({ ...prev, circulation: "Normal" }))}>
+                <Pressable style={[styles.normalBtn, { backgroundColor: abcdeStatus.circulation === "Normal" ? (isDark ? '#1B2D1E' : '#E8F5E9') : theme.backgroundSecondary }]} onPress={() => setABCDEStatus((prev) => ({ ...prev, circulation: "Normal" }))}>
                   <Feather name="check-circle" size={16} color={abcdeStatus.circulation === "Normal" ? TriageColors.green : theme.textMuted} />
                   <Text style={{ color: abcdeStatus.circulation === "Normal" ? TriageColors.green : theme.textMuted, fontWeight: "600" }}>Normal</Text>
                 </Pressable>
-                <Pressable style={[styles.abnormalBtn, { backgroundColor: abcdeStatus.circulation === "Abnormal" ? "#FEE2E2" : theme.backgroundSecondary }]} onPress={() => setABCDEStatus((prev) => ({ ...prev, circulation: "Abnormal" }))}>
+                <Pressable style={[styles.abnormalBtn, { backgroundColor: abcdeStatus.circulation === "Abnormal" ? (isDark ? '#4A2020' : '#FEE2E2') : theme.backgroundSecondary }]} onPress={() => setABCDEStatus((prev) => ({ ...prev, circulation: "Abnormal" }))}>
                   <Feather name="alert-circle" size={16} color={abcdeStatus.circulation === "Abnormal" ? TriageColors.red : theme.textMuted} />
                   <Text style={{ color: abcdeStatus.circulation === "Abnormal" ? TriageColors.red : theme.textMuted, fontWeight: "600" }}>Abnormal</Text>
                 </Pressable>
@@ -2353,11 +2353,11 @@ export default function CaseSheetScreen() {
               )}
 
               {abcdeStatus.circulation === "Abnormal" && (
-                <View style={styles.abnormalSection}>
+                <View style={[styles.abnormalSection, { backgroundColor: isDark ? '#2D1B1B' : '#FFF5F5' }]}>
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Rhythm</Text>
                   <View style={styles.chipRow}>
                     {CHIP_OPTIONS.circulationRhythm.map((opt) => (
-                      <Pressable key={opt.value} style={[styles.chip, formData.circulation.pulseQuality === opt.value && styles.chipSelected, { backgroundColor: formData.circulation.pulseQuality === opt.value ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => updateFormData("circulation", "pulseQuality", opt.value)}>
+                      <Pressable key={opt.value} style={[styles.chip, formData.circulation.pulseQuality === opt.value && styles.chipSelected, { backgroundColor: formData.circulation.pulseQuality === opt.value ? (isDark ? '#4A2020' : '#FEE2E2') : theme.card }]} onPress={() => updateFormData("circulation", "pulseQuality", opt.value)}>
                         <Text style={[styles.chipText, { color: formData.circulation.pulseQuality === opt.value ? TriageColors.red : theme.text }]}>{opt.label}</Text>
                       </Pressable>
                     ))}
@@ -2366,7 +2366,7 @@ export default function CaseSheetScreen() {
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>CRT</Text>
                   <View style={styles.chipRow}>
                     {CHIP_OPTIONS.circulationCRT.map((opt) => (
-                      <Pressable key={opt.value} style={[styles.chip, formData.circulation.capillaryRefill === opt.value && styles.chipSelected, { backgroundColor: formData.circulation.capillaryRefill === opt.value ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => updateFormData("circulation", "capillaryRefill", opt.value)}>
+                      <Pressable key={opt.value} style={[styles.chip, formData.circulation.capillaryRefill === opt.value && styles.chipSelected, { backgroundColor: formData.circulation.capillaryRefill === opt.value ? (isDark ? '#4A2020' : '#FEE2E2') : theme.card }]} onPress={() => updateFormData("circulation", "capillaryRefill", opt.value)}>
                         <Text style={[styles.chipText, { color: formData.circulation.capillaryRefill === opt.value ? TriageColors.red : theme.text }]}>{opt.label}</Text>
                       </Pressable>
                     ))}
@@ -2375,7 +2375,7 @@ export default function CaseSheetScreen() {
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Skin</Text>
                   <View style={styles.chipRow}>
                     {CHIP_OPTIONS.circulationSkin.map((opt) => (
-                      <Pressable key={opt.value} style={[styles.chip, formData.circulation.skinTemperature === opt.value && styles.chipSelected, { backgroundColor: formData.circulation.skinTemperature === opt.value ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => updateFormData("circulation", "skinTemperature", opt.value)}>
+                      <Pressable key={opt.value} style={[styles.chip, formData.circulation.skinTemperature === opt.value && styles.chipSelected, { backgroundColor: formData.circulation.skinTemperature === opt.value ? (isDark ? '#4A2020' : '#FEE2E2') : theme.card }]} onPress={() => updateFormData("circulation", "skinTemperature", opt.value)}>
                         <Text style={[styles.chipText, { color: formData.circulation.skinTemperature === opt.value ? TriageColors.red : theme.text }]}>{opt.label}</Text>
                       </Pressable>
                     ))}
@@ -2384,7 +2384,7 @@ export default function CaseSheetScreen() {
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Skin Color</Text>
                   <View style={styles.chipRow}>
                     {CHIP_OPTIONS.circulationSkinColor.map((opt) => (
-                      <Pressable key={opt.value} style={[styles.chip, formData.circulation.skinColor === opt.value && styles.chipSelected, { backgroundColor: formData.circulation.skinColor === opt.value ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => updateFormData("circulation", "skinColor", opt.value)}>
+                      <Pressable key={opt.value} style={[styles.chip, formData.circulation.skinColor === opt.value && styles.chipSelected, { backgroundColor: formData.circulation.skinColor === opt.value ? (isDark ? '#4A2020' : '#FEE2E2') : theme.card }]} onPress={() => updateFormData("circulation", "skinColor", opt.value)}>
                         <Text style={[styles.chipText, { color: formData.circulation.skinColor === opt.value ? TriageColors.red : theme.text }]}>{opt.label}</Text>
                       </Pressable>
                     ))}
@@ -2393,7 +2393,7 @@ export default function CaseSheetScreen() {
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>IV Access</Text>
                   <View style={styles.chipRow}>
                     {CHIP_OPTIONS.circulationIVAccess.map((opt) => (
-                      <Pressable key={opt.value} style={[styles.chip, formData.circulation.ivAccess === opt.value && styles.chipSelected, { backgroundColor: formData.circulation.ivAccess === opt.value ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => updateFormData("circulation", "ivAccess", opt.value)}>
+                      <Pressable key={opt.value} style={[styles.chip, formData.circulation.ivAccess === opt.value && styles.chipSelected, { backgroundColor: formData.circulation.ivAccess === opt.value ? (isDark ? '#4A2020' : '#FEE2E2') : theme.card }]} onPress={() => updateFormData("circulation", "ivAccess", opt.value)}>
                         <Text style={[styles.chipText, { color: formData.circulation.ivAccess === opt.value ? TriageColors.red : theme.text }]}>{opt.label}</Text>
                       </Pressable>
                     ))}
@@ -2423,11 +2423,11 @@ export default function CaseSheetScreen() {
 
             <CollapsibleSection title="D - DISABILITY (Neuro)" icon="?" iconColor={TriageColors.green}>
               <View style={styles.normalAbnormalRow}>
-                <Pressable style={[styles.normalBtn, { backgroundColor: abcdeStatus.disability === "Normal" ? "#E8F5E9" : theme.backgroundSecondary }]} onPress={() => setABCDEStatus((prev) => ({ ...prev, disability: "Normal" }))}>
+                <Pressable style={[styles.normalBtn, { backgroundColor: abcdeStatus.disability === "Normal" ? (isDark ? '#1B2D1E' : '#E8F5E9') : theme.backgroundSecondary }]} onPress={() => setABCDEStatus((prev) => ({ ...prev, disability: "Normal" }))}>
                   <Feather name="check-circle" size={16} color={abcdeStatus.disability === "Normal" ? TriageColors.green : theme.textMuted} />
                   <Text style={{ color: abcdeStatus.disability === "Normal" ? TriageColors.green : theme.textMuted, fontWeight: "600" }}>Normal</Text>
                 </Pressable>
-                <Pressable style={[styles.abnormalBtn, { backgroundColor: abcdeStatus.disability === "Abnormal" ? "#FEE2E2" : theme.backgroundSecondary }]} onPress={() => setABCDEStatus((prev) => ({ ...prev, disability: "Abnormal" }))}>
+                <Pressable style={[styles.abnormalBtn, { backgroundColor: abcdeStatus.disability === "Abnormal" ? (isDark ? '#4A2020' : '#FEE2E2') : theme.backgroundSecondary }]} onPress={() => setABCDEStatus((prev) => ({ ...prev, disability: "Abnormal" }))}>
                   <Feather name="alert-circle" size={16} color={abcdeStatus.disability === "Abnormal" ? TriageColors.red : theme.textMuted} />
                   <Text style={{ color: abcdeStatus.disability === "Abnormal" ? TriageColors.red : theme.textMuted, fontWeight: "600" }}>Abnormal</Text>
                 </Pressable>
@@ -2441,7 +2441,7 @@ export default function CaseSheetScreen() {
               </View>
 
               {abcdeStatus.disability === "Normal" && (
-                <View style={[styles.normalDescriptionBox, { backgroundColor: "#E8F5E9", borderColor: TriageColors.green }]}>
+                <View style={[styles.normalDescriptionBox, { backgroundColor: isDark ? '#1B2D1E' : '#E8F5E9', borderColor: TriageColors.green }]}>
                   <Text style={[styles.normalDescriptionText, { color: TriageColors.green }]}>
                     GCS 15/15, AVPU: Alert, pupils equal and reactive, no focal neurological deficits, euglycemic
                   </Text>
@@ -2449,11 +2449,11 @@ export default function CaseSheetScreen() {
               )}
 
               {abcdeStatus.disability === "Abnormal" && (
-                <View style={styles.abnormalSection}>
+                <View style={[styles.abnormalSection, { backgroundColor: isDark ? '#2D1B1B' : '#FFF5F5' }]}>
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>AVPU</Text>
                   <View style={styles.chipRow}>
                     {CHIP_OPTIONS.disabilityAVPU.map((opt) => (
-                      <Pressable key={opt.value} style={[styles.chip, formData.disability.motorResponse === opt.value && styles.chipSelected, { backgroundColor: formData.disability.motorResponse === opt.value ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => updateFormData("disability", "motorResponse", opt.value)}>
+                      <Pressable key={opt.value} style={[styles.chip, formData.disability.motorResponse === opt.value && styles.chipSelected, { backgroundColor: formData.disability.motorResponse === opt.value ? (isDark ? '#4A2020' : '#FEE2E2') : theme.card }]} onPress={() => updateFormData("disability", "motorResponse", opt.value)}>
                         <Text style={[styles.chipText, { color: formData.disability.motorResponse === opt.value ? TriageColors.red : theme.text }]}>{opt.label}</Text>
                       </Pressable>
                     ))}
@@ -2462,7 +2462,7 @@ export default function CaseSheetScreen() {
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Pupils Size</Text>
                   <View style={styles.chipRow}>
                     {CHIP_OPTIONS.disabilityPupilSize.map((opt) => (
-                      <Pressable key={opt.value} style={[styles.chip, formData.disability.pupilSize === opt.value && styles.chipSelected, { backgroundColor: formData.disability.pupilSize === opt.value ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => updateFormData("disability", "pupilSize", opt.value)}>
+                      <Pressable key={opt.value} style={[styles.chip, formData.disability.pupilSize === opt.value && styles.chipSelected, { backgroundColor: formData.disability.pupilSize === opt.value ? (isDark ? '#4A2020' : '#FEE2E2') : theme.card }]} onPress={() => updateFormData("disability", "pupilSize", opt.value)}>
                         <Text style={[styles.chipText, { color: formData.disability.pupilSize === opt.value ? TriageColors.red : theme.text }]}>{opt.label}</Text>
                       </Pressable>
                     ))}
@@ -2471,7 +2471,7 @@ export default function CaseSheetScreen() {
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Pupils Reaction</Text>
                   <View style={styles.chipRow}>
                     {CHIP_OPTIONS.disabilityPupilReaction.map((opt) => (
-                      <Pressable key={opt.value} style={[styles.chip, formData.disability.pupilReaction === opt.value && styles.chipSelected, { backgroundColor: formData.disability.pupilReaction === opt.value ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => updateFormData("disability", "pupilReaction", opt.value)}>
+                      <Pressable key={opt.value} style={[styles.chip, formData.disability.pupilReaction === opt.value && styles.chipSelected, { backgroundColor: formData.disability.pupilReaction === opt.value ? (isDark ? '#4A2020' : '#FEE2E2') : theme.card }]} onPress={() => updateFormData("disability", "pupilReaction", opt.value)}>
                         <Text style={[styles.chipText, { color: formData.disability.pupilReaction === opt.value ? TriageColors.red : theme.text }]}>{opt.label}</Text>
                       </Pressable>
                     ))}
@@ -2480,7 +2480,7 @@ export default function CaseSheetScreen() {
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Lateralizing</Text>
                   <View style={styles.chipRow}>
                     {CHIP_OPTIONS.disabilityLateralizing.map((opt) => (
-                      <Pressable key={opt.value} style={[styles.chip, (formData.disability.interventions || []).includes(opt.value) && styles.chipSelected, { backgroundColor: (formData.disability.interventions || []).includes(opt.value) ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => {
+                      <Pressable key={opt.value} style={[styles.chip, (formData.disability.interventions || []).includes(opt.value) && styles.chipSelected, { backgroundColor: (formData.disability.interventions || []).includes(opt.value) ? (isDark ? '#4A2020' : '#FEE2E2') : theme.card }]} onPress={() => {
                         const current = formData.disability.interventions || [];
                         updateFormData("disability", "interventions", current.includes(opt.value) ? current.filter((i: string) => i !== opt.value) : [...current, opt.value]);
                       }}>
@@ -2511,11 +2511,11 @@ export default function CaseSheetScreen() {
 
             <CollapsibleSection title="E - EXPOSURE" icon="*" iconColor={TriageColors.blue}>
               <View style={styles.normalAbnormalRow}>
-                <Pressable style={[styles.normalBtn, { backgroundColor: abcdeStatus.exposure === "Normal" ? "#E8F5E9" : theme.backgroundSecondary }]} onPress={() => setABCDEStatus((prev) => ({ ...prev, exposure: "Normal" }))}>
+                <Pressable style={[styles.normalBtn, { backgroundColor: abcdeStatus.exposure === "Normal" ? (isDark ? '#1B2D1E' : '#E8F5E9') : theme.backgroundSecondary }]} onPress={() => setABCDEStatus((prev) => ({ ...prev, exposure: "Normal" }))}>
                   <Feather name="check-circle" size={16} color={abcdeStatus.exposure === "Normal" ? TriageColors.green : theme.textMuted} />
                   <Text style={{ color: abcdeStatus.exposure === "Normal" ? TriageColors.green : theme.textMuted, fontWeight: "600" }}>Normal</Text>
                 </Pressable>
-                <Pressable style={[styles.abnormalBtn, { backgroundColor: abcdeStatus.exposure === "Abnormal" ? "#FEE2E2" : theme.backgroundSecondary }]} onPress={() => setABCDEStatus((prev) => ({ ...prev, exposure: "Abnormal" }))}>
+                <Pressable style={[styles.abnormalBtn, { backgroundColor: abcdeStatus.exposure === "Abnormal" ? (isDark ? '#4A2020' : '#FEE2E2') : theme.backgroundSecondary }]} onPress={() => setABCDEStatus((prev) => ({ ...prev, exposure: "Abnormal" }))}>
                   <Feather name="alert-circle" size={16} color={abcdeStatus.exposure === "Abnormal" ? TriageColors.red : theme.textMuted} />
                   <Text style={{ color: abcdeStatus.exposure === "Abnormal" ? TriageColors.red : theme.textMuted, fontWeight: "600" }}>Abnormal</Text>
                 </Pressable>
@@ -2535,11 +2535,11 @@ export default function CaseSheetScreen() {
               )}
 
               {abcdeStatus.exposure === "Abnormal" && (
-                <View style={styles.abnormalSection}>
+                <View style={[styles.abnormalSection, { backgroundColor: isDark ? '#2D1B1B' : '#FFF5F5' }]}>
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Findings</Text>
                   <View style={styles.chipRow}>
                     {CHIP_OPTIONS.exposureFindings.map((opt) => (
-                      <Pressable key={opt.value} style={[styles.chip, (formData.exposure.findings || []).includes(opt.value) && styles.chipSelected, { backgroundColor: (formData.exposure.findings || []).includes(opt.value) ? "#FEE2E2" : "#FFFFFF" }]} onPress={() => {
+                      <Pressable key={opt.value} style={[styles.chip, (formData.exposure.findings || []).includes(opt.value) && styles.chipSelected, { backgroundColor: (formData.exposure.findings || []).includes(opt.value) ? (isDark ? '#4A2020' : '#FEE2E2') : theme.card }]} onPress={() => {
                         const current = formData.exposure.findings || [];
                         updateFormData("exposure", "findings", current.includes(opt.value) ? current.filter((i: string) => i !== opt.value) : [...current, opt.value]);
                       }}>
@@ -2875,7 +2875,7 @@ export default function CaseSheetScreen() {
 
         {activeTab === "exam" && (
           <>
-            <Pressable style={[styles.markNormalBtn, { backgroundColor: "#E8F5E9" }]} onPress={markAllExamNormal}>
+            <Pressable style={[styles.markNormalBtn, { backgroundColor: isDark ? '#1B2D1E' : '#E8F5E9' }]} onPress={markAllExamNormal}>
               <Feather name="check-circle" size={20} color={TriageColors.green} />
               <Text style={[styles.markNormalBtnText, { color: TriageColors.green }]}>Mark All Examination Normal</Text>
             </Pressable>
@@ -3537,12 +3537,12 @@ const styles = StyleSheet.create({
   normalAbnormalRow: { flexDirection: "row", marginBottom: Spacing.lg },
   normalBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: Spacing.md, borderRadius: BorderRadius.md, gap: Spacing.xs, marginRight: Spacing.sm },
   abnormalBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: Spacing.md, borderRadius: BorderRadius.md, gap: Spacing.xs },
-  abnormalSection: { backgroundColor: "#FFF5F5", padding: Spacing.md, borderRadius: BorderRadius.md, borderLeftWidth: 3, borderLeftColor: "#EF4444" },
+  abnormalSection: { padding: Spacing.md, borderRadius: BorderRadius.md, borderLeftWidth: 3, borderLeftColor: "#EF4444" },
   normalDescriptionBox: { padding: Spacing.md, borderRadius: BorderRadius.md, borderLeftWidth: 3, marginTop: Spacing.sm, marginBottom: Spacing.sm },
   normalDescriptionText: { ...Typography.body, fontSize: 13, fontStyle: "italic", lineHeight: 20 },
   abnormalSectionLabel: { ...Typography.bodyMedium, fontWeight: "600", marginBottom: Spacing.sm },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm, marginBottom: Spacing.md },
-  chip: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.full, borderWidth: 1, borderColor: "#E5E7EB" },
+  chip: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.full, borderWidth: 1, borderColor: "#9CA3AF" },
   chipSelected: { borderColor: "#EF4444" },
   chipText: { fontSize: 13 },
   interventionRow: { flexDirection: "row", alignItems: "center", paddingVertical: Spacing.sm, gap: Spacing.md },
@@ -3561,7 +3561,7 @@ const styles = StyleSheet.create({
   frequencyPicker: { height: 40, justifyContent: "center" },
   frequencyModalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", padding: Spacing.lg },
   frequencyModalContent: { width: "90%", maxHeight: "70%", borderRadius: BorderRadius.lg, overflow: "hidden" },
-  frequencyModalTitle: { ...Typography.h4, padding: Spacing.lg, borderBottomWidth: 1, borderBottomColor: "#E5E7EB" },
+  frequencyModalTitle: { ...Typography.h4, padding: Spacing.lg, borderBottomWidth: 1, borderBottomColor: "#9CA3AF" },
   frequencyOption: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: Spacing.md, paddingHorizontal: Spacing.lg },
   frequencyOptionText: { ...Typography.body },
 });

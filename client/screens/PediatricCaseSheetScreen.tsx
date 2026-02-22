@@ -285,7 +285,7 @@ const TRAUMA_ILLNESS_SIGNS = ["Rashes", "Petechiae", "Ecchymosis", "Bruises", "B
 export default function PediatricCaseSheetScreen() {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<PediatricCaseSheetRouteProp>();
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
 
@@ -2249,8 +2249,8 @@ export default function PediatricCaseSheetScreen() {
             {(() => {
               const { weight, isEstimate } = getPatientWeight();
               return (
-                <View style={{ backgroundColor: isEstimate ? "#FEF3C7" : "#DCFCE7", padding: Spacing.sm, borderRadius: 8, marginBottom: Spacing.md }}>
-                  <Text style={{ color: isEstimate ? "#92400E" : "#166534", fontSize: 13, fontWeight: "600" }}>
+                <View style={{ backgroundColor: isEstimate ? (isDark ? '#4A3520' : '#FEF3C7') : (isDark ? '#1B2D1E' : '#DCFCE7'), padding: Spacing.sm, borderRadius: 8, marginBottom: Spacing.md }}>
+                  <Text style={{ color: isEstimate ? (isDark ? '#FBBF24' : '#92400E') : (isDark ? '#6EE7B7' : '#166534'), fontSize: 13, fontWeight: "600" }}>
                     {isEstimate ? `Using estimated weight: ${weight}kg (enter actual weight in Patient tab)` : `Using weight: ${weight}kg`}
                   </Text>
                 </View>
