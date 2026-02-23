@@ -15,6 +15,9 @@ export interface SimAction {
   isRedFlag?: boolean;
   isCritical?: boolean;
   timeToResult?: number;
+  isUnnecessary?: boolean;
+  timeCost?: number;
+  harmIfDone?: string;
 }
 
 export interface StabilizeAction {
@@ -24,6 +27,9 @@ export interface StabilizeAction {
   isCritical?: boolean;
   vitalChanges?: Partial<Vitals>;
   preventsDeterioration?: boolean;
+  isUnnecessary?: boolean;
+  timeCost?: number;
+  harmIfDone?: string;
 }
 
 export interface DeteriorationRule {
@@ -104,6 +110,9 @@ export const simulationCases: SimulationCase[] = [
       { id: "i4", label: "BMP/Electrolytes", finding: "Na 139, K 4.2, Cr 1.1, Glucose 210 mg/dL. Elevated glucose.", timeToResult: 20 },
       { id: "i5", label: "Chest X-ray", finding: "Mild pulmonary congestion. No pneumothorax. Normal cardiac silhouette.", timeToResult: 10 },
       { id: "i6", label: "Coagulation profile", finding: "PT/INR: 1.0, aPTT: 28 seconds. Normal.", timeToResult: 25 },
+      { id: "i7", label: "Serum Lipase", finding: "Lipase: 32 U/L (Normal). No pancreatic pathology.", timeToResult: 20, isUnnecessary: true, timeCost: 20 },
+      { id: "i8", label: "CT Abdomen", finding: "Normal abdominal organs. No acute pathology. UNNECESSARY - delayed cardiac care.", timeToResult: 25, isUnnecessary: true, timeCost: 40 },
+      { id: "i9", label: "Urine Drug Screen", finding: "Negative. Not clinically indicated in clear STEMI presentation.", timeToResult: 15, isUnnecessary: true, timeCost: 15 },
     ],
     stabilize: [
       { id: "s1", label: "IV Access & Monitoring", effect: "Two large bore IV cannulae placed. Continuous cardiac monitoring initiated.", isCritical: true },
@@ -115,6 +124,8 @@ export const simulationCases: SimulationCase[] = [
       { id: "s7", label: "Activate Cath Lab", effect: "Cath lab team activated for primary PCI. ETA 30 minutes. Door-to-balloon target <90min.", isCritical: true, preventsDeterioration: true },
       { id: "s8", label: "Oxygen via nasal cannula", effect: "O2 2L/min via NC. SpO2 improved to 99%.", vitalChanges: { spo2: 99 } },
       { id: "s9", label: "Atorvastatin 80mg", effect: "High-intensity statin initiated." },
+      { id: "s10", label: "IV Metoprolol 5mg push", effect: "Beta-blocker given. CAUTION: In acute STEMI with heart failure signs, IV beta-blockers can cause cardiogenic shock. Assess carefully.", isUnnecessary: true, harmIfDone: "IV beta-blocker in acute STEMI with pulmonary crackles risks cardiogenic shock. Oral beta-blockers are safer when patient is stable.", vitalChanges: { hr: 70, sbp: 100, dbp: 60 } },
+      { id: "s11", label: "IV Furosemide 40mg", effect: "Diuretic given. May worsen hypotension in acute MI if not clearly fluid overloaded.", isUnnecessary: true, harmIfDone: "Premature diuresis in acute MI can cause hypotension and reduce preload needed for cardiac output." },
     ],
     differentials: [
       { id: "d1", label: "Acute ST-elevation MI (Inferior STEMI)", isCorrect: true },
@@ -182,6 +193,8 @@ export const simulationCases: SimulationCase[] = [
       { id: "i4", label: "ABG", finding: "pH 7.28, pCO2 52, pO2 55, HCO3 22, BE -4. Respiratory acidosis with hypoxemia.", isRedFlag: true, timeToResult: 10 },
       { id: "i5", label: "Right forearm X-ray", finding: "Displaced fracture of distal radius and ulna.", timeToResult: 10 },
       { id: "i6", label: "Type & Crossmatch", finding: "Blood type A+. 2 units crossmatched.", timeToResult: 30 },
+      { id: "i7", label: "CT Chest (full)", finding: "Confirms large right pneumothorax. BUT THIS TOOK 25 MINUTES - tension pneumothorax is a CLINICAL diagnosis. You should have decompressed BEFORE imaging!", timeToResult: 25, isUnnecessary: true, timeCost: 45, harmIfDone: "Sending an unstable patient with tension pneumothorax for CT scan is dangerous. This is a clinical diagnosis - needle decompression should not wait for imaging." },
+      { id: "i8", label: "Serum Amylase", finding: "Amylase: 85 U/L. Normal. Not relevant to thoracic trauma management.", timeToResult: 20, isUnnecessary: true, timeCost: 15 },
     ],
     stabilize: [
       { id: "s1", label: "High-flow O2 (15L NRB mask)", effect: "Non-rebreather mask applied at 15L/min. SpO2 minimally improved to 90%.", isCritical: true, vitalChanges: { spo2: 90 } },
@@ -192,6 +205,8 @@ export const simulationCases: SimulationCase[] = [
       { id: "s6", label: "Splint right forearm", effect: "Right forearm splinted in position of comfort. Neurovascular status intact distally." },
       { id: "s7", label: "Tetanus prophylaxis", effect: "Td vaccine administered IM." },
       { id: "s8", label: "C-spine immobilization maintained", effect: "Cervical collar maintained. NEXUS criteria not yet cleared." },
+      { id: "s9", label: "Pericardiocentesis", effect: "No pericardial effusion found. This was NOT indicated - JVD here is from tension pneumothorax, not tamponade.", isUnnecessary: true, harmIfDone: "Pericardiocentesis on a patient without tamponade is an invasive procedure with risk of cardiac injury. JVD in this case is from obstructive shock due to tension pneumothorax." },
+      { id: "s10", label: "Start IV Antibiotics prophylactic", effect: "Antibiotics given. Not indicated at this stage - focus should be on life-saving decompression first.", isUnnecessary: true, timeCost: 10 },
     ],
     differentials: [
       { id: "d1", label: "Tension Pneumothorax", isCorrect: true },
@@ -262,6 +277,8 @@ export const simulationCases: SimulationCase[] = [
       { id: "i6", label: "ABG", finding: "pH 7.31, pCO2 28, pO2 72, HCO3 16, Lactate 4.6. Metabolic acidosis with respiratory compensation.", timeToResult: 10 },
       { id: "i7", label: "Procalcitonin", finding: "Procalcitonin: 12.5 ng/mL (Normal <0.5). Strongly suggestive of bacterial infection.", timeToResult: 20 },
       { id: "i8", label: "Chest X-ray", finding: "Clear lung fields. No consolidation or pleural effusion.", timeToResult: 10 },
+      { id: "i9", label: "CT Brain", finding: "Normal CT brain. No acute intracranial pathology. Confusion is from septic encephalopathy, not structural brain disease.", timeToResult: 30, isUnnecessary: true, timeCost: 45, harmIfDone: "Sending a septic, hemodynamically unstable patient for CT brain delays antibiotics and fluid resuscitation. The confusion has a clear infective cause (urosepsis)." },
+      { id: "i10", label: "Thyroid Function Tests", finding: "TSH 2.1, T3/T4 normal. Not clinically relevant in acute sepsis management.", timeToResult: 30, isUnnecessary: true, timeCost: 15 },
     ],
     stabilize: [
       { id: "s1", label: "IV Access & aggressive fluids (30mL/kg)", effect: "Two large bore IVs placed. 1.8L NS bolus running over 30 minutes. SSC Hour-1 bundle initiated.", isCritical: true, vitalChanges: { sbp: 95, dbp: 58, hr: 110 } },
@@ -273,6 +290,8 @@ export const simulationCases: SimulationCase[] = [
       { id: "s7", label: "Start vasopressor (Norepinephrine)", effect: "MAP still <65 despite 30mL/kg fluids. Norepinephrine started at 0.1mcg/kg/min via central line.", isCritical: true, vitalChanges: { sbp: 105, dbp: 65 } },
       { id: "s8", label: "Insulin sliding scale", effect: "Regular insulin 6U IV push for glucose 320. Sliding scale initiated." },
       { id: "s9", label: "Serial lactate monitoring", effect: "Repeat lactate ordered for 2 hours. Goal: >10% reduction per SSC guidelines." },
+      { id: "s10", label: "IV Co-trimoxazole (Bactrim)", effect: "WRONG ANTIBIOTIC - Patient is ALLERGIC to sulfonamides! Co-trimoxazole contains sulfamethoxazole. Risk of severe allergic reaction.", isUnnecessary: true, harmIfDone: "Co-trimoxazole given to a patient with DOCUMENTED SULFONAMIDE ALLERGY. This is a critical medication safety error that could cause anaphylaxis or Stevens-Johnson syndrome.", vitalChanges: { hr: 140, sbp: 70 } },
+      { id: "s11", label: "Lumbar puncture", effect: "LP performed. CSF normal. HOWEVER, performing LP on a hemodynamically unstable septic patient delays resuscitation and is not indicated without meningeal signs.", isUnnecessary: true, timeCost: 30, harmIfDone: "LP on a hemodynamically unstable patient without clear meningeal signs delays critical sepsis management. Stabilize first." },
     ],
     differentials: [
       { id: "d1", label: "Urosepsis / Septic Shock", isCorrect: true },
@@ -337,6 +356,8 @@ export const simulationCases: SimulationCase[] = [
       { id: "i2", label: "ABG", finding: "pH 7.35, pCO2 32, pO2 65, HCO3 22. Hypoxemia with mild respiratory alkalosis.", timeToResult: 10 },
       { id: "i3", label: "CBC", finding: "WBC 8.5, Hb 13.2, Platelets 280. Normal.", timeToResult: 20 },
       { id: "i4", label: "ECG", finding: "Sinus tachycardia at 130/min. No ST changes. No arrhythmia.", timeToResult: 5 },
+      { id: "i5", label: "CT Chest", finding: "Airway edema visible. No other pathology. UNNECESSARY - anaphylaxis is a clinical emergency, not a radiology diagnosis.", timeToResult: 25, isUnnecessary: true, timeCost: 40, harmIfDone: "Sending an anaphylaxis patient with airway compromise for CT scan wastes critical time. This patient needs epinephrine, not imaging." },
+      { id: "i6", label: "Skin prick allergy test", finding: "Cannot be performed during acute anaphylaxis. This is an outpatient investigation for AFTER recovery.", timeToResult: 20, isUnnecessary: true, timeCost: 20 },
     ],
     stabilize: [
       { id: "s1", label: "IM Epinephrine 0.5mg (1:1000) - thigh", effect: "Epinephrine 0.5mg administered IM into anterolateral thigh. THE MOST CRITICAL INTERVENTION. Effects within 5 minutes.", isCritical: true, preventsDeterioration: true, vitalChanges: { hr: 110, sbp: 100, dbp: 60, spo2: 94, rr: 24 } },
@@ -348,6 +369,8 @@ export const simulationCases: SimulationCase[] = [
       { id: "s7", label: "Nebulized Salbutamol", effect: "Salbutamol 5mg nebulized for persistent bronchospasm. Wheeze improving.", vitalChanges: { rr: 20 } },
       { id: "s8", label: "Prepare for intubation (standby)", effect: "Intubation tray, RSI drugs, and bougie kept ready. ENT standby for surgical airway." },
       { id: "s9", label: "Ranitidine 50mg IV (H2 blocker)", effect: "H2 blocker given as adjunct. Combined H1+H2 blockade." },
+      { id: "s10", label: "IV Diphenhydramine ONLY (skip epinephrine)", effect: "Antihistamine given. BUT epinephrine is the life-saving treatment, NOT antihistamines. Antihistamines alone do NOT treat anaphylaxis.", isUnnecessary: true, harmIfDone: "Relying on antihistamines instead of epinephrine for anaphylaxis is a potentially fatal error. Antihistamines do NOT reverse bronchospasm or hypotension." },
+      { id: "s11", label: "IV Epinephrine 1mg (1:10,000) push", effect: "IV Epinephrine given as push dose. DANGEROUS: IV route at this dose risks fatal arrhythmia. IM route is standard first-line.", isUnnecessary: true, harmIfDone: "IV Epinephrine push in a patient with pulse can cause fatal tachyarrhythmia. The correct first-line route is IM 0.5mg (1:1000) into the thigh.", vitalChanges: { hr: 180, sbp: 200 } },
     ],
     differentials: [
       { id: "d1", label: "Anaphylaxis (food-triggered)", isCorrect: true },
@@ -415,6 +438,8 @@ export const simulationCases: SimulationCase[] = [
       { id: "i6", label: "ECG", finding: "Sinus tachycardia. Peaked T waves (hyperkalemia). No ST changes.", isRedFlag: true, timeToResult: 5 },
       { id: "i7", label: "Urinalysis", finding: "Glucose 4+, Ketones 4+, pH 5.0. No evidence of UTI.", timeToResult: 10 },
       { id: "i8", label: "Phosphate & Magnesium", finding: "Phosphate: 1.2 (low-normal, will drop with insulin). Magnesium: 1.6 (low-normal).", timeToResult: 20 },
+      { id: "i9", label: "CT Abdomen", finding: "No acute surgical pathology. Abdominal pain is from DKA (pseudo-surgical abdomen), not a surgical cause.", timeToResult: 25, isUnnecessary: true, timeCost: 40, harmIfDone: "CT abdomen for DKA-related abdominal pain delays insulin and fluid therapy. DKA commonly causes pseudo-surgical abdomen that resolves with treatment." },
+      { id: "i10", label: "Serum Amylase/Lipase", finding: "Amylase mildly elevated (likely from DKA, not pancreatitis). Lipase normal.", timeToResult: 20, isUnnecessary: true, timeCost: 15 },
     ],
     stabilize: [
       { id: "s1", label: "IV Access & NS bolus 1L/hr", effect: "Large bore IV placed. 0.9% NS infusion at 1L/hr for first 2 hours. Aggressive rehydration started.", isCritical: true, vitalChanges: { hr: 110, sbp: 110, dbp: 65 } },
@@ -426,6 +451,8 @@ export const simulationCases: SimulationCase[] = [
       { id: "s7", label: "Anti-emetic (Ondansetron 4mg IV)", effect: "Ondansetron given for persistent vomiting. Patient tolerating better." },
       { id: "s8", label: "Bicarbonate infusion (if pH <6.9)", effect: "pH is 7.12 (>6.9), so bicarbonate NOT indicated per guidelines. Reserve for pH <6.9 only." },
       { id: "s9", label: "Search for precipitant (infection workup)", effect: "Blood cultures, UA, CXR ordered to identify DKA trigger. Likely viral URI as precipitant." },
+      { id: "s10", label: "Insulin 10U IV bolus STAT", effect: "High-dose insulin bolus given. DANGEROUS: Can cause rapid glucose drop and cerebral edema, especially in young patients.", isUnnecessary: true, harmIfDone: "Large insulin bolus risks precipitous glucose drop and fatal cerebral edema. ADA guidelines recommend infusion at 0.1 U/kg/hr, NOT bolus dosing in DKA." },
+      { id: "s11", label: "Sodium Bicarbonate IV (pH 7.12)", effect: "Bicarbonate infusion started. Per ADA guidelines, NOT indicated when pH >6.9. Can worsen intracellular acidosis and hypokalemia.", isUnnecessary: true, harmIfDone: "Bicarbonate is only indicated when pH <6.9 per ADA DKA guidelines. At pH 7.12, it can worsen hypokalemia and paradoxical CNS acidosis." },
     ],
     differentials: [
       { id: "d1", label: "Diabetic Ketoacidosis (DKA)", isCorrect: true },
@@ -495,6 +522,8 @@ export const simulationCases: SimulationCase[] = [
       { id: "i5", label: "Type & Crossmatch", finding: "Blood group: B+. 4 units PRBCs crossmatched urgently.", isCritical: true, timeToResult: 20 },
       { id: "i6", label: "Coagulation profile", finding: "PT/INR normal. aPTT normal. Fibrinogen normal.", timeToResult: 20 },
       { id: "i7", label: "BMP", finding: "Na 138, K 4.0, Cr 0.8, Glucose 95. Normal renal function.", timeToResult: 15 },
+      { id: "i8", label: "CT Abdomen/Pelvis", finding: "Free fluid in pelvis consistent with hemoperitoneum. Confirms ectopic but delayed surgical referral by 25 minutes.", timeToResult: 25, isUnnecessary: true, timeCost: 35, harmIfDone: "CT scan delayed emergency surgical referral. Transvaginal ultrasound is the imaging of choice for ectopic pregnancy - CT adds radiation and time without changing management." },
+      { id: "i9", label: "Serum Progesterone", finding: "Progesterone: 3.2 ng/mL. Low, consistent with non-viable pregnancy. However, this does NOT change acute management.", timeToResult: 30, isUnnecessary: true, timeCost: 15 },
     ],
     stabilize: [
       { id: "s1", label: "Two large bore IVs + NS bolus", effect: "Two 16G IVs placed. 1L NS running wide open. Second liter prepared.", isCritical: true, vitalChanges: { sbp: 100, dbp: 60, hr: 105 } },
@@ -505,6 +534,7 @@ export const simulationCases: SimulationCase[] = [
       { id: "s6", label: "Transfuse PRBCs when available", effect: "1 unit PRBC started when crossmatch available. Hb being monitored.", vitalChanges: { sbp: 105, dbp: 62 } },
       { id: "s7", label: "Anti-D immunoglobulin (if Rh negative)", effect: "Patient is Rh positive (B+). Anti-D not required." },
       { id: "s8", label: "Consent for surgery", effect: "Informed consent obtained for emergency salpingectomy vs salpingostomy." },
+      { id: "s9", label: "IM Methotrexate", effect: "Methotrexate given. WRONG: Methotrexate is for UNRUPTURED ectopic with stable vitals and low beta-hCG. This patient has a RUPTURED ectopic with hemorrhagic shock!", isUnnecessary: true, harmIfDone: "Methotrexate in ruptured ectopic pregnancy is contraindicated and delays life-saving surgery. It is only for hemodynamically stable, unruptured ectopic pregnancies." },
     ],
     differentials: [
       { id: "d1", label: "Ruptured Ectopic Pregnancy", isCorrect: true },
@@ -574,6 +604,8 @@ export const simulationCases: SimulationCase[] = [
       { id: "i5", label: "ECG", finding: "Atrial fibrillation with controlled ventricular rate (~88/min). No acute ST changes.", timeToResult: 5 },
       { id: "i6", label: "BMP", finding: "Na 140, K 4.1, Cr 1.0, Glucose 145. Normal electrolytes.", timeToResult: 15 },
       { id: "i7", label: "CT Angiography", finding: "Right MCA M1 segment occlusion confirmed. Good collateral circulation. Consider thrombectomy.", timeToResult: 15 },
+      { id: "i8", label: "MRI Brain", finding: "MRI shows acute right MCA territory infarct on DWI. BUT MRI TOOK 35 MINUTES - CT was sufficient. This delay narrowed the thrombolysis window!", timeToResult: 35, isUnnecessary: true, timeCost: 50, harmIfDone: "MRI in acute stroke wastes the thrombolysis window. CT non-contrast is sufficient to rule out hemorrhage and initiate tPA. Time is brain - every minute matters." },
+      { id: "i9", label: "Carotid Doppler", finding: "Mild bilateral carotid atherosclerosis. No significant stenosis. This is NOT the source - patient has AF.", timeToResult: 20, isUnnecessary: true, timeCost: 25 },
     ],
     stabilize: [
       { id: "s1", label: "Activate Stroke Code / Stroke Team", effect: "Stroke team paged. Neurologist and neuro-interventionalist notified. Door-to-CT target <25 min.", isCritical: true },
@@ -585,6 +617,8 @@ export const simulationCases: SimulationCase[] = [
       { id: "s7", label: "Glucose monitoring q2h", effect: "Glucose monitoring initiated. Target 140-180 mg/dL. Avoid hypoglycemia." },
       { id: "s8", label: "Continuous neuro checks q15min", effect: "Serial NIHSS monitoring. Watching for improvement or hemorrhagic conversion." },
       { id: "s9", label: "Hold aspirin for 24 hours", effect: "No antiplatelets or anticoagulants for 24 hours post-tPA. Repeat CT at 24h before starting." },
+      { id: "s10", label: "Aspirin 325mg + Clopidogrel NOW", effect: "Dual antiplatelet given WITH tPA. DANGEROUS: Antiplatelets within 24 hours of tPA dramatically increase hemorrhagic conversion risk!", isUnnecessary: true, harmIfDone: "Giving antiplatelets within 24 hours of tPA significantly increases risk of symptomatic intracranial hemorrhage. Hold all antiplatelets for 24 hours after thrombolysis." },
+      { id: "s11", label: "IV Heparin drip", effect: "Heparin started concurrently with tPA. DANGEROUS: Anticoagulation with thrombolysis causes hemorrhage!", isUnnecessary: true, harmIfDone: "Concurrent heparin with tPA is contraindicated in acute stroke. Anticoagulation should be started 24-48 hours after thrombolysis, after repeat CT confirms no hemorrhage." },
     ],
     differentials: [
       { id: "d1", label: "Acute Ischemic Stroke (Right MCA territory)", isCorrect: true },
@@ -655,6 +689,7 @@ export const simulationCases: SimulationCase[] = [
       { id: "i6", label: "ABG", finding: "pH 7.44, pCO2 30, pO2 58, HCO3 22. Hypoxemia with respiratory alkalosis (classic PE ABG).", timeToResult: 10 },
       { id: "i7", label: "Bedside Echo", finding: "RV dilation with septal bowing into LV (D-sign). McConnell's sign positive. Estimated RVSP >55mmHg.", isRedFlag: true, timeToResult: 5 },
       { id: "i8", label: "Right leg Doppler US", finding: "Acute DVT in right popliteal and femoral veins. Non-compressible veins with intraluminal thrombus.", timeToResult: 10 },
+      { id: "i9", label: "V/Q Scan", finding: "High probability for PE. BUT CTPA was already the gold standard and faster. V/Q scan added no value and delayed care.", timeToResult: 30, isUnnecessary: true, timeCost: 35, harmIfDone: "V/Q scan when CTPA is available and already performed adds no diagnostic value. It delays management and is reserved for patients who can't get contrast CT." },
     ],
     stabilize: [
       { id: "s1", label: "High-flow O2 & IV Access", effect: "15L NRB mask applied. Two large bore IVs. SpO2 improving to 92%.", isCritical: true, vitalChanges: { spo2: 92 } },
@@ -665,6 +700,7 @@ export const simulationCases: SimulationCase[] = [
       { id: "s6", label: "Analgesia - Morphine 2mg IV", effect: "Pain managed. Patient less tachycardic and distressed.", vitalChanges: { hr: 108 } },
       { id: "s7", label: "Hold orthopedic prophylactic LMWH, start therapeutic", effect: "Prophylactic LMWH discontinued. Full therapeutic anticoagulation with UFH initiated." },
       { id: "s8", label: "ICU admission arranged", effect: "ICU bed secured. Patient for close hemodynamic monitoring and potential escalation to catheter-directed therapy." },
+      { id: "s9", label: "Aggressive IV fluids 2L bolus", effect: "Large volume fluids given. Patient becoming MORE dyspneic. RV failing further from volume overload.", isUnnecessary: true, harmIfDone: "Aggressive fluids in massive PE with RV failure cause RV overdistension and worsened hemodynamics. Use cautious 250-500mL boluses only.", vitalChanges: { sbp: 90, spo2: 86, hr: 130 } },
     ],
     differentials: [
       { id: "d1", label: "Massive Pulmonary Embolism", isCorrect: true },
@@ -735,6 +771,7 @@ export const simulationCases: SimulationCase[] = [
       { id: "i5", label: "Coagulation profile", finding: "PT: 18s (prolonged), INR: 1.5, aPTT: 42s (prolonged), Fibrinogen: 150 (low), D-dimer: 8500. Evolving DIC.", isRedFlag: true, timeToResult: 20 },
       { id: "i6", label: "BMP & Lactate", finding: "Na 131, K 4.5, Cr 1.4, Lactate 4.2 mmol/L. AKI and tissue hypoperfusion.", timeToResult: 15 },
       { id: "i7", label: "Blood glucose", finding: "Blood glucose: 110 mg/dL. Used to calculate CSF:blood glucose ratio.", timeToResult: 2 },
+      { id: "i8", label: "MRI Brain with contrast", finding: "Meningeal enhancement seen. But MRI took 40 minutes and delayed antibiotic administration further!", timeToResult: 40, isUnnecessary: true, timeCost: 50, harmIfDone: "MRI in suspected meningococcal meningitis delays life-saving antibiotics. LP and CT (if needed for raised ICP signs) are sufficient. Every 15-minute delay in antibiotics increases mortality." },
     ],
     stabilize: [
       { id: "s1", label: "IV Ceftriaxone 2g IMMEDIATELY", effect: "IV Ceftriaxone 2g given within minutes. In suspected meningococcal meningitis, antibiotics should be given even BEFORE LP if there will be any delay.", isCritical: true, preventsDeterioration: true },
@@ -746,6 +783,7 @@ export const simulationCases: SimulationCase[] = [
       { id: "s7", label: "Contact prophylaxis prescribed", effect: "Ciprofloxacin 500mg single dose prescribed for all close contacts (roommates, friends who brought him in)." },
       { id: "s8", label: "Monitor for DIC & seizures", effect: "Platelet monitoring, coagulation panel q6h. Seizure precautions in place. FFP and platelets on standby." },
       { id: "s9", label: "ICU admission", effect: "ICU bed arranged for close monitoring of GCS, hemodynamics, and DIC." },
+      { id: "s10", label: "Wait for LP results before antibiotics", effect: "Antibiotics delayed waiting for LP. CRITICAL ERROR: In meningococcal disease, antibiotics should NEVER be delayed for diagnostic procedures.", isUnnecessary: true, harmIfDone: "Delaying antibiotics for LP results in suspected bacterial meningitis dramatically increases mortality. Give empiric antibiotics FIRST, then investigate." },
     ],
     differentials: [
       { id: "d1", label: "Bacterial Meningitis (Meningococcal)", isCorrect: true },
@@ -815,6 +853,8 @@ export const simulationCases: SimulationCase[] = [
       { id: "i4", label: "Blood culture", finding: "Blood culture drawn. Results pending 24-48 hours.", timeToResult: 2 },
       { id: "i5", label: "CRP", finding: "CRP: 45 mg/L. Elevated, consistent with bacterial tonsillopharyngitis.", timeToResult: 20 },
       { id: "i6", label: "Throat swab RADT (Strep)", finding: "Rapid strep test: POSITIVE for Group A Streptococcus.", timeToResult: 10 },
+      { id: "i7", label: "CT Brain", finding: "Normal CT brain. No structural cause found. In a child with clear febrile seizure and no focal signs, CT is unnecessary.", timeToResult: 25, isUnnecessary: true, timeCost: 35, harmIfDone: "CT brain in a simple/complex febrile seizure without focal neurological signs or signs of raised ICP is unnecessary. It exposes the child to radiation and delays seizure management." },
+      { id: "i8", label: "EEG", finding: "EEG cannot be meaningfully performed during active seizure in ER setting. This is an outpatient investigation.", timeToResult: 30, isUnnecessary: true, timeCost: 30 },
     ],
     stabilize: [
       { id: "s1", label: "Position & protect airway", effect: "Recovery position. Suction secretions. Jaw thrust. Avoid putting anything in mouth. Oxygen via mask.", isCritical: true, vitalChanges: { spo2: 92 } },
@@ -896,6 +936,7 @@ export const simulationCases: SimulationCase[] = [
       { id: "i6", label: "BMP/Renal function", finding: "Cr 1.8 (elevated - renal malperfusion from dissection flap). Na 138, K 4.3.", isRedFlag: true, timeToResult: 15 },
       { id: "i7", label: "Bedside Echo (TTE)", finding: "Dilated aortic root. Moderate aortic regurgitation (new). Normal LV function. Small pericardial effusion.", isRedFlag: true, timeToResult: 5 },
       { id: "i8", label: "CBC + Coags", finding: "Hb 12.5, WBC 14.2, Platelets 195. INR 1.0. Normal coagulation.", timeToResult: 15 },
+      { id: "i9", label: "Coronary Angiography", finding: "CONTRAINDICATED: Catheterization in aortic dissection can extend the dissection flap or cause aortic rupture!", timeToResult: 30, isUnnecessary: true, timeCost: 40, harmIfDone: "Coronary angiography in aortic dissection risks extending the intimal flap and causing aortic rupture. Even though troponin is elevated, this is NOT ACS - it's coronary malperfusion from dissection." },
     ],
     stabilize: [
       { id: "s1", label: "IV Esmolol (target HR <60, SBP 100-120)", effect: "IV Esmolol infusion started. Beta-blocker is FIRST-LINE. Target HR <60 AND SBP 100-120 to reduce aortic wall shear stress.", isCritical: true, preventsDeterioration: true, vitalChanges: { hr: 70, sbp: 140, dbp: 85 } },
@@ -906,6 +947,8 @@ export const simulationCases: SimulationCase[] = [
       { id: "s6", label: "Avoid anticoagulants/antiplatelets!", effect: "CRITICAL: NO heparin, NO aspirin, NO thrombolytics. These can be fatal in aortic dissection. Troponin elevation does NOT mean ACS treatment here.", isCritical: true },
       { id: "s7", label: "Bilateral arterial lines", effect: "Arterial lines placed in both radial arteries for continuous bilateral BP monitoring." },
       { id: "s8", label: "Foley catheter - monitor UOP", effect: "Foley placed. Monitoring for renal malperfusion (left renal artery compromised on CTA)." },
+      { id: "s9", label: "Aspirin 325mg + Heparin drip (ACS protocol)", effect: "Antiplatelet and anticoagulant given. FATAL ERROR: This is aortic dissection, NOT ACS! Anticoagulation can cause fatal hemorrhage from the dissection.", isUnnecessary: true, harmIfDone: "Giving aspirin and heparin in aortic dissection is potentially fatal. Even with elevated troponin, this is coronary malperfusion from dissection flap, NOT primary ACS. Anticoagulation risks uncontrolled hemorrhage.", vitalChanges: { sbp: 80, hr: 130 } },
+      { id: "s10", label: "IV Hydralazine (vasodilator first)", effect: "Vasodilator given WITHOUT beta-blocker first. Reflex tachycardia increases aortic shear stress and worsens dissection propagation!", isUnnecessary: true, harmIfDone: "Vasodilators without prior beta-blockade cause reflex tachycardia, increasing aortic wall shear stress and accelerating dissection propagation. ALWAYS beta-blocker FIRST.", vitalChanges: { hr: 140, sbp: 170 } },
     ],
     differentials: [
       { id: "d1", label: "Acute Aortic Dissection (Stanford Type A)", isCorrect: true },

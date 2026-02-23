@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -17,7 +17,7 @@ import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
-import { getCaseById, Vitals, SimAction, StabilizeAction, DeteriorationRule } from "@/data/simulationCases";
+import { getCaseById, Vitals, SimAction, StabilizeAction } from "@/data/simulationCases";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 type TabType = "history" | "exam" | "investigate" | "stabilize" | "differential";
@@ -42,6 +42,7 @@ export default function SimulationScreen() {
   const [elapsedTime, setElapsedTime] = useState(0);
   const [currentVitals, setCurrentVitals] = useState<Vitals>(simCase?.initialVitals || { hr: 80, sbp: 120, dbp: 80, rr: 16, spo2: 98, temp: 37, gcs: 15 });
   const [performedActions, setPerformedActions] = useState<Set<string>>(new Set());
+  const [actionTimestamps, setActionTimestamps] = useState<Record<string, number>>({});
   const [revealedFindings, setRevealedFindings] = useState<Record<string, string>>({});
   const [pendingInvestigations, setPendingInvestigations] = useState<Record<string, number>>({});
   const [selectedDifferential, setSelectedDifferential] = useState<string | null>(null);
@@ -49,9 +50,11 @@ export default function SimulationScreen() {
   const [hasCrashed, setHasCrashed] = useState(false);
   const [deteriorationMessages, setDeteriorationMessages] = useState<string[]>([]);
   const [showMessage, setShowMessage] = useState<string | null>(null);
+  const [timeExpired, setTimeExpired] = useState(false);
   const triggeredRulesRef = useRef<Set<number>>(new Set());
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const alertAnim = useRef(new Animated.Value(0)).current;
+  const hasNavigatedRef = useRef(false);
 
   useEffect(() => {
     if (!isRunning) return;
@@ -71,7 +74,37 @@ export default function SimulationScreen() {
   }, []);
 
   useEffect(() => {
-    if (!simCase || !isRunning || hasCrashed) return;
+    if (!simCase || !isRunning || hasCrashed || hasNavigatedRef.current) return;
+
+    if (elapsedTime >= simCase.timeLimit) {
+      setTimeExpired(true);
+      setIsRunning(false);
+      setShowMessage("TIME'S UP! The clock has run out. Review your performance.");
+
+      if (Platform.OS !== "web") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
+
+      Animated.sequence([
+        Animated.timing(alertAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
+        Animated.timing(alertAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
+        Animated.timing(alertAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
+        Animated.timing(alertAnim, { toValue: 0, duration: 3000, useNativeDriver: true }),
+      ]).start();
+
+      hasNavigatedRef.current = true;
+      setTimeout(() => {
+        navigation.navigate("SimulationResult", {
+          caseId,
+          elapsedTime: simCase.timeLimit,
+          performedActions: Array.from(performedActions),
+          actionTimestamps,
+          selectedDifferential,
+          hasCrashed: false,
+        });
+      }, 3000);
+      return;
+    }
 
     for (const rule of simCase.deteriorationRules) {
       if (triggeredRulesRef.current.has(rule.triggerTime)) continue;
@@ -102,11 +135,13 @@ export default function SimulationScreen() {
         if (rule.isCrash) {
           setHasCrashed(true);
           setIsRunning(false);
+          hasNavigatedRef.current = true;
           setTimeout(() => {
             navigation.navigate("SimulationResult", {
               caseId,
               elapsedTime,
               performedActions: Array.from(performedActions),
+              actionTimestamps,
               selectedDifferential,
               hasCrashed: true,
             });
@@ -146,12 +181,13 @@ export default function SimulationScreen() {
     );
   }
 
-  const performAction = (actionId: string, finding?: string) => {
-    if (performedActions.has(actionId) || hasCrashed) return;
+  const performAction = (actionId: string, finding?: string, timeCost?: number) => {
+    if (performedActions.has(actionId) || hasCrashed || timeExpired) return;
 
     const newActions = new Set(performedActions);
     newActions.add(actionId);
     setPerformedActions(newActions);
+    setActionTimestamps((prev) => ({ ...prev, [actionId]: elapsedTime }));
 
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -160,23 +196,32 @@ export default function SimulationScreen() {
     if (finding !== undefined) {
       setRevealedFindings((prev) => ({ ...prev, [actionId]: finding }));
     }
+
+    if (timeCost && timeCost > 0) {
+      setElapsedTime((prev) => prev + timeCost);
+    }
   };
 
   const performInvestigation = (action: SimAction) => {
-    if (performedActions.has(action.id) || hasCrashed) return;
+    if (performedActions.has(action.id) || hasCrashed || timeExpired) return;
 
     const newActions = new Set(performedActions);
     newActions.add(action.id);
     setPerformedActions(newActions);
+    setActionTimestamps((prev) => ({ ...prev, [action.id]: elapsedTime }));
 
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
 
+    if (action.timeCost && action.timeCost > 0) {
+      setElapsedTime((prev) => prev + action.timeCost);
+    }
+
     if (action.timeToResult && action.timeToResult > 3) {
       setPendingInvestigations((prev) => ({
         ...prev,
-        [action.id]: elapsedTime + action.timeToResult,
+        [action.id]: elapsedTime + (action.timeCost || 0) + action.timeToResult,
       }));
       setRevealedFindings((prev) => ({
         ...prev,
@@ -188,11 +233,12 @@ export default function SimulationScreen() {
   };
 
   const performStabilize = (action: StabilizeAction) => {
-    if (performedActions.has(action.id) || hasCrashed) return;
+    if (performedActions.has(action.id) || hasCrashed || timeExpired) return;
 
     const newActions = new Set(performedActions);
     newActions.add(action.id);
     setPerformedActions(newActions);
+    setActionTimestamps((prev) => ({ ...prev, [action.id]: elapsedTime }));
 
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -200,12 +246,17 @@ export default function SimulationScreen() {
 
     setRevealedFindings((prev) => ({ ...prev, [action.id]: action.effect }));
 
+    if (action.timeCost && action.timeCost > 0) {
+      setElapsedTime((prev) => prev + action.timeCost);
+    }
+
     if (action.vitalChanges) {
       setCurrentVitals((prev) => ({ ...prev, ...action.vitalChanges }));
     }
   };
 
   const selectDifferential = (id: string) => {
+    if (hasCrashed || timeExpired) return;
     setSelectedDifferential(id);
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -213,12 +264,15 @@ export default function SimulationScreen() {
   };
 
   const finishSimulation = () => {
+    if (hasNavigatedRef.current) return;
     const navigateToResults = () => {
+      hasNavigatedRef.current = true;
       setIsRunning(false);
       navigation.navigate("SimulationResult", {
         caseId,
         elapsedTime,
         performedActions: Array.from(performedActions),
+        actionTimestamps,
         selectedDifferential,
         hasCrashed: false,
       });
@@ -249,6 +303,11 @@ export default function SimulationScreen() {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
     return `${m}:${s.toString().padStart(2, "0")}`;
+  };
+
+  const getRemainingTime = () => {
+    const remaining = Math.max(0, simCase.timeLimit - elapsedTime);
+    return formatTime(remaining);
   };
 
   const getVitalColor = (type: string, value: number) => {
@@ -285,24 +344,29 @@ export default function SimulationScreen() {
   const renderActionItem = (action: SimAction, category: "history" | "exam") => {
     const isDone = performedActions.has(action.id);
     const finding = revealedFindings[action.id];
+    const showHarm = isDone && action.harmIfDone;
     return (
       <Pressable
         key={action.id}
         style={[
           styles.actionItem,
           {
-            backgroundColor: isDone ? (action.isRedFlag ? TriageColors.red + "10" : theme.backgroundDefault) : theme.card,
-            borderColor: isDone && action.isRedFlag ? TriageColors.red + "40" : theme.border,
+            backgroundColor: isDone
+              ? (showHarm ? TriageColors.orange + "15" : action.isRedFlag ? TriageColors.red + "10" : theme.backgroundDefault)
+              : theme.card,
+            borderColor: isDone
+              ? (showHarm ? TriageColors.orange + "40" : action.isRedFlag ? TriageColors.red + "40" : theme.border)
+              : theme.border,
           },
         ]}
-        onPress={() => performAction(action.id, action.finding)}
-        disabled={isDone}
+        onPress={() => performAction(action.id, action.finding, action.timeCost)}
+        disabled={isDone || hasCrashed || timeExpired}
       >
         <View style={styles.actionHeader}>
           <Feather
             name={isDone ? "check-circle" : "circle"}
             size={18}
-            color={isDone ? (action.isRedFlag ? TriageColors.red : TriageColors.green) : theme.textMuted}
+            color={isDone ? (showHarm ? TriageColors.orange : action.isRedFlag ? TriageColors.red : TriageColors.green) : theme.textMuted}
           />
           <Text style={[styles.actionLabel, { color: isDone ? theme.text : theme.primary }]}>
             {action.label}
@@ -313,9 +377,21 @@ export default function SimulationScreen() {
               <Text style={[styles.redFlagText, { color: TriageColors.red }]}>Red Flag</Text>
             </View>
           ) : null}
+          {action.timeCost ? (
+            <View style={[styles.timeCostBadge, { backgroundColor: TriageColors.orange + "20" }]}>
+              <Feather name="clock" size={9} color={TriageColors.orange} />
+              <Text style={[styles.timeCostText, { color: TriageColors.orange }]}>+{action.timeCost}s</Text>
+            </View>
+          ) : null}
         </View>
         {finding ? (
           <Text style={[styles.findingText, { color: theme.textSecondary }]}>{finding}</Text>
+        ) : null}
+        {showHarm ? (
+          <View style={[styles.harmBanner, { backgroundColor: TriageColors.orange + "15" }]}>
+            <Feather name="alert-triangle" size={12} color={TriageColors.orange} />
+            <Text style={[styles.harmText, { color: TriageColors.orange }]}>{action.harmIfDone}</Text>
+          </View>
         ) : null}
       </Pressable>
     );
@@ -325,24 +401,29 @@ export default function SimulationScreen() {
     const isDone = performedActions.has(action.id);
     const finding = revealedFindings[action.id];
     const isPending = pendingInvestigations[action.id] !== undefined;
+    const showHarm = isDone && action.harmIfDone && !isPending;
     return (
       <Pressable
         key={action.id}
         style={[
           styles.actionItem,
           {
-            backgroundColor: isDone ? (action.isRedFlag ? TriageColors.red + "10" : theme.backgroundDefault) : theme.card,
-            borderColor: isDone && action.isRedFlag ? TriageColors.red + "40" : theme.border,
+            backgroundColor: isDone
+              ? (showHarm ? TriageColors.orange + "15" : action.isRedFlag ? TriageColors.red + "10" : theme.backgroundDefault)
+              : (action.isUnnecessary ? theme.card : theme.card),
+            borderColor: isDone
+              ? (showHarm ? TriageColors.orange + "40" : action.isRedFlag ? TriageColors.red + "40" : theme.border)
+              : theme.border,
           },
         ]}
         onPress={() => performInvestigation(action)}
-        disabled={isDone}
+        disabled={isDone || hasCrashed || timeExpired}
       >
         <View style={styles.actionHeader}>
           <Feather
             name={isDone ? (isPending ? "loader" : "check-circle") : "circle"}
             size={18}
-            color={isDone ? (isPending ? theme.warning : action.isRedFlag ? TriageColors.red : TriageColors.green) : theme.textMuted}
+            color={isDone ? (isPending ? theme.warning : showHarm ? TriageColors.orange : action.isRedFlag ? TriageColors.red : TriageColors.green) : theme.textMuted}
           />
           <Text style={[styles.actionLabel, { color: isDone ? theme.text : theme.primary }]}>
             {action.label}
@@ -351,6 +432,12 @@ export default function SimulationScreen() {
             <Text style={[styles.timeToResult, { color: theme.textMuted }]}>
               ~{action.timeToResult}s
             </Text>
+          ) : null}
+          {action.timeCost ? (
+            <View style={[styles.timeCostBadge, { backgroundColor: TriageColors.orange + "20" }]}>
+              <Feather name="clock" size={9} color={TriageColors.orange} />
+              <Text style={[styles.timeCostText, { color: TriageColors.orange }]}>+{action.timeCost}s</Text>
+            </View>
           ) : null}
           {action.isRedFlag && isDone && !isPending ? (
             <View style={[styles.redFlagBadge, { backgroundColor: TriageColors.red + "20" }]}>
@@ -362,6 +449,12 @@ export default function SimulationScreen() {
         {finding ? (
           <Text style={[styles.findingText, { color: isPending ? theme.warning : theme.textSecondary }]}>{finding}</Text>
         ) : null}
+        {showHarm ? (
+          <View style={[styles.harmBanner, { backgroundColor: TriageColors.orange + "15" }]}>
+            <Feather name="alert-triangle" size={12} color={TriageColors.orange} />
+            <Text style={[styles.harmText, { color: TriageColors.orange }]}>{action.harmIfDone}</Text>
+          </View>
+        ) : null}
       </Pressable>
     );
   };
@@ -369,30 +462,35 @@ export default function SimulationScreen() {
   const renderStabilizeItem = (action: StabilizeAction) => {
     const isDone = performedActions.has(action.id);
     const finding = revealedFindings[action.id];
+    const showHarm = isDone && action.harmIfDone;
     return (
       <Pressable
         key={action.id}
         style={[
           styles.actionItem,
           {
-            backgroundColor: isDone ? (action.isCritical ? TriageColors.green + "10" : theme.backgroundDefault) : theme.card,
-            borderColor: isDone && action.isCritical ? TriageColors.green + "40" : theme.border,
+            backgroundColor: isDone
+              ? (showHarm ? TriageColors.red + "12" : action.isCritical ? TriageColors.green + "10" : theme.backgroundDefault)
+              : theme.card,
+            borderColor: isDone
+              ? (showHarm ? TriageColors.red + "40" : action.isCritical ? TriageColors.green + "40" : theme.border)
+              : theme.border,
           },
         ]}
         onPress={() => performStabilize(action)}
-        disabled={isDone}
+        disabled={isDone || hasCrashed || timeExpired}
       >
         <View style={styles.actionHeader}>
           <Feather
-            name={isDone ? "check-circle" : "zap"}
+            name={isDone ? (showHarm ? "alert-triangle" : "check-circle") : "zap"}
             size={18}
-            color={isDone ? TriageColors.green : action.isCritical ? TriageColors.red : theme.primary}
+            color={isDone ? (showHarm ? TriageColors.red : TriageColors.green) : action.isCritical ? TriageColors.red : theme.primary}
           />
           <Text
             style={[
               styles.actionLabel,
               {
-                color: isDone ? theme.text : action.isCritical ? TriageColors.red : theme.primary,
+                color: isDone ? (showHarm ? TriageColors.red : theme.text) : action.isCritical ? TriageColors.red : theme.primary,
                 fontWeight: action.isCritical ? "700" : "600",
               },
             ]}
@@ -404,9 +502,21 @@ export default function SimulationScreen() {
               <Text style={[styles.criticalText, { color: TriageColors.red }]}>Critical</Text>
             </View>
           ) : null}
+          {action.timeCost ? (
+            <View style={[styles.timeCostBadge, { backgroundColor: TriageColors.orange + "20" }]}>
+              <Feather name="clock" size={9} color={TriageColors.orange} />
+              <Text style={[styles.timeCostText, { color: TriageColors.orange }]}>+{action.timeCost}s</Text>
+            </View>
+          ) : null}
         </View>
         {finding ? (
-          <Text style={[styles.findingText, { color: TriageColors.green }]}>{finding}</Text>
+          <Text style={[styles.findingText, { color: showHarm ? TriageColors.red : TriageColors.green }]}>{finding}</Text>
+        ) : null}
+        {showHarm ? (
+          <View style={[styles.harmBanner, { backgroundColor: TriageColors.red + "12" }]}>
+            <Feather name="alert-octagon" size={12} color={TriageColors.red} />
+            <Text style={[styles.harmText, { color: TriageColors.red }]}>{action.harmIfDone}</Text>
+          </View>
         ) : null}
       </Pressable>
     );
@@ -414,6 +524,8 @@ export default function SimulationScreen() {
 
   const timeRatio = elapsedTime / simCase.timeLimit;
   const timerColor = timeRatio > 0.8 ? TriageColors.red : timeRatio > 0.5 ? TriageColors.orange : TriageColors.green;
+  const remainingSeconds = Math.max(0, simCase.timeLimit - elapsedTime);
+  const progressWidth = `${Math.min(100, timeRatio * 100)}%`;
 
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
@@ -435,8 +547,12 @@ export default function SimulationScreen() {
           </Text>
           <View style={[styles.timerBadge, { backgroundColor: timerColor + "30" }]}>
             <Feather name="clock" size={12} color={timerColor} />
-            <Text style={[styles.timerText, { color: timerColor }]}>{formatTime(elapsedTime)}</Text>
+            <Text style={[styles.timerText, { color: timerColor }]}>{getRemainingTime()}</Text>
           </View>
+        </View>
+
+        <View style={styles.timerProgressBarContainer}>
+          <View style={[styles.timerProgressBar, { width: progressWidth as any, backgroundColor: timerColor }]} />
         </View>
 
         <View style={styles.vitalsRow}>
@@ -487,16 +603,16 @@ export default function SimulationScreen() {
       {showMessage ? (
         <Pressable
           style={[styles.messageBar, {
-            backgroundColor: hasCrashed ? TriageColors.red : TriageColors.orange + "20",
-            borderColor: hasCrashed ? TriageColors.red : TriageColors.orange,
+            backgroundColor: hasCrashed ? TriageColors.red : timeExpired ? "#dc2626" : TriageColors.orange + "20",
+            borderColor: hasCrashed ? TriageColors.red : timeExpired ? "#dc2626" : TriageColors.orange,
           }]}
-          onPress={() => setShowMessage(null)}
+          onPress={() => !hasCrashed && !timeExpired && setShowMessage(null)}
         >
-          <Feather name={hasCrashed ? "alert-octagon" : "alert-triangle"} size={18} color={hasCrashed ? "#fff" : TriageColors.orange} />
-          <Text style={[styles.messageText, { color: hasCrashed ? "#fff" : TriageColors.orange }]} numberOfLines={3}>
+          <Feather name={hasCrashed ? "alert-octagon" : timeExpired ? "clock" : "alert-triangle"} size={18} color={hasCrashed || timeExpired ? "#fff" : TriageColors.orange} />
+          <Text style={[styles.messageText, { color: hasCrashed || timeExpired ? "#fff" : TriageColors.orange }]} numberOfLines={3}>
             {showMessage}
           </Text>
-          <Feather name="x" size={16} color={hasCrashed ? "#fff" : TriageColors.orange} />
+          {!hasCrashed && !timeExpired ? <Feather name="x" size={16} color={TriageColors.orange} /> : null}
         </Pressable>
       ) : null}
 
@@ -559,6 +675,7 @@ export default function SimulationScreen() {
                   },
                 ]}
                 onPress={() => selectDifferential(d.id)}
+                disabled={hasCrashed || timeExpired}
               >
                 <Feather
                   name={selectedDifferential === d.id ? "check-circle" : "circle"}
@@ -582,7 +699,7 @@ export default function SimulationScreen() {
         )}
       </ScrollView>
 
-      {!hasCrashed ? (
+      {!hasCrashed && !timeExpired ? (
         <View style={[styles.bottomBar, { backgroundColor: theme.card, paddingBottom: insets.bottom + Spacing.sm }]}>
           <Pressable
             style={({ pressed }) => [
@@ -635,6 +752,17 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     fontVariant: ["tabular-nums"],
+  },
+  timerProgressBarContainer: {
+    height: 3,
+    backgroundColor: "#1e293b",
+    borderRadius: 2,
+    marginBottom: Spacing.xs,
+    overflow: "hidden",
+  },
+  timerProgressBar: {
+    height: 3,
+    borderRadius: 2,
   },
   vitalsRow: {
     flexDirection: "row",
@@ -705,6 +833,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.sm,
+    flexWrap: "wrap",
   },
   actionLabel: {
     ...Typography.small,
@@ -713,6 +842,18 @@ const styles = StyleSheet.create({
   },
   timeToResult: {
     ...Typography.caption,
+  },
+  timeCostBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    paddingVertical: 2,
+    paddingHorizontal: 5,
+    borderRadius: BorderRadius.full,
+  },
+  timeCostText: {
+    fontSize: 9,
+    fontWeight: "700",
   },
   redFlagBadge: {
     flexDirection: "row",
@@ -734,6 +875,21 @@ const styles = StyleSheet.create({
   criticalText: {
     fontSize: 9,
     fontWeight: "700",
+  },
+  harmBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: Spacing.xs,
+    marginTop: Spacing.sm,
+    paddingLeft: 26,
+    padding: Spacing.sm,
+    borderRadius: BorderRadius.sm,
+  },
+  harmText: {
+    fontSize: 11,
+    fontWeight: "600",
+    flex: 1,
+    lineHeight: 16,
   },
   findingText: {
     ...Typography.small,

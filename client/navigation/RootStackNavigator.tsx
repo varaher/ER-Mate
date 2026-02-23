@@ -79,6 +79,7 @@ export type RootStackParamList = {
     caseId: string;
     elapsedTime: number;
     performedActions: string[];
+    actionTimestamps: Record<string, number>;
     selectedDifferential: string | null;
     hasCrashed: boolean;
   };
