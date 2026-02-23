@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
-  Alert,
   Animated,
   Platform,
   Modal,
@@ -301,6 +300,7 @@ export default function SimulationScreen() {
   const [timeExpired, setTimeExpired] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialChecked, setTutorialChecked] = useState(false);
+  const [showEndConfirm, setShowEndConfirm] = useState(false);
   const triggeredRulesRef = useRef<Set<number>>(new Set());
   const alertAnim = useRef(new Animated.Value(0)).current;
   const hasNavigatedRef = useRef(false);
@@ -531,34 +531,22 @@ export default function SimulationScreen() {
 
   const finishSimulation = () => {
     if (hasNavigatedRef.current) return;
-    const navigateToResults = () => {
-      hasNavigatedRef.current = true;
-      setIsRunning(false);
-      navigation.navigate("SimulationResult", {
-        caseId,
-        elapsedTime,
-        performedActions: Array.from(performedActions),
-        actionTimestamps,
-        selectedDifferential,
-        hasCrashed: false,
-      });
-    };
+    setShowEndConfirm(true);
+  };
 
-    if (Platform.OS === "web") {
-      const confirmed = window.confirm("End simulation and see your results?");
-      if (confirmed) {
-        navigateToResults();
-      }
-    } else {
-      Alert.alert(
-        "End Simulation",
-        "End simulation and see your results?",
-        [
-          { text: "Continue", style: "cancel" },
-          { text: "End & Review", style: "destructive", onPress: navigateToResults },
-        ]
-      );
-    }
+  const confirmEnd = () => {
+    if (hasNavigatedRef.current) return;
+    setShowEndConfirm(false);
+    hasNavigatedRef.current = true;
+    setIsRunning(false);
+    navigation.navigate("SimulationResult", {
+      caseId,
+      elapsedTime,
+      performedActions: Array.from(performedActions),
+      actionTimestamps,
+      selectedDifferential,
+      hasCrashed: false,
+    });
   };
 
   const getRemainingTime = () => {
@@ -841,6 +829,35 @@ export default function SimulationScreen() {
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
       <SimTutorialOverlay visible={showTutorial} onDismiss={dismissTutorial} />
+
+      <Modal transparent animationType="fade" visible={showEndConfirm}>
+        <View style={endConfirmStyles.overlay}>
+          <View style={[endConfirmStyles.card, { backgroundColor: theme.card }]}>
+            <View style={[endConfirmStyles.iconCircle, { backgroundColor: TriageColors.red + "15" }]}>
+              <Feather name="alert-circle" size={28} color={TriageColors.red} />
+            </View>
+            <Text style={[endConfirmStyles.title, { color: theme.text }]}>End Simulation?</Text>
+            <Text style={[endConfirmStyles.message, { color: theme.textSecondary }]}>
+              Are you sure you want to end this simulation? You'll be taken to your results and performance review.
+            </Text>
+            <View style={endConfirmStyles.buttonRow}>
+              <Pressable
+                style={[endConfirmStyles.cancelBtn, { borderColor: theme.border }]}
+                onPress={() => setShowEndConfirm(false)}
+              >
+                <Text style={[endConfirmStyles.cancelText, { color: theme.textSecondary }]}>Continue</Text>
+              </Pressable>
+              <Pressable
+                style={[endConfirmStyles.confirmBtn, { backgroundColor: TriageColors.red }]}
+                onPress={confirmEnd}
+              >
+                <Feather name="check-square" size={16} color="#fff" />
+                <Text style={endConfirmStyles.confirmText}>End & Review</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <Animated.View
         style={[
@@ -1257,5 +1274,71 @@ const styles = StyleSheet.create({
     ...Typography.h4,
     textAlign: "center",
     marginTop: 100,
+  },
+});
+
+const endConfirmStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: Spacing.xl,
+  },
+  card: {
+    width: "100%",
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.xl,
+    alignItems: "center",
+  },
+  iconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: Spacing.md,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: "700",
+    marginBottom: Spacing.sm,
+  },
+  message: {
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: "center",
+    marginBottom: Spacing.xl,
+  },
+  buttonRow: {
+    flexDirection: "row",
+    gap: Spacing.md,
+    width: "100%",
+  },
+  cancelBtn: {
+    flex: 1,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cancelText: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  confirmBtn: {
+    flex: 1,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.md,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.xs,
+  },
+  confirmText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "700",
   },
 });
