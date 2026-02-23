@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   Platform,
   Alert,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -28,6 +29,7 @@ import { getCachedCaseData, mergeCaseWithCache } from "@/lib/caseCache";
 import { getDraftByBackendId, type DraftCase } from "@/lib/draftManager";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
+import QuickStartScreen from "@/screens/QuickStartScreen";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -80,6 +82,25 @@ export default function DashboardScreen() {
   const [exporting, setExporting] = useState(false);
   const [draftsMap, setDraftsMap] = useState<Record<string, DraftCase>>({});
   const [aiCredits, setAiCredits] = useState<number | null>(null);
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [tutorialChecked, setTutorialChecked] = useState(false);
+
+  useEffect(() => {
+    const checkTutorial = async () => {
+      try {
+        const completed = await AsyncStorage.getItem("ermate_tutorial_completed");
+        if (!completed) {
+          setShowTutorial(true);
+        }
+      } catch {}
+      setTutorialChecked(true);
+    };
+    checkTutorial();
+  }, []);
+
+  const handleTutorialComplete = useCallback(() => {
+    setShowTutorial(false);
+  }, []);
 
   const { data: cases = [], isLoading: loading, error: queryError, refetch, isRefetching } = useQuery<CaseItem[]>({
     queryKey: ["cases"],
@@ -509,6 +530,10 @@ export default function DashboardScreen() {
 
   const isCompleted = (status: string) => status === "completed" || status === "discharged";
   const canDownload = (_status: string) => true;
+
+  if (showTutorial && tutorialChecked) {
+    return <QuickStartScreen onComplete={handleTutorialComplete} />;
+  }
 
   if (loading) {
     return (
