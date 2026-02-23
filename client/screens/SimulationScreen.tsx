@@ -42,7 +42,7 @@ const TUTORIAL_STEPS = [
   },
   {
     title: "5 Tabs - Your Workflow",
-    description: "Work through the tabs left to right:\n\nHistory - Ask the patient questions\nExam - Perform physical examination\nLabs - Order investigations\nStabilize - Give treatments\nDx - Select your diagnosis",
+    description: "Work through the tabs like a real ER shift:\n\nHistory - Ask the patient/bystanders\nExam - Perform physical examination\nLabs - Order investigations (results take time)\nStabilize - Give treatments & interventions\nDx - Select your final diagnosis",
     icon: "layout" as const,
   },
   {
@@ -898,7 +898,7 @@ export default function SimulationScreen() {
       ) : null}
 
       <View style={[styles.presentationCard, { backgroundColor: theme.card }]}>
-        <Text style={[styles.presentationText, { color: theme.textSecondary }]} numberOfLines={3}>
+        <Text style={[styles.presentationText, { color: theme.textSecondary }]}>
           {simCase.arrivalDescription}
         </Text>
       </View>
@@ -938,10 +938,50 @@ export default function SimulationScreen() {
         contentContainerStyle={{ paddingHorizontal: Spacing.md, paddingBottom: insets.bottom + 80 }}
         showsVerticalScrollIndicator={false}
       >
-        {activeTab === "history" ? simCase.history.map((a) => renderActionItem(a)) : null}
-        {activeTab === "exam" ? simCase.exam.map((a) => renderActionItem(a)) : null}
-        {activeTab === "investigate" ? simCase.investigate.map((a) => renderInvestigationItem(a)) : null}
-        {activeTab === "stabilize" ? simCase.stabilize.map((a) => renderStabilizeItem(a)) : null}
+        {activeTab === "history" ? (
+          <View>
+            <View style={[styles.tabHint, { backgroundColor: theme.primaryLight }]}>
+              <Feather name="info" size={13} color={theme.primary} />
+              <Text style={[styles.tabHintText, { color: theme.primary }]}>
+                Tap to ask the patient or bystanders. Information reveals after each question.
+              </Text>
+            </View>
+            {simCase.history.map((a) => renderActionItem(a))}
+          </View>
+        ) : null}
+        {activeTab === "exam" ? (
+          <View>
+            <View style={[styles.tabHint, { backgroundColor: theme.primaryLight }]}>
+              <Feather name="info" size={13} color={theme.primary} />
+              <Text style={[styles.tabHintText, { color: theme.primary }]}>
+                Tap to perform each examination. Findings appear after you examine.
+              </Text>
+            </View>
+            {simCase.exam.map((a) => renderActionItem(a))}
+          </View>
+        ) : null}
+        {activeTab === "investigate" ? (
+          <View>
+            <View style={[styles.tabHint, { backgroundColor: theme.primaryLight }]}>
+              <Feather name="info" size={13} color={theme.primary} />
+              <Text style={[styles.tabHintText, { color: theme.primary }]}>
+                Order investigations. Results take time. Not all tests are necessary - choose wisely.
+              </Text>
+            </View>
+            {simCase.investigate.map((a) => renderInvestigationItem(a))}
+          </View>
+        ) : null}
+        {activeTab === "stabilize" ? (
+          <View>
+            <View style={[styles.tabHint, { backgroundColor: theme.primaryLight }]}>
+              <Feather name="info" size={13} color={theme.primary} />
+              <Text style={[styles.tabHintText, { color: theme.primary }]}>
+                Give treatments and interventions. Critical actions are marked. Some options may be harmful!
+              </Text>
+            </View>
+            {simCase.stabilize.map((a) => renderStabilizeItem(a))}
+          </View>
+        ) : null}
         {activeTab === "differential" ? (
           <View>
             <Text style={[styles.diffHeader, { color: theme.text }]}>Select your working diagnosis:</Text>
@@ -1095,6 +1135,20 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   actionsList: { flex: 1 },
+  tabHint: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    padding: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.sm,
+  },
+  tabHintText: {
+    fontSize: 12,
+    fontWeight: "500",
+    flex: 1,
+    lineHeight: 17,
+  },
   actionItem: {
     padding: Spacing.md,
     borderRadius: BorderRadius.md,
