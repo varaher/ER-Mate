@@ -8,6 +8,7 @@ import {
   Alert,
   Animated,
   Platform,
+  Modal,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useRoute } from "@react-navigation/native";
@@ -15,6 +16,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RouteProp } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
 import { getCaseById, Vitals, SimAction, StabilizeAction } from "@/data/simulationCases";
@@ -29,6 +31,252 @@ const TAB_CONFIG: { key: TabType; label: string; icon: string }[] = [
   { key: "stabilize", label: "Stabilize", icon: "shield" },
   { key: "differential", label: "Dx", icon: "target" },
 ];
+
+const SIM_TUTORIAL_KEY = "ermate_sim_tutorial_seen";
+
+const TUTORIAL_STEPS = [
+  {
+    title: "Welcome to ER Simulation",
+    description: "You're about to manage a real emergency case. A patient arrives and you must diagnose and treat them under time pressure - just like a real ER shift.",
+    icon: "activity" as const,
+  },
+  {
+    title: "5 Tabs - Your Workflow",
+    description: "Work through the tabs left to right:\n\nHistory - Ask the patient questions\nExam - Perform physical examination\nLabs - Order investigations\nStabilize - Give treatments\nDx - Select your diagnosis",
+    icon: "layout" as const,
+  },
+  {
+    title: "Understanding Colors",
+    description: "Tap any action to perform it. After tapping:\n\nGreen check = Good action, useful finding\nRed flag badge = Critical red flag identified\nOrange warning = Unnecessary action that wastes time\nRed alert = Harmful action, could hurt the patient\n\nNot every option is the right choice - some are traps!",
+    icon: "eye" as const,
+  },
+  {
+    title: "Live Vital Signs",
+    description: "The dark bar at the top shows real-time vitals that change based on your actions.\n\nGreen = Normal range\nOrange = Abnormal, needs attention\nRed + Blinking = Critical, act NOW!\n\nIf you don't act fast enough, the patient deteriorates.",
+    icon: "heart" as const,
+  },
+  {
+    title: "Time is Ticking",
+    description: "Each case has a time limit shown in the timer. Some wrong investigations waste extra time (+Xs badge). If time runs out or the patient crashes, the simulation ends automatically.\n\nPrioritize critical interventions first!",
+    icon: "clock" as const,
+  },
+];
+
+function SimTutorialOverlay({ visible, onDismiss }: { visible: boolean; onDismiss: () => void }) {
+  const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
+  const [step, setStep] = useState(0);
+
+  if (!visible) return null;
+
+  const currentStep = TUTORIAL_STEPS[step];
+  const isLast = step === TUTORIAL_STEPS.length - 1;
+
+  return (
+    <Modal transparent animationType="fade" visible={visible}>
+      <View style={tutStyles.overlay}>
+        <View style={[tutStyles.card, { backgroundColor: theme.card, marginTop: insets.top + 60 }]}>
+          <View style={[tutStyles.iconCircle, { backgroundColor: theme.primaryLight }]}>
+            <Feather name={currentStep.icon} size={28} color={theme.primary} />
+          </View>
+          <Text style={[tutStyles.title, { color: theme.text }]}>{currentStep.title}</Text>
+          <Text style={[tutStyles.description, { color: theme.textSecondary }]}>{currentStep.description}</Text>
+
+          <View style={tutStyles.dots}>
+            {TUTORIAL_STEPS.map((_, i) => (
+              <View
+                key={i}
+                style={[
+                  tutStyles.dot,
+                  { backgroundColor: i === step ? theme.primary : theme.border },
+                ]}
+              />
+            ))}
+          </View>
+
+          <View style={tutStyles.buttonRow}>
+            {step > 0 ? (
+              <Pressable
+                style={[tutStyles.backBtn, { borderColor: theme.border }]}
+                onPress={() => setStep(step - 1)}
+              >
+                <Text style={[tutStyles.backBtnText, { color: theme.textSecondary }]}>Back</Text>
+              </Pressable>
+            ) : (
+              <Pressable
+                style={[tutStyles.backBtn, { borderColor: theme.border }]}
+                onPress={onDismiss}
+              >
+                <Text style={[tutStyles.backBtnText, { color: theme.textSecondary }]}>Skip</Text>
+              </Pressable>
+            )}
+            <Pressable
+              style={[tutStyles.nextBtn, { backgroundColor: theme.primary }]}
+              onPress={() => {
+                if (isLast) {
+                  onDismiss();
+                } else {
+                  setStep(step + 1);
+                }
+              }}
+            >
+              <Text style={tutStyles.nextBtnText}>{isLast ? "Start Simulation" : "Next"}</Text>
+              <Feather name={isLast ? "play" : "chevron-right"} size={16} color="#fff" />
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const tutStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.75)",
+    justifyContent: "flex-start",
+    alignItems: "center",
+    paddingHorizontal: Spacing.lg,
+  },
+  card: {
+    width: "100%",
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.xl,
+    alignItems: "center",
+  },
+  iconCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: Spacing.md,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: "700",
+    marginBottom: Spacing.md,
+    textAlign: "center",
+  },
+  description: {
+    fontSize: 14,
+    lineHeight: 22,
+    textAlign: "center",
+    marginBottom: Spacing.lg,
+  },
+  dots: {
+    flexDirection: "row",
+    gap: 6,
+    marginBottom: Spacing.lg,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  buttonRow: {
+    flexDirection: "row",
+    gap: Spacing.md,
+    width: "100%",
+  },
+  backBtn: {
+    flex: 1,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    alignItems: "center",
+  },
+  backBtnText: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  nextBtn: {
+    flex: 2,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.md,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.xs,
+  },
+  nextBtnText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+});
+
+function AnimatedVital({ label, value, displayValue, type, getColor }: {
+  label: string;
+  value: number;
+  displayValue: string;
+  type: string;
+  getColor: (type: string, value: number) => string;
+}) {
+  const color = getColor(type, value);
+  const isCritical = color === TriageColors.red;
+  const isWarning = color === TriageColors.orange;
+  const blinkAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (isCritical) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(blinkAnim, { toValue: 0.2, duration: 400, useNativeDriver: true }),
+          Animated.timing(blinkAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
+        ])
+      ).start();
+    } else {
+      blinkAnim.stopAnimation();
+      blinkAnim.setValue(1);
+    }
+  }, [isCritical]);
+
+  return (
+    <View style={vitalStyles.container}>
+      <Text style={vitalStyles.label}>{label}</Text>
+      <Animated.View style={[
+        vitalStyles.valueContainer,
+        {
+          backgroundColor: isCritical ? TriageColors.red + "25" : isWarning ? TriageColors.orange + "15" : "transparent",
+          borderColor: isCritical ? TriageColors.red + "60" : isWarning ? TriageColors.orange + "40" : "transparent",
+          opacity: isCritical ? blinkAnim : 1,
+        },
+      ]}>
+        <Animated.Text style={[vitalStyles.value, { color }]}>
+          {displayValue}
+        </Animated.Text>
+      </Animated.View>
+    </View>
+  );
+}
+
+const vitalStyles = StyleSheet.create({
+  container: {
+    alignItems: "center",
+    flex: 1,
+  },
+  label: {
+    color: "#94a3b8",
+    fontSize: 10,
+    fontWeight: "500",
+    textTransform: "uppercase",
+    marginBottom: 2,
+  },
+  valueContainer: {
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    minWidth: 38,
+    alignItems: "center",
+  },
+  value: {
+    fontSize: 15,
+    fontWeight: "800",
+    fontVariant: ["tabular-nums"],
+  },
+});
 
 export default function SimulationScreen() {
   const { theme } = useTheme();
@@ -46,15 +294,42 @@ export default function SimulationScreen() {
   const [revealedFindings, setRevealedFindings] = useState<Record<string, string>>({});
   const [pendingInvestigations, setPendingInvestigations] = useState<Record<string, number>>({});
   const [selectedDifferential, setSelectedDifferential] = useState<string | null>(null);
-  const [isRunning, setIsRunning] = useState(true);
+  const [isRunning, setIsRunning] = useState(false);
   const [hasCrashed, setHasCrashed] = useState(false);
   const [deteriorationMessages, setDeteriorationMessages] = useState<string[]>([]);
   const [showMessage, setShowMessage] = useState<string | null>(null);
   const [timeExpired, setTimeExpired] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [tutorialChecked, setTutorialChecked] = useState(false);
   const triggeredRulesRef = useRef<Set<number>>(new Set());
-  const pulseAnim = useRef(new Animated.Value(1)).current;
   const alertAnim = useRef(new Animated.Value(0)).current;
   const hasNavigatedRef = useRef(false);
+
+  useEffect(() => {
+    checkTutorial();
+  }, []);
+
+  const checkTutorial = async () => {
+    try {
+      const seen = await AsyncStorage.getItem(SIM_TUTORIAL_KEY);
+      if (!seen) {
+        setShowTutorial(true);
+      } else {
+        setIsRunning(true);
+      }
+    } catch {
+      setIsRunning(true);
+    }
+    setTutorialChecked(true);
+  };
+
+  const dismissTutorial = async () => {
+    setShowTutorial(false);
+    setIsRunning(true);
+    try {
+      await AsyncStorage.setItem(SIM_TUTORIAL_KEY, "true");
+    } catch {}
+  };
 
   useEffect(() => {
     if (!isRunning) return;
@@ -63,15 +338,6 @@ export default function SimulationScreen() {
     }, 1000);
     return () => clearInterval(timer);
   }, [isRunning]);
-
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1.15, duration: 500, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
-      ])
-    ).start();
-  }, []);
 
   useEffect(() => {
     if (!simCase || !isRunning || hasCrashed || hasNavigatedRef.current) return;
@@ -279,35 +545,27 @@ export default function SimulationScreen() {
     };
 
     if (Platform.OS === "web") {
-      const confirmed = window.confirm("Are you sure you want to end this simulation? You'll see your results.");
+      const confirmed = window.confirm("End simulation and see your results?");
       if (confirmed) {
         navigateToResults();
       }
     } else {
       Alert.alert(
         "End Simulation",
-        "Are you sure you want to end this simulation? You'll see your results.",
+        "End simulation and see your results?",
         [
           { text: "Continue", style: "cancel" },
-          {
-            text: "End & Review",
-            style: "destructive",
-            onPress: navigateToResults,
-          },
+          { text: "End & Review", style: "destructive", onPress: navigateToResults },
         ]
       );
     }
   };
 
-  const formatTime = (seconds: number) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m}:${s.toString().padStart(2, "0")}`;
-  };
-
   const getRemainingTime = () => {
     const remaining = Math.max(0, simCase.timeLimit - elapsedTime);
-    return formatTime(remaining);
+    const m = Math.floor(remaining / 60);
+    const s = remaining % 60;
+    return `${m}:${s.toString().padStart(2, "0")}`;
   };
 
   const getVitalColor = (type: string, value: number) => {
@@ -341,22 +599,38 @@ export default function SimulationScreen() {
     }
   };
 
-  const renderActionItem = (action: SimAction, category: "history" | "exam") => {
+  const getActionStatusInfo = (isDone: boolean, isRedFlag?: boolean, isHarmful?: boolean, isUnnecessary?: boolean, isPending?: boolean) => {
+    if (!isDone) return null;
+    if (isPending) return { label: "Pending", color: "#f59e0b", icon: "loader" as const };
+    if (isHarmful) return { label: "Harmful", color: TriageColors.red, icon: "alert-octagon" as const };
+    if (isUnnecessary) return { label: "Unnecessary", color: TriageColors.orange, icon: "alert-triangle" as const };
+    if (isRedFlag) return { label: "Red Flag", color: TriageColors.red, icon: "flag" as const };
+    return { label: "Done", color: TriageColors.green, icon: "check-circle" as const };
+  };
+
+  const renderActionItem = (action: SimAction) => {
     const isDone = performedActions.has(action.id);
     const finding = revealedFindings[action.id];
-    const showHarm = isDone && action.harmIfDone;
+    const isHarmful = isDone && !!action.harmIfDone;
+    const isUnnecessary = isDone && !!action.isUnnecessary && !action.harmIfDone;
+    const status = getActionStatusInfo(isDone, action.isRedFlag, isHarmful, isUnnecessary);
+
     return (
       <Pressable
         key={action.id}
         style={[
           styles.actionItem,
           {
-            backgroundColor: isDone
-              ? (showHarm ? TriageColors.orange + "15" : action.isRedFlag ? TriageColors.red + "10" : theme.backgroundDefault)
-              : theme.card,
-            borderColor: isDone
-              ? (showHarm ? TriageColors.orange + "40" : action.isRedFlag ? TriageColors.red + "40" : theme.border)
-              : theme.border,
+            backgroundColor: !isDone ? theme.card
+              : isHarmful ? TriageColors.red + "10"
+              : isUnnecessary ? TriageColors.orange + "10"
+              : action.isRedFlag ? TriageColors.red + "08"
+              : theme.backgroundDefault,
+            borderColor: !isDone ? theme.border
+              : isHarmful ? TriageColors.red + "40"
+              : isUnnecessary ? TriageColors.orange + "40"
+              : action.isRedFlag ? TriageColors.red + "30"
+              : TriageColors.green + "40",
           },
         ]}
         onPress={() => performAction(action.id, action.finding, action.timeCost)}
@@ -364,17 +638,16 @@ export default function SimulationScreen() {
       >
         <View style={styles.actionHeader}>
           <Feather
-            name={isDone ? "check-circle" : "circle"}
+            name={isDone ? (status?.icon || "check-circle") : "circle"}
             size={18}
-            color={isDone ? (showHarm ? TriageColors.orange : action.isRedFlag ? TriageColors.red : TriageColors.green) : theme.textMuted}
+            color={isDone ? (status?.color || TriageColors.green) : theme.textMuted}
           />
           <Text style={[styles.actionLabel, { color: isDone ? theme.text : theme.primary }]}>
             {action.label}
           </Text>
-          {action.isRedFlag && isDone ? (
-            <View style={[styles.redFlagBadge, { backgroundColor: TriageColors.red + "20" }]}>
-              <Feather name="flag" size={10} color={TriageColors.red} />
-              <Text style={[styles.redFlagText, { color: TriageColors.red }]}>Red Flag</Text>
+          {status ? (
+            <View style={[styles.statusBadge, { backgroundColor: status.color + "18" }]}>
+              <Text style={[styles.statusBadgeText, { color: status.color }]}>{status.label}</Text>
             </View>
           ) : null}
           {action.timeCost ? (
@@ -387,10 +660,16 @@ export default function SimulationScreen() {
         {finding ? (
           <Text style={[styles.findingText, { color: theme.textSecondary }]}>{finding}</Text>
         ) : null}
-        {showHarm ? (
-          <View style={[styles.harmBanner, { backgroundColor: TriageColors.orange + "15" }]}>
+        {isHarmful ? (
+          <View style={[styles.harmBanner, { backgroundColor: TriageColors.red + "10" }]}>
+            <Feather name="alert-octagon" size={12} color={TriageColors.red} />
+            <Text style={[styles.harmText, { color: TriageColors.red }]}>{action.harmIfDone}</Text>
+          </View>
+        ) : null}
+        {isUnnecessary && !isHarmful ? (
+          <View style={[styles.harmBanner, { backgroundColor: TriageColors.orange + "10" }]}>
             <Feather name="alert-triangle" size={12} color={TriageColors.orange} />
-            <Text style={[styles.harmText, { color: TriageColors.orange }]}>{action.harmIfDone}</Text>
+            <Text style={[styles.harmText, { color: TriageColors.orange }]}>This was unnecessary and wasted valuable time.</Text>
           </View>
         ) : null}
       </Pressable>
@@ -401,19 +680,28 @@ export default function SimulationScreen() {
     const isDone = performedActions.has(action.id);
     const finding = revealedFindings[action.id];
     const isPending = pendingInvestigations[action.id] !== undefined;
-    const showHarm = isDone && action.harmIfDone && !isPending;
+    const isHarmful = isDone && !!action.harmIfDone && !isPending;
+    const isUnnecessary = isDone && !!action.isUnnecessary && !action.harmIfDone && !isPending;
+    const status = getActionStatusInfo(isDone, action.isRedFlag, isHarmful, isUnnecessary, isPending);
+
     return (
       <Pressable
         key={action.id}
         style={[
           styles.actionItem,
           {
-            backgroundColor: isDone
-              ? (showHarm ? TriageColors.orange + "15" : action.isRedFlag ? TriageColors.red + "10" : theme.backgroundDefault)
-              : (action.isUnnecessary ? theme.card : theme.card),
-            borderColor: isDone
-              ? (showHarm ? TriageColors.orange + "40" : action.isRedFlag ? TriageColors.red + "40" : theme.border)
-              : theme.border,
+            backgroundColor: !isDone ? theme.card
+              : isHarmful ? TriageColors.red + "10"
+              : isUnnecessary ? TriageColors.orange + "10"
+              : isPending ? theme.warningLight || "#fff7ed"
+              : action.isRedFlag ? TriageColors.red + "08"
+              : theme.backgroundDefault,
+            borderColor: !isDone ? theme.border
+              : isHarmful ? TriageColors.red + "40"
+              : isUnnecessary ? TriageColors.orange + "40"
+              : isPending ? "#f59e0b40"
+              : action.isRedFlag ? TriageColors.red + "30"
+              : TriageColors.green + "40",
           },
         ]}
         onPress={() => performInvestigation(action)}
@@ -421,17 +709,22 @@ export default function SimulationScreen() {
       >
         <View style={styles.actionHeader}>
           <Feather
-            name={isDone ? (isPending ? "loader" : "check-circle") : "circle"}
+            name={isDone ? (status?.icon || "check-circle") : "circle"}
             size={18}
-            color={isDone ? (isPending ? theme.warning : showHarm ? TriageColors.orange : action.isRedFlag ? TriageColors.red : TriageColors.green) : theme.textMuted}
+            color={isDone ? (status?.color || TriageColors.green) : theme.textMuted}
           />
           <Text style={[styles.actionLabel, { color: isDone ? theme.text : theme.primary }]}>
             {action.label}
           </Text>
-          {action.timeToResult ? (
+          {action.timeToResult && !isDone ? (
             <Text style={[styles.timeToResult, { color: theme.textMuted }]}>
               ~{action.timeToResult}s
             </Text>
+          ) : null}
+          {status ? (
+            <View style={[styles.statusBadge, { backgroundColor: status.color + "18" }]}>
+              <Text style={[styles.statusBadgeText, { color: status.color }]}>{status.label}</Text>
+            </View>
           ) : null}
           {action.timeCost ? (
             <View style={[styles.timeCostBadge, { backgroundColor: TriageColors.orange + "20" }]}>
@@ -439,20 +732,20 @@ export default function SimulationScreen() {
               <Text style={[styles.timeCostText, { color: TriageColors.orange }]}>+{action.timeCost}s</Text>
             </View>
           ) : null}
-          {action.isRedFlag && isDone && !isPending ? (
-            <View style={[styles.redFlagBadge, { backgroundColor: TriageColors.red + "20" }]}>
-              <Feather name="flag" size={10} color={TriageColors.red} />
-              <Text style={[styles.redFlagText, { color: TriageColors.red }]}>Red Flag</Text>
-            </View>
-          ) : null}
         </View>
         {finding ? (
-          <Text style={[styles.findingText, { color: isPending ? theme.warning : theme.textSecondary }]}>{finding}</Text>
+          <Text style={[styles.findingText, { color: isPending ? "#f59e0b" : theme.textSecondary }]}>{finding}</Text>
         ) : null}
-        {showHarm ? (
-          <View style={[styles.harmBanner, { backgroundColor: TriageColors.orange + "15" }]}>
+        {isHarmful ? (
+          <View style={[styles.harmBanner, { backgroundColor: TriageColors.red + "10" }]}>
+            <Feather name="alert-octagon" size={12} color={TriageColors.red} />
+            <Text style={[styles.harmText, { color: TriageColors.red }]}>{action.harmIfDone}</Text>
+          </View>
+        ) : null}
+        {isUnnecessary && !isHarmful ? (
+          <View style={[styles.harmBanner, { backgroundColor: TriageColors.orange + "10" }]}>
             <Feather name="alert-triangle" size={12} color={TriageColors.orange} />
-            <Text style={[styles.harmText, { color: TriageColors.orange }]}>{action.harmIfDone}</Text>
+            <Text style={[styles.harmText, { color: TriageColors.orange }]}>Unnecessary investigation - wasted time and resources.</Text>
           </View>
         ) : null}
       </Pressable>
@@ -462,18 +755,26 @@ export default function SimulationScreen() {
   const renderStabilizeItem = (action: StabilizeAction) => {
     const isDone = performedActions.has(action.id);
     const finding = revealedFindings[action.id];
-    const showHarm = isDone && action.harmIfDone;
+    const isHarmful = isDone && !!action.harmIfDone;
+    const isUnnecessary = isDone && !!action.isUnnecessary && !action.harmIfDone;
+    const statusLabel = isHarmful ? "HARMFUL" : isUnnecessary ? "Unnecessary" : isDone && action.isCritical ? "Critical - Done" : isDone ? "Done" : null;
+    const statusColor = isHarmful ? TriageColors.red : isUnnecessary ? TriageColors.orange : isDone ? TriageColors.green : theme.textMuted;
+
     return (
       <Pressable
         key={action.id}
         style={[
           styles.actionItem,
           {
-            backgroundColor: isDone
-              ? (showHarm ? TriageColors.red + "12" : action.isCritical ? TriageColors.green + "10" : theme.backgroundDefault)
-              : theme.card,
-            borderColor: isDone
-              ? (showHarm ? TriageColors.red + "40" : action.isCritical ? TriageColors.green + "40" : theme.border)
+            backgroundColor: !isDone ? theme.card
+              : isHarmful ? TriageColors.red + "12"
+              : isUnnecessary ? TriageColors.orange + "10"
+              : action.isCritical ? TriageColors.green + "10"
+              : theme.backgroundDefault,
+            borderColor: !isDone ? theme.border
+              : isHarmful ? TriageColors.red + "40"
+              : isUnnecessary ? TriageColors.orange + "40"
+              : action.isCritical ? TriageColors.green + "40"
               : theme.border,
           },
         ]}
@@ -482,15 +783,15 @@ export default function SimulationScreen() {
       >
         <View style={styles.actionHeader}>
           <Feather
-            name={isDone ? (showHarm ? "alert-triangle" : "check-circle") : "zap"}
+            name={isDone ? (isHarmful ? "alert-octagon" : "check-circle") : "zap"}
             size={18}
-            color={isDone ? (showHarm ? TriageColors.red : TriageColors.green) : action.isCritical ? TriageColors.red : theme.primary}
+            color={isDone ? statusColor : action.isCritical ? TriageColors.red : theme.primary}
           />
           <Text
             style={[
               styles.actionLabel,
               {
-                color: isDone ? (showHarm ? TriageColors.red : theme.text) : action.isCritical ? TriageColors.red : theme.primary,
+                color: isDone ? (isHarmful ? TriageColors.red : theme.text) : action.isCritical ? TriageColors.red : theme.primary,
                 fontWeight: action.isCritical ? "700" : "600",
               },
             ]}
@@ -498,8 +799,13 @@ export default function SimulationScreen() {
             {action.label}
           </Text>
           {action.isCritical && !isDone ? (
-            <View style={[styles.criticalBadge, { backgroundColor: TriageColors.red + "20" }]}>
-              <Text style={[styles.criticalText, { color: TriageColors.red }]}>Critical</Text>
+            <View style={[styles.statusBadge, { backgroundColor: TriageColors.red + "18" }]}>
+              <Text style={[styles.statusBadgeText, { color: TriageColors.red }]}>Critical</Text>
+            </View>
+          ) : null}
+          {statusLabel && isDone ? (
+            <View style={[styles.statusBadge, { backgroundColor: statusColor + "18" }]}>
+              <Text style={[styles.statusBadgeText, { color: statusColor }]}>{statusLabel}</Text>
             </View>
           ) : null}
           {action.timeCost ? (
@@ -510,12 +816,18 @@ export default function SimulationScreen() {
           ) : null}
         </View>
         {finding ? (
-          <Text style={[styles.findingText, { color: showHarm ? TriageColors.red : TriageColors.green }]}>{finding}</Text>
+          <Text style={[styles.findingText, { color: isHarmful ? TriageColors.red : TriageColors.green }]}>{finding}</Text>
         ) : null}
-        {showHarm ? (
+        {isHarmful ? (
           <View style={[styles.harmBanner, { backgroundColor: TriageColors.red + "12" }]}>
             <Feather name="alert-octagon" size={12} color={TriageColors.red} />
             <Text style={[styles.harmText, { color: TriageColors.red }]}>{action.harmIfDone}</Text>
+          </View>
+        ) : null}
+        {isUnnecessary && !isHarmful ? (
+          <View style={[styles.harmBanner, { backgroundColor: TriageColors.orange + "10" }]}>
+            <Feather name="alert-triangle" size={12} color={TriageColors.orange} />
+            <Text style={[styles.harmText, { color: TriageColors.orange }]}>Unnecessary treatment - not indicated for this case.</Text>
           </View>
         ) : null}
       </Pressable>
@@ -524,18 +836,16 @@ export default function SimulationScreen() {
 
   const timeRatio = elapsedTime / simCase.timeLimit;
   const timerColor = timeRatio > 0.8 ? TriageColors.red : timeRatio > 0.5 ? TriageColors.orange : TriageColors.green;
-  const remainingSeconds = Math.max(0, simCase.timeLimit - elapsedTime);
   const progressWidth = `${Math.min(100, timeRatio * 100)}%`;
 
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
+      <SimTutorialOverlay visible={showTutorial} onDismiss={dismissTutorial} />
+
       <Animated.View
         style={[
           styles.alertOverlay,
-          {
-            opacity: alertAnim,
-            backgroundColor: TriageColors.red + "15",
-          },
+          { opacity: alertAnim, backgroundColor: TriageColors.red + "15" },
         ]}
         pointerEvents="none"
       />
@@ -545,6 +855,12 @@ export default function SimulationScreen() {
           <Text style={styles.patientName} numberOfLines={1}>
             {simCase.patientInfo.name}, {simCase.patientInfo.age}{simCase.patientInfo.gender === "Male" ? "M" : "F"}
           </Text>
+          <Pressable
+            onPress={() => setShowTutorial(true)}
+            style={styles.helpBtn}
+          >
+            <Feather name="help-circle" size={16} color="#94a3b8" />
+          </Pressable>
           <View style={[styles.timerBadge, { backgroundColor: timerColor + "30" }]}>
             <Feather name="clock" size={12} color={timerColor} />
             <Text style={[styles.timerText, { color: timerColor }]}>{getRemainingTime()}</Text>
@@ -556,47 +872,12 @@ export default function SimulationScreen() {
         </View>
 
         <View style={styles.vitalsRow}>
-          <View style={styles.vitalItem}>
-            <Text style={styles.vitalLabel}>HR</Text>
-            <Animated.Text
-              style={[
-                styles.vitalValue,
-                { color: getVitalColor("hr", currentVitals.hr), transform: [{ scale: pulseAnim }] },
-              ]}
-            >
-              {currentVitals.hr}
-            </Animated.Text>
-          </View>
-          <View style={styles.vitalItem}>
-            <Text style={styles.vitalLabel}>BP</Text>
-            <Text style={[styles.vitalValue, { color: getVitalColor("sbp", currentVitals.sbp) }]}>
-              {currentVitals.sbp}/{currentVitals.dbp}
-            </Text>
-          </View>
-          <View style={styles.vitalItem}>
-            <Text style={styles.vitalLabel}>SpO2</Text>
-            <Text style={[styles.vitalValue, { color: getVitalColor("spo2", currentVitals.spo2) }]}>
-              {currentVitals.spo2}%
-            </Text>
-          </View>
-          <View style={styles.vitalItem}>
-            <Text style={styles.vitalLabel}>RR</Text>
-            <Text style={[styles.vitalValue, { color: getVitalColor("rr", currentVitals.rr) }]}>
-              {currentVitals.rr}
-            </Text>
-          </View>
-          <View style={styles.vitalItem}>
-            <Text style={styles.vitalLabel}>T</Text>
-            <Text style={[styles.vitalValue, { color: getVitalColor("temp", currentVitals.temp) }]}>
-              {currentVitals.temp.toFixed(1)}
-            </Text>
-          </View>
-          <View style={styles.vitalItem}>
-            <Text style={styles.vitalLabel}>GCS</Text>
-            <Text style={[styles.vitalValue, { color: getVitalColor("gcs", currentVitals.gcs) }]}>
-              {currentVitals.gcs}
-            </Text>
-          </View>
+          <AnimatedVital label="HR" value={currentVitals.hr} displayValue={`${currentVitals.hr}`} type="hr" getColor={getVitalColor} />
+          <AnimatedVital label="BP" value={currentVitals.sbp} displayValue={`${currentVitals.sbp}/${currentVitals.dbp}`} type="sbp" getColor={getVitalColor} />
+          <AnimatedVital label="SpO2" value={currentVitals.spo2} displayValue={`${currentVitals.spo2}%`} type="spo2" getColor={getVitalColor} />
+          <AnimatedVital label="RR" value={currentVitals.rr} displayValue={`${currentVitals.rr}`} type="rr" getColor={getVitalColor} />
+          <AnimatedVital label="T" value={currentVitals.temp} displayValue={currentVitals.temp.toFixed(1)} type="temp" getColor={getVitalColor} />
+          <AnimatedVital label="GCS" value={currentVitals.gcs} displayValue={`${currentVitals.gcs}`} type="gcs" getColor={getVitalColor} />
         </View>
       </View>
 
@@ -657,11 +938,11 @@ export default function SimulationScreen() {
         contentContainerStyle={{ paddingHorizontal: Spacing.md, paddingBottom: insets.bottom + 80 }}
         showsVerticalScrollIndicator={false}
       >
-        {activeTab === "history" && simCase.history.map((a) => renderActionItem(a, "history"))}
-        {activeTab === "exam" && simCase.exam.map((a) => renderActionItem(a, "exam"))}
-        {activeTab === "investigate" && simCase.investigate.map((a) => renderInvestigationItem(a))}
-        {activeTab === "stabilize" && simCase.stabilize.map((a) => renderStabilizeItem(a))}
-        {activeTab === "differential" && (
+        {activeTab === "history" ? simCase.history.map((a) => renderActionItem(a)) : null}
+        {activeTab === "exam" ? simCase.exam.map((a) => renderActionItem(a)) : null}
+        {activeTab === "investigate" ? simCase.investigate.map((a) => renderInvestigationItem(a)) : null}
+        {activeTab === "stabilize" ? simCase.stabilize.map((a) => renderStabilizeItem(a)) : null}
+        {activeTab === "differential" ? (
           <View>
             <Text style={[styles.diffHeader, { color: theme.text }]}>Select your working diagnosis:</Text>
             {simCase.differentials.map((d) => (
@@ -696,7 +977,7 @@ export default function SimulationScreen() {
               </Pressable>
             ))}
           </View>
-        )}
+        ) : null}
       </ScrollView>
 
       {!hasCrashed && !timeExpired ? (
@@ -733,12 +1014,16 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: Spacing.xs,
+    gap: Spacing.sm,
   },
   patientName: {
     color: "#e2e8f0",
     fontSize: 13,
     fontWeight: "600",
     flex: 1,
+  },
+  helpBtn: {
+    padding: 4,
   },
   timerBadge: {
     flexDirection: "row",
@@ -767,20 +1052,7 @@ const styles = StyleSheet.create({
   vitalsRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-  },
-  vitalItem: {
-    alignItems: "center",
-  },
-  vitalLabel: {
-    color: "#94a3b8",
-    fontSize: 10,
-    fontWeight: "500",
-    textTransform: "uppercase",
-  },
-  vitalValue: {
-    fontSize: 16,
-    fontWeight: "800",
-    fontVariant: ["tabular-nums"],
+    gap: 2,
   },
   messageBar: {
     flexDirection: "row",
@@ -843,6 +1115,17 @@ const styles = StyleSheet.create({
   timeToResult: {
     ...Typography.caption,
   },
+  statusBadge: {
+    paddingVertical: 2,
+    paddingHorizontal: 7,
+    borderRadius: BorderRadius.full,
+  },
+  statusBadgeText: {
+    fontSize: 9,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+  },
   timeCostBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -852,27 +1135,6 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.full,
   },
   timeCostText: {
-    fontSize: 9,
-    fontWeight: "700",
-  },
-  redFlagBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 2,
-    paddingVertical: 2,
-    paddingHorizontal: 6,
-    borderRadius: BorderRadius.full,
-  },
-  redFlagText: {
-    fontSize: 9,
-    fontWeight: "700",
-  },
-  criticalBadge: {
-    paddingVertical: 2,
-    paddingHorizontal: 6,
-    borderRadius: BorderRadius.full,
-  },
-  criticalText: {
     fontSize: 9,
     fontWeight: "700",
   },
