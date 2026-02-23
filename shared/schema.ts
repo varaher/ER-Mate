@@ -111,3 +111,25 @@ export const insertSubscriptionSchema = createInsertSchema(subscriptions).omit({
 
 export type SubscriptionRecord = typeof subscriptions.$inferSelect;
 export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;
+
+export const userFeedback = pgTable("user_feedback", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id"),
+  userEmail: text("user_email"),
+  userName: text("user_name"),
+  category: text("category").notNull().default("general"),
+  message: text("message").notNull(),
+  platform: text("platform"),
+  appVersion: text("app_version"),
+  status: text("status").notNull().default("new"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertUserFeedbackSchema = createInsertSchema(userFeedback).omit({
+  id: true,
+  createdAt: true,
+  status: true,
+});
+
+export type UserFeedbackRecord = typeof userFeedback.$inferSelect;
+export type InsertUserFeedback = z.infer<typeof insertUserFeedbackSchema>;

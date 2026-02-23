@@ -7,7 +7,7 @@ import { generateDiagnosisSuggestions, recordFeedback, getFeedbackStats, getLear
 import { getOrCreateSubscription, canCreateCase, incrementCaseCount, activatePremium, cancelSubscription, FREE_CASE_LIMIT, PREMIUM_PRICE_INR } from "./services/subscription";
 import { getEMReferenceResponse, EM_TOPICS, type EMReferenceMessage } from "./services/emReference";
 import { getDb } from "./db";
-import { emReferenceFeedback } from "@shared/schema";
+import { emReferenceFeedback, userFeedback } from "@shared/schema";
 import { eq, desc, count, sql as drizzleSql } from "drizzle-orm";
 
 const upload = multer({ 
@@ -2387,6 +2387,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("[EMReference] Feedback stats error:", error);
       res.status(500).json({ error: "Failed to get feedback stats" });
+    }
+  });
+
+  app.post("/api/feedback", async (req: Request, res: Response) => {
+    try {
+      const { userId, userEmail, userName, category, message, platform, appVersion } = req.body;
+      if (!message || !message.trim()) {
+        return res.status(400).json({ error: "Feedback message is required" });
+      }
+      const db = getDb()!;
+      const [inserted] = await db.insert(userFeedback).values({
+        userId: userId || null,
+        userEmail: userEmail || null,
+        userName: userName || null,
+        category: category || "general",
+        message: message.trim(),
+        platform: platform || null,
+        appVersion: appVersion || null,
+      }).returning();
+      res.json({ success: true, id: inserted.id });
+    } catch (error) {
+      console.error("[Feedback] Error saving feedback:", error);
+      res.status(500).json({ error: "Failed to save feedback" });
+    }
+  });
+
+  app.get("/api/feedback", async (_req: Request, res: Response) => {
+    try {
+      const db = getDb()!;
+      const items = await db.select().from(userFeedback).orderBy(desc(userFeedback.createdAt)).limit(100);
+      res.json(items);
+    } catch (error) {
+      console.error("[Feedback] Error fetching feedback:", error);
+      res.status(500).json({ error: "Failed to fetch feedback" });
     }
   });
 

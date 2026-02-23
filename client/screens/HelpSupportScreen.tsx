@@ -8,6 +8,7 @@ import {
   Alert,
   TextInput,
   Platform,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -15,7 +16,15 @@ import { Feather } from "@expo/vector-icons";
 import * as Linking from "expo-linking";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
+import { getApiUrl } from "@/lib/query-client";
 import { Spacing, BorderRadius, Typography } from "@/constants/theme";
+
+const FEEDBACK_CATEGORIES = [
+  { key: "bug", label: "Bug Report", icon: "alert-triangle" as const, color: "#EF4444" },
+  { key: "feature", label: "Feature Request", icon: "star" as const, color: "#F59E0B" },
+  { key: "improvement", label: "Improvement", icon: "trending-up" as const, color: "#3B82F6" },
+  { key: "general", label: "General", icon: "message-circle" as const, color: "#10B981" },
+];
 
 const FAQ_ITEMS = [
   {
@@ -51,7 +60,9 @@ export default function HelpSupportScreen() {
   const headerHeight = useHeaderHeight();
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
   const [feedbackText, setFeedbackText] = useState("");
+  const [feedbackCategory, setFeedbackCategory] = useState("general");
   const [feedbackSent, setFeedbackSent] = useState(false);
+  const [feedbackSending, setFeedbackSending] = useState(false);
 
   const handleEmailSupport = async () => {
     const subject = encodeURIComponent("ErMate Support Request");
@@ -69,15 +80,39 @@ export default function HelpSupportScreen() {
     }
   };
 
-  const handleSendFeedback = () => {
+  const handleSendFeedback = async () => {
     if (!feedbackText.trim()) {
       Alert.alert("Empty Feedback", "Please type your feedback or suggestion before sending.");
       return;
     }
-    setFeedbackSent(true);
-    setFeedbackText("");
-    Alert.alert("Thank You!", "Your feedback has been submitted. We appreciate your input in making ErMate better.");
-    setTimeout(() => setFeedbackSent(false), 3000);
+    setFeedbackSending(true);
+    try {
+      const baseUrl = getApiUrl();
+      const url = new URL("/api/feedback", baseUrl).href;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user?.id || null,
+          userEmail: user?.email || null,
+          userName: user?.name || null,
+          category: feedbackCategory,
+          message: feedbackText.trim(),
+          platform: Platform.OS,
+          appVersion: "1.0.0",
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to send");
+      setFeedbackSent(true);
+      setFeedbackText("");
+      setFeedbackCategory("general");
+      Alert.alert("Thank You!", "Your feedback has been submitted. We appreciate your input in making ErMate better.");
+      setTimeout(() => setFeedbackSent(false), 3000);
+    } catch {
+      Alert.alert("Error", "Could not send feedback. Please try again or email us directly.");
+    } finally {
+      setFeedbackSending(false);
+    }
   };
 
   const toggleFaq = (index: number) => {
@@ -138,6 +173,31 @@ export default function HelpSupportScreen() {
           <Text style={[styles.feedbackSubtitle, { color: theme.textSecondary }]}>
             Help us improve ErMate with your suggestions
           </Text>
+          <View style={styles.categoryRow}>
+            {FEEDBACK_CATEGORIES.map((cat) => (
+              <Pressable
+                key={cat.key}
+                style={[
+                  styles.categoryChip,
+                  {
+                    backgroundColor: feedbackCategory === cat.key ? cat.color + "20" : theme.backgroundDefault,
+                    borderColor: feedbackCategory === cat.key ? cat.color : theme.border,
+                  },
+                ]}
+                onPress={() => setFeedbackCategory(cat.key)}
+              >
+                <Feather name={cat.icon} size={14} color={feedbackCategory === cat.key ? cat.color : theme.textMuted} />
+                <Text
+                  style={[
+                    styles.categoryLabel,
+                    { color: feedbackCategory === cat.key ? cat.color : theme.textSecondary },
+                  ]}
+                >
+                  {cat.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
           <TextInput
             style={[
               styles.feedbackInput,
@@ -158,13 +218,24 @@ export default function HelpSupportScreen() {
           <Pressable
             style={({ pressed }) => [
               styles.sendBtn,
-              { backgroundColor: theme.primary, opacity: pressed ? 0.8 : 1 },
+              { backgroundColor: theme.primary, opacity: feedbackSending || pressed ? 0.6 : 1 },
             ]}
             onPress={handleSendFeedback}
+            disabled={feedbackSending}
           >
-            <Feather name="send" size={16} color="#fff" />
-            <Text style={styles.sendBtnText}>Send Feedback</Text>
+            {feedbackSending ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Feather name="send" size={16} color="#fff" />
+            )}
+            <Text style={styles.sendBtnText}>{feedbackSending ? "Sending..." : "Send Feedback"}</Text>
           </Pressable>
+          {feedbackSent ? (
+            <View style={[styles.sentBanner, { backgroundColor: "#10B98120" }]}>
+              <Feather name="check-circle" size={16} color="#10B981" />
+              <Text style={{ color: "#10B981", ...Typography.small }}>Feedback sent successfully</Text>
+            </View>
+          ) : null}
         </View>
 
         <View style={[styles.section, { backgroundColor: theme.card }]}>
@@ -240,6 +311,31 @@ const styles = StyleSheet.create({
   faqQuestion: { ...Typography.bodyMedium, flex: 1 },
   faqAnswer: { ...Typography.small, marginTop: Spacing.sm, lineHeight: 20 },
   feedbackSubtitle: { ...Typography.small, marginBottom: Spacing.md },
+  categoryRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  categoryChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: Spacing.sm,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+  },
+  categoryLabel: { ...Typography.small },
+  sentBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+    padding: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    justifyContent: "center",
+  },
   feedbackInput: {
     borderWidth: 1,
     borderRadius: BorderRadius.md,
