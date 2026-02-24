@@ -1167,6 +1167,7 @@ export default function CaseSheetScreen() {
         refer_to: dispositionData.referTo || "",
       },
       addendum_notes: treatmentData.addendumNotes ? [{ text: treatmentData.addendumNotes, timestamp: new Date().toISOString() }] : [],
+      psychological: psychData,
       mode_of_arrival: modeOfArrival,
       mlc: isMLC,
       mlc_details: isMLC ? {
