@@ -144,7 +144,8 @@ const POLICY_SECTIONS = [
     title: "11. Contact Information",
     items: [
       "For privacy-related concerns, contact Varah Group.",
-      "Email: support@varahgroup.com",
+      "Email: varahgrp@gmail.com",
+      "Website: www.varahgrp.com",
     ],
   },
 ];
@@ -410,7 +411,7 @@ export default function PrivacyScreen() {
         <View style={styles.footer}>
           <Feather name="mail" size={14} color={theme.textMuted} />
           <Text style={[styles.footerText, { color: theme.textMuted }]}>
-            For privacy-related concerns, contact Varah Group at support@varahgroup.com
+            For privacy-related concerns, contact Varah Group at varahgrp@gmail.com | www.varahgrp.com
           </Text>
         </View>
       </ScrollView>
