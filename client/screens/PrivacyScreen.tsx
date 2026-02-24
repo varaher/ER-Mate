@@ -14,7 +14,7 @@ import { Feather } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
-import { Spacing, BorderRadius, Typography } from "@/constants/theme";
+import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
 
 const PRIVACY_PREFS_KEY = "@ermate_privacy_prefs";
 
@@ -32,12 +32,95 @@ const DEFAULT_PREFS: PrivacyPrefs = {
   autoLockTimeout: 5,
 };
 
+const POLICY_SECTIONS = [
+  {
+    icon: "database" as const,
+    title: "What Data We Collect",
+    items: [
+      "Patient demographics (name, age, gender, contact details) as entered by the treating physician",
+      "Clinical data including vitals, examination findings, investigations, treatment details, and discharge summaries",
+      "Psychological assessment data (suicidal ideation, self-harm history, substance abuse screening)",
+      "Voice recordings (temporarily processed for transcription, not stored permanently)",
+      "Document scans (processed for OCR extraction, original images not retained on servers)",
+      "Doctor's account information (name, email, institution, medical registration number)",
+    ],
+  },
+  {
+    icon: "lock" as const,
+    title: "How We Protect Your Data",
+    items: [
+      "All data is transmitted over HTTPS with TLS 1.2+ encryption",
+      "Patient records are stored on secured servers with access controls",
+      "Authentication tokens are stored securely on your device",
+      "Voice recordings are processed in real-time and discarded after transcription",
+      "AI processing uses de-identified data snippets -- full patient identity is never sent to AI models",
+      "Session-based access ensures only authenticated doctors can view their cases",
+    ],
+  },
+  {
+    icon: "users" as const,
+    title: "Who Can Access Patient Data",
+    items: [
+      "Only the treating physician who created the case can access the full record",
+      "ErMate staff do not access individual patient records",
+      "AI features process clinical data without personally identifiable information (PII)",
+      "No patient data is shared with third parties for marketing or commercial purposes",
+      "Data may be shared with authorized medical personnel if explicitly enabled by the physician",
+    ],
+  },
+  {
+    icon: "server" as const,
+    title: "Data Storage & Retention",
+    items: [
+      "Clinical records are stored on secure cloud infrastructure",
+      "Local device caching is used for offline access and is encrypted",
+      "Cached data can be cleared at any time from this screen",
+      "Account deletion removes all associated data within 30 days",
+      "Data retention follows applicable medical records regulations",
+    ],
+  },
+  {
+    icon: "cpu" as const,
+    title: "AI & Voice Processing",
+    items: [
+      "Voice dictation uses Sarvam AI and OpenAI for speech-to-text conversion",
+      "Audio is processed in real-time and not stored after transcription",
+      "AI diagnosis uses clinical findings only -- patient name and identifiers are excluded from AI prompts",
+      "Document scanning extracts text via OCR -- scanned images are not permanently stored",
+      "AI-generated suggestions are for clinical decision support only and do not replace physician judgment",
+    ],
+  },
+  {
+    icon: "globe" as const,
+    title: "Regulatory Compliance",
+    items: [
+      "ErMate is designed in accordance with India's Digital Personal Data Protection Act (DPDPA) 2023",
+      "Follows National Medical Commission (NMC) guidelines on electronic medical records",
+      "Supports patient's right to access, correct, and delete their data",
+      "Data processing is based on legitimate medical purpose and physician consent",
+      "Cross-border data transfers (if any) comply with applicable regulations",
+    ],
+  },
+  {
+    icon: "user-check" as const,
+    title: "Your Rights",
+    items: [
+      "Request a copy of all your data via the Download My Data option below",
+      "Delete your account and all associated data permanently",
+      "Opt out of analytics and AI training data sharing",
+      "Clear locally cached data from your device at any time",
+      "Contact us for any data-related concerns or requests",
+    ],
+  },
+];
+
 export default function PrivacyScreen() {
   const { theme } = useTheme();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const [prefs, setPrefs] = useState<PrivacyPrefs>(DEFAULT_PREFS);
+  const [expandedPolicy, setExpandedPolicy] = useState<number | null>(null);
 
   useEffect(() => {
     loadPrefs();
@@ -137,22 +220,61 @@ export default function PrivacyScreen() {
     );
   };
 
+  const PolicySection = ({ section, index }: { section: typeof POLICY_SECTIONS[0]; index: number }) => {
+    const isExpanded = expandedPolicy === index;
+    return (
+      <View style={[styles.policySection, { backgroundColor: theme.card }]}>
+        <Pressable
+          style={styles.policySectionHeader}
+          onPress={() => setExpandedPolicy(isExpanded ? null : index)}
+        >
+          <View style={[styles.policyIconCircle, { backgroundColor: theme.primaryLight }]}>
+            <Feather name={section.icon} size={16} color={theme.primary} />
+          </View>
+          <Text style={[styles.policySectionTitle, { color: theme.text }]}>{section.title}</Text>
+          <Feather name={isExpanded ? "chevron-up" : "chevron-down"} size={18} color={theme.textMuted} />
+        </Pressable>
+        {isExpanded && (
+          <View style={styles.policyItems}>
+            {section.items.map((item, idx) => (
+              <View key={idx} style={styles.policyItem}>
+                <View style={[styles.bulletDot, { backgroundColor: theme.primary }]} />
+                <Text style={[styles.policyItemText, { color: theme.textSecondary }]}>{item}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
+    );
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundDefault }]}>
       <ScrollView
         contentContainerStyle={[styles.content, { paddingTop: headerHeight + 12, paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={[styles.infoCard, { backgroundColor: theme.primaryLight }]}>
-          <Feather name="shield" size={24} color={theme.primary} />
-          <Text style={[styles.infoText, { color: theme.text }]}>
-            Your patient data is encrypted and stored securely. ErMate complies with healthcare data privacy standards.
+        <View style={[styles.headerCard, { backgroundColor: theme.primaryLight }]}>
+          <View style={[styles.headerIconCircle, { backgroundColor: theme.primary + "20" }]}>
+            <Feather name="shield" size={28} color={theme.primary} />
+          </View>
+          <Text style={[styles.headerTitle, { color: theme.text }]}>Privacy & Data Protection</Text>
+          <Text style={[styles.headerSubtitle, { color: theme.textSecondary }]}>
+            ErMate takes patient data privacy seriously. All clinical information is handled with the highest standards of security and confidentiality.
           </Text>
+          <View style={[styles.lastUpdated, { backgroundColor: theme.backgroundDefault + "80" }]}>
+            <Feather name="clock" size={12} color={theme.textMuted} />
+            <Text style={[styles.lastUpdatedText, { color: theme.textMuted }]}>Last updated: February 2026</Text>
+          </View>
         </View>
 
-        <View style={[styles.section, { backgroundColor: theme.card }]}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Data Sharing</Text>
+        <Text style={[styles.sectionHeader, { color: theme.text }]}>Privacy Policy</Text>
+        {POLICY_SECTIONS.map((section, index) => (
+          <PolicySection key={index} section={section} index={index} />
+        ))}
 
+        <Text style={[styles.sectionHeader, { color: theme.text }]}>Data Sharing Preferences</Text>
+        <View style={[styles.section, { backgroundColor: theme.card }]}>
           <View style={[styles.settingRow, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
             <View style={[styles.iconCircle, { backgroundColor: theme.primaryLight }]}>
               <Feather name="bar-chart-2" size={18} color={theme.primary} />
@@ -186,9 +308,8 @@ export default function PrivacyScreen() {
           </View>
         </View>
 
+        <Text style={[styles.sectionHeader, { color: theme.text }]}>Security</Text>
         <View style={[styles.section, { backgroundColor: theme.card }]}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Security</Text>
-
           <View style={styles.settingRow}>
             <View style={[styles.iconCircle, { backgroundColor: "#22c55e20" }]}>
               <Feather name="lock" size={18} color="#22c55e" />
@@ -206,9 +327,8 @@ export default function PrivacyScreen() {
           </View>
         </View>
 
+        <Text style={[styles.sectionHeader, { color: theme.text }]}>Your Data</Text>
         <View style={[styles.section, { backgroundColor: theme.card }]}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Your Data</Text>
-
           <Pressable
             style={({ pressed }) => [styles.actionRow, { borderBottomWidth: 1, borderBottomColor: theme.border, opacity: pressed ? 0.7 : 1 }]}
             onPress={handleClearLocalData}
@@ -251,6 +371,13 @@ export default function PrivacyScreen() {
             <Feather name="chevron-right" size={18} color={theme.textMuted} />
           </Pressable>
         </View>
+
+        <View style={styles.footer}>
+          <Feather name="mail" size={14} color={theme.textMuted} />
+          <Text style={[styles.footerText, { color: theme.textMuted }]}>
+            For privacy-related inquiries, contact us at privacy@ermate.in
+          </Text>
+        </View>
       </ScrollView>
     </View>
   );
@@ -259,21 +386,98 @@ export default function PrivacyScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg },
-  infoCard: {
+  headerCard: {
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.xl,
+    marginBottom: Spacing.xl,
+    alignItems: "center",
+  },
+  headerIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: Spacing.md,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    marginBottom: Spacing.xs,
+    textAlign: "center",
+  },
+  headerSubtitle: {
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: "center",
+    marginBottom: Spacing.md,
+  },
+  lastUpdated: {
     flexDirection: "row",
     alignItems: "center",
-    padding: Spacing.lg,
-    borderRadius: BorderRadius.lg,
-    marginBottom: Spacing.lg,
-    gap: Spacing.md,
+    gap: 6,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.md,
   },
-  infoText: { ...Typography.small, flex: 1 },
+  lastUpdatedText: {
+    fontSize: 11,
+    fontWeight: "500",
+  },
+  sectionHeader: {
+    ...Typography.h4,
+    marginBottom: Spacing.sm,
+    marginTop: Spacing.sm,
+  },
+  policySection: {
+    borderRadius: BorderRadius.lg,
+    marginBottom: Spacing.sm,
+    overflow: "hidden",
+  },
+  policySectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: Spacing.md,
+    gap: Spacing.sm,
+  },
+  policyIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  policySectionTitle: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  policyItems: {
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.md,
+  },
+  policyItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  bulletDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginTop: 6,
+  },
+  policyItemText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 19,
+  },
   section: {
     borderRadius: BorderRadius.lg,
     marginBottom: Spacing.lg,
     padding: Spacing.lg,
   },
-  sectionTitle: { ...Typography.h4, marginBottom: Spacing.md },
   settingRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -296,4 +500,14 @@ const styles = StyleSheet.create({
   settingInfo: { flex: 1 },
   settingLabel: { ...Typography.bodyMedium },
   settingDesc: { ...Typography.caption, marginTop: 2 },
+  footer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.xs,
+    paddingVertical: Spacing.xl,
+  },
+  footerText: {
+    fontSize: 12,
+  },
 });
