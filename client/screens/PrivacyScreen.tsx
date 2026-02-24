@@ -34,82 +34,117 @@ const DEFAULT_PREFS: PrivacyPrefs = {
 
 const POLICY_SECTIONS = [
   {
-    icon: "database" as const,
-    title: "What Data We Collect",
+    icon: "info" as const,
+    title: "1. Introduction",
     items: [
-      "Patient demographics (name, age, gender, contact details) as entered by the treating physician",
-      "Clinical data including vitals, examination findings, investigations, treatment details, and discharge summaries",
-      "Psychological assessment data (suicidal ideation, self-harm history, substance abuse screening)",
-      "Voice recordings (temporarily processed for transcription, not stored permanently)",
-      "Document scans (processed for OCR extraction, original images not retained on servers)",
-      "Doctor's account information (name, email, institution, medical registration number)",
+      "ErMate is a mobile-based Emergency Room Electronic Medical Records (EMR) application designed for licensed medical professionals.",
+      "Developed by Varah Group.",
+      "This Privacy Policy explains how we collect, use, store, and protect data within the application.",
+      "By using ErMate, you agree to the practices described in this policy.",
+    ],
+  },
+  {
+    icon: "database" as const,
+    title: "2. Information We Collect",
+    items: [
+      "Account Information: Name, email address, login credentials, and subscription status.",
+      "Clinical Data Entered by Doctors: Patient name, age and gender, clinical history, examination findings, investigations, diagnosis, treatment details, and discharge summaries.",
+      "Psychological assessment data (suicidal ideation, self-harm history, substance abuse screening) as entered by the treating physician.",
+      "Voice recordings (temporarily processed for transcription, not stored permanently).",
+      "Document scans (processed for OCR extraction, original images not retained on servers).",
+      "All clinical information is entered by authorized healthcare professionals for clinical documentation purposes.",
+    ],
+  },
+  {
+    icon: "target" as const,
+    title: "3. Purpose of Data Collection",
+    items: [
+      "Clinical documentation.",
+      "Emergency room workflow management.",
+      "Generating structured case sheets.",
+      "Generating discharge summaries.",
+      "AI-assisted clinical reasoning support.",
+      "Educational simulation and learning modules.",
+      "ErMate does not sell, rent, or share patient data with third parties for marketing purposes.",
     ],
   },
   {
     icon: "lock" as const,
-    title: "How We Protect Your Data",
+    title: "4. Data Storage & Security",
     items: [
-      "All data is transmitted over HTTPS with TLS 1.2+ encryption",
-      "Patient records are stored on secured servers with access controls",
-      "Authentication tokens are stored securely on your device",
-      "Voice recordings are processed in real-time and discarded after transcription",
-      "AI processing uses de-identified data snippets -- full patient identity is never sent to AI models",
-      "Session-based access ensures only authenticated doctors can view their cases",
-    ],
-  },
-  {
-    icon: "users" as const,
-    title: "Who Can Access Patient Data",
-    items: [
-      "Only the treating physician who created the case can access the full record",
-      "ErMate staff do not access individual patient records",
-      "AI features process clinical data without personally identifiable information (PII)",
-      "No patient data is shared with third parties for marketing or commercial purposes",
-      "Data may be shared with authorized medical personnel if explicitly enabled by the physician",
-    ],
-  },
-  {
-    icon: "server" as const,
-    title: "Data Storage & Retention",
-    items: [
-      "Clinical records are stored on secure cloud infrastructure",
-      "Local device caching is used for offline access and is encrypted",
-      "Cached data can be cleared at any time from this screen",
-      "Account deletion removes all associated data within 30 days",
-      "Data retention follows applicable medical records regulations",
+      "All data is transmitted using secure HTTPS encryption.",
+      "Clinical data is stored on secure backend servers.",
+      "Access is restricted to authenticated users.",
+      "Session-based authentication ensures only logged-in doctors can access case data.",
+      "Reasonable technical safeguards are implemented to prevent unauthorized access.",
+      "Local device caching is used for offline access and can be cleared at any time from this screen.",
     ],
   },
   {
     icon: "cpu" as const,
-    title: "AI & Voice Processing",
+    title: "5. AI Processing",
     items: [
-      "Voice dictation uses Sarvam AI and OpenAI for speech-to-text conversion",
-      "Audio is processed in real-time and not stored after transcription",
-      "AI diagnosis uses clinical findings only -- patient name and identifiers are excluded from AI prompts",
-      "Document scanning extracts text via OCR -- scanned images are not permanently stored",
-      "AI-generated suggestions are for clinical decision support only and do not replace physician judgment",
+      "Certain features (such as AI diagnosis, smart dictation, and reference chat) process clinical text using third-party AI services.",
+      "Only necessary clinical information is processed.",
+      "AI services are used solely to generate clinical assistance outputs.",
+      "ErMate does not allow third-party AI providers to independently store or use patient data for unrelated purposes.",
+      "Doctors are advised to avoid entering unnecessary personally identifiable information when using AI-powered features.",
+      "AI-generated suggestions are for clinical decision support only and do not replace physician judgment.",
     ],
   },
   {
-    icon: "globe" as const,
-    title: "Regulatory Compliance",
+    icon: "server" as const,
+    title: "6. Data Retention",
     items: [
-      "ErMate is designed in accordance with India's Digital Personal Data Protection Act (DPDPA) 2023",
-      "Follows National Medical Commission (NMC) guidelines on electronic medical records",
-      "Supports patient's right to access, correct, and delete their data",
-      "Data processing is based on legitimate medical purpose and physician consent",
-      "Cross-border data transfers (if any) comply with applicable regulations",
+      "Clinical data remains stored while the user's subscription is active.",
+      "Data is removed if the user deletes specific cases.",
+      "Data is removed if the user deletes their account.",
+      "Data is removed upon a formal deletion request.",
+      "Automated retention limits may be implemented in the future in compliance with applicable regulations.",
     ],
   },
   {
     icon: "user-check" as const,
-    title: "Your Rights",
+    title: "7. User Responsibility",
     items: [
-      "Request a copy of all your data via the Download My Data option below",
-      "Delete your account and all associated data permanently",
-      "Opt out of analytics and AI training data sharing",
-      "Clear locally cached data from your device at any time",
-      "Contact us for any data-related concerns or requests",
+      "ErMate is a documentation tool used by licensed healthcare professionals.",
+      "Doctors using the app are responsible for obtaining appropriate patient consent.",
+      "Doctors must comply with local hospital data policies.",
+      "Doctors must ensure device-level security (screen lock, password protection).",
+    ],
+  },
+  {
+    icon: "globe" as const,
+    title: "8. Compliance with Indian Law",
+    items: [
+      "ErMate operates in accordance with the Digital Personal Data Protection Act (DPDPA), 2023 (India).",
+      "Follows applicable medical record-keeping guidelines from regulatory authorities.",
+    ],
+  },
+  {
+    icon: "trash-2" as const,
+    title: "9. Data Deletion Requests",
+    items: [
+      "Users may request account deletion or data deletion at any time.",
+      "Requests can be submitted through the app (see 'Your Data' section below).",
+      "You may also contact us via email for deletion requests.",
+      "Deletion requests will be processed within 30 days.",
+    ],
+  },
+  {
+    icon: "refresh-cw" as const,
+    title: "10. Changes to This Policy",
+    items: [
+      "We may update this Privacy Policy periodically.",
+      "Users will be notified of significant changes through app updates.",
+    ],
+  },
+  {
+    icon: "mail" as const,
+    title: "11. Contact Information",
+    items: [
+      "For privacy-related concerns, contact Varah Group.",
+      "Email: support@varahgroup.com",
     ],
   },
 ];
@@ -258,13 +293,13 @@ export default function PrivacyScreen() {
           <View style={[styles.headerIconCircle, { backgroundColor: theme.primary + "20" }]}>
             <Feather name="shield" size={28} color={theme.primary} />
           </View>
-          <Text style={[styles.headerTitle, { color: theme.text }]}>Privacy & Data Protection</Text>
+          <Text style={[styles.headerTitle, { color: theme.text }]}>Privacy Policy</Text>
           <Text style={[styles.headerSubtitle, { color: theme.textSecondary }]}>
-            ErMate takes patient data privacy seriously. All clinical information is handled with the highest standards of security and confidentiality.
+            ErMate by Varah Group takes patient data privacy seriously. All clinical information is handled with the highest standards of security and confidentiality.
           </Text>
           <View style={[styles.lastUpdated, { backgroundColor: theme.backgroundDefault + "80" }]}>
             <Feather name="clock" size={12} color={theme.textMuted} />
-            <Text style={[styles.lastUpdatedText, { color: theme.textMuted }]}>Last updated: February 2026</Text>
+            <Text style={[styles.lastUpdatedText, { color: theme.textMuted }]}>Version 1.0</Text>
           </View>
         </View>
 
@@ -375,7 +410,7 @@ export default function PrivacyScreen() {
         <View style={styles.footer}>
           <Feather name="mail" size={14} color={theme.textMuted} />
           <Text style={[styles.footerText, { color: theme.textMuted }]}>
-            For privacy-related inquiries, contact us at privacy@ermate.in
+            For privacy-related concerns, contact Varah Group at support@varahgroup.com
           </Text>
         </View>
       </ScrollView>

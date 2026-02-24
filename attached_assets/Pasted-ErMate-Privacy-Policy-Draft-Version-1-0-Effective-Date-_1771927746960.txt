@@ -1,0 +1,72 @@
+ErMate Privacy Policy (Draft – Version 1.0)
+Effective Date: [Insert Date]
+App Name: ErMate
+Developer: Varah Group
+1. Introduction
+ErMate is a mobile-based Emergency Room Electronic Medical Records (EMR) application designed for licensed medical professionals. This Privacy Policy explains how we collect, use, store, and protect data within the application.
+By using ErMate, you agree to the practices described in this policy.
+2. Information We Collect
+A. Account Information
+Name
+Email address
+Login credentials
+Subscription status
+B. Clinical Data Entered by Doctors
+Patient name
+Age and gender
+Clinical history
+Examination findings
+Investigations
+Diagnosis
+Treatment details
+Discharge summaries
+This information is entered by authorized healthcare professionals for clinical documentation purposes.
+3. Purpose of Data Collection
+The data collected in ErMate is used solely for:
+Clinical documentation
+Emergency room workflow management
+Generating structured case sheets
+Generating discharge summaries
+AI-assisted clinical reasoning support
+Educational simulation and learning modules
+ErMate does not sell, rent, or share patient data with third parties for marketing purposes.
+4. Data Storage and Security
+All data is transmitted using secure HTTPS encryption.
+Clinical data is stored on secure backend servers.
+Access is restricted to authenticated users.
+Session-based authentication ensures only logged-in doctors can access case data.
+Reasonable technical safeguards are implemented to prevent unauthorized access.
+5. AI Processing
+Certain features (such as AI diagnosis, smart dictation, and reference chat) process clinical text using third-party AI services.
+Only necessary clinical information is processed.
+AI services are used solely to generate clinical assistance outputs.
+ErMate does not allow third-party AI providers to independently store or use patient data for unrelated purposes.
+Doctors are advised to avoid entering unnecessary personally identifiable information when using AI-powered features.
+6. Data Retention
+Clinical data remains stored while the user’s subscription is active unless:
+The user deletes specific cases
+The user deletes their account
+A formal deletion request is submitted
+We may implement automated retention limits in the future in compliance with applicable regulations.
+7. User Responsibility
+ErMate is a documentation tool used by licensed healthcare professionals. Doctors using the app are responsible for:
+Obtaining appropriate patient consent
+Complying with local hospital data policies
+Ensuring device-level security (screen lock, password protection)
+8. Compliance with Indian Law
+ErMate operates in accordance with:
+The Digital Personal Data Protection Act (DPDPA), 2023 (India)
+Applicable medical record-keeping guidelines from regulatory authorities
+9. Data Deletion Requests
+Users may request:
+Account deletion
+Data deletion
+Requests can be sent to:
+📧 [Insert official support email]
+10. Changes to This Policy
+We may update this Privacy Policy periodically. Users will be notified of significant changes through app updates.
+11. Contact Information
+For privacy-related concerns, contact:
+Varah Group
+Email: [Insert Email]
+Website: [Insert Website]
