@@ -205,6 +205,7 @@ export default function ViewCaseScreen() {
   const adjuncts = caseData.adjuncts || {};
   const history = caseData.history || {};
   const examination = caseData.examination || {};
+  const psychological = caseData.psychological || {};
   const investigations = caseData.investigations || {};
   const treatment = caseData.treatment || {};
   const disposition = caseData.disposition || {};
@@ -672,6 +673,46 @@ export default function ViewCaseScreen() {
             />
           </Section>
         )}
+
+        <Section title="Psychological Assessment">
+          {(() => {
+            const flags: string[] = [];
+            if (psychological.suicidalIdeation) flags.push("Suicidal Ideation");
+            if (psychological.selfHarmHistory) flags.push("Self-Harm History");
+            if (psychological.intentToHarmOthers) flags.push("Intent to Harm Others");
+            if (psychological.substanceAbuse) flags.push("Substance Abuse");
+            if (psychological.psychiatricHistory) flags.push("Psychiatric History");
+            if (psychological.currentlyOnTreatment) flags.push("Currently on Psychiatric Treatment");
+            const hasFlags = flags.length > 0;
+            const hasSupportSystem = psychological.hasSupportSystem;
+            return (
+              <>
+                <View style={styles.examSection}>
+                  <Text style={[styles.examSectionTitle, { color: hasFlags ? TriageColors.red : theme.text }]}>
+                    Status: {hasFlags ? "Abnormal" : "Normal"}
+                  </Text>
+                  {hasFlags ? (
+                    <Text style={[styles.examDetail, { color: TriageColors.red }]}>
+                      {flags.join(", ")}
+                    </Text>
+                  ) : (
+                    <Text style={[styles.examDetail, { color: theme.textSecondary }]}>
+                      No psychological concerns identified. Patient denies suicidal ideation, self-harm, intent to harm others, substance abuse, or psychiatric history.
+                    </Text>
+                  )}
+                  {hasSupportSystem !== undefined && (
+                    <Text style={[styles.examDetail, { color: theme.textSecondary }]}>
+                      Support System: {hasSupportSystem ? "Present" : "Absent"}
+                    </Text>
+                  )}
+                </View>
+                {psychological.notes ? (
+                  <InfoRow label="Notes" value={psychological.notes} />
+                ) : null}
+              </>
+            );
+          })()}
+        </Section>
 
         <Section title="Investigations">
           {investigations.panels_selected?.length > 0 && <InfoRow label="Ordered" value={investigations.panels_selected.join(", ")} />}
