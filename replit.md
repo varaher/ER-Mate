@@ -2,7 +2,7 @@
 
 ## Overview
 
-ErMate is a mobile-first Emergency Room Electronic Medical Records (EMR) application built with React Native and Expo. Its primary purpose is to streamline the workflow for emergency medicine physicians and residents, covering patient triage, case management, physical examinations, investigations, treatment planning, and discharge documentation. The application aims to improve efficiency and accuracy in emergency care through features like voice dictation, AI-powered diagnostics, and comprehensive documentation export. It operates on a subscription-based model.
+ErMate is a mobile-first Emergency Room Electronic Medical Records (EMR) application built with React Native and Expo, developed by **Varah Group**. Its primary purpose is to streamline the workflow for emergency medicine physicians and residents, covering patient triage, case management, physical examinations, investigations, treatment planning, and discharge documentation. The application aims to improve efficiency and accuracy in emergency care through features like voice dictation, AI-powered diagnostics, and comprehensive documentation export. It operates on a subscription-based model.
 
 ## User Preferences
 
@@ -35,16 +35,34 @@ Preferred communication style: Simple, everyday language.
 **AI Diagnosis System**: Generates differential diagnoses with confidence levels and medical guideline citations. It includes a self-learning feedback system that stores user feedback to improve AI accuracy.
 **Document Export System**: Supports export of Case Sheets and Discharge Summaries in PDF and DOCX formats, with platform-aware file handling for web and mobile.
 **Device Linking**: Provides a secure WhatsApp-style web linking feature for accessing the web application, generating temporary, expiring link codes.
+**Psychological Assessment**: Captured in Case Sheet (suicidal ideation, self-harm history, intent to harm others, substance abuse, psychiatric history, treatment status, support system, notes). Displayed in View Case Sheet with "Normal" default when nothing is marked, or "Abnormal" in red when flags are present. Data saved via `psychological` key in case payload.
 
 ### Learn Section
 
 The app includes a dedicated "Learn" tab (`client/screens/LearnScreen.tsx`) in the main navigation with three educational modules:
 
-**Simulation-Based Teaching** (`client/screens/SimulationListScreen.tsx`, `SimulationScreen.tsx`, `SimulationResultScreen.tsx`): Interactive clinical case simulations where users work through emergency scenarios step-by-step. Presents clinical vignettes with decision points. Results screen shows performance score and feedback.
+**Simulation-Based Teaching** (`client/screens/SimulationListScreen.tsx`, `SimulationScreen.tsx`, `SimulationResultScreen.tsx`, `client/data/simulationCases.ts`): Interactive clinical case simulations with 11 realistic ER cases (STEMI, Tension Pneumothorax, Sepsis, Anaphylaxis, DKA, Ectopic Pregnancy, Stroke, PE, Meningitis, Pediatric Seizure, Aortic Dissection). Features include distractor/unnecessary actions with time penalties and clinical harm warnings, auto-timeout system, action timestamps tracking, multi-factor scoring with clinical feedback, harmful/unnecessary action identification, action timeline on results screen, 5-step interactive tutorial overlay (shown first time, reopenable), color-coded status badges (Done/Red Flag/Unnecessary/Harmful/Pending/Critical), animated critical vitals with blinking, contextual tab hints, full case scenario text display, and styled in-app confirmation modal for ending simulation.
 
 **EM Reference Library** (`client/screens/EMReferenceScreen.tsx`): Emergency Medicine reference resource with AI-powered chat for looking up clinical guidelines, protocols, and medical information.
 
 **Trivia Time** (`client/screens/TriviaHomeScreen.tsx`, `TriviaQuizScreen.tsx`, `TriviaResultScreen.tsx`, `client/data/triviaQuestions.ts`): Case-based MCQ quiz system covering all medical specialties. Features three difficulty levels (Easy, Medium, Hard), category selection, detailed explanations with reliable medical references for each question, and a results screen with score breakdown.
+
+### Privacy & Data Protection
+
+**Privacy Policy Screen** (`client/screens/PrivacyScreen.tsx`): Comprehensive privacy policy (Version 1.0) accessible from Profile > Privacy. Contains 11 expandable sections matching the official Varah Group privacy policy draft:
+1. Introduction (ErMate by Varah Group)
+2. Information We Collect (account info + clinical data)
+3. Purpose of Data Collection (clinical documentation, workflow, AI support, education)
+4. Data Storage & Security (HTTPS, authenticated access, technical safeguards)
+5. AI Processing (third-party AI usage, no independent storage by AI providers)
+6. Data Retention (active while subscription active, deletion options)
+7. User Responsibility (patient consent, hospital policies, device security)
+8. Compliance with Indian Law (DPDPA 2023, medical record-keeping guidelines)
+9. Data Deletion Requests (account/data deletion within 30 days)
+10. Changes to This Policy (notification through app updates)
+11. Contact Information (Varah Group, varahgrp@gmail.com, www.varahgrp.com)
+
+Also includes data sharing preferences (analytics toggle, AI training toggle), biometric lock setting, and data management actions (clear local data, download data, delete account).
 
 ### Subscription & AI Credits Model
 
@@ -88,6 +106,12 @@ The app includes a dedicated "Learn" tab (`client/screens/LearnScreen.tsx`) in t
 - **AIDiagnosisPanel** (`client/components/AIDiagnosisPanel.tsx`): Perplexity-style UI with expandable differential diagnoses, inline `[1]` citation references, horizontally scrollable citation chips, collapsible Sources panel with categorized references, and self-learning feedback (accept/reject). Red flags include timeframe badges and cited guidelines.
 - **Vibe Dictation / Smart Dictation** (`client/components/SmartDictation.tsx`): "Vibe coding" approach - doctors dictate complete patient history naturally; app transcribes via Sarvam AI STT (primary) + OpenAI gpt-4o-mini-transcribe (fallback), displays full editable transcript, then on "Copy to Case Sheet" tap, AI (GPT-4o) parses and auto-fills 20+ case sheet fields. Two-step flow: (1) Record & see transcript, (2) Copy to case sheet with field preview. Server uses ffmpeg (`server/services/audioConvert.ts`) to convert any audio format (iOS .caf, etc.) to WAV before STT. Endpoints: `/api/voice/transcribe` (audio→text), `/api/voice/extract-clinical` (text→structured fields), `/api/voice/smart-dictation` (combined). Integrated in both Adult (ATLS) and Pediatric (PALS) case sheets.
 - **Voice Recorder** (`client/components/VoiceRecorder.tsx`): Same two-step flow for individual fields - Record → See transcript → Copy to Field. Used in case sheet Notes tabs and Triage screen.
+
+## Company Information
+
+- **Developer**: Varah Group
+- **Contact Email**: varahgrp@gmail.com
+- **Website**: www.varahgrp.com
 
 ## Future Plans
 
