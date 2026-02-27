@@ -287,7 +287,7 @@ export default function PediatricCaseSheetScreen() {
   const route = useRoute<PediatricCaseSheetRouteProp>();
   const { theme, isDark } = useTheme();
   const insets = useSafeAreaInsets();
-  const headerHeight = useHeaderHeight();
+  
 
   const { caseId, triageData } = route.params;
   const [loading, setLoading] = useState(true);
@@ -1281,7 +1281,7 @@ export default function PediatricCaseSheetScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundDefault }]}>
-      <View style={[styles.header, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
+      <View style={[styles.header, { backgroundColor: theme.card, borderBottomColor: theme.border, paddingTop: insets.top }]}>
         <View style={styles.headerTop}>
           <Pressable style={styles.backBtn} onPress={() => navigation.goBack()}>
             <Feather name="x" size={24} color={theme.text} />
@@ -1305,7 +1305,7 @@ export default function PediatricCaseSheetScreen() {
         </ScrollView>
       </View>
 
-      <KeyboardAwareScrollViewCompat contentContainerStyle={[styles.content, { paddingTop: headerHeight + Spacing.md }]}>
+      <KeyboardAwareScrollViewCompat contentContainerStyle={[styles.content, { paddingBottom: 100 }]}>
         {activeTab === "patient" && patient && (
           <View style={[styles.card, { backgroundColor: theme.card }]}>
             <View style={styles.patientHeader}>
@@ -2325,7 +2325,7 @@ export default function PediatricCaseSheetScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
-  header: { borderBottomWidth: 1, paddingTop: 50 },
+  header: { borderBottomWidth: 1 },
   headerTop: { flexDirection: "row", alignItems: "center", paddingHorizontal: Spacing.md, paddingBottom: Spacing.sm },
   backBtn: { padding: Spacing.sm },
   headerCenter: { flex: 1, alignItems: "center" },
@@ -2336,7 +2336,7 @@ const styles = StyleSheet.create({
   tabBar: { paddingHorizontal: Spacing.md, gap: Spacing.sm, paddingVertical: Spacing.sm },
   tabBtn: { flexDirection: "row", alignItems: "center", paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm, borderRadius: BorderRadius.full, gap: Spacing.xs },
   tabBtnText: { fontSize: 13, fontWeight: "600" },
-  content: { padding: Spacing.lg },
+  content: { paddingHorizontal: Spacing.md, paddingTop: 4, paddingBottom: Spacing.md },
   markNormalBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: Spacing.md, borderRadius: BorderRadius.md, gap: Spacing.sm, marginBottom: Spacing.lg },
   markNormalBtnText: { color: "#FFFFFF", ...Typography.bodyMedium, fontWeight: "600" },
   card: { padding: Spacing.md, borderRadius: BorderRadius.lg, marginBottom: Spacing.md },

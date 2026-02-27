@@ -515,7 +515,7 @@ export default function CaseSheetScreen() {
   const route = useRoute<RouteProps>();
   const { theme, isDark } = useTheme();
   const insets = useSafeAreaInsets();
-  const headerHeight = useHeaderHeight();
+  
   const { caseId } = route.params;
 
   const [activeTab, setActiveTab] = useState<TabType>("patient");
@@ -1962,7 +1962,7 @@ export default function CaseSheetScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundDefault }]}>
-      <View style={[styles.header, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
+      <View style={[styles.header, { backgroundColor: theme.card, borderBottomColor: theme.border, paddingTop: insets.top }]}>
         <View style={styles.headerTop}>
           <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
             <Feather name="arrow-left" size={24} color={theme.text} />
@@ -1993,7 +1993,7 @@ export default function CaseSheetScreen() {
         </View>
       </View>
 
-      <KeyboardAwareScrollViewCompat contentContainerStyle={[styles.content, { paddingTop: headerHeight + Spacing.md, paddingBottom: 100 }]} showsVerticalScrollIndicator={false}>
+      <KeyboardAwareScrollViewCompat contentContainerStyle={[styles.content, { paddingBottom: 100 }]} showsVerticalScrollIndicator={false}>
         {activeTab === "patient" && (
           <>
             {caseData?.patient && (
@@ -3461,7 +3461,7 @@ export default function CaseSheetScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
-  header: { borderBottomWidth: 1, paddingTop: 50 },
+  header: { borderBottomWidth: 1 },
   headerTop: { flexDirection: "row", alignItems: "center", paddingHorizontal: Spacing.md, paddingBottom: Spacing.sm },
   backBtn: { padding: Spacing.sm },
   headerCenter: { flex: 1, alignItems: "center" },
@@ -3472,9 +3472,9 @@ const styles = StyleSheet.create({
   tabBar: { paddingHorizontal: Spacing.md, gap: Spacing.sm, paddingVertical: Spacing.sm },
   tabBtn: { flexDirection: "row", alignItems: "center", paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm, borderRadius: BorderRadius.full, gap: Spacing.xs },
   tabBtnText: { fontSize: 13, fontWeight: "600" },
-  swipeHint: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingBottom: Spacing.sm, gap: Spacing.xs },
+  swipeHint: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingBottom: 4, gap: Spacing.xs },
   swipeHintText: { ...Typography.small },
-  content: { padding: Spacing.lg },
+  content: { paddingHorizontal: Spacing.md, paddingTop: 4, paddingBottom: Spacing.md },
   inputToolsRow: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginBottom: Spacing.sm },
   card: { padding: Spacing.md, borderRadius: BorderRadius.lg, marginBottom: Spacing.md },
   cardTitle: { ...Typography.h4, marginBottom: Spacing.md },

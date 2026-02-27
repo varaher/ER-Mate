@@ -135,7 +135,7 @@ export default function RootStackNavigator() {
             component={CaseSheetScreen}
             options={{
               presentation: "modal",
-              headerTitle: "Case Sheet",
+              headerShown: false,
             }}
           />
           <Stack.Screen
@@ -143,7 +143,7 @@ export default function RootStackNavigator() {
             component={PediatricCaseSheetScreen}
             options={{
               presentation: "modal",
-              headerTitle: "Pediatric Case Sheet",
+              headerShown: false,
             }}
           />
           <Stack.Screen
