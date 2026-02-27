@@ -77,6 +77,9 @@ export function DocumentScanner({ onDataExtracted, context }: DocumentScannerPro
     setCapturedImage(null);
   }, []);
 
+  const onDataExtractedRef = React.useRef(onDataExtracted);
+  onDataExtractedRef.current = onDataExtracted;
+
   const processImage = useCallback(async (imageUri: string, assetMimeType?: string) => {
     setIsProcessing(true);
     try {
@@ -112,45 +115,66 @@ export function DocumentScanner({ onDataExtracted, context }: DocumentScannerPro
         body: formData,
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        if (data.structured) {
-          const mapped: ExtractedData = {
-            chiefComplaint: data.structured.chiefComplaint,
-            hpiNotes: data.structured.historyOfPresentIllness,
-            allergies: data.structured.allergies,
-            pastMedicalHistory: data.structured.pastMedicalHistory,
-            medications: data.structured.medications,
-            vitals: data.structured.vitalsSuggested ? {
-              hr: data.structured.vitalsSuggested.hr,
-              bp: data.structured.vitalsSuggested.bp,
-              rr: data.structured.vitalsSuggested.rr,
-              spo2: data.structured.vitalsSuggested.spo2,
-              temp: data.structured.vitalsSuggested.temperature,
-              grbs: data.structured.vitalsSuggested.grbs,
-            } : undefined,
-            labResults: data.structured.assessmentPlan,
-            diagnosis: data.structured.diagnosis?.join(", "),
-            treatmentNotes: data.structured.treatmentNotes,
-            generalNotes: data.text ? `[Scanned Document] ${data.text.substring(0, 500)}` : undefined,
-          };
-          onDataExtracted(mapped);
-          setShowModal(false);
-          setCapturedImage(null);
-        } else if (data.text) {
-          onDataExtracted({ generalNotes: data.text });
-          setShowModal(false);
-          setCapturedImage(null);
-        } else {
-          Alert.alert("No Data Found", data.message || "Could not extract data from this document");
-        }
-      } else {
-        const errorData = await response.json().catch(() => ({}));
-        Alert.alert("Extraction Failed", errorData.error || "Could not extract data from image");
+      const responseText = await response.text();
+      let data: any;
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        console.error("Non-JSON response:", responseText.substring(0, 200));
+        Alert.alert("Scan Failed", "Server returned an unexpected response. Please try again.");
+        return;
       }
-    } catch (error) {
-      console.error("Error processing image:", error);
-      Alert.alert("Error", "Failed to process image. Please try again.");
+
+      if (!response.ok) {
+        Alert.alert("Scan Failed", data?.error || "Could not extract data from image. Please try again.");
+        return;
+      }
+
+      if (data.structured) {
+        const mapped: ExtractedData = {
+          chiefComplaint: data.structured.chiefComplaint,
+          hpiNotes: data.structured.historyOfPresentIllness,
+          allergies: data.structured.allergies,
+          pastMedicalHistory: data.structured.pastMedicalHistory,
+          medications: data.structured.medications,
+          vitals: data.structured.vitalsSuggested ? {
+            hr: data.structured.vitalsSuggested.hr,
+            bp: data.structured.vitalsSuggested.bp,
+            rr: data.structured.vitalsSuggested.rr,
+            spo2: data.structured.vitalsSuggested.spo2,
+            temp: data.structured.vitalsSuggested.temperature,
+            grbs: data.structured.vitalsSuggested.grbs,
+          } : undefined,
+          labResults: data.structured.assessmentPlan,
+          diagnosis: data.structured.diagnosis?.join(", "),
+          treatmentNotes: data.structured.treatmentNotes,
+          generalNotes: data.text ? `[Scanned Document] ${data.text.substring(0, 500)}` : undefined,
+        };
+        setIsProcessing(false);
+        setShowModal(false);
+        setCapturedImage(null);
+        try {
+          onDataExtractedRef.current(mapped);
+        } catch (applyErr) {
+          console.error("Error applying scan data:", applyErr);
+        }
+        return;
+      } else if (data.text) {
+        setIsProcessing(false);
+        setShowModal(false);
+        setCapturedImage(null);
+        try {
+          onDataExtractedRef.current({ generalNotes: data.text });
+        } catch (applyErr) {
+          console.error("Error applying scan data:", applyErr);
+        }
+        return;
+      } else {
+        Alert.alert("No Data Found", data.message || "Could not extract data from this document.");
+      }
+    } catch (error: any) {
+      console.error("Error processing image:", error?.message || error);
+      Alert.alert("Scan Error", "Failed to process image. Please check your connection and try again.");
     } finally {
       setIsProcessing(false);
     }
