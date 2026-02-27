@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -14,8 +14,6 @@ import {
 import { Feather } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
 import * as ImagePicker from "expo-image-picker";
-// @ts-ignore - expo-camera types may not be fully available
-import { CameraView, useCameraPermissions } from "expo-camera";
 import { getApiUrl } from "@/lib/query-client";
 
 interface ExtractedData {
@@ -67,12 +65,9 @@ interface DocumentScannerProps {
 export function DocumentScanner({ onDataExtracted, context }: DocumentScannerProps) {
   const { theme } = useTheme();
   const [showModal, setShowModal] = useState(false);
-  const [showCamera, setShowCamera] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [extractedData, setExtractedData] = useState<ExtractedData | null>(null);
-  const [permission, requestPermission] = useCameraPermissions();
-  const cameraRef = useRef<CameraView>(null);
 
   const openScanner = useCallback(() => {
     setShowModal(true);
@@ -82,7 +77,6 @@ export function DocumentScanner({ onDataExtracted, context }: DocumentScannerPro
 
   const closeModal = useCallback(() => {
     setShowModal(false);
-    setShowCamera(false);
     setCapturedImage(null);
     setExtractedData(null);
   }, []);
@@ -162,24 +156,6 @@ export function DocumentScanner({ onDataExtracted, context }: DocumentScannerPro
     }
   }, [context]);
 
-  const takePicture = useCallback(async () => {
-    if (cameraRef.current) {
-      try {
-        const photo = await cameraRef.current.takePictureAsync({
-          quality: 0.8,
-        });
-        if (photo) {
-          setCapturedImage(photo.uri);
-          setShowCamera(false);
-          processImage(photo.uri);
-        }
-      } catch (error) {
-        console.error("Error taking picture:", error);
-        Alert.alert("Error", "Failed to capture image");
-      }
-    }
-  }, [processImage]);
-
   const pickImage = useCallback(async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -199,18 +175,29 @@ export function DocumentScanner({ onDataExtracted, context }: DocumentScannerPro
   }, [processImage]);
 
   const openCamera = useCallback(async () => {
-    if (!permission?.granted) {
-      const result = await requestPermission();
-      if (!result.granted) {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== "granted") {
         Alert.alert(
           "Camera Permission Required",
           "Please enable camera access in your device settings to scan documents."
         );
         return;
       }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        setCapturedImage(asset.uri);
+        processImage(asset.uri, asset.mimeType || undefined);
+      }
+    } catch (error) {
+      console.error("Error opening camera:", error);
+      Alert.alert("Error", "Failed to open camera. Please try choosing from gallery instead.");
     }
-    setShowCamera(true);
-  }, [permission, requestPermission]);
+  }, [processImage]);
 
   const applyExtractedData = useCallback(() => {
     if (extractedData) {
@@ -330,34 +317,7 @@ export function DocumentScanner({ onDataExtracted, context }: DocumentScannerPro
             <View style={styles.closeButton} />
           </View>
 
-          {showCamera ? (
-            <View style={styles.cameraContainer}>
-              <CameraView
-                ref={cameraRef}
-                style={styles.camera}
-                facing="back"
-              >
-                <View style={styles.cameraOverlay}>
-                  <View style={styles.scanFrame} />
-                </View>
-              </CameraView>
-              <View style={[styles.cameraControls, { backgroundColor: theme.backgroundDefault }]}>
-                <TouchableOpacity
-                  style={styles.cancelCameraButton}
-                  onPress={() => setShowCamera(false)}
-                >
-                  <Text style={[styles.cancelCameraText, { color: theme.text }]}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.captureButton, { backgroundColor: theme.primary }]}
-                  onPress={takePicture}
-                >
-                  <View style={styles.captureButtonInner} />
-                </TouchableOpacity>
-                <View style={styles.cancelCameraButton} />
-              </View>
-            </View>
-          ) : capturedImage ? (
+          {capturedImage ? (
             <View style={styles.previewContainer}>
               <Image source={{ uri: capturedImage }} style={styles.previewImage} />
               
@@ -465,51 +425,6 @@ const styles = StyleSheet.create({
     height: 40,
     alignItems: "center",
     justifyContent: "center",
-  },
-  cameraContainer: {
-    flex: 1,
-  },
-  camera: {
-    flex: 1,
-  },
-  cameraOverlay: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  scanFrame: {
-    width: "85%",
-    aspectRatio: 0.7,
-    borderWidth: 2,
-    borderColor: "rgba(255, 255, 255, 0.6)",
-    borderRadius: 12,
-  },
-  cameraControls: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 20,
-    paddingHorizontal: 40,
-  },
-  cancelCameraButton: {
-    width: 80,
-    alignItems: "center",
-  },
-  cancelCameraText: {
-    fontSize: 16,
-  },
-  captureButton: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  captureButtonInner: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: "#fff",
   },
   optionsContainer: {
     flex: 1,
