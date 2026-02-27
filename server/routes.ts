@@ -2008,38 +2008,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "No document file provided" });
       }
 
-      const { isSarvamAvailable, sarvamParsePDF } = await import("./services/sarvamAI");
-      
-      if (!isSarvamAvailable()) {
-        return res.status(503).json({ error: "Document scanning service not available - Sarvam AI not configured" });
+      let patientContext;
+      if (req.body.patientContext) {
+        try { patientContext = JSON.parse(req.body.patientContext); } catch { patientContext = undefined; }
       }
-
-      const pageNumber = parseInt(req.body.pageNumber) || 1;
-      let pdfBuffer = file.buffer;
 
       const isImage = file.mimetype.startsWith("image/");
+      let parsedText = "";
+
       if (isImage) {
-        console.log("[Doc Scan] Converting image to PDF...");
-        try {
-          const { default: PDFDocument } = await import("pdfkit");
-          pdfBuffer = await new Promise<Buffer>((resolve, reject) => {
-            const doc = new PDFDocument({ size: "A4" });
-            const chunks: Buffer[] = [];
-            doc.on("data", (chunk: Buffer) => chunks.push(chunk));
-            doc.on("end", () => resolve(Buffer.concat(chunks)));
-            doc.on("error", reject);
-            doc.image(file.buffer, 0, 0, { fit: [595, 842], align: "center", valign: "center" });
-            doc.end();
-          });
-          console.log("[Doc Scan] PDF conversion done, size:", pdfBuffer.length);
-        } catch (pdfErr) {
-          console.error("[Doc Scan] PDF conversion failed:", pdfErr);
-          return res.status(500).json({ error: "Failed to process image format" });
+        const base64Image = file.buffer.toString("base64");
+        const dataUrl = `data:${file.mimetype};base64,${base64Image}`;
+
+        const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
+        const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
+
+        if (apiKey && baseURL) {
+          console.log("[Doc Scan] Using OpenAI Vision for OCR...");
+          try {
+            const OpenAI = (await import("openai")).default;
+            const openai = new OpenAI({ apiKey, baseURL });
+            const visionResponse = await openai.chat.completions.create({
+              model: "gpt-4o",
+              messages: [
+                {
+                  role: "system",
+                  content: "You are a medical document OCR system. Extract ALL text from the provided medical document image exactly as written. Include all values, numbers, units, dates, and labels. Output the raw extracted text only, no commentary.",
+                },
+                {
+                  role: "user",
+                  content: [
+                    { type: "text", text: "Extract all text from this medical document:" },
+                    { type: "image_url", image_url: { url: dataUrl, detail: "high" } },
+                  ],
+                },
+              ],
+              max_tokens: 4096,
+            });
+            parsedText = visionResponse.choices[0]?.message?.content || "";
+            console.log("[Doc Scan] OpenAI Vision OCR done, text length:", parsedText.length);
+          } catch (visionErr) {
+            console.warn("[Doc Scan] OpenAI Vision failed, trying Sarvam fallback:", (visionErr as Error).message);
+          }
+        }
+
+        if (!parsedText) {
+          const { isSarvamAvailable, sarvamParsePDF } = await import("./services/sarvamAI");
+          if (isSarvamAvailable()) {
+            console.log("[Doc Scan] Using Sarvam AI fallback...");
+            try {
+              const { default: PDFDocument } = await import("pdfkit");
+              const pdfBuffer = await new Promise<Buffer>((resolve, reject) => {
+                const doc = new PDFDocument({ size: "A4" });
+                const chunks: Buffer[] = [];
+                doc.on("data", (chunk: Buffer) => chunks.push(chunk));
+                doc.on("end", () => resolve(Buffer.concat(chunks)));
+                doc.on("error", reject);
+                doc.image(file.buffer, 0, 0, { fit: [595, 842], align: "center", valign: "center" });
+                doc.end();
+              });
+              parsedText = await sarvamParsePDF(pdfBuffer, 1);
+              console.log("[Doc Scan] Sarvam OCR done, text length:", parsedText.length);
+            } catch (sarvamErr) {
+              console.warn("[Doc Scan] Sarvam fallback also failed:", (sarvamErr as Error).message);
+            }
+          }
+        }
+      } else {
+        const { isSarvamAvailable, sarvamParsePDF } = await import("./services/sarvamAI");
+        if (isSarvamAvailable()) {
+          console.log("[Doc Scan] PDF document, using Sarvam AI...");
+          parsedText = await sarvamParsePDF(file.buffer, parseInt(req.body.pageNumber) || 1);
         }
       }
-
-      console.log("[Doc Scan] Sending to Sarvam AI for OCR...");
-      const parsedText = await sarvamParsePDF(pdfBuffer, pageNumber);
 
       if (!parsedText || parsedText.trim().length === 0) {
         return res.json({ 
@@ -2051,11 +2092,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       let structured = null;
-      let patientContext;
-      if (req.body.patientContext) {
-        try { patientContext = JSON.parse(req.body.patientContext); } catch { patientContext = undefined; }
-      }
-
       const extractMode = req.body.mode || "clinical";
       if (extractMode === "clinical") {
         try {

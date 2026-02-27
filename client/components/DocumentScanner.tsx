@@ -9,7 +9,6 @@ import {
   Image,
   Alert,
   Platform,
-  ScrollView,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
@@ -67,18 +66,15 @@ export function DocumentScanner({ onDataExtracted, context }: DocumentScannerPro
   const [showModal, setShowModal] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [extractedData, setExtractedData] = useState<ExtractedData | null>(null);
 
   const openScanner = useCallback(() => {
     setShowModal(true);
     setCapturedImage(null);
-    setExtractedData(null);
   }, []);
 
   const closeModal = useCallback(() => {
     setShowModal(false);
     setCapturedImage(null);
-    setExtractedData(null);
   }, []);
 
   const processImage = useCallback(async (imageUri: string, assetMimeType?: string) => {
@@ -138,9 +134,13 @@ export function DocumentScanner({ onDataExtracted, context }: DocumentScannerPro
             treatmentNotes: data.structured.treatmentNotes,
             generalNotes: data.text ? `[Scanned Document] ${data.text.substring(0, 500)}` : undefined,
           };
-          setExtractedData(mapped);
+          onDataExtracted(mapped);
+          setShowModal(false);
+          setCapturedImage(null);
         } else if (data.text) {
-          setExtractedData({ generalNotes: data.text });
+          onDataExtracted({ generalNotes: data.text });
+          setShowModal(false);
+          setCapturedImage(null);
         } else {
           Alert.alert("No Data Found", data.message || "Could not extract data from this document");
         }
@@ -160,7 +160,7 @@ export function DocumentScanner({ onDataExtracted, context }: DocumentScannerPro
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality: 0.8,
+        quality: 0.5,
       });
 
       if (!result.canceled && result.assets[0]) {
@@ -186,7 +186,7 @@ export function DocumentScanner({ onDataExtracted, context }: DocumentScannerPro
       }
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality: 0.8,
+        quality: 0.5,
       });
       if (!result.canceled && result.assets[0]) {
         const asset = result.assets[0];
@@ -199,96 +199,9 @@ export function DocumentScanner({ onDataExtracted, context }: DocumentScannerPro
     }
   }, [processImage]);
 
-  const applyExtractedData = useCallback(() => {
-    if (extractedData) {
-      onDataExtracted(extractedData);
-      closeModal();
-      Alert.alert("Success", "Data has been populated into the relevant fields.");
-    }
-  }, [extractedData, onDataExtracted, closeModal]);
-
   const retryCapture = useCallback(() => {
     setCapturedImage(null);
-    setExtractedData(null);
   }, []);
-
-  const renderExtractedDataPreview = () => {
-    if (!extractedData) return null;
-
-    const dataItems: { label: string; value: string }[] = [];
-    
-    if (extractedData.chiefComplaint) {
-      dataItems.push({ label: "Chief Complaint", value: extractedData.chiefComplaint });
-    }
-    if (extractedData.hpiNotes) {
-      dataItems.push({ label: "HPI Notes", value: extractedData.hpiNotes });
-    }
-    if (extractedData.vitals) {
-      const vitalsStr = Object.entries(extractedData.vitals)
-        .filter(([_, v]) => v)
-        .map(([k, v]) => `${k.toUpperCase()}: ${v}`)
-        .join(", ");
-      if (vitalsStr) dataItems.push({ label: "Vitals", value: vitalsStr });
-    }
-    if (extractedData.abgValues) {
-      const abgStr = Object.entries(extractedData.abgValues)
-        .filter(([_, v]) => v)
-        .map(([k, v]) => `${k}: ${v}`)
-        .join(", ");
-      if (abgStr) dataItems.push({ label: "ABG Values", value: abgStr });
-    }
-    if (extractedData.allergies) {
-      dataItems.push({ label: "Allergies", value: extractedData.allergies });
-    }
-    if (extractedData.pastMedicalHistory) {
-      dataItems.push({ label: "Past Medical History", value: extractedData.pastMedicalHistory });
-    }
-    if (extractedData.medications) {
-      dataItems.push({ label: "Medications", value: extractedData.medications });
-    }
-    if (extractedData.labResults) {
-      dataItems.push({ label: "Lab Results", value: extractedData.labResults });
-    }
-    if (extractedData.imagingResults) {
-      dataItems.push({ label: "Imaging Results", value: extractedData.imagingResults });
-    }
-    if (extractedData.diagnosis) {
-      dataItems.push({ label: "Diagnosis", value: extractedData.diagnosis });
-    }
-    if (extractedData.treatmentNotes) {
-      dataItems.push({ label: "Treatment Notes", value: extractedData.treatmentNotes });
-    }
-    if (extractedData.generalNotes) {
-      dataItems.push({ label: "General Notes", value: extractedData.generalNotes });
-    }
-
-    if (dataItems.length === 0) {
-      return (
-        <View style={[styles.noDataContainer, { backgroundColor: theme.backgroundSecondary }]}>
-          <Feather name="alert-circle" size={24} color={theme.textMuted} />
-          <Text style={[styles.noDataText, { color: theme.textMuted }]}>
-            No clinical data could be extracted from this image.
-          </Text>
-        </View>
-      );
-    }
-
-    return (
-      <ScrollView style={styles.extractedDataContainer}>
-        <Text style={[styles.extractedTitle, { color: theme.text }]}>
-          Extracted Data Preview
-        </Text>
-        {dataItems.map((item, index) => (
-          <View key={index} style={[styles.dataItem, { borderBottomColor: theme.border }]}>
-            <Text style={[styles.dataLabel, { color: theme.primary }]}>{item.label}</Text>
-            <Text style={[styles.dataValue, { color: theme.text }]} numberOfLines={3}>
-              {item.value}
-            </Text>
-          </View>
-        ))}
-      </ScrollView>
-    );
-  };
 
   return (
     <>
@@ -325,30 +238,20 @@ export function DocumentScanner({ onDataExtracted, context }: DocumentScannerPro
                 <View style={[styles.processingContainer, { backgroundColor: theme.backgroundSecondary }]}>
                   <ActivityIndicator size="large" color={theme.primary} />
                   <Text style={[styles.processingText, { color: theme.text }]}>
-                    Scanning document with Sarvam AI...
+                    Scanning document...
                   </Text>
                 </View>
-              ) : extractedData ? (
-                <>
-                  {renderExtractedDataPreview()}
-                  <View style={styles.actionButtons}>
-                    <TouchableOpacity
-                      style={[styles.actionButton, { backgroundColor: theme.backgroundSecondary }]}
-                      onPress={retryCapture}
-                    >
-                      <Feather name="refresh-cw" size={18} color={theme.text} />
-                      <Text style={[styles.actionButtonText, { color: theme.text }]}>Retake</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.actionButton, styles.applyButton, { backgroundColor: theme.primary }]}
-                      onPress={applyExtractedData}
-                    >
-                      <Feather name="check" size={18} color="#fff" />
-                      <Text style={styles.applyButtonText}>Apply Data</Text>
-                    </TouchableOpacity>
-                  </View>
-                </>
-              ) : null}
+              ) : (
+                <View style={styles.actionButtons}>
+                  <TouchableOpacity
+                    style={[styles.actionButton, { backgroundColor: theme.backgroundSecondary }]}
+                    onPress={retryCapture}
+                  >
+                    <Feather name="refresh-cw" size={18} color={theme.text} />
+                    <Text style={[styles.actionButtonText, { color: theme.text }]}>Retake</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
           ) : (
             <View style={styles.optionsContainer}>
@@ -490,43 +393,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "500",
   },
-  extractedDataContainer: {
-    flex: 1,
-    padding: 16,
-  },
-  extractedTitle: {
-    fontSize: 17,
-    fontWeight: "600",
-    marginBottom: 16,
-  },
-  dataItem: {
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-  },
-  dataLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    marginBottom: 4,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  dataValue: {
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  noDataContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 40,
-    margin: 16,
-    borderRadius: 12,
-    gap: 12,
-  },
-  noDataText: {
-    fontSize: 14,
-    textAlign: "center",
-  },
   actionButtons: {
     flexDirection: "row",
     padding: 16,
@@ -542,12 +408,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   actionButtonText: {
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  applyButton: {},
-  applyButtonText: {
-    color: "#fff",
     fontSize: 15,
     fontWeight: "600",
   },
