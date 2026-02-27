@@ -434,15 +434,15 @@ const styles = StyleSheet.create({
   scanButton: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 16,
+    alignSelf: "flex-start",
+    paddingVertical: 8,
+    paddingHorizontal: 14,
     borderRadius: 8,
-    gap: 8,
+    gap: 6,
   },
   scanButtonText: {
     color: "#fff",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "600",
   },
   modalContainer: {
