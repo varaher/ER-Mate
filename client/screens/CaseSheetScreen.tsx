@@ -2134,6 +2134,16 @@ export default function CaseSheetScreen() {
 
         {activeTab === "primary" && (
           <>
+            <View style={styles.inputToolsRow}>
+              <DocumentScanner
+                onDataExtracted={handleDocumentScanExtraction}
+                context={{
+                  patientAge: caseData?.patient?.age ? parseFloat(caseData.patient.age) : undefined,
+                  patientSex: caseData?.patient?.sex,
+                  presentingComplaint: caseData?.presenting_complaint?.text,
+                }}
+              />
+            </View>
             <CollapsibleSection title="A - AIRWAY" icon="*" iconColor={TriageColors.red} defaultExpanded>
               <View style={styles.normalAbnormalRow}>
                 <Pressable
@@ -2876,6 +2886,16 @@ export default function CaseSheetScreen() {
 
         {activeTab === "exam" && (
           <>
+            <View style={styles.inputToolsRow}>
+              <DocumentScanner
+                onDataExtracted={handleDocumentScanExtraction}
+                context={{
+                  patientAge: caseData?.patient?.age ? parseFloat(caseData.patient.age) : undefined,
+                  patientSex: caseData?.patient?.sex,
+                  presentingComplaint: caseData?.presenting_complaint?.text,
+                }}
+              />
+            </View>
             <Pressable style={[styles.markNormalBtn, { backgroundColor: isDark ? '#1B2D1E' : '#E8F5E9' }]} onPress={markAllExamNormal}>
               <Feather name="check-circle" size={20} color={TriageColors.green} />
               <Text style={[styles.markNormalBtnText, { color: TriageColors.green }]}>Mark All Examination Normal</Text>
@@ -3000,6 +3020,16 @@ export default function CaseSheetScreen() {
 
         {activeTab === "treatment" && (
           <>
+            <View style={styles.inputToolsRow}>
+              <DocumentScanner
+                onDataExtracted={handleDocumentScanExtraction}
+                context={{
+                  patientAge: caseData?.patient?.age ? parseFloat(caseData.patient.age) : undefined,
+                  patientSex: caseData?.patient?.sex,
+                  presentingComplaint: caseData?.presenting_complaint?.text,
+                }}
+              />
+            </View>
             <View style={[styles.card, { backgroundColor: theme.card }]}>
               <Text style={[styles.cardTitle, { color: theme.text }]}>Investigations</Text>
               
@@ -3292,6 +3322,16 @@ export default function CaseSheetScreen() {
 
         {activeTab === "disposition" && (
           <>
+            <View style={styles.inputToolsRow}>
+              <DocumentScanner
+                onDataExtracted={handleDocumentScanExtraction}
+                context={{
+                  patientAge: caseData?.patient?.age ? parseFloat(caseData.patient.age) : undefined,
+                  patientSex: caseData?.patient?.sex,
+                  presentingComplaint: caseData?.presenting_complaint?.text,
+                }}
+              />
+            </View>
             <View style={[styles.card, { backgroundColor: theme.card }]}>
               <Text style={[styles.cardTitle, { color: theme.text }]}>Disposition</Text>
               

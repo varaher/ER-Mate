@@ -2003,6 +2003,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/scan/document", upload.single('document'), async (req: Request, res: Response) => {
     try {
       const file = req.file;
+      console.log("[Doc Scan] Request received, file:", file ? `${file.originalname} (${file.mimetype}, ${file.size} bytes)` : "none");
       if (!file) {
         return res.status(400).json({ error: "No document file provided" });
       }
@@ -2018,18 +2019,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const isImage = file.mimetype.startsWith("image/");
       if (isImage) {
-        const { default: PDFDocument } = await import("pdfkit");
-        pdfBuffer = await new Promise<Buffer>((resolve, reject) => {
-          const doc = new PDFDocument({ size: "A4" });
-          const chunks: Buffer[] = [];
-          doc.on("data", (chunk: Buffer) => chunks.push(chunk));
-          doc.on("end", () => resolve(Buffer.concat(chunks)));
-          doc.on("error", reject);
-          doc.image(file.buffer, 0, 0, { fit: [595, 842], align: "center", valign: "center" });
-          doc.end();
-        });
+        console.log("[Doc Scan] Converting image to PDF...");
+        try {
+          const { default: PDFDocument } = await import("pdfkit");
+          pdfBuffer = await new Promise<Buffer>((resolve, reject) => {
+            const doc = new PDFDocument({ size: "A4" });
+            const chunks: Buffer[] = [];
+            doc.on("data", (chunk: Buffer) => chunks.push(chunk));
+            doc.on("end", () => resolve(Buffer.concat(chunks)));
+            doc.on("error", reject);
+            doc.image(file.buffer, 0, 0, { fit: [595, 842], align: "center", valign: "center" });
+            doc.end();
+          });
+          console.log("[Doc Scan] PDF conversion done, size:", pdfBuffer.length);
+        } catch (pdfErr) {
+          console.error("[Doc Scan] PDF conversion failed:", pdfErr);
+          return res.status(500).json({ error: "Failed to process image format" });
+        }
       }
 
+      console.log("[Doc Scan] Sending to Sarvam AI for OCR...");
       const parsedText = await sarvamParsePDF(pdfBuffer, pageNumber);
 
       if (!parsedText || parsedText.trim().length === 0) {

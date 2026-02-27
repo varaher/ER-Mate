@@ -1377,6 +1377,14 @@ export default function PediatricCaseSheetScreen() {
 
         {activeTab === "primary" && (
           <>
+            <DocumentScanner
+              onDataExtracted={handleDocumentScanExtraction}
+              context={{
+                patientAge: patient?.age,
+                patientSex: patient?.sex,
+                presentingComplaint: patient?.chief_complaint,
+              }}
+            />
             <Pressable style={[styles.markNormalBtn, { backgroundColor: TriageColors.green }]} onPress={markAllAsNormal}>
               <Feather name="check-circle" size={18} color="#FFFFFF" />
               <Text style={styles.markNormalBtnText}>Mark Everything as Normal</Text>
@@ -1711,6 +1719,14 @@ export default function PediatricCaseSheetScreen() {
 
         {activeTab === "history" && (
           <>
+            <DocumentScanner
+              onDataExtracted={handleDocumentScanExtraction}
+              context={{
+                patientAge: patient?.age,
+                patientSex: patient?.sex,
+                presentingComplaint: patient?.chief_complaint,
+              }}
+            />
             <View style={[styles.card, { backgroundColor: theme.card }]}>
               <Text style={[styles.cardTitle, { color: theme.text }]}>Focused History (SAMPLE)</Text>
 
@@ -1818,6 +1834,14 @@ export default function PediatricCaseSheetScreen() {
 
         {activeTab === "exam" && (
           <>
+            <DocumentScanner
+              onDataExtracted={handleDocumentScanExtraction}
+              context={{
+                patientAge: patient?.age,
+                patientSex: patient?.sex,
+                presentingComplaint: patient?.chief_complaint,
+              }}
+            />
             <View style={[styles.card, { backgroundColor: theme.card }]}>
               <Text style={[styles.cardTitle, { color: theme.text }]}>Focused Physical Examination</Text>
 
@@ -1904,6 +1928,14 @@ export default function PediatricCaseSheetScreen() {
 
         {activeTab === "treatment" && (
           <>
+            <DocumentScanner
+              onDataExtracted={handleDocumentScanExtraction}
+              context={{
+                patientAge: patient?.age,
+                patientSex: patient?.sex,
+                presentingComplaint: patient?.chief_complaint,
+              }}
+            />
             <View style={[styles.card, { backgroundColor: theme.card }]}>
               <Text style={[styles.cardTitle, { color: theme.text }]}>Investigations</Text>
               
@@ -2134,6 +2166,14 @@ export default function PediatricCaseSheetScreen() {
 
         {activeTab === "disposition" && (
           <>
+            <DocumentScanner
+              onDataExtracted={handleDocumentScanExtraction}
+              context={{
+                patientAge: patient?.age,
+                patientSex: patient?.sex,
+                presentingComplaint: patient?.chief_complaint,
+              }}
+            />
             <View style={[styles.card, { backgroundColor: theme.card }]}>
               <Text style={[styles.cardTitle, { color: theme.text }]}>Disposition</Text>
               

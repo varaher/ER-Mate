@@ -14,7 +14,6 @@ import {
 import { Feather } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
 import * as ImagePicker from "expo-image-picker";
-import * as FileSystem from "expo-file-system";
 // @ts-ignore - expo-camera types may not be fully available
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { getApiUrl } from "@/lib/query-client";
@@ -88,7 +87,7 @@ export function DocumentScanner({ onDataExtracted, context }: DocumentScannerPro
     setExtractedData(null);
   }, []);
 
-  const processImage = useCallback(async (imageUri: string) => {
+  const processImage = useCallback(async (imageUri: string, assetMimeType?: string) => {
     setIsProcessing(true);
     try {
       const apiUrl = getApiUrl();
@@ -100,8 +99,13 @@ export function DocumentScanner({ onDataExtracted, context }: DocumentScannerPro
         const blob = await resp.blob();
         formData.append("document", blob, "scan.jpg");
       } else {
-        const file = new FileSystem.File(imageUri);
-        formData.append("document", file as unknown as Blob, "scan.jpg");
+        const mimeType = assetMimeType || "image/jpeg";
+        const ext = mimeType === "image/png" ? "png" : "jpg";
+        formData.append("document", {
+          uri: imageUri,
+          name: `scan.${ext}`,
+          type: mimeType,
+        } as any);
       }
 
       if (context) {
@@ -184,8 +188,9 @@ export function DocumentScanner({ onDataExtracted, context }: DocumentScannerPro
       });
 
       if (!result.canceled && result.assets[0]) {
-        setCapturedImage(result.assets[0].uri);
-        processImage(result.assets[0].uri);
+        const asset = result.assets[0];
+        setCapturedImage(asset.uri);
+        processImage(asset.uri, asset.mimeType || undefined);
       }
     } catch (error) {
       console.error("Error picking image:", error);
