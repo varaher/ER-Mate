@@ -2022,7 +2022,6 @@ export default function CaseSheetScreen() {
           <Feather name="chevron-right" size={14} color={theme.textMuted} />
         </View>
       </View>
-
       <KeyboardAwareScrollViewCompat contentContainerStyle={[styles.content, { paddingBottom: 100 }]} showsVerticalScrollIndicator={false}>
         {activeTab === "patient" && (
           <>
@@ -2096,7 +2095,6 @@ export default function CaseSheetScreen() {
                 </View>
               </View>
             )}
-
             <View style={[styles.card, { backgroundColor: theme.card }]}>
               <Text style={[styles.cardTitle, { color: theme.text }]}>Case Sheet Dictation</Text>
               <Text style={[styles.cardSubtitle, { color: theme.textSecondary }]}>Dictate full patient history, exam findings, and plan.</Text>
@@ -2110,7 +2108,6 @@ export default function CaseSheetScreen() {
                 }}
               />
             </View>
-
             <View style={[styles.card, { backgroundColor: theme.card }]}>
               <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Mode of Arrival</Text>
               <View style={styles.arrivalRow}>
@@ -2124,7 +2121,6 @@ export default function CaseSheetScreen() {
                   </Pressable>
                 ))}
               </View>
-
               <View style={styles.mlcRow}>
                 <Text style={[styles.fieldLabel, { color: theme.text, flex: 1 }]}>MLC Case</Text>
                 <Switch
@@ -2135,14 +2131,12 @@ export default function CaseSheetScreen() {
                 />
               </View>
             </View>
-
             {isMLC && (
               <View style={[styles.mlcCard, { backgroundColor: "#FFF8E1", borderColor: "#FFB300" }]}>
                 <View style={styles.mlcHeader}>
                   <Feather name="alert-triangle" size={18} color="#FF8F00" />
                   <Text style={[styles.mlcTitle, { color: "#FF8F00" }]}>MLC Details</Text>
                 </View>
-
                 <View style={styles.field}>
                   <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Nature of Incident</Text>
                   <TextInput
@@ -2153,7 +2147,6 @@ export default function CaseSheetScreen() {
                     placeholderTextColor={theme.textMuted}
                   />
                 </View>
-
                 <View style={styles.field}>
                   <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Date & Time of Incident</Text>
                   <TextInput
@@ -2164,7 +2157,6 @@ export default function CaseSheetScreen() {
                     placeholderTextColor={theme.textMuted}
                   />
                 </View>
-
                 <View style={styles.field}>
                   <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Place of Incident</Text>
                   <TextInput
@@ -2175,7 +2167,6 @@ export default function CaseSheetScreen() {
                     placeholderTextColor={theme.textMuted}
                   />
                 </View>
-
                 <View style={styles.field}>
                   <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Identification Mark</Text>
                   <TextInput
@@ -2186,7 +2177,6 @@ export default function CaseSheetScreen() {
                     placeholderTextColor={theme.textMuted}
                   />
                 </View>
-
                 <View style={styles.field}>
                   <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Informant/Brought By</Text>
                   <TextInput
@@ -2201,7 +2191,6 @@ export default function CaseSheetScreen() {
             )}
           </>
         )}
-
         {activeTab === "primary" && (
           <>
             <View style={styles.inputToolsRow}>
@@ -2231,7 +2220,6 @@ export default function CaseSheetScreen() {
                   <Text style={{ color: abcdeStatus.airway === "Abnormal" ? TriageColors.red : theme.textMuted, fontWeight: "600" }}>Abnormal</Text>
                 </Pressable>
               </View>
-
               {abcdeStatus.airway === "Normal" && (
                 <View style={[styles.normalDescriptionBox, { backgroundColor: isDark ? '#1B2D1E' : '#E8F5E9', borderColor: TriageColors.green }]}>
                   <Text style={[styles.normalDescriptionText, { color: TriageColors.green }]}>
@@ -2239,7 +2227,6 @@ export default function CaseSheetScreen() {
                   </Text>
                 </View>
               )}
-
               {abcdeStatus.airway === "Abnormal" && (
                 <View style={[styles.abnormalSection, { backgroundColor: isDark ? '#2D1B1B' : '#FFF5F5' }]}>
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Position</Text>
@@ -2250,7 +2237,6 @@ export default function CaseSheetScreen() {
                       </Pressable>
                     ))}
                   </View>
-
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Patency</Text>
                   <View style={styles.chipRow}>
                     {CHIP_OPTIONS.airwayStatus.map((opt) => (
@@ -2259,7 +2245,6 @@ export default function CaseSheetScreen() {
                       </Pressable>
                     ))}
                   </View>
-
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Cause</Text>
                   <View style={styles.chipRow}>
                     {CHIP_OPTIONS.airwayCause.map((opt) => (
@@ -2268,7 +2253,6 @@ export default function CaseSheetScreen() {
                       </Pressable>
                     ))}
                   </View>
-
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Speech</Text>
                   <View style={styles.chipRow}>
                     {CHIP_OPTIONS.airwaySpeech.map((opt) => (
@@ -2277,7 +2261,6 @@ export default function CaseSheetScreen() {
                       </Pressable>
                     ))}
                   </View>
-
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Interventions Done:</Text>
                   {CHIP_OPTIONS.airwayInterventions.map((int) => (
                     <Pressable key={int.value} style={styles.interventionRow} onPress={() => {
@@ -2292,14 +2275,12 @@ export default function CaseSheetScreen() {
                   ))}
                 </View>
               )}
-
               <View style={[styles.fieldWithVoice, { marginTop: Spacing.md }]}>
                 <Text style={[styles.fieldLabel, { color: theme.text }]}>Notes</Text>
                 <VoiceButton fieldKey="airway.notes" small />
               </View>
               <TextInput style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Additional airway observations..." placeholderTextColor={theme.textMuted} value={formData.airway.notes} onChangeText={(v) => updateFormData("airway", "notes", v)} multiline />
             </CollapsibleSection>
-
             <CollapsibleSection title="B - BREATHING" icon="*" iconColor={TriageColors.orange}>
               <View style={styles.normalAbnormalRow}>
                 <Pressable style={[styles.normalBtn, { backgroundColor: abcdeStatus.breathing === "Normal" ? (isDark ? '#1B2D1E' : '#E8F5E9') : theme.backgroundSecondary }]} onPress={() => setABCDEStatus((prev) => ({ ...prev, breathing: "Normal" }))}>
@@ -2311,13 +2292,11 @@ export default function CaseSheetScreen() {
                   <Text style={{ color: abcdeStatus.breathing === "Abnormal" ? TriageColors.red : theme.textMuted, fontWeight: "600" }}>Abnormal</Text>
                 </Pressable>
               </View>
-
               <View style={styles.abcdeVitalsRow}>
                 <View style={styles.abcdeVitalInput}><TextInputField label="RR" value={formData.breathing.rr} onChangeText={(v) => updateFormData("breathing", "rr", v)} keyboardType="numeric" suffix="/min" /></View>
                 <View style={styles.abcdeVitalInput}><TextInputField label="SpO2" value={formData.breathing.spo2} onChangeText={(v) => updateFormData("breathing", "spo2", v)} keyboardType="numeric" suffix="%" /></View>
                 <View style={styles.abcdeVitalInput}><TextInputField label="O2 Flow" value={formData.breathing.o2Flow} onChangeText={(v) => updateFormData("breathing", "o2Flow", v)} keyboardType="numeric" suffix="L/min" /></View>
               </View>
-
               {abcdeStatus.breathing === "Normal" && (
                 <View style={[styles.normalDescriptionBox, { backgroundColor: "#FFF3E0", borderColor: TriageColors.orange }]}>
                   <Text style={[styles.normalDescriptionText, { color: "#E65100" }]}>
@@ -2325,7 +2304,6 @@ export default function CaseSheetScreen() {
                   </Text>
                 </View>
               )}
-
               {abcdeStatus.breathing === "Abnormal" && (
                 <View style={[styles.abnormalSection, { backgroundColor: isDark ? '#2D1B1B' : '#FFF5F5' }]}>
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Effort</Text>
@@ -2336,7 +2314,6 @@ export default function CaseSheetScreen() {
                       </Pressable>
                     ))}
                   </View>
-
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>O2 Device</Text>
                   <View style={styles.chipRow}>
                     {CHIP_OPTIONS.breathingO2Device.map((opt) => (
@@ -2345,7 +2322,6 @@ export default function CaseSheetScreen() {
                       </Pressable>
                     ))}
                   </View>
-
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Pattern</Text>
                   <View style={styles.chipRow}>
                     {CHIP_OPTIONS.breathingPattern.map((opt) => (
@@ -2354,7 +2330,6 @@ export default function CaseSheetScreen() {
                       </Pressable>
                     ))}
                   </View>
-
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Chest Expansion</Text>
                   <View style={styles.chipRow}>
                     {CHIP_OPTIONS.breathingChestExpansion.map((opt) => (
@@ -2363,7 +2338,6 @@ export default function CaseSheetScreen() {
                       </Pressable>
                     ))}
                   </View>
-
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Air Entry</Text>
                   <View style={styles.chipRow}>
                     {CHIP_OPTIONS.breathingAirEntry.map((opt) => (
@@ -2372,7 +2346,6 @@ export default function CaseSheetScreen() {
                       </Pressable>
                     ))}
                   </View>
-
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Added Sounds</Text>
                   <View style={styles.chipRow}>
                     {CHIP_OPTIONS.breathingAddedSounds.map((opt) => (
@@ -2381,7 +2354,6 @@ export default function CaseSheetScreen() {
                       </Pressable>
                     ))}
                   </View>
-
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Interventions:</Text>
                   {CHIP_OPTIONS.breathingInterventions.map((int) => (
                     <Pressable key={int.value} style={styles.interventionRow} onPress={() => {
@@ -2396,14 +2368,12 @@ export default function CaseSheetScreen() {
                   ))}
                 </View>
               )}
-
               <View style={[styles.fieldWithVoice, { marginTop: Spacing.md }]}>
                 <Text style={[styles.fieldLabel, { color: theme.text }]}>Notes</Text>
                 <VoiceButton fieldKey="breathing.notes" small />
               </View>
               <TextInput style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Additional breathing observations..." placeholderTextColor={theme.textMuted} value={formData.breathing.notes} onChangeText={(v) => updateFormData("breathing", "notes", v)} multiline />
             </CollapsibleSection>
-
             <CollapsibleSection title="C - CIRCULATION" icon="*" iconColor={TriageColors.yellow}>
               <View style={styles.normalAbnormalRow}>
                 <Pressable style={[styles.normalBtn, { backgroundColor: abcdeStatus.circulation === "Normal" ? (isDark ? '#1B2D1E' : '#E8F5E9') : theme.backgroundSecondary }]} onPress={() => setABCDEStatus((prev) => ({ ...prev, circulation: "Normal" }))}>
@@ -2415,7 +2385,6 @@ export default function CaseSheetScreen() {
                   <Text style={{ color: abcdeStatus.circulation === "Abnormal" ? TriageColors.red : theme.textMuted, fontWeight: "600" }}>Abnormal</Text>
                 </Pressable>
               </View>
-
               <View style={styles.abcdeVitalsRow}>
                 <View style={styles.abcdeVitalInput}><TextInputField label="HR" value={formData.circulation.hr} onChangeText={(v) => updateFormData("circulation", "hr", v)} keyboardType="numeric" suffix="bpm" /></View>
                 <View style={styles.abcdeVitalInput}><TextInputField label="BP" value={`${formData.circulation.bpSystolic}/${formData.circulation.bpDiastolic}`} onChangeText={(v) => {
@@ -2424,7 +2393,6 @@ export default function CaseSheetScreen() {
                   updateFormData("circulation", "bpDiastolic", parts[1] || "");
                 }} placeholder="Sys/Dia" /></View>
               </View>
-
               {abcdeStatus.circulation === "Normal" && (
                 <View style={[styles.normalDescriptionBox, { backgroundColor: "#FFFDE7", borderColor: TriageColors.yellow }]}>
                   <Text style={[styles.normalDescriptionText, { color: "#F57F17" }]}>
@@ -2432,7 +2400,6 @@ export default function CaseSheetScreen() {
                   </Text>
                 </View>
               )}
-
               {abcdeStatus.circulation === "Abnormal" && (
                 <View style={[styles.abnormalSection, { backgroundColor: isDark ? '#2D1B1B' : '#FFF5F5' }]}>
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Rhythm</Text>
@@ -2443,7 +2410,6 @@ export default function CaseSheetScreen() {
                       </Pressable>
                     ))}
                   </View>
-
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>CRT</Text>
                   <View style={styles.chipRow}>
                     {CHIP_OPTIONS.circulationCRT.map((opt) => (
@@ -2452,7 +2418,6 @@ export default function CaseSheetScreen() {
                       </Pressable>
                     ))}
                   </View>
-
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Skin</Text>
                   <View style={styles.chipRow}>
                     {CHIP_OPTIONS.circulationSkin.map((opt) => (
@@ -2461,7 +2426,6 @@ export default function CaseSheetScreen() {
                       </Pressable>
                     ))}
                   </View>
-
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Skin Color</Text>
                   <View style={styles.chipRow}>
                     {CHIP_OPTIONS.circulationSkinColor.map((opt) => (
@@ -2470,7 +2434,6 @@ export default function CaseSheetScreen() {
                       </Pressable>
                     ))}
                   </View>
-
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>IV Access</Text>
                   <View style={styles.chipRow}>
                     {CHIP_OPTIONS.circulationIVAccess.map((opt) => (
@@ -2479,7 +2442,6 @@ export default function CaseSheetScreen() {
                       </Pressable>
                     ))}
                   </View>
-
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Interventions:</Text>
                   {CHIP_OPTIONS.circulationInterventions.map((int) => (
                     <Pressable key={int.value} style={styles.interventionRow} onPress={() => {
@@ -2494,14 +2456,12 @@ export default function CaseSheetScreen() {
                   ))}
                 </View>
               )}
-
               <View style={[styles.fieldWithVoice, { marginTop: Spacing.md }]}>
                 <Text style={[styles.fieldLabel, { color: theme.text }]}>Notes</Text>
                 <VoiceButton fieldKey="circulation.notes" small />
               </View>
               <TextInput style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Additional circulation observations..." placeholderTextColor={theme.textMuted} value={formData.circulation.notes} onChangeText={(v) => updateFormData("circulation", "notes", v)} multiline />
             </CollapsibleSection>
-
             <CollapsibleSection title="D - DISABILITY (Neuro)" icon="?" iconColor={TriageColors.green}>
               <View style={styles.normalAbnormalRow}>
                 <Pressable style={[styles.normalBtn, { backgroundColor: abcdeStatus.disability === "Normal" ? (isDark ? '#1B2D1E' : '#E8F5E9') : theme.backgroundSecondary }]} onPress={() => setABCDEStatus((prev) => ({ ...prev, disability: "Normal" }))}>
@@ -2513,14 +2473,12 @@ export default function CaseSheetScreen() {
                   <Text style={{ color: abcdeStatus.disability === "Abnormal" ? TriageColors.red : theme.textMuted, fontWeight: "600" }}>Abnormal</Text>
                 </Pressable>
               </View>
-
               <View style={styles.abcdeVitalsRow}>
                 <View style={styles.abcdeVitalInput}><TextInputField label="GCS E" value={formData.disability.gcsE} onChangeText={(v) => updateFormData("disability", "gcsE", v)} keyboardType="numeric" suffix="1-4" /></View>
                 <View style={styles.abcdeVitalInput}><TextInputField label="V" value={formData.disability.gcsV} onChangeText={(v) => updateFormData("disability", "gcsV", v)} keyboardType="numeric" suffix="1-5" /></View>
                 <View style={styles.abcdeVitalInput}><TextInputField label="M" value={formData.disability.gcsM} onChangeText={(v) => updateFormData("disability", "gcsM", v)} keyboardType="numeric" suffix="1-6" /></View>
                 <View style={styles.abcdeVitalInput}><TextInputField label="GRBS" value={formData.disability.glucose} onChangeText={(v) => updateFormData("disability", "glucose", v)} keyboardType="numeric" suffix="mg/dL" /></View>
               </View>
-
               {abcdeStatus.disability === "Normal" && (
                 <View style={[styles.normalDescriptionBox, { backgroundColor: isDark ? '#1B2D1E' : '#E8F5E9', borderColor: TriageColors.green }]}>
                   <Text style={[styles.normalDescriptionText, { color: TriageColors.green }]}>
@@ -2528,7 +2486,6 @@ export default function CaseSheetScreen() {
                   </Text>
                 </View>
               )}
-
               {abcdeStatus.disability === "Abnormal" && (
                 <View style={[styles.abnormalSection, { backgroundColor: isDark ? '#2D1B1B' : '#FFF5F5' }]}>
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>AVPU</Text>
@@ -2539,7 +2496,6 @@ export default function CaseSheetScreen() {
                       </Pressable>
                     ))}
                   </View>
-
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Pupils Size</Text>
                   <View style={styles.chipRow}>
                     {CHIP_OPTIONS.disabilityPupilSize.map((opt) => (
@@ -2548,7 +2504,6 @@ export default function CaseSheetScreen() {
                       </Pressable>
                     ))}
                   </View>
-
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Pupils Reaction</Text>
                   <View style={styles.chipRow}>
                     {CHIP_OPTIONS.disabilityPupilReaction.map((opt) => (
@@ -2557,7 +2512,6 @@ export default function CaseSheetScreen() {
                       </Pressable>
                     ))}
                   </View>
-
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Lateralizing</Text>
                   <View style={styles.chipRow}>
                     {CHIP_OPTIONS.disabilityLateralizing.map((opt) => (
@@ -2569,7 +2523,6 @@ export default function CaseSheetScreen() {
                       </Pressable>
                     ))}
                   </View>
-
                   <Pressable style={styles.interventionRow} onPress={() => {
                     const current = formData.disability.interventions || [];
                     const opt = "seizure_observed";
@@ -2582,14 +2535,12 @@ export default function CaseSheetScreen() {
                   </Pressable>
                 </View>
               )}
-
               <View style={[styles.fieldWithVoice, { marginTop: Spacing.md }]}>
                 <Text style={[styles.fieldLabel, { color: theme.text }]}>Notes</Text>
                 <VoiceButton fieldKey="disability.notes" small />
               </View>
               <TextInput style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Additional neuro observations..." placeholderTextColor={theme.textMuted} value={formData.disability.notes} onChangeText={(v) => updateFormData("disability", "notes", v)} multiline />
             </CollapsibleSection>
-
             <CollapsibleSection title="E - EXPOSURE" icon="*" iconColor={TriageColors.blue}>
               <View style={styles.normalAbnormalRow}>
                 <Pressable style={[styles.normalBtn, { backgroundColor: abcdeStatus.exposure === "Normal" ? (isDark ? '#1B2D1E' : '#E8F5E9') : theme.backgroundSecondary }]} onPress={() => setABCDEStatus((prev) => ({ ...prev, exposure: "Normal" }))}>
@@ -2601,12 +2552,10 @@ export default function CaseSheetScreen() {
                   <Text style={{ color: abcdeStatus.exposure === "Abnormal" ? TriageColors.red : theme.textMuted, fontWeight: "600" }}>Abnormal</Text>
                 </Pressable>
               </View>
-
               <View style={styles.abcdeVitalsRow}>
                 <View style={{ flex: 1 }}><TextInputField label="Temp" value={formData.exposure.temperature} onChangeText={(v) => updateFormData("exposure", "temperature", v)} keyboardType="decimal-pad" suffix="\u00B0C" /></View>
                 <View style={{ flex: 1 }}><TextInputField label="Pain (0-10)" value={formData.exposure.painScore} onChangeText={(v) => updateFormData("exposure", "painScore", v)} keyboardType="decimal-pad" suffix="/10" /></View>
               </View>
-
               {abcdeStatus.exposure === "Normal" && (
                 <View style={[styles.normalDescriptionBox, { backgroundColor: "#E3F2FD", borderColor: TriageColors.blue }]}>
                   <Text style={[styles.normalDescriptionText, { color: TriageColors.blue }]}>
@@ -2614,7 +2563,6 @@ export default function CaseSheetScreen() {
                   </Text>
                 </View>
               )}
-
               {abcdeStatus.exposure === "Abnormal" && (
                 <View style={[styles.abnormalSection, { backgroundColor: isDark ? '#2D1B1B' : '#FFF5F5' }]}>
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Findings</Text>
@@ -2628,7 +2576,6 @@ export default function CaseSheetScreen() {
                       </Pressable>
                     ))}
                   </View>
-
                   <Text style={[styles.abnormalSectionLabel, { color: theme.text }]}>Interventions:</Text>
                   {CHIP_OPTIONS.exposureInterventions.map((int) => (
                     <Pressable key={int.value} style={styles.interventionRow} onPress={() => {
@@ -2643,14 +2590,12 @@ export default function CaseSheetScreen() {
                   ))}
                 </View>
               )}
-
               <View style={[styles.fieldWithVoice, { marginTop: Spacing.md }]}>
                 <Text style={[styles.fieldLabel, { color: theme.text }]}>Local Exam / Notes</Text>
                 <VoiceButton fieldKey="exposure.notes" small />
               </View>
               <TextInput style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Additional exposure findings..." placeholderTextColor={theme.textMuted} value={formData.exposure.notes} onChangeText={(v) => updateFormData("exposure", "notes", v)} multiline />
             </CollapsibleSection>
-
             <Text style={[styles.sectionHeading, { color: theme.text }]}>Adjuncts to Primary Survey</Text>
             <CollapsibleSection title="ABG / VBG" icon="+" iconColor={theme.primary}>
               <View style={styles.abgActionRow}>
@@ -2684,7 +2629,6 @@ export default function CaseSheetScreen() {
                 <Feather name="check-circle" size={16} color={TriageColors.green} />
                 <Text style={[styles.fillNormalBtnText, { color: TriageColors.green }]}>Fill Normal Values</Text>
               </Pressable>
-
               <View style={styles.abgRow}>
                 <View style={styles.abgHalfField}>
                   <DropdownField label="Sample Type" options={ABG_SAMPLE_TYPE_OPTIONS} value={formData.adjuncts.abgSampleType} onChange={(v) => updateFormData("adjuncts", "abgSampleType", v)} />
@@ -2693,7 +2637,6 @@ export default function CaseSheetScreen() {
                   <DropdownField label="Interpretation" options={ABG_STATUS_OPTIONS} value={formData.adjuncts.abgStatus} onChange={(v) => updateFormData("adjuncts", "abgStatus", v)} />
                 </View>
               </View>
-              
               <View style={[styles.abgNormalValuesCard, { backgroundColor: theme.backgroundSecondary, borderColor: theme.border }]}>
                 <Text style={[styles.abgNormalTitle, { color: theme.primary }]}>Normal Values Reference</Text>
                 <View style={styles.abgNormalGrid}>
@@ -2707,7 +2650,6 @@ export default function CaseSheetScreen() {
                   <View style={styles.abgNormalItem}><Text style={[styles.abgNormalLabel, { color: theme.textSecondary }]}>A-a</Text><Text style={[styles.abgNormalValue, { color: theme.text }]}>{"<"}10-15</Text></View>
                 </View>
               </View>
-
               <Text style={[styles.abgSectionLabel, { color: theme.text }]}>Blood Gas Values (Optional)</Text>
               <View style={styles.abgGrid}>
                 <View style={styles.abgSmallField}>
@@ -2743,7 +2685,6 @@ export default function CaseSheetScreen() {
                   <TextInput style={[styles.abgInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]} placeholder="21" placeholderTextColor={theme.textMuted} value={formData.adjuncts.abgFio2} onChangeText={(v) => updateFormData("adjuncts", "abgFio2", v)} keyboardType="decimal-pad" />
                 </View>
               </View>
-
               <Text style={[styles.abgSectionLabel, { color: theme.text }]}>Electrolytes (Optional)</Text>
               <View style={styles.abgGrid}>
                 <View style={styles.abgSmallField}>
@@ -2775,9 +2716,7 @@ export default function CaseSheetScreen() {
                   <TextInput style={[styles.abgInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]} placeholder="10" placeholderTextColor={theme.textMuted} value={formData.adjuncts.abgAaGradient} onChangeText={(v) => updateFormData("adjuncts", "abgAaGradient", v)} keyboardType="decimal-pad" />
                 </View>
               </View>
-
               <TextInputField label="Additional Notes" value={formData.adjuncts.abgNotes} onChangeText={(v) => updateFormData("adjuncts", "abgNotes", v)} placeholder="Sample time, clinical context, etc..." multiline numberOfLines={2} />
-              
               <Pressable
                 style={[styles.aiInterpretBtn, { backgroundColor: "#8B5CF6", opacity: abgInterpreting ? 0.7 : 1 }]}
                 onPress={handleABGInterpretation}
@@ -2790,7 +2729,6 @@ export default function CaseSheetScreen() {
                 )}
                 <Text style={styles.aiInterpretBtnText}>{abgInterpreting ? "Interpreting..." : "AI Interpret ABG"}</Text>
               </Pressable>
-
               {abgInterpretation && (
                 <View style={[styles.abgInterpretationCard, { backgroundColor: `${theme.primary}10`, borderColor: theme.primary }]}>
                   <View style={styles.abgInterpretationHeader}>
@@ -2838,7 +2776,6 @@ export default function CaseSheetScreen() {
                   </Pressable>
                 </View>
               )}
-
               <TextInputField label="Final ABG Diagnosis" value={formData.adjuncts.abgFinalDiagnosis} onChangeText={(v) => updateFormData("adjuncts", "abgFinalDiagnosis", v)} placeholder="e.g. Mixed respiratory and metabolic acidosis with lactic acidosis" multiline numberOfLines={3} />
               <TextInputField label="Your Interpretation (Optional)" value={formData.adjuncts.abgInterpretation} onChangeText={(v) => updateFormData("adjuncts", "abgInterpretation", v)} placeholder="Your clinical interpretation of the ABG..." multiline numberOfLines={2} />
             </CollapsibleSection>
@@ -2856,7 +2793,6 @@ export default function CaseSheetScreen() {
             </CollapsibleSection>
           </>
         )}
-
         {activeTab === "history" && (
           <>
             <View style={styles.inputToolsRow}>
@@ -2880,47 +2816,39 @@ export default function CaseSheetScreen() {
             </View>
             <View style={[styles.card, { backgroundColor: theme.card }]}>
               <Text style={[styles.cardTitle, { color: theme.text }]}>History</Text>
-              
               <View style={styles.fieldWithVoice}>
                 <Text style={[styles.fieldLabel, { color: theme.text }]}>Signs & Symptoms</Text>
                 <VoiceButton fieldKey="sample.signsSymptoms" />
               </View>
               <TextInput style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Associated symptoms..." placeholderTextColor={theme.textMuted} value={formData.sample.signsSymptoms} onChangeText={(v) => updateFormData("sample", "signsSymptoms", v)} multiline />
-
               <View style={styles.fieldWithVoice}>
                 <Text style={[styles.fieldLabel, { color: theme.text }]}>Allergies</Text>
                 <VoiceButton fieldKey="sample.allergies" />
               </View>
               <TextInput style={[styles.inputField, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="NKDA or list allergies" placeholderTextColor={theme.textMuted} value={formData.sample.allergies} onChangeText={(v) => updateFormData("sample", "allergies", v)} />
-
               <View style={styles.fieldWithVoice}>
                 <Text style={[styles.fieldLabel, { color: theme.text }]}>Medications</Text>
                 <VoiceButton fieldKey="sample.medications" />
               </View>
               <TextInput style={[styles.inputField, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Current medications..." placeholderTextColor={theme.textMuted} value={formData.sample.medications} onChangeText={(v) => updateFormData("sample", "medications", v)} />
-
               <View style={styles.fieldWithVoice}>
                 <Text style={[styles.fieldLabel, { color: theme.text }]}>Past Medical History</Text>
                 <VoiceButton fieldKey="sample.pastMedicalHistory" />
               </View>
               <TextInput style={[styles.inputField, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="DM, HTN, Asthma..." placeholderTextColor={theme.textMuted} value={formData.sample.pastMedicalHistory} onChangeText={(v) => updateFormData("sample", "pastMedicalHistory", v)} />
-
               <View style={styles.fieldWithVoice}>
                 <Text style={[styles.fieldLabel, { color: theme.text }]}>Past Surgical History</Text>
                 <VoiceButton fieldKey="pastSurgicalHistory" />
               </View>
               <TextInput style={[styles.inputField, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Previous surgeries..." placeholderTextColor={theme.textMuted} value={pastSurgicalHistory} onChangeText={setPastSurgicalHistory} />
-
               <Text style={[styles.fieldLabel, { color: theme.text }]}>Last Meal</Text>
               <TextInput style={[styles.inputField, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Time of last meal" placeholderTextColor={theme.textMuted} value={formData.sample.lastMeal} onChangeText={(v) => updateFormData("sample", "lastMeal", v)} />
-
               {caseData?.patient?.sex?.toLowerCase() === "female" && (
                 <>
                   <Text style={[styles.fieldLabel, { color: theme.text }]}>LMP (Last Menstrual Period)</Text>
                   <TextInput style={[styles.inputField, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="LMP date (e.g., 15 days back, 10/01/2025)" placeholderTextColor={theme.textMuted} value={formData.sample.lmp} onChangeText={(v) => updateFormData("sample", "lmp", v)} />
                 </>
               )}
-
               <View style={styles.fieldWithVoice}>
                 <View style={styles.fieldLabelWithBar}>
                   <View style={[styles.fieldBar, { backgroundColor: theme.primary }]} />
@@ -2929,14 +2857,12 @@ export default function CaseSheetScreen() {
                 <VoiceButton fieldKey="sample.eventsHopi" />
               </View>
               <TextInput style={[styles.textAreaLarge, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Events and history of present illness..." placeholderTextColor={theme.textMuted} value={formData.sample.eventsHopi} onChangeText={(v) => updateFormData("sample", "eventsHopi", v)} multiline />
-
               <View style={styles.fieldWithVoice}>
                 <Text style={[styles.fieldLabel, { color: theme.text }]}>Any other relevant history</Text>
                 <VoiceButton fieldKey="otherHistory" />
               </View>
               <TextInput style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Any other relevant history..." placeholderTextColor={theme.textMuted} value={otherHistory} onChangeText={setOtherHistory} multiline />
             </View>
-
             <CollapsibleSection title="Psychological Assessment" icon="smile" iconColor={TriageColors.green} defaultExpanded={false}>
               <ToggleRow label="Suicidal Ideation" value={psychData.suicidalIdeation} onValueChange={(v) => setPsychData((p) => ({ ...p, suicidalIdeation: v }))} />
               <ToggleRow label="Self-Harm History" value={psychData.selfHarmHistory} onValueChange={(v) => setPsychData((p) => ({ ...p, selfHarmHistory: v }))} />
@@ -2953,7 +2879,6 @@ export default function CaseSheetScreen() {
             </CollapsibleSection>
           </>
         )}
-
         {activeTab === "exam" && (
           <>
             <View style={styles.inputToolsRow}>
@@ -2970,7 +2895,6 @@ export default function CaseSheetScreen() {
               <Feather name="check-circle" size={20} color={TriageColors.green} />
               <Text style={[styles.markNormalBtnText, { color: TriageColors.green }]}>Mark All Examination Normal</Text>
             </Pressable>
-
             <CollapsibleSection title="General Examination" icon="user" iconColor={theme.primary} defaultExpanded>
               <View style={styles.toggleGrid}>
                 <View style={styles.toggleGridItem}><Text style={[styles.toggleGridLabel, { color: theme.text }]}>Pallor</Text><Switch value={examData.general.pallor} onValueChange={(v) => updateExamData("general", "pallor", v)} trackColor={{ false: theme.backgroundSecondary, true: theme.primary }} thumbColor="#FFFFFF" /></View>
@@ -2986,7 +2910,6 @@ export default function CaseSheetScreen() {
               </View>
               <TextInput style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="General exam notes..." placeholderTextColor={theme.textMuted} value={examData.general.notes} onChangeText={(v) => updateExamData("general", "notes", v)} multiline />
             </CollapsibleSection>
-
             <CollapsibleSection title="Cardiovascular System" icon="heart" iconColor={TriageColors.red}>
               <Text style={[styles.fieldLabel, { color: theme.text }]}>CVS Status</Text>
               <SegmentedControl options={["Normal", "Abnormal"]} value={examData.cvs.status} onChange={(v) => updateExamData("cvs", "status", v)} />
@@ -3006,7 +2929,6 @@ export default function CaseSheetScreen() {
               </View>
               <TextInput style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="CVS notes..." placeholderTextColor={theme.textMuted} value={examData.cvs.notes} onChangeText={(v) => updateExamData("cvs", "notes", v)} multiline />
             </CollapsibleSection>
-
             <CollapsibleSection title="Respiratory System" icon="wind" iconColor={TriageColors.orange}>
               <Text style={[styles.fieldLabel, { color: theme.text }]}>Respiratory Status</Text>
               <SegmentedControl options={["Normal", "Abnormal"]} value={examData.respiratory.status} onChange={(v) => updateExamData("respiratory", "status", v)} />
@@ -3025,7 +2947,6 @@ export default function CaseSheetScreen() {
               </View>
               <TextInput style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Respiratory notes..." placeholderTextColor={theme.textMuted} value={examData.respiratory.notes} onChangeText={(v) => updateExamData("respiratory", "notes", v)} multiline />
             </CollapsibleSection>
-
             <CollapsibleSection title="Abdomen" icon="activity" iconColor={TriageColors.yellow}>
               <Text style={[styles.fieldLabel, { color: theme.text }]}>Abdomen Status</Text>
               <SegmentedControl options={["Normal", "Abnormal"]} value={examData.abdomen.status} onChange={(v) => updateExamData("abdomen", "status", v)} />
@@ -3048,7 +2969,6 @@ export default function CaseSheetScreen() {
               </View>
               <TextInput style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Abdomen notes..." placeholderTextColor={theme.textMuted} value={examData.abdomen.notes} onChangeText={(v) => updateExamData("abdomen", "notes", v)} multiline />
             </CollapsibleSection>
-
             <CollapsibleSection title="Central Nervous System" icon="cpu" iconColor={TriageColors.green}>
               <Text style={[styles.fieldLabel, { color: theme.text }]}>CNS Status</Text>
               <SegmentedControl options={["Normal", "Abnormal"]} value={examData.cns.status} onChange={(v) => updateExamData("cns", "status", v)} />
@@ -3072,7 +2992,6 @@ export default function CaseSheetScreen() {
               </View>
               <TextInput style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="CNS notes..." placeholderTextColor={theme.textMuted} value={examData.cns.notes} onChangeText={(v) => updateExamData("cns", "notes", v)} multiline />
             </CollapsibleSection>
-
             <CollapsibleSection title="Extremities" icon="move" iconColor={TriageColors.blue}>
               <Text style={[styles.fieldLabel, { color: theme.text }]}>Extremities Status</Text>
               <SegmentedControl options={["Normal", "Abnormal"]} value={examData.extremities.status} onChange={(v) => updateExamData("extremities", "status", v)} />
@@ -3087,7 +3006,6 @@ export default function CaseSheetScreen() {
             </CollapsibleSection>
           </>
         )}
-
         {activeTab === "treatment" && (
           <>
             <View style={styles.inputToolsRow}>
@@ -3102,42 +3020,35 @@ export default function CaseSheetScreen() {
             </View>
             <View style={[styles.card, { backgroundColor: theme.card }]}>
               <Text style={[styles.cardTitle, { color: theme.text }]}>Investigations</Text>
-              
               <View style={styles.fieldWithVoice}>
                 <Text style={[styles.fieldLabel, { color: theme.text }]}>Labs Ordered</Text>
                 <VoiceButton fieldKey="treatment.labsOrdered" />
               </View>
               <TextInput style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="CBC, RFT, LFT..." placeholderTextColor={theme.textMuted} value={treatmentData.labsOrdered} onChangeText={(v) => setTreatmentData((prev) => ({ ...prev, labsOrdered: v }))} multiline />
-
               <View style={styles.fieldWithVoice}>
                 <Text style={[styles.fieldLabel, { color: theme.text }]}>Imaging</Text>
                 <VoiceButton fieldKey="treatment.imaging" />
               </View>
               <TextInput style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="X-ray, CT, USG..." placeholderTextColor={theme.textMuted} value={treatmentData.imaging} onChangeText={(v) => setTreatmentData((prev) => ({ ...prev, imaging: v }))} multiline />
-
               <View style={styles.fieldWithVoice}>
                 <Text style={[styles.fieldLabel, { color: theme.text }]}>Results Summary</Text>
                 <VoiceButton fieldKey="treatment.resultsSummary" />
               </View>
               <TextInput style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Key findings..." placeholderTextColor={theme.textMuted} value={treatmentData.resultsSummary} onChangeText={(v) => setTreatmentData((prev) => ({ ...prev, resultsSummary: v }))} multiline />
             </View>
-
             <View style={[styles.card, { backgroundColor: theme.card }]}>
               <Text style={[styles.cardTitle, { color: theme.text }]}>Provisional Diagnosis</Text>
-              
               <View style={styles.fieldWithVoice}>
                 <Text style={[styles.fieldLabel, { color: theme.text }]}>Primary Diagnosis</Text>
                 <VoiceButton fieldKey="treatment.primaryDiagnosis" />
               </View>
               <TextInput style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Main diagnosis..." placeholderTextColor={theme.textMuted} value={treatmentData.primaryDiagnosis} onChangeText={(v) => setTreatmentData((prev) => ({ ...prev, primaryDiagnosis: v }))} multiline />
-
               <View style={styles.fieldWithVoice}>
                 <Text style={[styles.fieldLabel, { color: theme.text }]}>Differential Diagnoses</Text>
                 <VoiceButton fieldKey="treatment.differentialDiagnoses" />
               </View>
               <TextInput style={[styles.textAreaLarge, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Other possibilities..." placeholderTextColor={theme.textMuted} value={treatmentData.differentialDiagnoses} onChangeText={(v) => setTreatmentData((prev) => ({ ...prev, differentialDiagnoses: v }))} multiline />
             </View>
-
             <View style={[styles.card, { backgroundColor: theme.card }]}>
               <AIDiagnosisPanel
                 caseId={caseId || ""}
@@ -3184,12 +3095,9 @@ export default function CaseSheetScreen() {
                 onDiagnosisSelect={(diagnosis) => setTreatmentData((prev) => ({ ...prev, primaryDiagnosis: diagnosis }))}
               />
             </View>
-
             <View style={[styles.card, { backgroundColor: theme.card }]}>
               <Text style={[styles.cardTitle, { color: theme.text }]}>Treatment Given</Text>
-              
               <Text style={[styles.fieldLabel, { color: theme.text }]}>Medications</Text>
-              
               <View style={styles.medicationInputRow}>
                 <TextInput
                   style={[styles.medicationInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, flex: 2 }]}
@@ -3228,7 +3136,6 @@ export default function CaseSheetScreen() {
                 <Feather name="plus" size={18} color="#FFFFFF" />
                 <Text style={styles.addDrugBtnText}>Add Medication</Text>
               </Pressable>
-
               {treatmentData.medications.length > 0 && (
                 <View style={styles.medicationsList}>
                   {treatmentData.medications.map((med) => (
@@ -3244,9 +3151,7 @@ export default function CaseSheetScreen() {
                   ))}
                 </View>
               )}
-
               <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.lg }]}>Infusions / IV Fluids</Text>
-              
               <View style={styles.medicationInputRow}>
                 <TextInput
                   style={[styles.medicationInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, flex: 2 }]}
@@ -3283,7 +3188,6 @@ export default function CaseSheetScreen() {
                 <Feather name="plus" size={18} color="#FFFFFF" />
                 <Text style={styles.addDrugBtnText}>Add Infusion / IV Fluid</Text>
               </Pressable>
-
               {treatmentData.infusions.length > 0 && (
                 <View style={styles.medicationsList}>
                   {treatmentData.infusions.map((inf) => (
@@ -3299,16 +3203,13 @@ export default function CaseSheetScreen() {
                   ))}
                 </View>
               )}
-
             </View>
-
             <Pressable style={[styles.addAddendumBtn, { borderColor: theme.border }]}>
               <Feather name="plus" size={18} color={theme.primary} />
               <Text style={[styles.addAddendumBtnText, { color: theme.primary }]}>Add Addendum Note</Text>
             </Pressable>
           </>
         )}
-
         {activeTab === "notes" && (
           <>
             <View style={styles.inputToolsRow}>
@@ -3330,11 +3231,9 @@ export default function CaseSheetScreen() {
                 }}
               />
             </View>
-
             <View style={[styles.card, { backgroundColor: theme.card }]}>
               <Text style={[styles.cardTitle, { color: theme.text }]}>Procedures Performed</Text>
               <Text style={[styles.cardSubtitle, { color: theme.textSecondary }]}>Select all procedures performed and add notes</Text>
-              
               <Pressable 
                 style={[styles.nilProcedureRow, { borderColor: proceduresData.generalNotes === "Nil" ? TriageColors.green : theme.border }]} 
                 onPress={() => {
@@ -3352,7 +3251,6 @@ export default function CaseSheetScreen() {
                 </View>
                 <Text style={[styles.procedureLabel, { color: theme.text, fontWeight: "600" }]}>No procedures performed (Nil)</Text>
               </Pressable>
-              
               {proceduresData.generalNotes !== "Nil" && (
                 <>
                   <ProcedureSection title="Resuscitation" category="resuscitation" />
@@ -3367,12 +3265,10 @@ export default function CaseSheetScreen() {
                 </>
               )}
             </View>
-
             {proceduresData.generalNotes !== "Nil" && (
               <View style={[styles.card, { backgroundColor: theme.card }]}>
                 <Text style={[styles.cardTitle, { color: theme.text }]}>General Procedure Notes</Text>
                 <Text style={[styles.cardSubtitle, { color: theme.textSecondary }]}>Detailed procedure notes and observations (included in exports)</Text>
-                
                 <View style={styles.fieldWithVoice}>
                   <Text style={[styles.fieldLabel, { color: theme.text }]}>Procedure Details</Text>
                   <VoiceButton fieldKey="procedures.generalNotes" />
@@ -3389,7 +3285,6 @@ export default function CaseSheetScreen() {
             )}
           </>
         )}
-
         {activeTab === "disposition" && (
           <>
             <View style={styles.inputToolsRow}>
@@ -3404,7 +3299,6 @@ export default function CaseSheetScreen() {
             </View>
             <View style={[styles.card, { backgroundColor: theme.card }]}>
               <Text style={[styles.cardTitle, { color: theme.text }]}>Disposition</Text>
-              
               <Text style={[styles.fieldLabel, { color: theme.text }]}>Disposition Type</Text>
               <View style={styles.dispositionOptions}>
                 {["Discharge", "Admit", "Refer", "LAMA", "Absconded", "Death"].map((opt) => (
@@ -3413,7 +3307,6 @@ export default function CaseSheetScreen() {
                   </Pressable>
                 ))}
               </View>
-
               {dispositionData.dispositionType === "Admit" && (
                 <>
                   <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.md }]}>Admit To</Text>
@@ -3428,7 +3321,6 @@ export default function CaseSheetScreen() {
                   <TextInput style={[styles.inputField, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Ward/Room/Bed number..." placeholderTextColor={theme.textMuted} value={dispositionData.admitToRoom} onChangeText={(v) => setDispositionData((prev) => ({ ...prev, admitToRoom: v }))} />
                 </>
               )}
-
               {dispositionData.dispositionType === "Refer" && (
                 <>
                   <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.md }]}>Refer To</Text>
@@ -3436,20 +3328,16 @@ export default function CaseSheetScreen() {
                 </>
               )}
             </View>
-
             <View style={[styles.card, { backgroundColor: theme.card }]}>
               <Text style={[styles.cardTitle, { color: theme.text }]}>Observation in ER</Text>
-              
               <View style={styles.fieldWithVoice}>
                 <Text style={[styles.fieldLabel, { color: theme.text }]}>ER Observation Notes</Text>
                 <VoiceButton fieldKey="erObservationNotes" />
               </View>
               <TextInput style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Patient's course in ER, response to treatment, changes in condition..." placeholderTextColor={theme.textMuted} value={dispositionData.erObservationNotes} onChangeText={(v) => setDispositionData((prev) => ({ ...prev, erObservationNotes: v }))} multiline />
-
               <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.md }]}>Duration in ER</Text>
               <TextInput style={[styles.inputField, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="e.g., 4 hours" placeholderTextColor={theme.textMuted} value={dispositionData.durationInER} onChangeText={(v) => setDispositionData((prev) => ({ ...prev, durationInER: v }))} />
             </View>
-
             <Pressable style={[styles.generateSummaryBtn, { backgroundColor: theme.primary }]} onPress={async () => {
               const success = await commitToBackend();
               if (success && caseId) {
@@ -3459,7 +3347,6 @@ export default function CaseSheetScreen() {
               <Feather name="file-text" size={18} color="#FFFFFF" />
               <Text style={styles.generateSummaryBtnText}>Generate Discharge Summary</Text>
             </Pressable>
-
             <Pressable style={[styles.saveDashboardBtn, { borderColor: theme.primary }]} onPress={async () => { const success = await commitToBackend(); if (success) navigation.reset({ index: 0, routes: [{ name: "Main", params: { screen: "DashboardTab" } }] }); }}>
               <Feather name="home" size={18} color={theme.primary} />
               <Text style={[styles.saveDashboardBtnText, { color: theme.primary }]}>Save & Go to Dashboard</Text>
@@ -3467,7 +3354,6 @@ export default function CaseSheetScreen() {
           </>
         )}
       </KeyboardAwareScrollViewCompat>
-
       <View style={[styles.bottomNav, { backgroundColor: theme.card, borderTopColor: theme.border, paddingBottom: insets.bottom + Spacing.sm }]}>
         <Pressable style={[styles.navBtn, styles.prevBtn]} onPress={handlePrevious} disabled={activeTab === "patient"}>
           <Feather name="arrow-left" size={18} color={activeTab === "patient" ? theme.textMuted : theme.text} />
@@ -3481,7 +3367,6 @@ export default function CaseSheetScreen() {
           {activeTab === "disposition" ? <Feather name="check" size={18} color="#FFFFFF" /> : <Feather name="arrow-right" size={18} color="#FFFFFF" />}
         </Pressable>
       </View>
-
       <Modal
         visible={showFrequencyPicker}
         transparent
