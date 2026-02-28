@@ -2046,58 +2046,51 @@ export default function CaseSheetScreen() {
                 )}
                 <Text style={[styles.fieldLabel, { color: theme.textSecondary, marginBottom: Spacing.sm }]}>Vitals at Arrival</Text>
                 <View style={[styles.vitalsEditGrid, { backgroundColor: theme.backgroundSecondary }]}>
+                  {[
+                    [
+                      { label: "HR", unit: "bpm", key: "circulation.hr", kb: "numeric" as const },
+                      { label: "RR", unit: "/min", key: "breathing.rr", kb: "numeric" as const },
+                      { label: "SpO2", unit: "%", key: "breathing.spo2", kb: "numeric" as const },
+                      { label: "Temp", unit: "F", key: "exposure.temperature", kb: "decimal-pad" as const },
+                    ],
+                    [
+                      { label: "GRBS", unit: "mg/dL", key: "disability.glucose", kb: "numeric" as const },
+                      { label: "Pain", unit: "/10", key: "exposure.painScore", kb: "numeric" as const },
+                    ],
+                  ].map((row, ri) => (
+                    <View key={ri} style={styles.vitalsEditRow}>
+                      {row.map((item) => {
+                        const [cat, field] = item.key.split(".") as [keyof typeof formData, string];
+                        return (
+                          <View key={item.key} style={styles.vitalsEditItem}>
+                            <Text style={[styles.vitalLabel, { color: theme.textMuted }]}>{item.label}</Text>
+                            <TextInput style={[styles.vitalInput, { color: theme.text, borderColor: theme.border }]} keyboardType={item.kb} defaultValue={String((formData[cat] as any)?.[field] || "")} onChangeText={(v) => updateFormData(cat as any, field, v)} placeholder="-" placeholderTextColor={theme.textMuted} maxLength={5} />
+                            <Text style={[styles.vitalUnit, { color: theme.textMuted }]}>{item.unit}</Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  ))}
                   <View style={styles.vitalsEditRow}>
-                    <View style={styles.vitalsEditItem}>
-                      <Text style={[styles.vitalLabel, { color: theme.textMuted }]}>HR</Text>
-                      <TextInput style={[styles.vitalInput, { color: theme.text, borderColor: theme.border }]} keyboardType="numeric" defaultValue={formData.circulation.hr} onChangeText={(v) => updateFormData("circulation", "hr", v)} placeholder="-" placeholderTextColor={theme.textMuted} />
-                      <Text style={[styles.vitalUnit, { color: theme.textMuted }]}>bpm</Text>
-                    </View>
-                    <View style={styles.vitalsEditItem}>
-                      <Text style={[styles.vitalLabel, { color: theme.textMuted }]}>BP</Text>
-                      <View style={{ flexDirection: "row", alignItems: "center" }}>
-                        <TextInput style={[styles.vitalInput, { color: theme.text, borderColor: theme.border, minWidth: 35 }]} keyboardType="numeric" defaultValue={formData.circulation.bpSystolic} onChangeText={(v) => updateFormData("circulation", "bpSystolic", v)} placeholder="-" placeholderTextColor={theme.textMuted} />
-                        <Text style={{ color: theme.textMuted, marginHorizontal: 2 }}>/</Text>
-                        <TextInput style={[styles.vitalInput, { color: theme.text, borderColor: theme.border, minWidth: 35 }]} keyboardType="numeric" defaultValue={formData.circulation.bpDiastolic} onChangeText={(v) => updateFormData("circulation", "bpDiastolic", v)} placeholder="-" placeholderTextColor={theme.textMuted} />
+                    <View style={[styles.vitalsEditItem, { flex: 2 }]}>
+                      <Text style={[styles.vitalLabel, { color: theme.textMuted }]}>BP (Sys/Dia)</Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                        <TextInput style={[styles.vitalInput, { color: theme.text, borderColor: theme.border, width: 50 }]} keyboardType="numeric" defaultValue={formData.circulation.bpSystolic} onChangeText={(v) => updateFormData("circulation", "bpSystolic", v)} placeholder="120" placeholderTextColor={theme.textMuted} maxLength={3} />
+                        <Text style={{ color: theme.textMuted, fontWeight: "700" }}>/</Text>
+                        <TextInput style={[styles.vitalInput, { color: theme.text, borderColor: theme.border, width: 50 }]} keyboardType="numeric" defaultValue={formData.circulation.bpDiastolic} onChangeText={(v) => updateFormData("circulation", "bpDiastolic", v)} placeholder="80" placeholderTextColor={theme.textMuted} maxLength={3} />
+                        <Text style={[styles.vitalUnit, { color: theme.textMuted }]}>mmHg</Text>
                       </View>
-                      <Text style={[styles.vitalUnit, { color: theme.textMuted }]}>mmHg</Text>
                     </View>
-                    <View style={styles.vitalsEditItem}>
-                      <Text style={[styles.vitalLabel, { color: theme.textMuted }]}>RR</Text>
-                      <TextInput style={[styles.vitalInput, { color: theme.text, borderColor: theme.border }]} keyboardType="numeric" defaultValue={formData.breathing.rr} onChangeText={(v) => updateFormData("breathing", "rr", v)} placeholder="-" placeholderTextColor={theme.textMuted} />
-                      <Text style={[styles.vitalUnit, { color: theme.textMuted }]}>/min</Text>
-                    </View>
-                    <View style={styles.vitalsEditItem}>
-                      <Text style={[styles.vitalLabel, { color: theme.textMuted }]}>SpO2</Text>
-                      <TextInput style={[styles.vitalInput, { color: theme.text, borderColor: theme.border }]} keyboardType="numeric" defaultValue={formData.breathing.spo2} onChangeText={(v) => updateFormData("breathing", "spo2", v)} placeholder="-" placeholderTextColor={theme.textMuted} />
-                      <Text style={[styles.vitalUnit, { color: theme.textMuted }]}>%</Text>
-                    </View>
-                  </View>
-                  <View style={styles.vitalsEditRow}>
-                    <View style={styles.vitalsEditItem}>
-                      <Text style={[styles.vitalLabel, { color: theme.textMuted }]}>Temp</Text>
-                      <TextInput style={[styles.vitalInput, { color: theme.text, borderColor: theme.border }]} keyboardType="decimal-pad" defaultValue={formData.exposure.temperature} onChangeText={(v) => updateFormData("exposure", "temperature", v)} placeholder="-" placeholderTextColor={theme.textMuted} />
-                      <Text style={[styles.vitalUnit, { color: theme.textMuted }]}>F</Text>
-                    </View>
-                    <View style={styles.vitalsEditItem}>
-                      <Text style={[styles.vitalLabel, { color: theme.textMuted }]}>GCS</Text>
-                      <View style={{ flexDirection: "row", alignItems: "center" }}>
-                        <TextInput style={[styles.vitalInput, { color: theme.text, borderColor: theme.border, minWidth: 22 }]} keyboardType="numeric" defaultValue={formData.disability.gcsE} onChangeText={(v) => updateFormData("disability", "gcsE", v)} placeholder="4" placeholderTextColor={theme.textMuted} />
-                        <Text style={{ color: theme.textMuted, fontSize: 10 }}>+</Text>
-                        <TextInput style={[styles.vitalInput, { color: theme.text, borderColor: theme.border, minWidth: 22 }]} keyboardType="numeric" defaultValue={formData.disability.gcsV} onChangeText={(v) => updateFormData("disability", "gcsV", v)} placeholder="5" placeholderTextColor={theme.textMuted} />
-                        <Text style={{ color: theme.textMuted, fontSize: 10 }}>+</Text>
-                        <TextInput style={[styles.vitalInput, { color: theme.text, borderColor: theme.border, minWidth: 22 }]} keyboardType="numeric" defaultValue={formData.disability.gcsM} onChangeText={(v) => updateFormData("disability", "gcsM", v)} placeholder="6" placeholderTextColor={theme.textMuted} />
+                    <View style={[styles.vitalsEditItem, { flex: 2 }]}>
+                      <Text style={[styles.vitalLabel, { color: theme.textMuted }]}>GCS (E/V/M)</Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                        <TextInput style={[styles.vitalInput, { color: theme.text, borderColor: theme.border, width: 30 }]} keyboardType="numeric" defaultValue={formData.disability.gcsE} onChangeText={(v) => updateFormData("disability", "gcsE", v)} placeholder="4" placeholderTextColor={theme.textMuted} maxLength={1} />
+                        <Text style={{ color: theme.textMuted, fontWeight: "700" }}>/</Text>
+                        <TextInput style={[styles.vitalInput, { color: theme.text, borderColor: theme.border, width: 30 }]} keyboardType="numeric" defaultValue={formData.disability.gcsV} onChangeText={(v) => updateFormData("disability", "gcsV", v)} placeholder="5" placeholderTextColor={theme.textMuted} maxLength={1} />
+                        <Text style={{ color: theme.textMuted, fontWeight: "700" }}>/</Text>
+                        <TextInput style={[styles.vitalInput, { color: theme.text, borderColor: theme.border, width: 30 }]} keyboardType="numeric" defaultValue={formData.disability.gcsM} onChangeText={(v) => updateFormData("disability", "gcsM", v)} placeholder="6" placeholderTextColor={theme.textMuted} maxLength={1} />
+                        <Text style={[styles.vitalUnit, { color: theme.textMuted }]}>/15</Text>
                       </View>
-                      <Text style={[styles.vitalUnit, { color: theme.textMuted }]}>E+V+M</Text>
-                    </View>
-                    <View style={styles.vitalsEditItem}>
-                      <Text style={[styles.vitalLabel, { color: theme.textMuted }]}>GRBS</Text>
-                      <TextInput style={[styles.vitalInput, { color: theme.text, borderColor: theme.border }]} keyboardType="numeric" defaultValue={formData.disability.glucose} onChangeText={(v) => updateFormData("disability", "glucose", v)} placeholder="-" placeholderTextColor={theme.textMuted} />
-                      <Text style={[styles.vitalUnit, { color: theme.textMuted }]}>mg/dL</Text>
-                    </View>
-                    <View style={styles.vitalsEditItem}>
-                      <Text style={[styles.vitalLabel, { color: theme.textMuted }]}>Pain</Text>
-                      <TextInput style={[styles.vitalInput, { color: theme.text, borderColor: theme.border }]} keyboardType="numeric" defaultValue={formData.exposure.painScore} onChangeText={(v) => updateFormData("exposure", "painScore", v)} placeholder="-" placeholderTextColor={theme.textMuted} />
-                      <Text style={[styles.vitalUnit, { color: theme.textMuted }]}>/10</Text>
                     </View>
                   </View>
                 </View>
@@ -3566,11 +3559,11 @@ const styles = StyleSheet.create({
   vitalItem: { alignItems: "center", minWidth: 50 },
   vitalLabel: { ...Typography.label, fontSize: 10 },
   vitalValue: { ...Typography.bodyMedium, fontWeight: "600" },
-  vitalInput: { ...Typography.bodyMedium, fontWeight: "600", textAlign: "center" as const, borderBottomWidth: 1, minWidth: 30, paddingVertical: 2, fontSize: 15 },
-  vitalUnit: { fontSize: 9, marginTop: 1 },
-  vitalsEditGrid: { padding: Spacing.md, borderRadius: BorderRadius.md, gap: Spacing.md },
-  vitalsEditRow: { flexDirection: "row" as const, justifyContent: "space-between" as const, gap: Spacing.sm },
-  vitalsEditItem: { flex: 1, alignItems: "center" as const, gap: 2 },
+  vitalInput: { fontWeight: "600" as const, textAlign: "center" as const, borderBottomWidth: 1, paddingVertical: 2, paddingHorizontal: 4, fontSize: 16, width: 50 },
+  vitalUnit: { fontSize: 9, marginTop: 2 },
+  vitalsEditGrid: { padding: Spacing.md, borderRadius: BorderRadius.md, gap: Spacing.lg },
+  vitalsEditRow: { flexDirection: "row" as const, justifyContent: "space-around" as const, flexWrap: "wrap" as const, gap: Spacing.md },
+  vitalsEditItem: { alignItems: "center" as const, gap: 2 },
   fieldWithVoice: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: Spacing.sm, marginBottom: Spacing.xs },
   fieldLabelWithBar: { flexDirection: "row", alignItems: "center" },
   fieldBar: { width: 4, height: 20, borderRadius: 2, marginRight: Spacing.sm },
