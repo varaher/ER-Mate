@@ -450,31 +450,21 @@ export default function ViewCaseScreen() {
           </Section>
         )}
 
-        {(adjuncts.ecg_findings || adjuncts.bedside_echo || adjuncts.additional_notes || adjuncts.efast_status || adjuncts.efast_notes) && (
-          <Section title="Adjuncts to Primary Survey">
-            {(adjuncts.additional_notes) && (
-              <SubSection title="ABG / VBG">
-                <Text style={[styles.text, { color: theme.text }]}>{safeText(adjuncts.additional_notes)}</Text>
-              </SubSection>
-            )}
-            {(adjuncts.ecg_findings) && (
-              <SubSection title="ECG">
-                <Text style={[styles.text, { color: theme.text }]}>{safeText(adjuncts.ecg_findings)}</Text>
-              </SubSection>
-            )}
-            {(adjuncts.efast_status || adjuncts.efast_notes) && (
-              <SubSection title="EFAST">
-                <InfoRow label="Status" value={adjuncts.efast_status} />
-                {adjuncts.efast_notes && <Text style={[styles.text, { color: theme.text }]}>{safeText(adjuncts.efast_notes)}</Text>}
-              </SubSection>
-            )}
-            {(adjuncts.bedside_echo) && (
-              <SubSection title="Bedside Echo">
-                <Text style={[styles.text, { color: theme.text }]}>{safeText(adjuncts.bedside_echo)}</Text>
-              </SubSection>
-            )}
-          </Section>
-        )}
+        <Section title="Adjuncts to Primary Survey">
+          <SubSection title="ABG / VBG">
+            <Text style={[styles.text, { color: theme.text }]}>{safeText(adjuncts.additional_notes) || "Not done"}</Text>
+          </SubSection>
+          <SubSection title="ECG">
+            <Text style={[styles.text, { color: theme.text }]}>{safeText(adjuncts.ecg_findings) || "Not done"}</Text>
+          </SubSection>
+          <SubSection title="Echo">
+            <Text style={[styles.text, { color: theme.text }]}>{safeText(adjuncts.bedside_echo) || "Not done"}</Text>
+          </SubSection>
+          <SubSection title="FAST">
+            <InfoRow label="Status" value={adjuncts.efast_status || "Not done"} />
+            {adjuncts.efast_notes ? <Text style={[styles.text, { color: theme.text }]}>{safeText(adjuncts.efast_notes)}</Text> : null}
+          </SubSection>
+        </Section>
 
         {isPed ? (
           <Section title="History (SAMPLE)">
