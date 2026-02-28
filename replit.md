@@ -36,6 +36,7 @@ Preferred communication style: Simple, everyday language.
 **Document Export System**: Supports export of Case Sheets and Discharge Summaries in PDF and DOCX formats, with platform-aware file handling for web and mobile.
 **Device Linking**: Provides a secure WhatsApp-style web linking feature for accessing the web application, generating temporary, expiring link codes.
 **Psychological Assessment**: Captured in Case Sheet (suicidal ideation, self-harm history, intent to harm others, substance abuse, psychiatric history, treatment status, support system, notes). Displayed in View Case Sheet with "Normal" default when nothing is marked, or "Abnormal" in red when flags are present. Data saved via `psychological` key in case payload.
+**Adult View Case Sheet Section Order**: Patient Info → Triage/Vitals → Presenting Complaint → Primary Assessment (ABCDE) → Adjuncts → History of Present Illness → Secondary Survey (Signs & Symptoms, Past Medical, Surgical, Family/Gynec, LMP, Allergies) → General Examination → Systemic Examination (CNS, CVS, Chest, Abdomen, Extremities) → Psychological Assessment → Investigations → Treatment Plan (Medications, Infusions, Notes) → Procedures → ER Observation → Disposition → Differential Diagnosis → AI Diagnosis Panel → Addendum Notes → Case Information.
 
 ### Learn Section
 

@@ -253,7 +253,7 @@ export default function ViewCaseScreen() {
 
   const ExamSection = ({ title, status, notes }: { title: string; status?: any; notes?: any }) => (
     <View style={styles.examSection}>
-      <Text style={[styles.examSectionTitle, { color: theme.text }]}>{title}: {safeText(status) || "Normal"}</Text>
+      <Text style={[styles.examSectionTitle, { color: theme.text }]}>{title ? `${title}: ` : ""}{safeText(status) || "Normal"}</Text>
       <Text style={[styles.examDetail, { color: theme.textSecondary }]}>{safeText(notes) || "No additional notes"}</Text>
     </View>
   );
@@ -522,59 +522,72 @@ export default function ViewCaseScreen() {
             </SubSection>
           </Section>
         ) : (
-          <Section title="History">
-            <SubSection title="Events / HOPI">
+          <>
+            <Section title="History of Present Illness">
               {editMode ? (
                 <TextInput style={[styles.editableTextArea, { backgroundColor: "#FEF9C3", color: theme.text }]} multiline numberOfLines={4} defaultValue={editableFieldsRef.current.hopi} onChangeText={(text) => updateEditableField("hopi", text)} placeholder="History of present illness..." placeholderTextColor={theme.textMuted} />
               ) : (
                 <Text style={[styles.text, { color: theme.text }]}>{safeText(history.hpi) || safeText(history.events_hopi) || safeText(caseData.sample?.eventsHopi) || "N/A"}</Text>
               )}
-            </SubSection>
+            </Section>
 
-            <SubSection title="Past Medical History">
-              {editMode ? (
-                <TextInput style={[styles.editableInput, { backgroundColor: "#FEF9C3", color: theme.text }]} defaultValue={editableFieldsRef.current.past_medical} onChangeText={(text) => updateEditableField("past_medical", text)} placeholder="e.g., DM, HTN, CAD (comma separated)" placeholderTextColor={theme.textMuted} />
-              ) : (
-                <Text style={[styles.text, { color: theme.text }]}>{Array.isArray(history.past_medical) ? history.past_medical.join(", ") : (safeText(history.past_medical) || "None")}</Text>
-              )}
-            </SubSection>
-
-            <SubSection title="Past Surgical History">
-              {editMode ? (
-                <TextInput style={[styles.editableInput, { backgroundColor: "#FEF9C3", color: theme.text }]} defaultValue={editableFieldsRef.current.past_surgical} onChangeText={(text) => updateEditableField("past_surgical", text)} placeholder="Surgical history..." placeholderTextColor={theme.textMuted} />
-              ) : (
-                <Text style={[styles.text, { color: theme.text }]}>{safeText(history.past_surgical) || "None"}</Text>
-              )}
-            </SubSection>
-
-            <SubSection title="Allergies">
-              {editMode ? (
-                <TextInput style={[styles.editableInput, { backgroundColor: "#FEF9C3", color: theme.text }]} defaultValue={editableFieldsRef.current.allergies} onChangeText={(text) => updateEditableField("allergies", text)} placeholder="Allergies (comma separated)" placeholderTextColor={theme.textMuted} />
-              ) : (
-                <Text style={[styles.text, { color: theme.text }]}>{Array.isArray(history.allergies) ? history.allergies.join(", ") : (safeText(history.allergies) || "NKDA")}</Text>
-              )}
-            </SubSection>
-
-            <SubSection title="Current Medications">
-              {editMode ? (
-                <TextInput style={[styles.editableInput, { backgroundColor: "#FEF9C3", color: theme.text }]} defaultValue={editableFieldsRef.current.medications} onChangeText={(text) => updateEditableField("medications", text)} placeholder="Current medications..." placeholderTextColor={theme.textMuted} />
-              ) : (
-                <Text style={[styles.text, { color: theme.text }]}>{safeText(history.medications) || safeText(history.drug_history) || "None"}</Text>
-              )}
-            </SubSection>
-
-            {(history.last_meal || history.last_meal_lmp) ? (
-              <SubSection title="Last Meal">
-                <Text style={[styles.text, { color: theme.text }]}>{safeText(history.last_meal) || safeText(history.last_meal_lmp) || "N/A"}</Text>
+            <Section title="Secondary Survey">
+              <SubSection title="Signs and Symptoms">
+                <Text style={[styles.text, { color: theme.text }]}>{safeText(caseData.presenting_complaint?.text) || safeText(caseData.sample?.signsSymptoms) || "N/A"}</Text>
               </SubSection>
-            ) : null}
 
-            {history.lmp ? (
-              <SubSection title="LMP (Last Menstrual Period)">
-                <Text style={[styles.text, { color: theme.text }]}>{safeText(history.lmp)}</Text>
+              <SubSection title="Past Medical History">
+                {editMode ? (
+                  <TextInput style={[styles.editableInput, { backgroundColor: "#FEF9C3", color: theme.text }]} defaultValue={editableFieldsRef.current.past_medical} onChangeText={(text) => updateEditableField("past_medical", text)} placeholder="e.g., DM, HTN, CAD (comma separated)" placeholderTextColor={theme.textMuted} />
+                ) : (
+                  <Text style={[styles.text, { color: theme.text }]}>{Array.isArray(history.past_medical) ? history.past_medical.join(", ") : (safeText(history.past_medical) || "No known comorbidities.")}</Text>
+                )}
               </SubSection>
-            ) : null}
-          </Section>
+
+              <SubSection title="Surgical History">
+                {editMode ? (
+                  <TextInput style={[styles.editableInput, { backgroundColor: "#FEF9C3", color: theme.text }]} defaultValue={editableFieldsRef.current.past_surgical} onChangeText={(text) => updateEditableField("past_surgical", text)} placeholder="Surgical history..." placeholderTextColor={theme.textMuted} />
+                ) : (
+                  <Text style={[styles.text, { color: theme.text }]}>{safeText(history.past_surgical) || "No history of surgeries."}</Text>
+                )}
+              </SubSection>
+
+              {(history.family_history || history.gynec_history || history.lmp) ? (
+                <>
+                  <InfoRow label="Family/Gynecological History" value={safeText(history.family_history) || safeText(history.gynec_history) || "Nil"} />
+                  {history.lmp ? <Text style={[styles.text, { color: theme.primary, marginLeft: 8 }]}>LMP-{safeText(history.lmp)}</Text> : null}
+                </>
+              ) : null}
+
+              {history.lmp && !history.family_history && !history.gynec_history ? (
+                <SubSection title="LMP (Last Menstrual Period)">
+                  <Text style={[styles.text, { color: theme.text }]}>{safeText(history.lmp)}</Text>
+                </SubSection>
+              ) : null}
+
+              <SubSection title="Allergies">
+                {editMode ? (
+                  <TextInput style={[styles.editableInput, { backgroundColor: "#FEF9C3", color: theme.text }]} defaultValue={editableFieldsRef.current.allergies} onChangeText={(text) => updateEditableField("allergies", text)} placeholder="Allergies (comma separated)" placeholderTextColor={theme.textMuted} />
+                ) : (
+                  <Text style={[styles.text, { color: theme.text }]}>{Array.isArray(history.allergies) ? history.allergies.join(", ") : (safeText(history.allergies) || "No known allergies.")}</Text>
+                )}
+              </SubSection>
+
+              <SubSection title="Current Medications">
+                {editMode ? (
+                  <TextInput style={[styles.editableInput, { backgroundColor: "#FEF9C3", color: theme.text }]} defaultValue={editableFieldsRef.current.medications} onChangeText={(text) => updateEditableField("medications", text)} placeholder="Current medications..." placeholderTextColor={theme.textMuted} />
+                ) : (
+                  <Text style={[styles.text, { color: theme.text }]}>{safeText(history.medications) || safeText(history.drug_history) || "None"}</Text>
+                )}
+              </SubSection>
+
+              {(history.last_meal || history.last_meal_lmp) ? (
+                <SubSection title="Last Meal">
+                  <Text style={[styles.text, { color: theme.text }]}>{safeText(history.last_meal) || safeText(history.last_meal_lmp) || "N/A"}</Text>
+                </SubSection>
+              ) : null}
+            </Section>
+          </>
         )}
 
         {isPed ? (
@@ -609,69 +622,74 @@ export default function ViewCaseScreen() {
             </SubSection>
           </Section>
         ) : (
-          <Section title="Physical Examination">
-            <ExamSection 
-              title="General Examination" 
-              status={(() => {
-                const hasAbnormal = examination.general_pallor || examination.general_icterus || examination.general_cyanosis || examination.general_clubbing || examination.general_lymphadenopathy || examination.general_edema;
-                return hasAbnormal ? "Abnormal" : (examination.general_appearance || "Normal");
-              })()}
-              notes={(() => {
-                const hasAbnormal = examination.general_pallor || examination.general_icterus || examination.general_cyanosis || examination.general_clubbing || examination.general_lymphadenopathy || examination.general_edema;
-                if (hasAbnormal) {
-                  const findings = [];
-                  if (examination.general_pallor) findings.push("Pallor present");
-                  if (examination.general_icterus) findings.push("Icterus present");
-                  if (examination.general_cyanosis) findings.push("Cyanosis present");
-                  if (examination.general_clubbing) findings.push("Clubbing present");
-                  if (examination.general_lymphadenopathy) findings.push("Lymphadenopathy present");
-                  if (examination.general_edema) findings.push("Edema present");
-                  return findings.join(". ") + (examination.general_additional_notes ? `. ${examination.general_additional_notes}` : "");
+          <>
+            <Section title="General Examination">
+              <ExamSection 
+                title="" 
+                status={(() => {
+                  const hasAbnormal = examination.general_pallor || examination.general_icterus || examination.general_cyanosis || examination.general_clubbing || examination.general_lymphadenopathy || examination.general_edema;
+                  return hasAbnormal ? "Abnormal" : (examination.general_appearance || "Normal");
+                })()}
+                notes={(() => {
+                  const hasAbnormal = examination.general_pallor || examination.general_icterus || examination.general_cyanosis || examination.general_clubbing || examination.general_lymphadenopathy || examination.general_edema;
+                  if (hasAbnormal) {
+                    const findings = [];
+                    if (examination.general_pallor) findings.push("Pallor present");
+                    if (examination.general_icterus) findings.push("Icterus present");
+                    if (examination.general_cyanosis) findings.push("Cyanosis present");
+                    if (examination.general_clubbing) findings.push("Clubbing present");
+                    if (examination.general_lymphadenopathy) findings.push("Lymphadenopathy present");
+                    if (examination.general_edema) findings.push("Edema present");
+                    return findings.join(". ") + (examination.general_additional_notes ? `. ${examination.general_additional_notes}` : "");
+                  }
+                  return examination.general_additional_notes || "No signs of pallor, icterus, or clubbing. No lymphadenopathy or thyroid abnormalities. No varicose veins noted.";
+                })()}
+              />
+            </Section>
+
+            <Section title="Systemic Examination">
+              <ExamSection 
+                title="CNS" 
+                status={examination.cns_status || "Normal"} 
+                notes={examination.cns_status !== "Normal"
+                  ? `Higher mental: ${examination.cns_higher_mental_functions || "-"}, Cranial nerves: ${examination.cns_cranial_nerves || "-"}, Motor: ${examination.cns_motor_system || "-"}, Sensory: ${examination.cns_sensory_system || "-"}, Reflexes: ${examination.cns_reflexes || "-"}${examination.cns_additional_notes ? `. ${examination.cns_additional_notes}` : ""}`
+                  : (examination.cns_additional_notes || `E${disability.gcsE || vitals.gcs_e || "4"}V${disability.gcsV || vitals.gcs_v || "5"}M${disability.gcsM || vitals.gcs_m || "6"}, No focal neurological deficits, moving all 4 limbs`)
                 }
-                return examination.general_additional_notes || "Patient is conscious, alert, and oriented. No pallor, icterus, cyanosis, clubbing, lymphadenopathy, or edema noted.";
-              })()}
-            />
-            <ExamSection 
-              title="Cardiovascular System (CVS)" 
-              status={examination.cvs_status || "Normal"} 
-              notes={examination.cvs_status !== "Normal" 
-                ? `S1/S2: ${examination.cvs_s1_s2 || "-"}, Pulse: ${examination.cvs_pulse || "-"} @ ${examination.cvs_pulse_rate || "-"}bpm, Apex: ${examination.cvs_apexBeat || "-"}${examination.cvs_murmurs ? `, Murmurs: ${examination.cvs_murmurs}` : ""}${examination.cvs_added_sounds ? `, Added sounds: ${examination.cvs_added_sounds}` : ""}${examination.cvs_additional_notes ? `. ${examination.cvs_additional_notes}` : ""}`
-                : (examination.cvs_additional_notes || "S1 S2 heard, normal intensity. No murmurs, gallops, or rubs. JVP not elevated. Peripheral pulses well felt bilaterally.")
-              } 
-            />
-            <ExamSection 
-              title="Respiratory System" 
-              status={examination.respiratory_status || "Normal"} 
-              notes={examination.respiratory_status !== "Normal"
-                ? `Expansion: ${examination.respiratory_expansion || "-"}, Breath sounds: ${examination.respiratory_breath_sounds || "-"}, Percussion: ${examination.respiratory_percussion || "-"}${examination.respiratory_added_sounds ? `, Added sounds: ${examination.respiratory_added_sounds}` : ""}${examination.respiratory_additional_notes ? `. ${examination.respiratory_additional_notes}` : ""}`
-                : (examination.respiratory_additional_notes || "Bilateral equal air entry. Vesicular breath sounds. No wheeze, crackles, or rhonchi. Normal percussion notes.")
-              }
-            />
-            <ExamSection 
-              title="Abdomen" 
-              status={examination.abdomen_status || "Normal"} 
-              notes={examination.abdomen_status !== "Normal"
-                ? `Bowel sounds: ${examination.abdomen_bowel_sounds || "-"}, Percussion: ${examination.abdomen_percussion || "-"}${examination.abdomen_organomegaly ? `, Organomegaly: ${examination.abdomen_organomegaly}` : ""}${examination.abdomen_additional_notes ? `. ${examination.abdomen_additional_notes}` : ""}`
-                : (examination.abdomen_additional_notes || "Soft, non-distended, non-tender. No guarding or rigidity. No organomegaly. Bowel sounds present and normal.")
-              }
-            />
-            <ExamSection 
-              title="Central Nervous System" 
-              status={examination.cns_status || "Normal"} 
-              notes={examination.cns_status !== "Normal"
-                ? `Higher mental: ${examination.cns_higher_mental_functions || "-"}, Cranial nerves: ${examination.cns_cranial_nerves || "-"}, Motor: ${examination.cns_motor_system || "-"}, Sensory: ${examination.cns_sensory_system || "-"}, Reflexes: ${examination.cns_reflexes || "-"}${examination.cns_additional_notes ? `. ${examination.cns_additional_notes}` : ""}`
-                : (examination.cns_additional_notes || "Conscious, oriented to time, place, and person. GCS 15/15. Cranial nerves intact. Pupils BERL. Motor power 5/5 in all limbs. Reflexes normal.")
-              }
-            />
-            <ExamSection 
-              title="Extremities" 
-              status={examination.extremities_status || "Normal"} 
-              notes={examination.extremities_status !== "Normal"
-                ? (examination.extremities_findings || examination.extremities_additional_notes || "Abnormal findings documented")
-                : (examination.extremities_additional_notes || "No edema, cyanosis, or clubbing. Peripheral pulses well felt. Full range of motion. No deformity or swelling.")
-              }
-            />
-          </Section>
+              />
+              <ExamSection 
+                title="CVS" 
+                status={examination.cvs_status || "Normal"} 
+                notes={examination.cvs_status !== "Normal" 
+                  ? `S1/S2: ${examination.cvs_s1_s2 || "-"}, Pulse: ${examination.cvs_pulse || "-"} @ ${examination.cvs_pulse_rate || "-"}bpm, Apex: ${examination.cvs_apexBeat || "-"}${examination.cvs_murmurs ? `, Murmurs: ${examination.cvs_murmurs}` : ""}${examination.cvs_added_sounds ? `, Added sounds: ${examination.cvs_added_sounds}` : ""}${examination.cvs_additional_notes ? `. ${examination.cvs_additional_notes}` : ""}`
+                  : (examination.cvs_additional_notes || "S1, S2 heard, no added sounds")
+                } 
+              />
+              <ExamSection 
+                title="Chest" 
+                status={examination.respiratory_status || "Normal"} 
+                notes={examination.respiratory_status !== "Normal"
+                  ? `Expansion: ${examination.respiratory_expansion || "-"}, Breath sounds: ${examination.respiratory_breath_sounds || "-"}, Percussion: ${examination.respiratory_percussion || "-"}${examination.respiratory_added_sounds ? `, Added sounds: ${examination.respiratory_added_sounds}` : ""}${examination.respiratory_additional_notes ? `. ${examination.respiratory_additional_notes}` : ""}`
+                  : (examination.respiratory_additional_notes || "Clear, Normal vesicular breath sounds present, no added sounds")
+                }
+              />
+              <ExamSection 
+                title="Abdomen" 
+                status={examination.abdomen_status || "Normal"} 
+                notes={examination.abdomen_status !== "Normal"
+                  ? `Bowel sounds: ${examination.abdomen_bowel_sounds || "-"}, Percussion: ${examination.abdomen_percussion || "-"}${examination.abdomen_organomegaly ? `, Organomegaly: ${examination.abdomen_organomegaly}` : ""}${examination.abdomen_additional_notes ? `. ${examination.abdomen_additional_notes}` : ""}`
+                  : (examination.abdomen_additional_notes || "Soft, No distension, bowel sounds present")
+                }
+              />
+              <ExamSection 
+                title="Extremities" 
+                status={examination.extremities_status || "Normal"} 
+                notes={examination.extremities_status !== "Normal"
+                  ? (examination.extremities_findings || examination.extremities_additional_notes || "Abnormal findings documented")
+                  : (examination.extremities_additional_notes || "Normal.")
+                }
+              />
+            </Section>
+          </>
         )}
 
         <Section title="Psychological Assessment">
@@ -723,21 +741,7 @@ export default function ViewCaseScreen() {
           ) : null}
         </Section>
 
-        <Section title="Treatment">
-          {treatment.interventions?.length > 0 && <InfoRow label="Interventions" value={treatment.interventions.join(", ")} />}
-          
-          <SubSection title="Primary Diagnosis">
-            <Text style={[styles.text, { color: theme.text }]}>{safeText(treatment.primary_diagnosis) || safeText(treatment.provisional_diagnoses?.[0]) || "N/A"}</Text>
-          </SubSection>
-          
-          <SubSection title="Differential Diagnoses">
-            {editMode ? (
-              <TextInput style={[styles.editableInput, { backgroundColor: "#FEF9C3", color: theme.text }]} defaultValue={editableFieldsRef.current.differential_diagnoses} onChangeText={(text) => updateEditableField("differential_diagnoses", text)} placeholder="Differential diagnoses (comma separated)" placeholderTextColor={theme.textMuted} />
-            ) : (
-              <Text style={[styles.text, { color: theme.text }]}>{treatment.differential_diagnoses?.join(", ") || "N/A"}</Text>
-            )}
-          </SubSection>
-
+        <Section title="Treatment Plan">
           {treatment.medications?.length > 0 && (
             <SubSection title="Medications">
               {treatment.medications.map((med: any, idx: number) => (
@@ -772,6 +776,8 @@ export default function ViewCaseScreen() {
               <Text style={[styles.text, { color: theme.text }]}>{safeText(treatment.other_medications)}</Text>
             </SubSection>
           ) : null}
+
+          {treatment.interventions?.length > 0 && <InfoRow label="Interventions" value={treatment.interventions.join(", ")} />}
 
           <SubSection title="Notes">
             {editMode ? (
@@ -809,6 +815,27 @@ export default function ViewCaseScreen() {
             <InfoRow label="Condition" value={disposition.condition_at_discharge || disposition.condition} />
           </Section>
         )}
+
+        <Section title="Differential Diagnosis">
+          <SubSection title="Primary Diagnosis">
+            <Text style={[styles.text, { color: theme.text }]}>{safeText(treatment.primary_diagnosis) || safeText(treatment.provisional_diagnoses?.[0]) || "N/A"}</Text>
+          </SubSection>
+          <SubSection title="Differentials">
+            {editMode ? (
+              <TextInput style={[styles.editableInput, { backgroundColor: "#FEF9C3", color: theme.text }]} defaultValue={editableFieldsRef.current.differential_diagnoses} onChangeText={(text) => updateEditableField("differential_diagnoses", text)} placeholder="Differential diagnoses (comma separated)" placeholderTextColor={theme.textMuted} />
+            ) : (
+              <>
+                {treatment.differential_diagnoses?.length > 0 ? (
+                  treatment.differential_diagnoses.map((dx: string, idx: number) => (
+                    <Text key={idx} style={[styles.text, { color: theme.text }]}>• {dx}</Text>
+                  ))
+                ) : (
+                  <Text style={[styles.text, { color: theme.text }]}>N/A</Text>
+                )}
+              </>
+            )}
+          </SubSection>
+        </Section>
 
         <AIDiagnosisPanel
           caseId={caseId}
