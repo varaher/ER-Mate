@@ -610,7 +610,7 @@ export default function DashboardScreen() {
             onPress={() => navigation.navigate("QuickCaseSheet" as any, { type: "adult" })}
           >
             <Feather name="user" size={20} color="#10b981" />
-            <Text style={[styles.quickSheetBtnTitle, { color: theme.text }]}>Adult</Text>
+            <Text style={[styles.quickSheetBtnTitle, { color: theme.text }]}>Start Adult</Text>
             <Text style={[styles.quickSheetBtnSub, { color: theme.textSecondary }]}>Case Sheet</Text>
           </Pressable>
           <Pressable
@@ -621,7 +621,7 @@ export default function DashboardScreen() {
             onPress={() => navigation.navigate("QuickCaseSheet" as any, { type: "pediatric" })}
           >
             <Feather name="heart" size={20} color="#06b6d4" />
-            <Text style={[styles.quickSheetBtnTitle, { color: theme.text }]}>Pediatric</Text>
+            <Text style={[styles.quickSheetBtnTitle, { color: theme.text }]}>Start Pediatric</Text>
             <Text style={[styles.quickSheetBtnSub, { color: theme.textSecondary }]}>Case Sheet</Text>
           </Pressable>
         </View>

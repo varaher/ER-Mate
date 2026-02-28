@@ -37,11 +37,11 @@ function NewPatientButton() {
         onPress: () => navigation.navigate("Triage"),
       },
       {
-        text: "Adult Case Sheet",
+        text: "Start Adult Case Sheet",
         onPress: () => navigation.navigate("QuickCaseSheet" as any, { type: "adult" }),
       },
       {
-        text: "Pediatric Case Sheet",
+        text: "Start Pediatric Case Sheet",
         onPress: () => navigation.navigate("QuickCaseSheet" as any, { type: "pediatric" }),
       },
       { text: "Cancel", style: "cancel" },
