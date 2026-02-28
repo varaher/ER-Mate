@@ -601,6 +601,31 @@ export default function DashboardScreen() {
           <Feather name="chevron-right" size={24} color={theme.primary} />
         </Pressable>
 
+        <View style={styles.quickSheetRow}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.quickSheetBtn,
+              { backgroundColor: theme.card, borderColor: "#10b981", opacity: pressed ? 0.9 : 1 },
+            ]}
+            onPress={() => navigation.navigate("QuickCaseSheet" as any, { type: "adult" })}
+          >
+            <Feather name="user" size={20} color="#10b981" />
+            <Text style={[styles.quickSheetBtnTitle, { color: theme.text }]}>Adult</Text>
+            <Text style={[styles.quickSheetBtnSub, { color: theme.textSecondary }]}>Case Sheet</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              styles.quickSheetBtn,
+              { backgroundColor: theme.card, borderColor: "#06b6d4", opacity: pressed ? 0.9 : 1 },
+            ]}
+            onPress={() => navigation.navigate("QuickCaseSheet" as any, { type: "pediatric" })}
+          >
+            <Feather name="heart" size={20} color="#06b6d4" />
+            <Text style={[styles.quickSheetBtnTitle, { color: theme.text }]}>Pediatric</Text>
+            <Text style={[styles.quickSheetBtnSub, { color: theme.textSecondary }]}>Case Sheet</Text>
+          </Pressable>
+        </View>
+
         <Pressable
           style={({ pressed }) => [
             styles.newPatientBtn,
@@ -915,6 +940,23 @@ const styles = StyleSheet.create({
   newPatientText: { flex: 1 },
   newPatientTitle: { ...Typography.h4 },
   newPatientSubtitle: { ...Typography.small },
+  quickSheetRow: {
+    flexDirection: "row",
+    marginHorizontal: Spacing.lg,
+    marginTop: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  quickSheetBtn: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1.5,
+    gap: 4,
+  },
+  quickSheetBtnTitle: { fontSize: 14, fontWeight: "700" },
+  quickSheetBtnSub: { fontSize: 11 },
   statsRow: {
     flexDirection: "row",
     marginHorizontal: Spacing.lg,

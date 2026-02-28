@@ -2,7 +2,7 @@ import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Feather } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
-import { Platform, StyleSheet, View, Pressable } from "react-native";
+import { Platform, StyleSheet, View, Pressable, Alert } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useTheme } from "@/hooks/useTheme";
@@ -30,9 +30,27 @@ function NewPatientButton() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { theme } = useTheme();
 
+  const showOptions = () => {
+    Alert.alert("New Patient", "How would you like to start?", [
+      {
+        text: "Start with Triage",
+        onPress: () => navigation.navigate("Triage"),
+      },
+      {
+        text: "Adult Case Sheet",
+        onPress: () => navigation.navigate("QuickCaseSheet" as any, { type: "adult" }),
+      },
+      {
+        text: "Pediatric Case Sheet",
+        onPress: () => navigation.navigate("QuickCaseSheet" as any, { type: "pediatric" }),
+      },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
+
   return (
     <Pressable
-      onPress={() => navigation.navigate("Triage")}
+      onPress={showOptions}
       style={({ pressed }) => [
         styles.fabButton,
         { backgroundColor: theme.primary, opacity: pressed ? 0.8 : 1 },
