@@ -19,7 +19,7 @@ import { cacheCasePayload } from "@/lib/caseCache";
 import { useCase } from "@/context/CaseContext";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
-import { getAgeGroupLabel, getAgeGroup } from "@/lib/pediatricVitals";
+import { getAgeGroupLabel, getAgeGroup, getVitalRanges, isVitalAbnormal } from "@/lib/pediatricVitals";
 
 const toStringOrEmpty = (val: any): string => {
   if (val === null || val === undefined) return "";
@@ -1334,14 +1334,75 @@ export default function PediatricCaseSheetScreen() {
             </View>
             {patient.chief_complaint && <Text style={[styles.complaint, { color: theme.textSecondary }]}>Chief Complaint: {patient.chief_complaint}</Text>}
             
-            <View style={[styles.vitalsGrid, { backgroundColor: theme.backgroundSecondary }]}>
-              <View style={styles.vitalItem}><Text style={[styles.vitalValue, { color: theme.text }]}>{patient.vitals.hr || "--"}</Text><Text style={[styles.vitalLabel, { color: theme.textSecondary }]}>HR</Text></View>
-              <View style={styles.vitalItem}><Text style={[styles.vitalValue, { color: theme.text }]}>{patient.vitals.bp_systolic || "--"}/{patient.vitals.bp_diastolic || "--"}</Text><Text style={[styles.vitalLabel, { color: theme.textSecondary }]}>BP</Text></View>
-              <View style={styles.vitalItem}><Text style={[styles.vitalValue, { color: theme.text }]}>{patient.vitals.rr || "--"}</Text><Text style={[styles.vitalLabel, { color: theme.textSecondary }]}>RR</Text></View>
-              <View style={styles.vitalItem}><Text style={[styles.vitalValue, { color: theme.text }]}>{patient.vitals.spo2 || "--"}%</Text><Text style={[styles.vitalLabel, { color: theme.textSecondary }]}>SpO2</Text></View>
-              <View style={styles.vitalItem}><Text style={[styles.vitalValue, { color: theme.text }]}>{patient.vitals.temperature || "--"}</Text><Text style={[styles.vitalLabel, { color: theme.textSecondary }]}>Temp</Text></View>
-              <View style={styles.vitalItem}><Text style={[styles.vitalValue, { color: theme.text }]}>{patient.vitals?.pain_score || "--"}</Text><Text style={[styles.vitalLabel, { color: theme.textSecondary }]}>Pain</Text></View>
-            </View>
+            {(() => {
+              const ranges = getVitalRanges(patient.age);
+              const updateVital = (key: string, val: string) => setPatient((p) => p ? { ...p, vitals: { ...p.vitals, [key]: val } } : p);
+              const getVitalColor = (vital: "hr" | "rr" | "spo2" | "temperature", val: string) => {
+                const n = parseFloat(val);
+                if (!val || isNaN(n)) return theme.text;
+                const status = isVitalAbnormal(vital, n, patient.age);
+                return status === "normal" ? TriageColors.green : TriageColors.red;
+              };
+              const getBpColor = (type: "bp_systolic" | "bp_diastolic", val: string) => {
+                const n = parseFloat(val);
+                if (!val || isNaN(n)) return theme.text;
+                const status = isVitalAbnormal(type, n, patient.age);
+                return status === "normal" ? TriageColors.green : TriageColors.red;
+              };
+              return (
+                <View style={[styles.pedVitalsGrid, { backgroundColor: theme.backgroundSecondary }]}>
+                  <View style={styles.pedVitalsRow}>
+                    <View style={styles.pedVitalCell}>
+                      <Text style={[styles.vitalLabel, { color: theme.textMuted }]}>HR</Text>
+                      <TextInput style={[styles.pedVitalInput, { color: getVitalColor("hr", patient.vitals.hr), borderColor: theme.border }]} keyboardType="numeric" value={patient.vitals.hr} onChangeText={(v) => updateVital("hr", v)} placeholder="--" placeholderTextColor={theme.textMuted} maxLength={3} />
+                      <Text style={[styles.pedVitalRange, { color: theme.textMuted }]}>{ranges.hr.label}</Text>
+                    </View>
+                    <View style={styles.pedVitalCell}>
+                      <Text style={[styles.vitalLabel, { color: theme.textMuted }]}>RR</Text>
+                      <TextInput style={[styles.pedVitalInput, { color: getVitalColor("rr", patient.vitals.rr), borderColor: theme.border }]} keyboardType="numeric" value={patient.vitals.rr} onChangeText={(v) => updateVital("rr", v)} placeholder="--" placeholderTextColor={theme.textMuted} maxLength={3} />
+                      <Text style={[styles.pedVitalRange, { color: theme.textMuted }]}>{ranges.rr.label}</Text>
+                    </View>
+                    <View style={styles.pedVitalCell}>
+                      <Text style={[styles.vitalLabel, { color: theme.textMuted }]}>SpO2</Text>
+                      <TextInput style={[styles.pedVitalInput, { color: getVitalColor("spo2", patient.vitals.spo2), borderColor: theme.border }]} keyboardType="numeric" value={patient.vitals.spo2} onChangeText={(v) => updateVital("spo2", v)} placeholder="--" placeholderTextColor={theme.textMuted} maxLength={3} />
+                      <Text style={[styles.pedVitalRange, { color: theme.textMuted }]}>{ranges.spo2.label}</Text>
+                    </View>
+                    <View style={styles.pedVitalCell}>
+                      <Text style={[styles.vitalLabel, { color: theme.textMuted }]}>Temp</Text>
+                      <TextInput style={[styles.pedVitalInput, { color: getVitalColor("temperature", patient.vitals.temperature), borderColor: theme.border }]} keyboardType="decimal-pad" value={patient.vitals.temperature} onChangeText={(v) => updateVital("temperature", v)} placeholder="--" placeholderTextColor={theme.textMuted} maxLength={5} />
+                      <Text style={[styles.pedVitalRange, { color: theme.textMuted }]}>{ranges.temperature.label}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.pedVitalsRow}>
+                    <View style={[styles.pedVitalCell, { flex: 2 }]}>
+                      <Text style={[styles.vitalLabel, { color: theme.textMuted }]}>BP (Sys/Dia)</Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                        <TextInput style={[styles.pedVitalInput, { color: getBpColor("bp_systolic", patient.vitals.bp_systolic), borderColor: theme.border, width: 45 }]} keyboardType="numeric" value={patient.vitals.bp_systolic} onChangeText={(v) => updateVital("bp_systolic", v)} placeholder="--" placeholderTextColor={theme.textMuted} maxLength={3} />
+                        <Text style={{ color: theme.textMuted, fontWeight: "700" }}>/</Text>
+                        <TextInput style={[styles.pedVitalInput, { color: getBpColor("bp_diastolic", patient.vitals.bp_diastolic), borderColor: theme.border, width: 45 }]} keyboardType="numeric" value={patient.vitals.bp_diastolic} onChangeText={(v) => updateVital("bp_diastolic", v)} placeholder="--" placeholderTextColor={theme.textMuted} maxLength={3} />
+                      </View>
+                      <Text style={[styles.pedVitalRange, { color: theme.textMuted }]}>{ranges.bp_systolic.label}/{ranges.bp_diastolic.label}</Text>
+                    </View>
+                    <View style={styles.pedVitalCell}>
+                      <Text style={[styles.vitalLabel, { color: theme.textMuted }]}>GCS</Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
+                        <TextInput style={[styles.pedVitalInput, { color: theme.text, borderColor: theme.border, width: 28 }]} keyboardType="numeric" value={patient.vitals.gcs_e} onChangeText={(v) => updateVital("gcs_e", v)} placeholder="4" placeholderTextColor={theme.textMuted} maxLength={1} />
+                        <Text style={{ color: theme.textMuted, fontSize: 10 }}>/</Text>
+                        <TextInput style={[styles.pedVitalInput, { color: theme.text, borderColor: theme.border, width: 28 }]} keyboardType="numeric" value={patient.vitals.gcs_v} onChangeText={(v) => updateVital("gcs_v", v)} placeholder="5" placeholderTextColor={theme.textMuted} maxLength={1} />
+                        <Text style={{ color: theme.textMuted, fontSize: 10 }}>/</Text>
+                        <TextInput style={[styles.pedVitalInput, { color: theme.text, borderColor: theme.border, width: 28 }]} keyboardType="numeric" value={patient.vitals.gcs_m} onChangeText={(v) => updateVital("gcs_m", v)} placeholder="6" placeholderTextColor={theme.textMuted} maxLength={1} />
+                      </View>
+                      <Text style={[styles.pedVitalRange, { color: theme.textMuted }]}>E/V/M = {ranges.gcs.label}</Text>
+                    </View>
+                    <View style={styles.pedVitalCell}>
+                      <Text style={[styles.vitalLabel, { color: theme.textMuted }]}>Pain</Text>
+                      <TextInput style={[styles.pedVitalInput, { color: theme.text, borderColor: theme.border }]} keyboardType="numeric" value={patient.vitals.pain_score} onChangeText={(v) => updateVital("pain_score", v)} placeholder="--" placeholderTextColor={theme.textMuted} maxLength={2} />
+                      <Text style={[styles.pedVitalRange, { color: theme.textMuted }]}>/10</Text>
+                    </View>
+                  </View>
+                </View>
+              );
+            })()}
 
             <View style={[styles.weightSection, { backgroundColor: theme.backgroundSecondary, borderColor: TriageColors.blue }]}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginBottom: Spacing.sm }}>
@@ -2368,6 +2429,11 @@ const styles = StyleSheet.create({
   vitalItem: { alignItems: "center", minWidth: 50 },
   vitalValue: { ...Typography.bodyMedium, fontWeight: "600" },
   vitalLabel: { ...Typography.small },
+  pedVitalsGrid: { marginTop: Spacing.md, padding: Spacing.md, borderRadius: BorderRadius.md, gap: Spacing.lg },
+  pedVitalsRow: { flexDirection: "row" as const, justifyContent: "space-around" as const, gap: Spacing.sm },
+  pedVitalCell: { flex: 1, alignItems: "center" as const, gap: 3 },
+  pedVitalInput: { fontWeight: "600" as const, textAlign: "center" as const, borderBottomWidth: 1, paddingVertical: 2, paddingHorizontal: 2, fontSize: 16, width: 50 },
+  pedVitalRange: { fontSize: 8, textAlign: "center" as const, fontStyle: "italic" as const },
   weightSection: { marginTop: Spacing.lg, padding: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1.5, borderStyle: "dashed" },
   infoSection: { marginTop: Spacing.lg },
   fieldWithVoice: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: Spacing.md, marginBottom: Spacing.sm },
