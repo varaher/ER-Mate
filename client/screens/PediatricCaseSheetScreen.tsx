@@ -350,6 +350,8 @@ export default function PediatricCaseSheetScreen() {
   const [recordingField, setRecordingField] = useState<string | null>(null);
   const recordingRef = useRef<Audio.Recording | null>(null);
   const localDraftIdRef = useRef<string | null>(null);
+  const complaintDurationRef = useRef<string>("");
+  const complaintOnsetRef = useRef<string>("");
   
   const { saveToDraft, currentDraftId, commitDraft, initDraftForCase, loadDraft } = useCase();
 
@@ -473,6 +475,8 @@ export default function PediatricCaseSheetScreen() {
         const patientData = triageData.patient || triageData;
         const vitalsData = triageData.vitals_at_arrival || triageData.vitals || {};
         const complaintData = triageData.presenting_complaint || {};
+        complaintDurationRef.current = complaintData.duration || "";
+        complaintOnsetRef.current = complaintData.onset_type || "";
         
         setPatient({
           id: caseId,
@@ -509,6 +513,8 @@ export default function PediatricCaseSheetScreen() {
           const patientData = data.patient || data;
           const vitalsData = data.vitals_at_arrival || data.vitals || {};
           const complaintData = data.presenting_complaint || {};
+          complaintDurationRef.current = complaintData.duration || "";
+          complaintOnsetRef.current = complaintData.onset_type || "";
           
           setPatient({
             id: data.id || caseId,
@@ -573,9 +579,9 @@ export default function PediatricCaseSheetScreen() {
       } : undefined,
       presenting_complaint: {
         text: patient?.chief_complaint || triageData?.presenting_complaint?.text || "",
-        duration: triageData?.presenting_complaint?.duration || "Recent onset",
-        onset_type: triageData?.presenting_complaint?.onset_type || "Sudden",
-        course: triageData?.presenting_complaint?.course || "Progressive",
+        duration: complaintDurationRef.current || triageData?.presenting_complaint?.duration || "",
+        onset_type: complaintOnsetRef.current || triageData?.presenting_complaint?.onset_type || "",
+        course: triageData?.presenting_complaint?.course || "",
       },
       triage_color: patient?.triage_category || "green",
       vitals_at_arrival: {
@@ -996,7 +1002,15 @@ export default function PediatricCaseSheetScreen() {
 
   const handleSmartDictation = (data: SmartDictationExtracted) => {
     if (data.chiefComplaint) {
+      setPatient((prev: any) => prev ? { ...prev, chief_complaint: (prev.chief_complaint ? prev.chief_complaint + ", " : "") + data.chiefComplaint } : prev);
       setHistoryData((prev) => ({ ...prev, events: (prev.events ? prev.events + ". " : "") + "Chief Complaint: " + data.chiefComplaint }));
+    }
+    if (data.duration) complaintDurationRef.current = data.duration;
+    if (data.onset) complaintOnsetRef.current = data.onset;
+    if (data.painDetails) {
+      const isActual = (v?: string) => v && !["not mentioned", "none", "n/a", "unknown", ""].includes(v.toLowerCase().trim());
+      if (isActual(data.painDetails.duration)) complaintDurationRef.current = data.painDetails.duration!;
+      if (isActual(data.painDetails.onset)) complaintOnsetRef.current = data.painDetails.onset!;
     }
     if (data.historyOfPresentIllness) {
       let hpi = data.historyOfPresentIllness;

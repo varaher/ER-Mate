@@ -538,6 +538,8 @@ export default function CaseSheetScreen() {
   const [activeVoiceField, setActiveVoiceField] = useState<string | null>(null);
   const recordingRef = useRef<Audio.Recording | null>(null);
   const localDraftIdRef = useRef<string | null>(null);
+  const complaintDurationRef = useRef<string>("");
+  const complaintOnsetRef = useRef<string>("");
   const [modeOfArrival, setModeOfArrival] = useState("Walk-in");
   const [isMLC, setIsMLC] = useState(false);
   const [mlcDetails, setMLCDetails] = useState<MLCDetailsData>(getDefaultMLCDetails());
@@ -737,6 +739,8 @@ export default function CaseSheetScreen() {
       const res = await apiGet<any>(`/cases/${caseId}`);
       if (res.success && res.data) {
         setCaseData(res.data);
+        complaintDurationRef.current = res.data.presenting_complaint?.duration || "";
+        complaintOnsetRef.current = res.data.presenting_complaint?.onset_type || "";
         
         if (hasLocalDraft) {
           loadFromCaseSheetData(draft!.caseSheetData);
@@ -1168,8 +1172,8 @@ export default function CaseSheetScreen() {
       },
       presenting_complaint: {
         text: formData.sample.signsSymptoms || caseData?.presenting_complaint?.text || "",
-        duration: caseData?.presenting_complaint?.duration || "",
-        onset_type: caseData?.presenting_complaint?.onset_type || "",
+        duration: complaintDurationRef.current || caseData?.presenting_complaint?.duration || "",
+        onset_type: complaintOnsetRef.current || caseData?.presenting_complaint?.onset_type || "",
       },
       addendum_notes: treatmentData.addendumNotes ? [{ text: treatmentData.addendumNotes, timestamp: new Date().toISOString() }] : [],
       psychological: psychData,
@@ -1654,6 +1658,8 @@ export default function CaseSheetScreen() {
     if (data.chiefComplaint) {
       updateFormData("sample", "signsSymptoms", (formData.sample.signsSymptoms ? formData.sample.signsSymptoms + ", " : "") + data.chiefComplaint);
     }
+    if (data.duration) complaintDurationRef.current = data.duration;
+    if (data.onset) complaintOnsetRef.current = data.onset;
     if (data.historyOfPresentIllness) {
       updateFormData("sample", "eventsHopi", (formData.sample.eventsHopi ? formData.sample.eventsHopi + " " : "") + data.historyOfPresentIllness);
     }
@@ -1682,18 +1688,22 @@ export default function CaseSheetScreen() {
       const symptomsText = data.symptoms.join(", ");
       updateFormData("sample", "signsSymptoms", (formData.sample.signsSymptoms ? formData.sample.signsSymptoms + ", " : "") + symptomsText);
     }
-    if (data.painDetails && !data.historyOfPresentIllness) {
+    if (data.painDetails) {
       const pd = data.painDetails;
       const isActual = (v?: string) => v && !["not mentioned", "none", "n/a", "unknown", ""].includes(v.toLowerCase().trim());
-      const parts = [];
-      if (isActual(pd.location)) parts.push(`${pd.location} pain`);
-      if (isActual(pd.character)) parts.push(`${pd.character} in nature`);
-      if (isActual(pd.severity)) parts.push(`severity ${pd.severity}`);
-      if (isActual(pd.aggravatingFactors)) parts.push(`aggravated by ${pd.aggravatingFactors}`);
-      if (isActual(pd.relievingFactors)) parts.push(`relieved by ${pd.relievingFactors}`);
-      if (parts.length > 0) {
-        const painNarrative = `Patient complains of ${parts.join(", ")}.`;
-        updateFormData("sample", "eventsHopi", (formData.sample.eventsHopi ? formData.sample.eventsHopi + " " : "") + painNarrative);
+      if (isActual(pd.duration)) complaintDurationRef.current = pd.duration!;
+      if (isActual(pd.onset)) complaintOnsetRef.current = pd.onset!;
+      if (!data.historyOfPresentIllness) {
+        const parts = [];
+        if (isActual(pd.location)) parts.push(`${pd.location} pain`);
+        if (isActual(pd.character)) parts.push(`${pd.character} in nature`);
+        if (isActual(pd.severity)) parts.push(`severity ${pd.severity}`);
+        if (isActual(pd.aggravatingFactors)) parts.push(`aggravated by ${pd.aggravatingFactors}`);
+        if (isActual(pd.relievingFactors)) parts.push(`relieved by ${pd.relievingFactors}`);
+        if (parts.length > 0) {
+          const painNarrative = `Patient complains of ${parts.join(", ")}.`;
+          updateFormData("sample", "eventsHopi", (formData.sample.eventsHopi ? formData.sample.eventsHopi + " " : "") + painNarrative);
+        }
       }
     }
     if (data.examFindings) {
