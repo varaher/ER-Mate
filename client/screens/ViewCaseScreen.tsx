@@ -523,7 +523,7 @@ export default function ViewCaseScreen() {
 
             <Section title="Secondary Survey">
               <SubSection title="Signs and Symptoms">
-                <Text style={[styles.text, { color: theme.text }]}>{safeText(caseData.presenting_complaint?.text) || safeText(caseData.sample?.signsSymptoms) || "N/A"}</Text>
+                <Text style={[styles.text, { color: theme.text }]}>{safeText(history.signs_and_symptoms) || safeText(caseData.sample?.signsSymptoms) || "N/A"}</Text>
               </SubSection>
 
               <SubSection title="Past Medical History">
