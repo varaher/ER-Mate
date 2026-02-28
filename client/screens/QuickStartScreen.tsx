@@ -51,6 +51,19 @@ const STEPS: TutorialStep[] = [
     ],
   },
   {
+    icon: "zap",
+    iconColor: "#6366F1",
+    iconBg: "#E0E7FF",
+    title: "Quick Case Sheet",
+    description: "Skip triage and jump straight into the case sheet. Enter just the name, age, and sex to get started.",
+    tips: [
+      "Tap '+' on Dashboard for quick options",
+      "Edit vitals directly on the Patient tab",
+      "Pediatric vitals show age-based normal ranges",
+      "Abnormal values turn red automatically",
+    ],
+  },
+  {
     icon: "file-text",
     iconColor: "#8B5CF6",
     iconBg: "#EDE9FE",
