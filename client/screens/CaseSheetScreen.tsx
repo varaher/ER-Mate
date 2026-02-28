@@ -2029,15 +2029,40 @@ export default function CaseSheetScreen() {
                 {caseData.presenting_complaint?.text && (
                   <Text style={[styles.complaint, { color: theme.textMuted }]}>Chief Complaint: {caseData.presenting_complaint.text}</Text>
                 )}
+                <Text style={[styles.fieldLabel, { color: theme.textSecondary, marginBottom: Spacing.sm }]}>Vitals at Arrival</Text>
                 <View style={[styles.vitalsGrid, { backgroundColor: theme.backgroundSecondary }]}>
-                  <View style={styles.vitalItem}><Text style={[styles.vitalLabel, { color: theme.textMuted }]}>HR</Text><Text style={[styles.vitalValue, { color: theme.text }]}>{caseData.vitals_at_arrival?.hr || "-"}</Text></View>
-                  <View style={styles.vitalItem}><Text style={[styles.vitalLabel, { color: theme.textMuted }]}>BP</Text><Text style={[styles.vitalValue, { color: theme.text }]}>{caseData.vitals_at_arrival?.bp_systolic || "-"}/{caseData.vitals_at_arrival?.bp_diastolic || "-"}</Text></View>
-                  <View style={styles.vitalItem}><Text style={[styles.vitalLabel, { color: theme.textMuted }]}>RR</Text><Text style={[styles.vitalValue, { color: theme.text }]}>{caseData.vitals_at_arrival?.rr || "-"}</Text></View>
-                  <View style={styles.vitalItem}><Text style={[styles.vitalLabel, { color: theme.textMuted }]}>SpO2</Text><Text style={[styles.vitalValue, { color: theme.text }]}>{caseData.vitals_at_arrival?.spo2 || "-"}%</Text></View>
-                  <View style={styles.vitalItem}><Text style={[styles.vitalLabel, { color: theme.textMuted }]}>Temp</Text><Text style={[styles.vitalValue, { color: theme.text }]}>{caseData.vitals_at_arrival?.temperature || "-"}</Text></View>
-                  <View style={styles.vitalItem}><Text style={[styles.vitalLabel, { color: theme.textMuted }]}>GCS</Text><Text style={[styles.vitalValue, { color: theme.text }]}>{(caseData.vitals_at_arrival?.gcs_e || 0) + (caseData.vitals_at_arrival?.gcs_v || 0) + (caseData.vitals_at_arrival?.gcs_m || 0) || "-"}/15</Text></View>
-                  <View style={styles.vitalItem}><Text style={[styles.vitalLabel, { color: theme.textMuted }]}>Pain</Text><Text style={[styles.vitalValue, { color: theme.text }]}>{caseData.vitals_at_arrival?.pain_score || "-"}/10</Text></View>
-                  <View style={styles.vitalItem}><Text style={[styles.vitalLabel, { color: theme.textMuted }]}>GRBS</Text><Text style={[styles.vitalValue, { color: theme.text }]}>{caseData.vitals_at_arrival?.grbs || "-"}</Text></View>
+                  <View style={styles.vitalItem}>
+                    <Text style={[styles.vitalLabel, { color: theme.textMuted }]}>HR</Text>
+                    <TextInput style={[styles.vitalInput, { color: theme.text, borderColor: theme.border }]} keyboardType="numeric" defaultValue={formData.circulation.hr} onChangeText={(v) => updateFormData("circulation", "hr", v)} placeholder="-" placeholderTextColor={theme.textMuted} />
+                  </View>
+                  <View style={styles.vitalItem}>
+                    <Text style={[styles.vitalLabel, { color: theme.textMuted }]}>BP Sys</Text>
+                    <TextInput style={[styles.vitalInput, { color: theme.text, borderColor: theme.border }]} keyboardType="numeric" defaultValue={formData.circulation.bpSystolic} onChangeText={(v) => updateFormData("circulation", "bpSystolic", v)} placeholder="-" placeholderTextColor={theme.textMuted} />
+                  </View>
+                  <View style={styles.vitalItem}>
+                    <Text style={[styles.vitalLabel, { color: theme.textMuted }]}>BP Dia</Text>
+                    <TextInput style={[styles.vitalInput, { color: theme.text, borderColor: theme.border }]} keyboardType="numeric" defaultValue={formData.circulation.bpDiastolic} onChangeText={(v) => updateFormData("circulation", "bpDiastolic", v)} placeholder="-" placeholderTextColor={theme.textMuted} />
+                  </View>
+                  <View style={styles.vitalItem}>
+                    <Text style={[styles.vitalLabel, { color: theme.textMuted }]}>RR</Text>
+                    <TextInput style={[styles.vitalInput, { color: theme.text, borderColor: theme.border }]} keyboardType="numeric" defaultValue={formData.breathing.rr} onChangeText={(v) => updateFormData("breathing", "rr", v)} placeholder="-" placeholderTextColor={theme.textMuted} />
+                  </View>
+                  <View style={styles.vitalItem}>
+                    <Text style={[styles.vitalLabel, { color: theme.textMuted }]}>SpO2</Text>
+                    <TextInput style={[styles.vitalInput, { color: theme.text, borderColor: theme.border }]} keyboardType="numeric" defaultValue={formData.breathing.spo2} onChangeText={(v) => updateFormData("breathing", "spo2", v)} placeholder="-" placeholderTextColor={theme.textMuted} />
+                  </View>
+                  <View style={styles.vitalItem}>
+                    <Text style={[styles.vitalLabel, { color: theme.textMuted }]}>Temp</Text>
+                    <TextInput style={[styles.vitalInput, { color: theme.text, borderColor: theme.border }]} keyboardType="decimal-pad" defaultValue={formData.exposure.temperature} onChangeText={(v) => updateFormData("exposure", "temperature", v)} placeholder="-" placeholderTextColor={theme.textMuted} />
+                  </View>
+                  <View style={styles.vitalItem}>
+                    <Text style={[styles.vitalLabel, { color: theme.textMuted }]}>GRBS</Text>
+                    <TextInput style={[styles.vitalInput, { color: theme.text, borderColor: theme.border }]} keyboardType="numeric" defaultValue={formData.disability.glucose} onChangeText={(v) => updateFormData("disability", "glucose", v)} placeholder="-" placeholderTextColor={theme.textMuted} />
+                  </View>
+                  <View style={styles.vitalItem}>
+                    <Text style={[styles.vitalLabel, { color: theme.textMuted }]}>Pain</Text>
+                    <TextInput style={[styles.vitalInput, { color: theme.text, borderColor: theme.border }]} keyboardType="numeric" defaultValue={formData.exposure.painScore} onChangeText={(v) => updateFormData("exposure", "painScore", v)} placeholder="-" placeholderTextColor={theme.textMuted} />
+                  </View>
                 </View>
               </View>
             )}
@@ -3504,6 +3529,7 @@ const styles = StyleSheet.create({
   vitalItem: { alignItems: "center", minWidth: 50 },
   vitalLabel: { ...Typography.label, fontSize: 10 },
   vitalValue: { ...Typography.bodyMedium, fontWeight: "600" },
+  vitalInput: { ...Typography.bodyMedium, fontWeight: "600", textAlign: "center" as const, borderBottomWidth: 1, minWidth: 45, paddingVertical: 2 },
   fieldWithVoice: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: Spacing.sm, marginBottom: Spacing.xs },
   fieldLabelWithBar: { flexDirection: "row", alignItems: "center" },
   fieldBar: { width: 4, height: 20, borderRadius: 2, marginRight: Spacing.sm },
