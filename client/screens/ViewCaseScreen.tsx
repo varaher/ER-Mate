@@ -113,7 +113,7 @@ export default function ViewCaseScreen() {
         
         setCaseData(mergedData);
         editableFieldsRef.current = {
-          presenting_complaint: res.data.presenting_complaint?.text || "",
+          presenting_complaint: res.data.presenting_complaint?.text || res.data.history?.signs_and_symptoms || res.data.sample?.signsSymptoms || "",
           hopi: res.data.history?.hpi || res.data.history?.events_hopi || "",
           past_medical: Array.isArray(res.data.history?.past_medical) ? res.data.history.past_medical.join(", ") : (res.data.history?.past_medical || ""),
           past_surgical: res.data.history?.past_surgical || "",
@@ -315,7 +315,7 @@ export default function ViewCaseScreen() {
           {editMode ? (
             <TextInput style={[styles.editableTextArea, { backgroundColor: "#FEF9C3", color: theme.text }]} multiline numberOfLines={3} defaultValue={editableFieldsRef.current.presenting_complaint} onChangeText={(text) => updateEditableField("presenting_complaint", text)} placeholder="Chief complaint..." placeholderTextColor={theme.textMuted} />
           ) : (
-            <Text style={[styles.text, { color: theme.text }]}>{caseData.presenting_complaint?.text || "N/A"}</Text>
+            <Text style={[styles.text, { color: theme.text }]}>{caseData.presenting_complaint?.text || safeText(history.signs_and_symptoms) || safeText(caseData.sample?.signsSymptoms) || "N/A"}</Text>
           )}
           <InfoRow label="Duration" value={caseData.presenting_complaint?.duration} />
           <InfoRow label="Onset" value={caseData.presenting_complaint?.onset_type} />

@@ -1166,6 +1166,11 @@ export default function CaseSheetScreen() {
         admit_to_room: dispositionData.admitToRoom || "",
         refer_to: dispositionData.referTo || "",
       },
+      presenting_complaint: {
+        text: formData.sample.signsSymptoms || caseData?.presenting_complaint?.text || "",
+        duration: caseData?.presenting_complaint?.duration || "",
+        onset_type: caseData?.presenting_complaint?.onset_type || "",
+      },
       addendum_notes: treatmentData.addendumNotes ? [{ text: treatmentData.addendumNotes, timestamp: new Date().toISOString() }] : [],
       psychological: psychData,
       mode_of_arrival: modeOfArrival,
