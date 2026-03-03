@@ -39,12 +39,14 @@ export default function LoginScreen() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  const useProxy = Platform.OS !== "web";
   const redirectUri = AuthSession.makeRedirectUri({
     scheme: "ermate",
     path: "auth",
+    ...(useProxy ? { projectNameForProxy: "@anonymous/ermate" } : {}),
   });
 
-  console.log("[LoginScreen] Redirect URI:", redirectUri, "Platform:", Platform.OS);
+  console.log("[LoginScreen] Redirect URI:", redirectUri, "Platform:", Platform.OS, "useProxy:", useProxy);
 
   const discovery = AuthSession.useAutoDiscovery("https://accounts.google.com");
 
