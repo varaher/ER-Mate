@@ -1,11 +1,11 @@
 {
-  "id": "aa0101ec-9ea7-4130-b2f0-7c72e42ad07a",
-  "createdAt": "2026-02-28T06:32:27.790Z",
+  "id": "c9b4d03e-23b6-44b0-be51-91887d0f7fd2",
+  "createdAt": "2026-03-03T00:18:44.982Z",
   "runtimeVersion": "exposdk:54.0.0",
   "launchAsset": {
-    "key": "bundle-1772260347790-15578",
+    "key": "bundle-1772497124982-805",
     "contentType": "application/javascript",
-    "url": "https://cc70901c-5ae8-4394-a8d0-9961ae7b57dc-00-1obtc7pzxu7ls.picard.replit.dev/1772260347790-15578/_expo/static/js/ios/bundle.js"
+    "url": "https://cc70901c-5ae8-4394-a8d0-9961ae7b57dc-00-1obtc7pzxu7ls.picard.replit.dev/1772497124982-805/_expo/static/js/ios/bundle.js"
   },
   "assets": [],
   "metadata": {},
@@ -36,7 +36,8 @@
         },
         "edgeToEdgeEnabled": true,
         "predictiveBackGestureEnabled": false,
-        "package": "com.ermate.app"
+        "package": "com.ermate.app",
+        "googleServicesFile": "{\n  \"project_info\": {\n    \"project_number\": \"1018674231904\",\n    \"project_id\": \"ermate-e8f01\",\n    \"storage_bucket\": \"ermate-e8f01.firebasestorage.app\"\n  },\n  \"client\": [\n    {\n      \"client_info\": {\n        \"mobilesdk_app_id\": \"1:1018674231904:android:20bcf8129087f3560b2105\",\n        \"android_client_info\": {\n          \"package_name\": \"com.ermate.app\"\n        }\n      },\n      \"oauth_client\": [\n        {\n          \"client_id\": \"1018674231904-qjp0qr7bvc3sh792mq74inbf02gdqtkb.apps.googleusercontent.com\",\n          \"client_type\": 3\n        }\n      ],\n      \"api_key\": [\n        {\n          \"current_key\": \"AIzaSyB1faL-tmbQuNXwxWv_C_Xu-UdEeEkbL2g\"\n        }\n      ],\n      \"services\": {\n        \"appinvite_service\": {\n          \"other_platform_oauth_client\": [\n            {\n              \"client_id\": \"1018674231904-qjp0qr7bvc3sh792mq74inbf02gdqtkb.apps.googleusercontent.com\",\n              \"client_type\": 3\n            }\n          ]\n        }\n      }\n    }\n  ],\n  \"configuration_version\": \"1\"\n}\n"
       },
       "web": {
         "output": "single",
@@ -100,6 +101,6 @@
       },
       "mainModuleName": "client/index"
     },
-    "scopeKey": "@anonymous/ermate-74b87dbc-4dbb-4609-b64a-aed759463ba9"
+    "scopeKey": "@anonymous/ermate-6904654b-05b3-4183-ac4a-5590dbc1c72b"
   }
 }

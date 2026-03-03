@@ -26,7 +26,7 @@ WebBrowser.maybeCompleteAuthSession();
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-const GOOGLE_CLIENT_ID = "748928941626-p243s6m10cl8r340hd40huefsogmcg2q.apps.googleusercontent.com";
+const GOOGLE_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || "1018674231904-qjp0qr7bvc3sh792mq74inbf02gdqtkb.apps.googleusercontent.com";
 
 export default function LoginScreen() {
   const navigation = useNavigation<NavigationProp>();
