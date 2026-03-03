@@ -6,6 +6,7 @@ import {
   ScrollView,
   Pressable,
   Alert,
+  Platform,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -25,10 +26,16 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
 
   const handleLogout = () => {
-    Alert.alert("Logout", "Are you sure you want to logout?", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Logout", style: "destructive", onPress: () => logout() },
-    ]);
+    if (Platform.OS === "web") {
+      if (window.confirm("Are you sure you want to logout?")) {
+        logout();
+      }
+    } else {
+      Alert.alert("Logout", "Are you sure you want to logout?", [
+        { text: "Cancel", style: "cancel" },
+        { text: "Logout", style: "destructive", onPress: () => logout() },
+      ]);
+    }
   };
 
   const menuItems = [

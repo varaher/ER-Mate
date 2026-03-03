@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { apiPost, apiGet, setOnTokenExpiredCallback } from "@/lib/api";
-import { getApiUrl } from "@/lib/query-client";
+import { getApiUrl, queryClient } from "@/lib/query-client";
 
 export interface User {
   id: string;
@@ -42,6 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Handle token expiry callback from API layer
   const handleTokenExpired = useCallback(() => {
     console.log("[AuthContext] Token expired, logging out user");
+    queryClient.clear();
     setToken(null);
     setUser(null);
   }, []);
@@ -167,10 +168,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
-    await AsyncStorage.removeItem("token");
-    await AsyncStorage.removeItem("user");
-    setToken(null);
-    setUser(null);
+    try {
+      await AsyncStorage.removeItem("token");
+      await AsyncStorage.removeItem("user");
+      queryClient.clear();
+      setToken(null);
+      setUser(null);
+    } catch (error) {
+      console.error("[AuthContext] Logout error:", error);
+      queryClient.clear();
+      setToken(null);
+      setUser(null);
+    }
   };
 
   const refreshUser = async () => {
