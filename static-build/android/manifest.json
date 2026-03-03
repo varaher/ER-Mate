@@ -1,11 +1,11 @@
 {
-  "id": "fbbfa723-ce6d-4096-b201-a21aa768943f",
-  "createdAt": "2026-03-03T00:18:44.982Z",
+  "id": "0f45215c-5c8d-4144-bed2-0488e4a12017",
+  "createdAt": "2026-03-03T02:38:29.187Z",
   "runtimeVersion": "exposdk:54.0.0",
   "launchAsset": {
-    "key": "bundle-1772497124982-805",
+    "key": "bundle-1772505509187-870",
     "contentType": "application/javascript",
-    "url": "https://cc70901c-5ae8-4394-a8d0-9961ae7b57dc-00-1obtc7pzxu7ls.picard.replit.dev/1772497124982-805/_expo/static/js/android/bundle.js"
+    "url": "https://cc70901c-5ae8-4394-a8d0-9961ae7b57dc-00-1obtc7pzxu7ls.picard.replit.dev/1772505509187-870/_expo/static/js/android/bundle.js"
   },
   "assets": [],
   "metadata": {},
@@ -101,6 +101,6 @@
       },
       "mainModuleName": "client/index"
     },
-    "scopeKey": "@anonymous/ermate-6904654b-05b3-4183-ac4a-5590dbc1c72b"
+    "scopeKey": "@anonymous/ermate-a7057d42-9f55-4d2b-ace8-4c091a431239"
   }
 }

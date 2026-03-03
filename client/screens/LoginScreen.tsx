@@ -42,7 +42,10 @@ export default function LoginScreen() {
 
   const redirectUri = AuthSession.makeRedirectUri({
     scheme: "ermate",
+    preferLocalhost: false,
   });
+
+  console.log("[LoginScreen] Redirect URI:", redirectUri);
 
   const handleLogin = async () => {
     if (!email || !password) {
