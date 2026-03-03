@@ -296,6 +296,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/auth/forgot-password", async (req: Request, res: Response) => {
+    try {
+      const { email } = req.body;
+      if (!email) {
+        return res.status(400).json({ error: "Email is required" });
+      }
+      const EXTERNAL_API = "https://er-emr-backend.onrender.com/api";
+      const response = await fetch(`${EXTERNAL_API}/auth/forgot-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      if (response.ok) {
+        const data = await response.json().catch(() => ({}));
+        return res.json({ success: true, message: data.message || "If an account exists with this email, a password reset link has been sent." });
+      }
+      return res.json({ success: true, message: "If an account exists with this email, a password reset link has been sent." });
+    } catch (error) {
+      console.error("[Forgot Password] Error:", error);
+      return res.json({ success: true, message: "If an account exists with this email, a password reset link has been sent." });
+    }
+  });
+
   app.post("/api/export/discharge-pdf", async (req: Request, res: Response) => {
     try {
       const data: DischargeSummaryData = req.body;

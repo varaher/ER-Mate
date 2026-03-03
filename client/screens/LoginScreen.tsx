@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Pressable,
   Platform,
+  Modal,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -38,6 +39,10 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
 
   const useProxy = Platform.OS !== "web";
   const redirectUri = AuthSession.makeRedirectUri({
@@ -98,6 +103,29 @@ export default function LoginScreen() {
     setLoading(false);
     if (!result.success) {
       Alert.alert("Login Failed", result.error || "Invalid credentials");
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!forgotEmail.trim()) {
+      Alert.alert("Required", "Please enter your email address");
+      return;
+    }
+    setForgotLoading(true);
+    try {
+      const { getApiUrl } = await import("@/lib/query-client");
+      const url = new URL("/api/auth/forgot-password", getApiUrl());
+      const res = await fetch(url.toString(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: forgotEmail.trim().toLowerCase() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      setForgotSent(true);
+    } catch {
+      setForgotSent(true);
+    } finally {
+      setForgotLoading(false);
     }
   };
 
@@ -201,6 +229,16 @@ export default function LoginScreen() {
           </View>
 
           <Pressable
+            onPress={() => {
+              setForgotEmail(email);
+              setForgotSent(false);
+              setShowForgotModal(true);
+            }}
+            style={styles.forgotButton}
+          >
+            <Text style={[styles.forgotText, { color: theme.primary }]}>Forgot Password?</Text>
+          </Pressable>
+          <Pressable
             style={({ pressed }) => [
               styles.button,
               { backgroundColor: theme.primary, opacity: pressed || loading ? 0.8 : 1 },
@@ -235,6 +273,81 @@ export default function LoginScreen() {
           </Text>
         </View>
       </KeyboardAwareScrollViewCompat>
+      <Modal
+        visible={showForgotModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowForgotModal(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => {
+            setShowForgotModal(false);
+            setForgotSent(false);
+            setForgotEmail("");
+          }}
+        >
+          <Pressable
+            style={[styles.modalContent, { backgroundColor: theme.card }]}
+            onPress={() => {}}
+          >
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>
+                {forgotSent ? "Check Your Email" : "Reset Password"}
+              </Text>
+              <Pressable onPress={() => { setShowForgotModal(false); setForgotSent(false); setForgotEmail(""); }}>
+                <Feather name="x" size={24} color={theme.textMuted} />
+              </Pressable>
+            </View>
+            {forgotSent ? (
+              <View>
+                <View style={[styles.successIcon, { backgroundColor: theme.primary + "20" }]}>
+                  <Feather name="mail" size={32} color={theme.primary} />
+                </View>
+                <Text style={[styles.modalDesc, { color: theme.textSecondary, textAlign: "center" }]}>
+                  If an account exists with this email, a password reset link has been sent. Please check your inbox and spam folder.
+                </Text>
+                <Pressable
+                  style={[styles.modalButton, { backgroundColor: theme.primary }]}
+                  onPress={() => { setShowForgotModal(false); setForgotSent(false); setForgotEmail(""); }}
+                >
+                  <Text style={styles.modalButtonText}>Done</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <View>
+                <Text style={[styles.modalDesc, { color: theme.textSecondary }]}>
+                  Enter your email address and we'll send you a link to reset your password.
+                </Text>
+                <View style={[styles.inputContainer, { backgroundColor: theme.backgroundDefault, borderColor: theme.border }]}>
+                  <Feather name="mail" size={20} color={theme.textMuted} style={styles.inputIcon} />
+                  <TextInput
+                    style={[styles.input, { color: theme.text }]}
+                    placeholder="Enter your email"
+                    placeholderTextColor={theme.textMuted}
+                    value={forgotEmail}
+                    onChangeText={setForgotEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoComplete="email"
+                  />
+                </View>
+                <Pressable
+                  style={[styles.modalButton, { backgroundColor: theme.primary, opacity: forgotLoading ? 0.7 : 1 }]}
+                  onPress={handleForgotPassword}
+                  disabled={forgotLoading}
+                >
+                  {forgotLoading ? (
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                  ) : (
+                    <Text style={styles.modalButtonText}>Send Reset Link</Text>
+                  )}
+                </Pressable>
+              </View>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -357,5 +470,59 @@ const styles = StyleSheet.create({
   },
   footerText: {
     ...Typography.caption,
+  },
+  forgotButton: {
+    alignSelf: "flex-end",
+    marginTop: Spacing.xs,
+  },
+  forgotText: {
+    ...Typography.small,
+    fontWeight: "600",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: Spacing.xl,
+  },
+  modalContent: {
+    width: "100%",
+    maxWidth: 400,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.xl,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: Spacing.lg,
+  },
+  modalTitle: {
+    ...Typography.h3,
+  },
+  modalDesc: {
+    ...Typography.body,
+    marginBottom: Spacing.lg,
+  },
+  modalButton: {
+    height: Spacing.buttonHeight,
+    borderRadius: BorderRadius.md,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: Spacing.md,
+  },
+  modalButtonText: {
+    color: "#FFFFFF",
+    ...Typography.bodyMedium,
+  },
+  successIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: "center",
+    alignItems: "center",
+    alignSelf: "center",
+    marginBottom: Spacing.lg,
   },
 });
