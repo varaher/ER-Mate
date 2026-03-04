@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -16,9 +16,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as AuthSession from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
+import * as AppleAuthentication from "expo-apple-authentication";
+import * as Crypto from "expo-crypto";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
+import { warmUpBackend } from "@/lib/api";
 import { Colors, Spacing, BorderRadius, Typography } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -39,11 +42,20 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("");
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [appleLoading, setAppleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotLoading, setForgotLoading] = useState(false);
   const [forgotSent, setForgotSent] = useState(false);
+  const [isAppleAvailable, setIsAppleAvailable] = useState(false);
+
+  useEffect(() => {
+    warmUpBackend();
+    if (Platform.OS === "ios") {
+      AppleAuthentication.isAvailableAsync().then(setIsAppleAvailable).catch(() => setIsAppleAvailable(false));
+    }
+  }, []);
 
   const useProxy = Platform.OS !== "web";
   const redirectUri = AuthSession.makeRedirectUri({
@@ -108,7 +120,11 @@ export default function LoginScreen() {
       setLoadingMessage("Almost there, hang tight...");
     }, 15000);
     try {
-      const result = await login(email.trim().toLowerCase(), password);
+      let result = await login(email.trim().toLowerCase(), password);
+      if (!result.success && result.error?.includes("taking too long")) {
+        setLoadingMessage("Retrying connection...");
+        result = await login(email.trim().toLowerCase(), password);
+      }
       if (!result.success) {
         Alert.alert("Login Failed", result.error || "Invalid credentials");
       }
@@ -154,6 +170,42 @@ export default function LoginScreen() {
     }
   }, [promptAsync]);
 
+  const handleAppleSignIn = async () => {
+    setAppleLoading(true);
+    try {
+      const nonce = await Crypto.digestStringAsync(
+        Crypto.CryptoDigestAlgorithm.SHA256,
+        Math.random().toString(36).substring(2)
+      );
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+        nonce,
+      });
+      const fullName = credential.fullName
+        ? `${credential.fullName.givenName || ""} ${credential.fullName.familyName || ""}`.trim()
+        : "";
+      const appleEmail = credential.email || "";
+      const result = await googleSignIn({
+        name: fullName || "Apple User",
+        email: appleEmail || `apple_${credential.user}@privaterelay.appleid.com`,
+        idToken: credential.identityToken || undefined,
+      });
+      if (!result.success) {
+        Alert.alert("Sign In Failed", result.error || "Apple sign-in failed. Please try again.");
+      }
+    } catch (error: any) {
+      if (error.code !== "ERR_REQUEST_CANCELED") {
+        console.error("[LoginScreen] Apple sign-in error:", error);
+        Alert.alert("Error", "Something went wrong during Apple sign-in");
+      }
+    } finally {
+      setAppleLoading(false);
+    }
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundDefault }]}>
       <KeyboardAwareScrollViewCompat
@@ -198,6 +250,26 @@ export default function LoginScreen() {
             </>
           )}
         </Pressable>
+
+        {isAppleAvailable ? (
+          <Pressable
+            style={({ pressed }) => [
+              styles.appleButton,
+              { opacity: pressed || appleLoading ? 0.8 : 1 },
+            ]}
+            onPress={handleAppleSignIn}
+            disabled={appleLoading}
+          >
+            {appleLoading ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <>
+                <Feather name="command" size={20} color="#FFFFFF" />
+                <Text style={styles.appleButtonText}>Sign in with Apple</Text>
+              </>
+            )}
+          </Pressable>
+        ) : null}
 
         <View style={styles.dividerRow}>
           <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
@@ -407,6 +479,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderWidth: 1,
     gap: Spacing.md,
+  },
+  appleButton: {
+    height: Spacing.buttonHeight,
+    borderRadius: BorderRadius.md,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#000000",
+    gap: Spacing.md,
+    marginTop: Spacing.md,
+  },
+  appleButtonText: {
+    color: "#FFFFFF",
+    ...Typography.bodyMedium,
   },
   googleIconContainer: {
     width: 24,

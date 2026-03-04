@@ -6,6 +6,32 @@ function getExternalApiUrl(): string {
   return apiUrl;
 }
 
+function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number = 30000): Promise<Response> {
+  return new Promise((resolve, reject) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      controller.abort();
+      reject(new Error("The server is taking too long to respond. Please try again."));
+    }, timeoutMs);
+    fetch(url, { ...options, signal: controller.signal })
+      .then(resolve)
+      .catch((err) => {
+        if (err.name === "AbortError") {
+          reject(new Error("The server is taking too long to respond. Please try again."));
+        } else {
+          reject(err);
+        }
+      })
+      .finally(() => clearTimeout(timer));
+  });
+}
+
+export function warmUpBackend(): void {
+  const apiUrl = getExternalApiUrl();
+  fetch(`${apiUrl}/health`, { method: "GET" }).catch(() => {});
+  console.log("[API] Warming up backend server...");
+}
+
 export interface ApiResponse<T> {
   success: boolean;
   data?: T;
@@ -147,20 +173,21 @@ export async function apiGet<T>(endpoint: string): Promise<ApiResponse<T>> {
 
 export async function apiPost<T>(
   endpoint: string,
-  data?: unknown
+  data?: unknown,
+  timeoutMs: number = 30000
 ): Promise<ApiResponse<T>> {
   try {
     const apiUrl = getExternalApiUrl();
     const token = await getToken();
     console.log(`[API] POST ${endpoint}, has token: ${!!token}, token length: ${token?.length || 0}`);
-    const res = await fetch(`${apiUrl}${endpoint}`, {
+    const res = await fetchWithTimeout(`${apiUrl}${endpoint}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: data ? JSON.stringify(data) : undefined,
-    });
+    }, timeoutMs);
     const result = await handleResponse<T>(res);
     console.log(`[API] POST ${endpoint} response:`, result.success, result.error || '');
     return result;

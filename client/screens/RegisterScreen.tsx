@@ -60,13 +60,23 @@ export default function RegisterScreen() {
       setLoadingMessage("Almost there, hang tight...");
     }, 15000);
     try {
-      const result = await register({
+      let result = await register({
         name: name.trim(),
         email: email.trim().toLowerCase(),
         password,
         hospital: hospital.trim() || undefined,
         role: "resident",
       });
+      if (!result.success && result.error?.includes("taking too long")) {
+        setLoadingMessage("Retrying connection...");
+        result = await register({
+          name: name.trim(),
+          email: email.trim().toLowerCase(),
+          password,
+          hospital: hospital.trim() || undefined,
+          role: "resident",
+        });
+      }
       if (!result.success) {
         Alert.alert("Registration Failed", result.error || "Please try again");
       }
