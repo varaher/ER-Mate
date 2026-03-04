@@ -1,11 +1,11 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   Pressable,
-  Alert,
+  Modal,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -23,12 +23,15 @@ export default function ProfileScreen() {
   const { theme } = useTheme();
   const { user, logout } = useAuth();
   const insets = useSafeAreaInsets();
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const handleLogout = () => {
-    Alert.alert("Logout", "Are you sure you want to logout?", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Logout", style: "destructive", onPress: () => logout() },
-    ]);
+    setShowLogoutModal(true);
+  };
+
+  const confirmLogout = () => {
+    setShowLogoutModal(false);
+    logout();
   };
 
   const menuItems = [
@@ -107,6 +110,35 @@ export default function ProfileScreen() {
 
         <Text style={[styles.version, { color: theme.textMuted }]}>ErMate v1.0.0</Text>
       </ScrollView>
+      <Modal
+        visible={showLogoutModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowLogoutModal(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setShowLogoutModal(false)}>
+          <Pressable style={[styles.modalContent, { backgroundColor: theme.card }]} onPress={() => {}}>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>Logout</Text>
+            <Text style={[styles.modalDesc, { color: theme.textSecondary }]}>
+              Are you sure you want to logout?
+            </Text>
+            <View style={styles.modalActions}>
+              <Pressable
+                style={[styles.modalBtn, { backgroundColor: theme.backgroundTertiary }]}
+                onPress={() => setShowLogoutModal(false)}
+              >
+                <Text style={[styles.modalBtnText, { color: theme.text }]}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalBtn, { backgroundColor: theme.danger }]}
+                onPress={confirmLogout}
+              >
+                <Text style={[styles.modalBtnText, { color: "#FFFFFF" }]}>Logout</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -170,4 +202,39 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   lockedText: { ...Typography.caption },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: Spacing.xl,
+  },
+  modalContent: {
+    width: "100%",
+    maxWidth: 340,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.xl,
+  },
+  modalTitle: {
+    ...Typography.h3,
+    marginBottom: Spacing.sm,
+  },
+  modalDesc: {
+    ...Typography.body,
+    marginBottom: Spacing.xl,
+  },
+  modalActions: {
+    flexDirection: "row",
+    gap: Spacing.md,
+  },
+  modalBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: BorderRadius.md,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalBtnText: {
+    ...Typography.bodyMedium,
+  },
 });
