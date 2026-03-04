@@ -225,6 +225,7 @@ export default function LoginScreen() {
           </Text>
         </View>
 
+        {/* Google Sign-In disabled temporarily
         <Pressable
           style={({ pressed }) => [
             styles.googleButton,
@@ -250,6 +251,7 @@ export default function LoginScreen() {
             </>
           )}
         </Pressable>
+        */}
 
         {isAppleAvailable ? (
           <Pressable
