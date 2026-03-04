@@ -37,6 +37,7 @@ export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState("");
   const [googleLoading, setGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showForgotModal, setShowForgotModal] = useState(false);
@@ -99,10 +100,23 @@ export default function LoginScreen() {
       return;
     }
     setLoading(true);
-    const result = await login(email.trim().toLowerCase(), password);
-    setLoading(false);
-    if (!result.success) {
-      Alert.alert("Login Failed", result.error || "Invalid credentials");
+    setLoadingMessage("Connecting to server...");
+    const slowTimer = setTimeout(() => {
+      setLoadingMessage("Server is waking up, please wait...");
+    }, 5000);
+    const verySlowTimer = setTimeout(() => {
+      setLoadingMessage("Almost there, hang tight...");
+    }, 15000);
+    try {
+      const result = await login(email.trim().toLowerCase(), password);
+      if (!result.success) {
+        Alert.alert("Login Failed", result.error || "Invalid credentials");
+      }
+    } finally {
+      clearTimeout(slowTimer);
+      clearTimeout(verySlowTimer);
+      setLoading(false);
+      setLoadingMessage("");
     }
   };
 
@@ -247,12 +261,17 @@ export default function LoginScreen() {
             disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator color="#FFFFFF" />
+              <View style={styles.loadingRow}>
+                <ActivityIndicator color="#FFFFFF" size="small" />
+                <Text style={styles.loadingText}>Signing in...</Text>
+              </View>
             ) : (
               <Text style={styles.buttonText}>Sign In</Text>
             )}
           </Pressable>
-
+          {loading && loadingMessage ? (
+            <Text style={[styles.loadingHint, { color: theme.textMuted }]}>{loadingMessage}</Text>
+          ) : null}
           <Pressable
             style={({ pressed }) => [
               styles.secondaryButton,
@@ -470,6 +489,20 @@ const styles = StyleSheet.create({
   },
   footerText: {
     ...Typography.caption,
+  },
+  loadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  loadingText: {
+    color: "#FFFFFF",
+    ...Typography.bodyMedium,
+  },
+  loadingHint: {
+    ...Typography.small,
+    textAlign: "center",
+    marginTop: Spacing.sm,
   },
   forgotButton: {
     alignSelf: "flex-end",

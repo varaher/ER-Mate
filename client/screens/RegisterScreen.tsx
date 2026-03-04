@@ -32,6 +32,7 @@ export default function RegisterScreen() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [hospital, setHospital] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
   const handleRegister = async () => {
@@ -51,17 +52,29 @@ export default function RegisterScreen() {
     }
 
     setLoading(true);
-    const result = await register({
-      name: name.trim(),
-      email: email.trim().toLowerCase(),
-      password,
-      hospital: hospital.trim() || undefined,
-      role: "resident",
-    });
-    setLoading(false);
-
-    if (!result.success) {
-      Alert.alert("Registration Failed", result.error || "Please try again");
+    setLoadingMessage("Creating your account...");
+    const slowTimer = setTimeout(() => {
+      setLoadingMessage("Server is waking up, please wait...");
+    }, 5000);
+    const verySlowTimer = setTimeout(() => {
+      setLoadingMessage("Almost there, hang tight...");
+    }, 15000);
+    try {
+      const result = await register({
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        password,
+        hospital: hospital.trim() || undefined,
+        role: "resident",
+      });
+      if (!result.success) {
+        Alert.alert("Registration Failed", result.error || "Please try again");
+      }
+    } finally {
+      clearTimeout(slowTimer);
+      clearTimeout(verySlowTimer);
+      setLoading(false);
+      setLoadingMessage("");
     }
   };
 
@@ -178,12 +191,17 @@ export default function RegisterScreen() {
             disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator color="#FFFFFF" />
+              <View style={styles.loadingRow}>
+                <ActivityIndicator color="#FFFFFF" size="small" />
+                <Text style={styles.loadingBtnText}>Creating Account...</Text>
+              </View>
             ) : (
               <Text style={styles.buttonText}>Create Account</Text>
             )}
           </Pressable>
-
+          {loading && loadingMessage ? (
+            <Text style={[styles.loadingHint, { color: theme.textMuted }]}>{loadingMessage}</Text>
+          ) : null}
           <Pressable
             style={({ pressed }) => [styles.secondaryButton, { opacity: pressed ? 0.7 : 1 }]}
             onPress={() => navigation.goBack()}
@@ -261,6 +279,20 @@ const styles = StyleSheet.create({
   buttonText: {
     color: "#FFFFFF",
     ...Typography.h4,
+  },
+  loadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  loadingBtnText: {
+    color: "#FFFFFF",
+    ...Typography.bodyMedium,
+  },
+  loadingHint: {
+    ...Typography.small,
+    textAlign: "center",
+    marginTop: Spacing.sm,
   },
   secondaryButton: {
     alignItems: "center",
