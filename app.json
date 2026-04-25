@@ -2,12 +2,22 @@
   "expo": {
     "name": "ErMate",
     "slug": "ermate",
+    "owner": "varah",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "ermate",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/ermate",
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.ermate.app",
@@ -49,6 +59,7 @@
           "enableBackgroundAudio": false
         }
       ],
+      "expo-updates",
       "expo-web-browser",
       "expo-apple-authentication"
     ],
