@@ -112,6 +112,18 @@ const STEPS: TutorialStep[] = [
     ],
   },
   {
+    icon: "monitor",
+    iconColor: "#0EA5E9",
+    iconBg: "#E0F2FE",
+    title: "Use ErMate on Your Computer",
+    description: "Open er-mate.replit.app/web on any browser to access your cases from a desktop or laptop — just like WhatsApp Web.",
+    tips: [
+      "Go to Profile > Link to Web to get your 6-digit code",
+      "Enter the code at er-mate.replit.app/web to connect",
+      "View all your cases, vitals, and diagnosis on screen",
+    ],
+  },
+  {
     icon: "book-open",
     iconColor: "#EC4899",
     iconBg: "#FCE7F3",

@@ -14,10 +14,15 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { Feather } from "@expo/vector-icons";
 import * as Linking from "expo-linking";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { getApiUrl } from "@/lib/query-client";
 import { Spacing, BorderRadius, Typography } from "@/constants/theme";
+import type { RootStackParamList } from "@/navigation/RootStackNavigator";
+
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 const FEEDBACK_CATEGORIES = [
   { key: "bug", label: "Bug Report", icon: "alert-triangle" as const, color: "#EF4444" },
@@ -48,6 +53,10 @@ const FAQ_ITEMS = [
     answer: "Patients aged 16 or younger are automatically routed to the Pediatric Case Sheet which uses PALS protocols, includes PAT (Pediatric Assessment Triangle), and has age-appropriate vital sign references.",
   },
   {
+    question: "Can I use ErMate on my computer?",
+    answer: "Yes! Open er-mate.replit.app/web in any browser on your computer or tablet. Then go to Profile > Link to Web in the app, generate a 6-digit code, and enter it on the web page to connect — just like WhatsApp Web. Your cases sync automatically.",
+  },
+  {
     question: "Is my patient data secure?",
     answer: "Yes. All patient data is encrypted in transit and at rest. Data is stored securely on our HIPAA-compliant servers. You can manage your privacy settings from Profile > Privacy.",
   },
@@ -56,8 +65,18 @@ const FAQ_ITEMS = [
 export default function HelpSupportScreen() {
   const { theme } = useTheme();
   const { user } = useAuth();
+  const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+
+  const openWebApp = async () => {
+    const url = "https://er-mate.replit.app/web";
+    try {
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert("Open in Browser", "Visit er-mate.replit.app/web to access ErMate on your computer.");
+    }
+  };
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
   const [feedbackText, setFeedbackText] = useState("");
   const [feedbackCategory, setFeedbackCategory] = useState("general");
@@ -138,6 +157,37 @@ export default function HelpSupportScreen() {
             >
               <Feather name="mail" size={18} color="#fff" />
               <Text style={styles.contactBtnText}>Email Support</Text>
+            </Pressable>
+          </View>
+        </View>
+
+        <View style={[styles.webCard, { backgroundColor: theme.card, borderColor: "#0EA5E940" }]}>
+          <View style={styles.webCardTop}>
+            <View style={[styles.webCardIcon, { backgroundColor: "#0EA5E920" }]}>
+              <Feather name="monitor" size={24} color="#0EA5E9" />
+            </View>
+            <View style={styles.webCardInfo}>
+              <Text style={[styles.webCardTitle, { color: theme.text }]}>Use ErMate on Your Computer</Text>
+              <Text style={[styles.webCardUrl, { color: "#0EA5E9" }]}>er-mate.replit.app/web</Text>
+            </View>
+          </View>
+          <Text style={[styles.webCardDesc, { color: theme.textSecondary }]}>
+            Access all your cases from any browser — just like WhatsApp Web. Generate a link code from Profile and enter it on the web page to connect instantly.
+          </Text>
+          <View style={styles.webCardActions}>
+            <Pressable
+              style={({ pressed }) => [styles.webCardBtn, { backgroundColor: "#0EA5E9", opacity: pressed ? 0.85 : 1 }]}
+              onPress={openWebApp}
+            >
+              <Feather name="external-link" size={15} color="#fff" />
+              <Text style={styles.webCardBtnText}>Open Web App</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.webCardBtnOutline, { borderColor: "#0EA5E940", opacity: pressed ? 0.85 : 1 }]}
+              onPress={() => navigation.navigate("LinkDevices")}
+            >
+              <Feather name="link" size={15} color="#0EA5E9" />
+              <Text style={[styles.webCardBtnOutlineText, { color: "#0EA5E9" }]}>Get Link Code</Text>
             </Pressable>
           </View>
         </View>
@@ -367,4 +417,49 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   linkLabel: { ...Typography.body, flex: 1 },
+  webCard: {
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    marginBottom: Spacing.lg,
+    borderWidth: 1.5,
+  },
+  webCardTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    marginBottom: Spacing.sm,
+  },
+  webCardIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: BorderRadius.md,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  webCardInfo: { flex: 1 },
+  webCardTitle: { ...Typography.bodyMedium },
+  webCardUrl: { ...Typography.small, marginTop: 2 },
+  webCardDesc: { ...Typography.small, lineHeight: 18, marginBottom: Spacing.md },
+  webCardActions: { flexDirection: "row", gap: Spacing.sm },
+  webCardBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+  },
+  webCardBtnText: { ...Typography.label, color: "#fff" },
+  webCardBtnOutline: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1.5,
+  },
+  webCardBtnOutlineText: { ...Typography.label },
 });
