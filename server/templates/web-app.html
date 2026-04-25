@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ErMate Web</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0e1a;
+      --bg2: #111827;
+      --card: #1a2236;
+      --card2: #1f2d45;
+      --border: #2a3a55;
+      --primary: #3b82f6;
+      --primary-dim: rgba(59,130,246,0.15);
+      --gold: #d4a843;
+      --text: #f0f4ff;
+      --text2: #94a3b8;
+      --text3: #64748b;
+      --danger: #ef4444;
+      --danger-dim: rgba(239,68,68,0.12);
+      --success: #22c55e;
+      --success-dim: rgba(34,197,94,0.12);
+      --warning: #f59e0b;
+      --radius: 12px;
+      --radius-sm: 8px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+
+    /* ─── LINK PAGE ─────────────────────────────────── */
+    #link-page {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 48px;
+    }
+
+    .brand-icon {
+      width: 48px;
+      height: 48px;
+      background: var(--primary);
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .brand-icon svg { width: 28px; height: 28px; fill: #fff; }
+
+    .brand-name {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      color: var(--text);
+    }
+
+    .brand-tag {
+      font-size: 12px;
+      color: var(--text3);
+      margin-top: -4px;
+    }
+
+    .link-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 40px 36px;
+      width: 100%;
+      max-width: 440px;
+      text-align: center;
+    }
+
+    .link-card h2 {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .link-card p {
+      font-size: 14px;
+      color: var(--text2);
+      margin-bottom: 32px;
+      line-height: 1.6;
+    }
+
+    .code-input-wrapper {
+      position: relative;
+      margin-bottom: 16px;
+    }
+
+    .code-input {
+      width: 100%;
+      background: var(--bg2);
+      border: 2px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      font-size: 28px;
+      font-weight: 700;
+      text-align: center;
+      letter-spacing: 12px;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.2s;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .code-input:focus { border-color: var(--primary); }
+    .code-input::placeholder { letter-spacing: 4px; font-size: 16px; color: var(--text3); }
+
+    .verify-btn {
+      width: 100%;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      padding: 14px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .verify-btn:hover { opacity: 0.9; }
+    .verify-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .link-error {
+      background: var(--danger-dim);
+      border: 1px solid rgba(239,68,68,0.3);
+      color: #fca5a5;
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      font-size: 13px;
+      margin-bottom: 16px;
+      display: none;
+    }
+
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 28px 0;
+      color: var(--text3);
+      font-size: 13px;
+    }
+
+    .divider::before, .divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    .steps {
+      text-align: left;
+      background: var(--bg2);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-top: 28px;
+    }
+
+    .steps-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text2);
+      margin-bottom: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .step-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .step-item:last-child { margin-bottom: 0; }
+
+    .step-num {
+      width: 22px;
+      height: 22px;
+      background: var(--primary-dim);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--primary);
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .step-text { font-size: 13px; color: var(--text2); line-height: 1.5; }
+    .step-text strong { color: var(--text); }
+
+    /* ─── DASHBOARD ─────────────────────────────────── */
+    #dashboard-page { display: none; min-height: 100vh; }
+
+    .topbar {
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .topbar-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .topbar-brand .dot {
+      width: 10px;
+      height: 10px;
+      background: var(--primary);
+      border-radius: 50%;
+    }
+
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .user-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 6px 14px 6px 8px;
+    }
+
+    .user-avatar {
+      width: 28px;
+      height: 28px;
+      background: var(--primary);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .user-name { font-size: 13px; font-weight: 500; }
+
+    .logout-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text2);
+      border-radius: var(--radius-sm);
+      padding: 6px 12px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .logout-btn:hover { border-color: var(--danger); color: var(--danger); }
+
+    .dashboard-body {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 32px 24px;
+    }
+
+    .dash-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .dash-header h1 { font-size: 24px; font-weight: 700; }
+    .dash-header p { font-size: 14px; color: var(--text2); margin-top: 2px; }
+
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+
+    .stat-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: var(--text3);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 800;
+      color: var(--text);
+    }
+
+    .stat-value.blue { color: var(--primary); }
+    .stat-value.gold { color: var(--gold); }
+
+    .cases-section { }
+
+    .section-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text2);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .search-bar {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .search-bar svg { width: 16px; height: 16px; fill: var(--text3); flex-shrink: 0; }
+
+    .search-input {
+      flex: 1;
+      background: none;
+      border: none;
+      padding: 12px 0;
+      color: var(--text);
+      font-size: 14px;
+      outline: none;
+    }
+
+    .search-input::placeholder { color: var(--text3); }
+
+    .cases-list { display: flex; flex-direction: column; gap: 10px; }
+
+    .case-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .case-card:hover { border-color: var(--primary); background: var(--card2); }
+
+    .case-avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: var(--primary-dim);
+      border: 1px solid rgba(59,130,246,0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--primary);
+      flex-shrink: 0;
+    }
+
+    .case-info { flex: 1; min-width: 0; }
+
+    .case-name {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 3px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .case-meta {
+      font-size: 13px;
+      color: var(--text2);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .case-right { text-align: right; flex-shrink: 0; }
+
+    .case-date { font-size: 12px; color: var(--text3); margin-bottom: 6px; }
+
+    .triage-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .triage-red { background: var(--danger-dim); color: #fca5a5; }
+    .triage-yellow { background: rgba(245,158,11,0.12); color: #fbbf24; }
+    .triage-green { background: var(--success-dim); color: #86efac; }
+    .triage-blue { background: var(--primary-dim); color: #93c5fd; }
+    .triage-black { background: rgba(255,255,255,0.06); color: #94a3b8; }
+
+    .empty-state {
+      text-align: center;
+      padding: 64px 20px;
+      color: var(--text3);
+    }
+
+    .empty-state svg { width: 48px; height: 48px; margin-bottom: 16px; opacity: 0.4; }
+    .empty-state p { font-size: 15px; }
+
+    .loading-state {
+      text-align: center;
+      padding: 48px 20px;
+    }
+
+    .spinner {
+      width: 32px;
+      height: 32px;
+      border: 2px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin: 0 auto 16px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading-text { font-size: 14px; color: var(--text2); }
+
+    /* ─── CASE DETAIL MODAL ─────────────────────────── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .modal-overlay.open { display: flex; }
+
+    .modal {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      width: 100%;
+      max-width: 640px;
+      max-height: 85vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .modal-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .modal-title { font-size: 18px; font-weight: 700; }
+
+    .close-btn {
+      width: 32px;
+      height: 32px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: var(--text2);
+      font-size: 18px;
+      transition: all 0.15s;
+    }
+
+    .close-btn:hover { border-color: var(--danger); color: var(--danger); }
+
+    .modal-body {
+      padding: 24px;
+      overflow-y: auto;
+    }
+
+    .detail-section { margin-bottom: 24px; }
+
+    .detail-section-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text3);
+      margin-bottom: 12px;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+    }
+
+    .detail-item {
+      background: var(--bg2);
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+    }
+
+    .detail-item-label { font-size: 11px; color: var(--text3); margin-bottom: 4px; }
+    .detail-item-value { font-size: 14px; font-weight: 500; color: var(--text); }
+
+    .vital-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+      gap: 10px;
+    }
+
+    .vital-item {
+      background: var(--bg2);
+      border-radius: var(--radius-sm);
+      padding: 12px;
+      text-align: center;
+    }
+
+    .vital-label { font-size: 10px; color: var(--text3); text-transform: uppercase; margin-bottom: 4px; }
+    .vital-value { font-size: 18px; font-weight: 700; color: var(--primary); }
+
+    @media (max-width: 600px) {
+      .topbar { padding: 0 16px; }
+      .dashboard-body { padding: 20px 16px; }
+      .link-card { padding: 28px 20px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════ LINK PAGE -->
+<div id="link-page">
+  <div class="brand">
+    <div class="brand-icon">
+      <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/></svg>
+    </div>
+    <div>
+      <div class="brand-name">ErMate</div>
+      <div class="brand-tag">Emergency Room EMR</div>
+    </div>
+  </div>
+
+  <div class="link-card">
+    <h2>Link with Mobile App</h2>
+    <p>Enter the 6-digit code from your ErMate app to access your cases on this browser.</p>
+
+    <div id="link-error" class="link-error"></div>
+
+    <div class="code-input-wrapper">
+      <input
+        id="code-input"
+        class="code-input"
+        type="text"
+        maxlength="6"
+        placeholder="000000"
+        autocomplete="off"
+        inputmode="numeric"
+      />
+    </div>
+
+    <button class="verify-btn" id="verify-btn" onclick="verifyCode()" disabled>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+      Connect
+    </button>
+
+    <div class="steps">
+      <div class="steps-title">How to get your code</div>
+      <div class="step-item">
+        <div class="step-num">1</div>
+        <div class="step-text">Open the <strong>ErMate app</strong> on your phone</div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">2</div>
+        <div class="step-text">Go to <strong>Profile</strong> tab at the bottom</div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">3</div>
+        <div class="step-text">Tap <strong>Link to Web</strong> and generate a code</div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">4</div>
+        <div class="step-text">Enter the <strong>6-digit code</strong> above. Code expires in 5 minutes.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════ DASHBOARD PAGE -->
+<div id="dashboard-page">
+  <div class="topbar">
+    <div class="topbar-brand">
+      <div class="dot"></div>
+      ErMate Web
+    </div>
+    <div class="topbar-right">
+      <div class="user-pill">
+        <div class="user-avatar" id="user-avatar">?</div>
+        <div class="user-name" id="user-name-label">Loading...</div>
+      </div>
+      <button class="logout-btn" onclick="logout()">Sign out</button>
+    </div>
+  </div>
+
+  <div class="dashboard-body">
+    <div class="dash-header">
+      <div>
+        <h1>Cases</h1>
+        <p>Your emergency room cases</p>
+      </div>
+    </div>
+
+    <div class="stats-row" id="stats-row">
+      <div class="stat-card">
+        <div class="stat-label">Total Cases</div>
+        <div class="stat-value blue" id="stat-total">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Today</div>
+        <div class="stat-value" id="stat-today">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">This Month</div>
+        <div class="stat-value gold" id="stat-month">—</div>
+      </div>
+    </div>
+
+    <div class="cases-section">
+      <div class="section-label">
+        <span>Recent Cases</span>
+        <span id="case-count-label" style="font-weight:400;color:var(--text3)"></span>
+      </div>
+
+      <div class="search-bar">
+        <svg viewBox="0 0 24 24"><path d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+        <input class="search-input" id="search-input" type="text" placeholder="Search by patient name, complaint..." oninput="filterCases()" />
+      </div>
+
+      <div id="cases-container">
+        <div class="loading-state">
+          <div class="spinner"></div>
+          <div class="loading-text">Loading cases...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════ CASE MODAL -->
+<div class="modal-overlay" id="case-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title">Case Details</div>
+      <div class="close-btn" onclick="closeModal()">&#x2715;</div>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<script>
+  const API_BASE = window.location.origin;
+  const EXTERNAL_API = 'https://er-emr-backend.onrender.com/api';
+  let allCases = [];
+  let authToken = null;
+  let currentUser = null;
+
+  // ─── Init ───────────────────────────────────────────
+  (function init() {
+    const saved = localStorage.getItem('ermate_web_token');
+    const savedUser = localStorage.getItem('ermate_web_user');
+    if (saved && savedUser) {
+      authToken = saved;
+      currentUser = JSON.parse(savedUser);
+      showDashboard();
+    } else {
+      showLinkPage();
+    }
+
+    // Check if code is in URL
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    if (code) {
+      document.getElementById('code-input').value = code;
+      document.getElementById('verify-btn').disabled = false;
+      verifyCode();
+    }
+  })();
+
+  // ─── Link Page ──────────────────────────────────────
+  function showLinkPage() {
+    document.getElementById('link-page').style.display = 'flex';
+    document.getElementById('dashboard-page').style.display = 'none';
+  }
+
+  const codeInput = document.getElementById('code-input');
+  codeInput.addEventListener('input', function() {
+    this.value = this.value.replace(/[^0-9]/g, '');
+    document.getElementById('verify-btn').disabled = this.value.length < 6;
+    if (this.value.length === 6) verifyCode();
+  });
+
+  async function verifyCode() {
+    const code = document.getElementById('code-input').value.trim();
+    if (!code || code.length < 6) return;
+
+    const btn = document.getElementById('verify-btn');
+    const errorEl = document.getElementById('link-error');
+    btn.disabled = true;
+    btn.innerHTML = '<div style="width:18px;height:18px;border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:spin 0.7s linear infinite"></div> Connecting...';
+    errorEl.style.display = 'none';
+
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/verify-link-code?code=${code}`);
+      const data = await res.json();
+
+      if (data.success && data.data && data.data.access_token) {
+        authToken = data.data.access_token;
+        currentUser = data.data.user;
+        localStorage.setItem('ermate_web_token', authToken);
+        localStorage.setItem('ermate_web_user', JSON.stringify(currentUser));
+        showDashboard();
+      } else {
+        throw new Error(data.error || 'Invalid or expired code');
+      }
+    } catch (err) {
+      errorEl.textContent = err.message || 'Failed to verify code. Please try again.';
+      errorEl.style.display = 'block';
+      btn.disabled = false;
+      btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg> Connect';
+    }
+  }
+
+  // ─── Dashboard ──────────────────────────────────────
+  function showDashboard() {
+    document.getElementById('link-page').style.display = 'none';
+    document.getElementById('dashboard-page').style.display = 'block';
+
+    if (currentUser) {
+      const name = currentUser.name || currentUser.email || 'Doctor';
+      document.getElementById('user-name-label').textContent = name;
+      document.getElementById('user-avatar').textContent = name.charAt(0).toUpperCase();
+    }
+
+    loadCases();
+  }
+
+  async function loadCases() {
+    const container = document.getElementById('cases-container');
+    container.innerHTML = '<div class="loading-state"><div class="spinner"></div><div class="loading-text">Loading cases...</div></div>';
+
+    try {
+      const res = await fetch(`${EXTERNAL_API}/cases`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (res.status === 401) {
+        logout();
+        return;
+      }
+
+      const data = await res.json();
+      allCases = Array.isArray(data) ? data : (data.cases || data.data || []);
+      renderCases(allCases);
+      updateStats(allCases);
+    } catch (err) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <p>Could not load cases. Please check your connection.</p>
+        </div>`;
+    }
+  }
+
+  function updateStats(cases) {
+    document.getElementById('stat-total').textContent = cases.length;
+
+    const today = new Date().toDateString();
+    const todayCases = cases.filter(c => {
+      const d = new Date(c.created_at || c.createdAt || c.date || 0);
+      return d.toDateString() === today;
+    });
+    document.getElementById('stat-today').textContent = todayCases.length;
+
+    const now = new Date();
+    const monthCases = cases.filter(c => {
+      const d = new Date(c.created_at || c.createdAt || c.date || 0);
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    });
+    document.getElementById('stat-month').textContent = monthCases.length;
+  }
+
+  function filterCases() {
+    const q = document.getElementById('search-input').value.toLowerCase();
+    if (!q) { renderCases(allCases); return; }
+    const filtered = allCases.filter(c => {
+      const name = (c.patient_name || c.name || '').toLowerCase();
+      const complaint = (c.chief_complaint || c.complaint || '').toLowerCase();
+      return name.includes(q) || complaint.includes(q);
+    });
+    renderCases(filtered);
+  }
+
+  function renderCases(cases) {
+    const container = document.getElementById('cases-container');
+    document.getElementById('case-count-label').textContent = cases.length + ' case' + (cases.length !== 1 ? 's' : '');
+
+    if (cases.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg>
+          <p>No cases found</p>
+        </div>`;
+      return;
+    }
+
+    const html = cases.map(c => {
+      const name = c.patient_name || c.name || 'Unknown Patient';
+      const complaint = c.chief_complaint || c.complaint || 'No complaint recorded';
+      const age = c.age ? `${c.age}y` : '';
+      const sex = c.sex ? c.sex.charAt(0).toUpperCase() : '';
+      const initials = name.split(' ').map(n => n.charAt(0)).slice(0, 2).join('');
+      const triage = (c.triage_category || c.triage || '').toLowerCase();
+      const triageClass = triage === 'red' ? 'triage-red' : triage === 'yellow' ? 'triage-yellow' : triage === 'green' ? 'triage-green' : triage === 'blue' ? 'triage-blue' : triage === 'black' ? 'triage-black' : '';
+      const triageLabel = triage ? triage.charAt(0).toUpperCase() + triage.slice(1) : '';
+      const date = formatDate(c.created_at || c.createdAt || c.date);
+      const metaParts = [age && sex ? `${age} ${sex}` : age || sex, complaint].filter(Boolean);
+
+      return `
+        <div class="case-card" onclick='openCase(${JSON.stringify(c).replace(/'/g, "&#39;")})'>
+          <div class="case-avatar">${initials || '?'}</div>
+          <div class="case-info">
+            <div class="case-name">${escapeHtml(name)}</div>
+            <div class="case-meta">${escapeHtml(metaParts.join(' · '))}</div>
+          </div>
+          <div class="case-right">
+            <div class="case-date">${date}</div>
+            ${triageClass ? `<span class="triage-badge ${triageClass}">${triageLabel}</span>` : ''}
+          </div>
+        </div>`;
+    }).join('');
+
+    container.innerHTML = `<div class="cases-list">${html}</div>`;
+  }
+
+  function openCase(c) {
+    document.getElementById('modal-title').textContent = c.patient_name || c.name || 'Case Details';
+    document.getElementById('case-modal').classList.add('open');
+
+    const vitals = c.vitals || {};
+    const patient = c;
+
+    document.getElementById('modal-body').innerHTML = `
+      <div class="detail-section">
+        <div class="detail-section-title">Patient</div>
+        <div class="detail-grid">
+          ${detailItem('Name', patient.patient_name || patient.name)}
+          ${detailItem('Age', patient.age ? patient.age + ' years' : null)}
+          ${detailItem('Sex', patient.sex)}
+          ${detailItem('Phone', patient.phone)}
+          ${detailItem('MRN', patient.mrn || patient.id)}
+          ${detailItem('Date', formatDate(patient.created_at || patient.createdAt || patient.date))}
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-section-title">Presentation</div>
+        <div class="detail-grid">
+          ${detailItem('Chief Complaint', patient.chief_complaint || patient.complaint)}
+          ${detailItem('Triage', patient.triage_category || patient.triage)}
+          ${detailItem('Mode of Arrival', patient.mode_of_arrival)}
+          ${detailItem('MLC', patient.mlc ? 'Yes' : patient.mlc === false ? 'No' : null)}
+        </div>
+      </div>
+
+      ${Object.keys(vitals).length > 0 ? `
+      <div class="detail-section">
+        <div class="detail-section-title">Vitals on Arrival</div>
+        <div class="vital-grid">
+          ${vitals.hr ? `<div class="vital-item"><div class="vital-label">HR</div><div class="vital-value">${vitals.hr}</div></div>` : ''}
+          ${vitals.bp ? `<div class="vital-item"><div class="vital-label">BP</div><div class="vital-value">${vitals.bp}</div></div>` : ''}
+          ${vitals.spo2 ? `<div class="vital-item"><div class="vital-label">SpO2</div><div class="vital-value">${vitals.spo2}</div></div>` : ''}
+          ${vitals.rr ? `<div class="vital-item"><div class="vital-label">RR</div><div class="vital-value">${vitals.rr}</div></div>` : ''}
+          ${vitals.temp ? `<div class="vital-item"><div class="vital-label">Temp</div><div class="vital-value">${vitals.temp}</div></div>` : ''}
+          ${vitals.gcs ? `<div class="vital-item"><div class="vital-label">GCS</div><div class="vital-value">${vitals.gcs}</div></div>` : ''}
+        </div>
+      </div>` : ''}
+
+      ${patient.diagnosis || patient.final_diagnosis ? `
+      <div class="detail-section">
+        <div class="detail-section-title">Diagnosis</div>
+        <div class="detail-grid">
+          ${detailItem('Final Diagnosis', patient.diagnosis || patient.final_diagnosis)}
+        </div>
+      </div>` : ''}
+    `;
+  }
+
+  function detailItem(label, value) {
+    if (!value) return '';
+    return `<div class="detail-item"><div class="detail-item-label">${label}</div><div class="detail-item-value">${escapeHtml(String(value))}</div></div>`;
+  }
+
+  function closeModal() {
+    document.getElementById('case-modal').classList.remove('open');
+  }
+
+  document.getElementById('case-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+  });
+
+  function logout() {
+    localStorage.removeItem('ermate_web_token');
+    localStorage.removeItem('ermate_web_user');
+    authToken = null;
+    currentUser = null;
+    allCases = [];
+    document.getElementById('code-input').value = '';
+    document.getElementById('verify-btn').disabled = true;
+    document.getElementById('link-error').style.display = 'none';
+    showLinkPage();
+  }
+
+  function formatDate(val) {
+    if (!val) return '';
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return '';
+    const now = new Date();
+    const diff = now - d;
+    if (diff < 86400000) {
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+    if (diff < 604800000) {
+      const days = Math.floor(diff / 86400000);
+      return days + 'd ago';
+    }
+    return d.toLocaleDateString([], { day: 'numeric', month: 'short' });
+  }
+
+  function escapeHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+</script>
+</body>
+</html>

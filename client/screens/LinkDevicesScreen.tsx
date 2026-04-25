@@ -198,7 +198,8 @@ export default function LinkDevicesScreen() {
                 <Text style={[styles.stepNumberText, { color: theme.primary }]}>1</Text>
               </View>
               <Text style={[styles.stepText, { color: theme.textSecondary }]}>
-                Open ErMate in your computer browser
+                On your computer, open{" "}
+                <Text style={{ color: theme.primary, fontWeight: "600" }}>er-mate.replit.app/web</Text>
               </Text>
             </View>
             <View style={styles.step}>
@@ -206,7 +207,7 @@ export default function LinkDevicesScreen() {
                 <Text style={[styles.stepNumberText, { color: theme.primary }]}>2</Text>
               </View>
               <Text style={[styles.stepText, { color: theme.textSecondary }]}>
-                Click "Link with Mobile App"
+                Tap the button above to generate your link code
               </Text>
             </View>
             <View style={styles.step}>
@@ -214,7 +215,7 @@ export default function LinkDevicesScreen() {
                 <Text style={[styles.stepNumberText, { color: theme.primary }]}>3</Text>
               </View>
               <Text style={[styles.stepText, { color: theme.textSecondary }]}>
-                Enter the code above or use the direct link
+                Enter the 6-digit code on the web page, or tap "Open Web" to auto-connect
               </Text>
             </View>
           </View>

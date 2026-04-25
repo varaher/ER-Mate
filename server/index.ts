@@ -175,6 +175,19 @@ function configureExpoAndLanding(app: express.Application) {
   const landingPageTemplate = fs.readFileSync(templatePath, "utf-8");
   const appName = getAppName();
 
+  // ErMate Web App - WhatsApp Web style interface
+  const webAppTemplatePath = path.resolve(process.cwd(), "server", "templates", "web-app.html");
+  const webAppTemplate = fs.existsSync(webAppTemplatePath) ? fs.readFileSync(webAppTemplatePath, "utf-8") : null;
+
+  app.get("/web", (_req: Request, res: Response) => {
+    if (webAppTemplate) {
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.status(200).send(webAppTemplate);
+    } else {
+      res.status(404).send("Web app not found");
+    }
+  });
+
   log("Serving static Expo files with dynamic manifest routing");
 
   app.use((req: Request, res: Response, next: NextFunction) => {

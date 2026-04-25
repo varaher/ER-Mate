@@ -175,8 +175,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         expiresAt: now + expiresIn * 1000,
       });
 
-      const domain = process.env.REPLIT_DEV_DOMAIN || process.env.REPL_SLUG + ".replit.app";
-      const url = `https://${domain}/link?code=${code}`;
+      const domain = process.env.REPLIT_DOMAINS
+        ? process.env.REPLIT_DOMAINS.split(",")[0].trim()
+        : process.env.REPLIT_DEV_DOMAIN || process.env.REPL_SLUG + ".replit.app";
+      const url = `https://${domain}/web?code=${code}`;
 
       res.json({
         success: true,
