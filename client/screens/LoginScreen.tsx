@@ -57,14 +57,10 @@ export default function LoginScreen() {
     }
   }, []);
 
-  const useProxy = Platform.OS !== "web";
   const redirectUri = AuthSession.makeRedirectUri({
     scheme: "ermate",
     path: "auth",
-    ...(useProxy ? { projectNameForProxy: "@anonymous/ermate" } : {}),
   });
-
-  console.log("[LoginScreen] Redirect URI:", redirectUri, "Platform:", Platform.OS, "useProxy:", useProxy);
 
   const discovery = AuthSession.useAutoDiscovery("https://accounts.google.com");
 
@@ -73,17 +69,28 @@ export default function LoginScreen() {
       clientId: GOOGLE_CLIENT_ID,
       redirectUri,
       scopes: ["openid", "profile", "email"],
-      responseType: AuthSession.ResponseType.Token,
+      responseType: AuthSession.ResponseType.Code,
+      usePKCE: true,
     },
     discovery
   );
 
   React.useEffect(() => {
-    if (response?.type === "success" && response.authentication?.accessToken) {
-      const accessToken = response.authentication.accessToken;
+    if (response?.type === "success" && response.params?.code && request) {
+      const code = response.params.code;
       (async () => {
         setGoogleLoading(true);
         try {
+          const tokenResponse = await AuthSession.exchangeCodeAsync(
+            {
+              clientId: GOOGLE_CLIENT_ID,
+              redirectUri,
+              code,
+              extraParams: { code_verifier: request.codeVerifier ?? "" },
+            },
+            discovery!
+          );
+          const accessToken = tokenResponse.accessToken;
           const userInfoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
             headers: { Authorization: `Bearer ${accessToken}` },
           });
@@ -104,7 +111,7 @@ export default function LoginScreen() {
         }
       })();
     }
-  }, [response, googleSignIn]);
+  }, [response, googleSignIn, request, redirectUri, discovery]);
 
   const handleLogin = async () => {
     if (!email || !password) {
