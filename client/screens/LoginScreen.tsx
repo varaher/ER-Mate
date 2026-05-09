@@ -57,10 +57,11 @@ export default function LoginScreen() {
     }
   }, []);
 
-  const redirectUri = AuthSession.makeRedirectUri({
-    scheme: "ermate",
-    path: "auth",
-  });
+  const redirectUri = AuthSession.makeRedirectUri(
+    Platform.OS === "web"
+      ? { scheme: "ermate", path: "auth" }
+      : { projectNameForProxy: "@varah/ermate" }
+  );
 
   const discovery = AuthSession.useAutoDiscovery("https://accounts.google.com");
 
