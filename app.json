@@ -63,7 +63,6 @@
           "enableBackgroundAudio": false
         }
       ],
-      "expo-updates",
       "expo-web-browser",
       "expo-apple-authentication"
     ],
