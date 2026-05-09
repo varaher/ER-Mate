@@ -494,6 +494,48 @@ function updateManifests(manifests, timestamp, baseUrl, assetsByHash) {
   console.log("Manifests updated");
 }
 
+function checkExistingBuild(baseUrl) {
+  try {
+    const iosManifestPath = path.join("static-build", "ios", "manifest.json");
+    const androidManifestPath = path.join("static-build", "android", "manifest.json");
+
+    if (!fs.existsSync(iosManifestPath) || !fs.existsSync(androidManifestPath)) {
+      return false;
+    }
+
+    const iosManifest = JSON.parse(fs.readFileSync(iosManifestPath, "utf-8"));
+    const androidManifest = JSON.parse(fs.readFileSync(androidManifestPath, "utf-8"));
+
+    if (!iosManifest.launchAsset?.url || !androidManifest.launchAsset?.url) {
+      return false;
+    }
+
+    if (!iosManifest.launchAsset.url.startsWith(baseUrl)) {
+      console.log("Domain changed - rebuild required.");
+      return false;
+    }
+
+    const urlMatch = iosManifest.launchAsset.url.match(/\/(\d+-\d+)\/_expo\//);
+    if (!urlMatch) return false;
+    const timestamp = urlMatch[1];
+
+    const iosBundlePath = path.join("static-build", timestamp, "_expo", "static", "js", "ios", "bundle.js");
+    const androidBundlePath = path.join("static-build", timestamp, "_expo", "static", "js", "android", "bundle.js");
+
+    if (!fs.existsSync(iosBundlePath) || !fs.existsSync(androidBundlePath)) {
+      return false;
+    }
+
+    if (fs.statSync(iosBundlePath).size < 1000 || fs.statSync(androidBundlePath).size < 1000) {
+      return false;
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function main() {
   console.log("Building static Expo Go deployment...");
 
@@ -501,6 +543,13 @@ async function main() {
 
   const domain = getDeploymentDomain();
   const baseUrl = `https://${domain}`;
+
+  if (checkExistingBuild(baseUrl)) {
+    console.log("Static bundles already exist - skipping rebuild.");
+    console.log("To force a rebuild, delete the static-build/ directory.");
+    process.exit(0);
+  }
+
   const timestamp = `${Date.now()}-${process.pid}`;
 
   prepareDirectories(timestamp);
