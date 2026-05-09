@@ -233,18 +233,17 @@ export default function LoginScreen() {
           </Text>
         </View>
 
-        {/* Google Sign-In disabled temporarily
         <Pressable
           style={({ pressed }) => [
             styles.googleButton,
             {
               backgroundColor: theme.card,
               borderColor: theme.border,
-              opacity: pressed || googleLoading ? 0.8 : 1,
+              opacity: pressed || googleLoading || !request ? 0.8 : 1,
             },
           ]}
           onPress={handleGoogleSignIn}
-          disabled={googleLoading}
+          disabled={googleLoading || !request}
         >
           {googleLoading ? (
             <ActivityIndicator color={theme.text} size="small" />
@@ -259,7 +258,6 @@ export default function LoginScreen() {
             </>
           )}
         </Pressable>
-        */}
 
         {isAppleAvailable ? (
           <Pressable
