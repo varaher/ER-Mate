@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import { useTheme } from "@/hooks/useTheme";
+import { useAuth } from "@/context/AuthContext";
 import { fetchFromApi } from "@/lib/api";
 import { isPediatric } from "@/lib/pediatricVitals";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
@@ -51,15 +52,17 @@ const getPriorityColor = (level: number) => {
 export default function CasesScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
+  const { user } = useAuth();
   const insets = useSafeAreaInsets();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "active" | "discharged">("all");
 
   const { data: rawCases = [], isLoading: loading, refetch, isRefetching } = useQuery<CaseItem[]>({
-    queryKey: ["cases"],
+    queryKey: ["cases", user?.id],
     queryFn: () => fetchFromApi<CaseItem[]>("/cases"),
     refetchOnMount: true,
+    enabled: !!user?.id,
   });
 
   const cases = useMemo(() => {

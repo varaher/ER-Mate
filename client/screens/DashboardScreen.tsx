@@ -103,9 +103,10 @@ export default function DashboardScreen() {
   }, []);
 
   const { data: cases = [], isLoading: loading, error: queryError, refetch, isRefetching } = useQuery<CaseItem[]>({
-    queryKey: ["cases"],
+    queryKey: ["cases", user?.id],
     queryFn: () => fetchFromApi<CaseItem[]>("/cases"),
     refetchOnMount: true,
+    enabled: !!user?.id,
   });
 
   useEffect(() => {
