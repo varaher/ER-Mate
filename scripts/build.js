@@ -70,6 +70,7 @@ function prepareDirectories(timestamp) {
     path.join("static-build", timestamp, "_expo", "static", "js", "android"),
     path.join("static-build", "ios"),
     path.join("static-build", "android"),
+    path.join("static-build", "web"),
   ];
 
   for (const dir of dirs) {
@@ -239,6 +240,20 @@ async function downloadManifest(platform) {
   }
 }
 
+async function downloadWebBundle() {
+  const url = new URL("http://localhost:8081/client/index.bundle");
+  url.searchParams.set("platform", "web");
+  url.searchParams.set("dev", "false");
+  url.searchParams.set("hot", "false");
+  url.searchParams.set("lazy", "false");
+  url.searchParams.set("minify", "true");
+
+  const output = path.join("static-build", "web", "bundle.js");
+  console.log("Fetching web bundle...");
+  await downloadFile(url.toString(), output);
+  console.log("web bundle ready");
+}
+
 async function downloadBundlesAndManifests(timestamp) {
   console.log("Downloading bundles and manifests...");
   console.log("This may take several minutes for production builds...");
@@ -249,14 +264,16 @@ async function downloadBundlesAndManifests(timestamp) {
       downloadBundle("android", timestamp),
       downloadManifest("ios"),
       downloadManifest("android"),
+      downloadWebBundle(),
     ]);
 
-    const failures = results
+    const coreFailures = results
+      .slice(0, 4)
       .map((result, index) => ({ result, index }))
       .filter(({ result }) => result.status === "rejected");
 
-    if (failures.length > 0) {
-      const errorMessages = failures.map(({ result, index }) => {
+    if (coreFailures.length > 0) {
+      const errorMessages = coreFailures.map(({ result, index }) => {
         const names = [
           "iOS bundle",
           "Android bundle",
@@ -267,6 +284,10 @@ async function downloadBundlesAndManifests(timestamp) {
       });
 
       exitWithError(`Download failed:\n${errorMessages.join("\n")}`);
+    }
+
+    if (results[4].status === "rejected") {
+      console.warn("Web bundle download failed (non-critical):", results[4].reason?.message);
     }
 
     const iosManifest =
@@ -494,6 +515,120 @@ function updateManifests(manifests, timestamp, baseUrl, assetsByHash) {
   console.log("Manifests updated");
 }
 
+function createWebPWAFiles(baseUrl) {
+  const webDir = path.join("static-build", "web");
+  fs.mkdirSync(webDir, { recursive: true });
+
+  const bundleExists = fs.existsSync(path.join(webDir, "bundle.js"));
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="ErMate" />
+  <meta name="description" content="Emergency Room EMR for medical professionals" />
+  <title>ErMate</title>
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" type="image/png" href="/assets/images/favicon.png" />
+  <link rel="apple-touch-icon" href="/assets/images/icon.png" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { height: 100%; }
+    body { height: 100%; background: #0f172a; -webkit-text-size-adjust: 100%; }
+    #root { display: flex; flex-direction: column; height: 100%; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script>window.__ERMATE_PWA__ = true;</script>
+  ${bundleExists ? '<script src="/web/bundle.js"></script>' : '<p style="color:white;text-align:center;padding:40px">Loading...</p>'}
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/sw.js').catch(function(err) {
+          console.log('SW registration failed:', err);
+        });
+      });
+    }
+  </script>
+</body>
+</html>`;
+
+  fs.writeFileSync(path.join(webDir, "index.html"), html);
+
+  const manifest = {
+    name: "ErMate - Emergency Room EMR",
+    short_name: "ErMate",
+    description: "Emergency Room Electronic Medical Records for EM professionals",
+    start_url: "/",
+    display: "standalone",
+    background_color: "#000000",
+    theme_color: "#000000",
+    orientation: "portrait-primary",
+    categories: ["medical", "health"],
+    icons: [
+      {
+        src: "/assets/images/icon.png",
+        sizes: "1024x1024",
+        type: "image/png",
+        purpose: "any"
+      },
+      {
+        src: "/assets/images/icon.png",
+        sizes: "1024x1024",
+        type: "image/png",
+        purpose: "maskable"
+      }
+    ]
+  };
+  fs.writeFileSync(
+    path.join("static-build", "manifest.webmanifest"),
+    JSON.stringify(manifest, null, 2)
+  );
+
+  const sw = `const CACHE = 'ermate-pwa-v1';
+const PRECACHE = ['/web/bundle.js', '/assets/images/icon.png', '/assets/images/favicon.png'];
+
+self.addEventListener('install', event => {
+  self.skipWaiting();
+  event.waitUntil(
+    caches.open(CACHE).then(cache => cache.addAll(PRECACHE).catch(() => {}))
+  );
+});
+
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
+    ).then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener('fetch', event => {
+  if (event.request.url.includes('/api/')) return;
+  if (event.request.method !== 'GET') return;
+  event.respondWith(
+    caches.match(event.request).then(cached => {
+      const network = fetch(event.request).then(res => {
+        if (res && res.status === 200) {
+          const clone = res.clone();
+          caches.open(CACHE).then(c => c.put(event.request, clone));
+        }
+        return res;
+      });
+      return cached || network;
+    })
+  );
+});`;
+
+  fs.writeFileSync(path.join("static-build", "sw.js"), sw);
+  console.log("PWA files created (index.html, manifest.webmanifest, sw.js)");
+}
+
 function checkExistingBuild(baseUrl) {
   try {
     const iosManifestPath = path.join("static-build", "ios", "manifest.json");
@@ -530,6 +665,12 @@ function checkExistingBuild(baseUrl) {
       return false;
     }
 
+    const webIndexPath = path.join("static-build", "web", "index.html");
+    const webManifestPath = path.join("static-build", "manifest.webmanifest");
+    if (!fs.existsSync(webIndexPath) || !fs.existsSync(webManifestPath)) {
+      return false;
+    }
+
     return true;
   } catch {
     return false;
@@ -553,7 +694,6 @@ async function main() {
   const timestamp = `${Date.now()}-${process.pid}`;
 
   prepareDirectories(timestamp);
-  clearMetroCache();
 
   await startMetro(domain);
 
@@ -592,6 +732,8 @@ async function main() {
 
   console.log("Updating manifests and creating landing page...");
   updateManifests(manifests, timestamp, baseUrl, assetsByHash);
+
+  createWebPWAFiles(baseUrl);
 
   console.log("Build complete! Deploy to:", baseUrl);
 

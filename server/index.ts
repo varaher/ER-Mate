@@ -220,6 +220,29 @@ function configureExpoAndLanding(app: express.Application) {
     next();
   });
 
+  app.get("/manifest.webmanifest", (_req: Request, res: Response) => {
+    const manifestPath = path.resolve(process.cwd(), "static-build", "manifest.webmanifest");
+    if (fs.existsSync(manifestPath)) {
+      res.setHeader("Content-Type", "application/manifest+json");
+      res.setHeader("Cache-Control", "no-cache");
+      res.sendFile(manifestPath);
+    } else {
+      res.status(404).json({ error: "PWA manifest not found" });
+    }
+  });
+
+  app.get("/sw.js", (_req: Request, res: Response) => {
+    const swPath = path.resolve(process.cwd(), "static-build", "sw.js");
+    if (fs.existsSync(swPath)) {
+      res.setHeader("Content-Type", "application/javascript");
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      res.setHeader("Service-Worker-Allowed", "/");
+      res.sendFile(swPath);
+    } else {
+      res.status(404).send("// service worker not found");
+    }
+  });
+
   app.use("/assets", express.static(path.resolve(process.cwd(), "assets")));
   app.use(express.static(path.resolve(process.cwd(), "static-build")));
   app.use(express.static(path.resolve(process.cwd(), "static-build/web")));

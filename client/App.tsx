@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { StyleSheet } from "react-native";
+import { Platform, StyleSheet } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
@@ -15,11 +15,15 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider } from "@/context/AuthContext";
 import { CaseProvider } from "@/context/CaseContext";
 
-SplashScreen.preventAutoHideAsync();
+if (Platform.OS !== "web") {
+  SplashScreen.preventAutoHideAsync();
+}
 
 export default function App() {
   useEffect(() => {
-    SplashScreen.hideAsync().catch(() => {});
+    if (Platform.OS !== "web") {
+      SplashScreen.hideAsync().catch(() => {});
+    }
   }, []);
 
   return (
