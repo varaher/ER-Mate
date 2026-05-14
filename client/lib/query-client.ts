@@ -2,19 +2,19 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { Platform } from "react-native";
 
 export function getApiUrl(): string {
+  // On web, always use the current page's origin so API calls are same-origin
+  // (works correctly whether the user visits ermate.in or er-mate.replit.app)
+  if (Platform.OS === "web" && typeof window !== "undefined") {
+    return window.location.origin;
+  }
+
   let host = process.env.EXPO_PUBLIC_DOMAIN;
 
   if (!host) {
     host = "er-mate.replit.app";
   }
 
-  if (Platform.OS === "web" && !host.includes(':') && (host.includes('localhost') || host.includes('127.0.0.1'))) {
-    host = `${host}:5000`;
-  }
-  
-  let url = new URL(`https://${host}`);
-
-  return url.href;
+  return `https://${host}`;
 }
 
 async function throwIfResNotOk(res: Response) {
