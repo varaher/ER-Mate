@@ -42,6 +42,7 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("");
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [googleError, setGoogleError] = useState<string | null>(null);
   const [appleLoading, setAppleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showForgotModal, setShowForgotModal] = useState(false);
@@ -57,12 +58,55 @@ export default function LoginScreen() {
     }
   }, []);
 
-  const redirectUri = Platform.OS === "web"
-    ? (typeof window !== "undefined" ? window.location.origin : "https://er-mate.replit.app")
-    : AuthSession.makeRedirectUri({ projectNameForProxy: "@varah/ermate" });
+  // Web: handle Google OAuth redirect callback (implicit flow via URL hash)
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof window === "undefined") return;
+    const hash = window.location.hash.substring(1);
+    if (!hash) return;
+    const params = new URLSearchParams(hash);
+    const accessToken = params.get("access_token");
+    const savedState = sessionStorage.getItem("google_oauth_state");
+    const returnedState = params.get("state");
+    if (!accessToken) return;
+    if (savedState && returnedState && savedState !== returnedState) {
+      setGoogleError("Sign-in failed: security state mismatch. Please try again.");
+      window.history.replaceState(null, "", window.location.pathname);
+      return;
+    }
+    // Clear hash immediately so refresh doesn't re-trigger
+    window.history.replaceState(null, "", window.location.pathname);
+    sessionStorage.removeItem("google_oauth_state");
+    setGoogleLoading(true);
+    setGoogleError(null);
+    (async () => {
+      try {
+        console.log("[Google Auth Web] Got access token, fetching user info");
+        const userInfoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        const userInfo = await userInfoRes.json();
+        console.log("[Google Auth Web] User:", userInfo.email);
+        const signInResult = await googleSignIn({
+          name: userInfo.name || userInfo.given_name || "User",
+          email: userInfo.email,
+          accessToken,
+        });
+        console.log("[Google Auth Web] Backend result:", signInResult);
+        if (!signInResult.success) {
+          setGoogleError(signInResult.error || "Could not sign in with Google");
+        }
+      } catch (error: any) {
+        console.error("[Google Auth Web] Error:", error);
+        setGoogleError(error?.message || "Something went wrong. Please try again.");
+      } finally {
+        setGoogleLoading(false);
+      }
+    })();
+  }, [googleSignIn]);
 
+  // Native only: expo-auth-session
+  const redirectUri = AuthSession.makeRedirectUri({ projectNameForProxy: "@varah/ermate" });
   const discovery = AuthSession.useAutoDiscovery("https://accounts.google.com");
-
   const [request, response, promptAsync] = AuthSession.useAuthRequest(
     {
       clientId: GOOGLE_CLIENT_ID,
@@ -75,10 +119,22 @@ export default function LoginScreen() {
   );
 
   React.useEffect(() => {
-    if (response?.type === "success" && response.params?.code && request) {
+    if (Platform.OS === "web") return;
+    if (!response) return;
+    if (response.type === "error") {
+      setGoogleError(response.error?.message || "Google authorisation failed");
+      setGoogleLoading(false);
+      return;
+    }
+    if (response.type === "dismiss") {
+      setGoogleLoading(false);
+      return;
+    }
+    if (response.type === "success" && response.params?.code && request) {
       const code = response.params.code;
       (async () => {
         setGoogleLoading(true);
+        setGoogleError(null);
         try {
           const tokenResponse = await AuthSession.exchangeCodeAsync(
             {
@@ -100,11 +156,10 @@ export default function LoginScreen() {
             accessToken,
           });
           if (!signInResult.success) {
-            Alert.alert("Sign-In Failed", signInResult.error || "Could not sign in with Google");
+            setGoogleError(signInResult.error || "Could not sign in with Google");
           }
-        } catch (error) {
-          console.error("[LoginScreen] Google sign-in error:", error);
-          Alert.alert("Error", "Something went wrong during Google sign-in");
+        } catch (error: any) {
+          setGoogleError(error?.message || "Something went wrong during Google sign-in");
         } finally {
           setGoogleLoading(false);
         }
@@ -166,12 +221,28 @@ export default function LoginScreen() {
   };
 
   const handleGoogleSignIn = useCallback(async () => {
+    setGoogleError(null);
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      // Web: full-page redirect using implicit token flow (no popup, no code exchange needed)
+      const state = Math.random().toString(36).substring(2) + Date.now().toString(36);
+      sessionStorage.setItem("google_oauth_state", state);
+      const params = new URLSearchParams({
+        client_id: GOOGLE_CLIENT_ID,
+        redirect_uri: window.location.origin,
+        response_type: "token",
+        scope: "openid profile email",
+        state,
+        include_granted_scopes: "true",
+      });
+      window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+      return;
+    }
     setGoogleLoading(true);
     try {
       await promptAsync();
     } catch (error) {
       console.error("[LoginScreen] Google sign-in error:", error);
-      Alert.alert("Error", "Something went wrong during Google sign-in");
+      setGoogleError("Something went wrong during Google sign-in");
       setGoogleLoading(false);
     }
   }, [promptAsync]);
@@ -256,6 +327,14 @@ export default function LoginScreen() {
             </>
           )}
         </Pressable>
+
+        {googleError ? (
+          <View style={[styles.errorBox, { backgroundColor: "#fee2e2", borderColor: "#fca5a5" }]}>
+            <Text style={{ color: "#b91c1c", fontSize: 13, textAlign: "center" }}>
+              {googleError}
+            </Text>
+          </View>
+        ) : null}
 
         {isAppleAvailable ? (
           <Pressable
@@ -485,6 +564,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderWidth: 1,
     gap: Spacing.md,
+  },
+  errorBox: {
+    padding: Spacing.md,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    marginTop: Spacing.sm,
   },
   appleButton: {
     height: Spacing.buttonHeight,
