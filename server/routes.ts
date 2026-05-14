@@ -250,6 +250,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       };
 
+      // Try 1: login with email as password (works for Google-created accounts)
       let loginRes = await fetch(`${EXTERNAL_API}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -261,6 +262,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (loginData) return res.json(loginData);
       }
 
+      // Try 2: attempt registration for new Google users
       const registerRes = await fetch(`${EXTERNAL_API}/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -277,9 +279,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (registerData) return res.json(registerData);
       }
 
-      const regError = await registerRes.text().catch(() => "Unknown error");
-      console.error("[Google Auth] Registration failed:", regError);
+      const regErrorText = await registerRes.text().catch(() => "");
+      console.error("[Google Auth] Registration failed:", regErrorText);
 
+      // If email is already registered, this user has an existing account with a
+      // different password — guide them to sign in with email/password instead.
+      const emailAlreadyExists =
+        regErrorText.toLowerCase().includes("already registered") ||
+        regErrorText.toLowerCase().includes("already exists") ||
+        regErrorText.toLowerCase().includes("duplicate");
+
+      if (emailAlreadyExists) {
+        return res.status(401).json({
+          error:
+            "An account with this email already exists. Please sign in using your email and password instead.",
+        });
+      }
+
+      // Try 3: one more login attempt in case registration just succeeded on the backend
       loginRes = await fetch(`${EXTERNAL_API}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
