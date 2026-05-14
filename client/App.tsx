@@ -16,6 +16,7 @@ import RootStackNavigator from "@/navigation/RootStackNavigator";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider } from "@/context/AuthContext";
 import { CaseProvider } from "@/context/CaseContext";
+import { PWABanner } from "@/components/PWABanner";
 
 if (Platform.OS !== "web") {
   SplashScreen.preventAutoHideAsync();
@@ -44,6 +45,7 @@ export default function App() {
             <SafeAreaProvider>
               <GestureHandlerRootView style={styles.root}>
                 <KeyboardProvider>
+                  <PWABanner />
                   <NavigationContainer>
                     <RootStackNavigator />
                   </NavigationContainer>

@@ -232,15 +232,68 @@ function configureExpoAndLanding(app: express.Application) {
   });
 
   app.get("/sw.js", (_req: Request, res: Response) => {
-    const swPath = path.resolve(process.cwd(), "static-build", "sw.js");
-    if (fs.existsSync(swPath)) {
-      res.setHeader("Content-Type", "application/javascript");
-      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-      res.setHeader("Service-Worker-Allowed", "/");
-      res.sendFile(swPath);
-    } else {
-      res.status(404).send("// service worker not found");
-    }
+    // Derive a build-specific cache version from the timestamp folder in static-build
+    let cacheVersion = "ermate-pwa-v3";
+    try {
+      const entries = fs.readdirSync(path.resolve(process.cwd(), "static-build"));
+      const tsFolder = entries.find((e) => /^\d{13}/.test(e));
+      if (tsFolder) cacheVersion = `ermate-pwa-${tsFolder}`;
+    } catch {}
+
+    const swContent = `
+const CACHE = '${cacheVersion}';
+const PRECACHE = ['/web/bundle.js', '/assets/images/icon.png', '/assets/images/favicon.png'];
+
+// Install: pre-cache assets but do NOT skipWaiting — wait for user confirmation
+self.addEventListener('install', function(event) {
+  event.waitUntil(
+    caches.open(CACHE).then(function(cache) {
+      return cache.addAll(PRECACHE).catch(function() {});
+    })
+  );
+});
+
+// Activate: clear old caches, then claim clients
+self.addEventListener('activate', function(event) {
+  event.waitUntil(
+    caches.keys().then(function(keys) {
+      return Promise.all(
+        keys.filter(function(k) { return k !== CACHE; }).map(function(k) { return caches.delete(k); })
+      );
+    }).then(function() { return self.clients.claim(); })
+  );
+});
+
+// Message: trigger activation when app sends SKIP_WAITING
+self.addEventListener('message', function(event) {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
+// Fetch: stale-while-revalidate for non-API requests
+self.addEventListener('fetch', function(event) {
+  if (event.request.url.includes('/api/')) return;
+  if (event.request.method !== 'GET') return;
+  event.respondWith(
+    caches.match(event.request).then(function(cached) {
+      var network = fetch(event.request).then(function(res) {
+        if (res && res.status === 200) {
+          var clone = res.clone();
+          caches.open(CACHE).then(function(c) { c.put(event.request, clone); });
+        }
+        return res;
+      });
+      return cached || network;
+    })
+  );
+});
+`.trim();
+
+    res.setHeader("Content-Type", "application/javascript");
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Service-Worker-Allowed", "/");
+    res.send(swContent);
   });
 
   // Serve Expo asset requests that use ?unstable_path query param (e.g. vector icon fonts)
