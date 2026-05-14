@@ -232,7 +232,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/auth/google", async (req: Request, res: Response) => {
     try {
-      const { idToken, accessToken, name, email } = req.body;
+      const { idToken, accessToken, name, email, password } = req.body;
 
       if (!email) {
         return res.status(400).json({ error: "Email is required" });
@@ -250,11 +250,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       };
 
-      // Try 1: login with email as password (works for Google-created accounts)
+      // If a password was explicitly provided (link-account flow), use it
+      const loginPassword = password || email;
+
+      // Try 1: login with provided password or email as password
       let loginRes = await fetch(`${EXTERNAL_API}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password: email }),
+        body: JSON.stringify({ email, password: loginPassword }),
       });
 
       if (loginRes.ok) {

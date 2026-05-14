@@ -50,6 +50,12 @@ export default function LoginScreen() {
   const [forgotLoading, setForgotLoading] = useState(false);
   const [forgotSent, setForgotSent] = useState(false);
   const [isAppleAvailable, setIsAppleAvailable] = useState(false);
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const [linkPassword, setLinkPassword] = useState("");
+  const [linkPasswordVisible, setLinkPasswordVisible] = useState(false);
+  const [linkLoading, setLinkLoading] = useState(false);
+  const [linkError, setLinkError] = useState<string | null>(null);
+  const [pendingGoogleParams, setPendingGoogleParams] = useState<{ name: string; email: string; accessToken?: string } | null>(null);
 
   useEffect(() => {
     warmUpBackend();
@@ -102,14 +108,20 @@ export default function LoginScreen() {
         });
         const userInfo = await userInfoRes.json();
         console.log("[Google Auth Web] User:", userInfo.email);
-        const signInResult = await googleSignIn({
+        const googleParams = {
           name: userInfo.name || userInfo.given_name || "User",
           email: userInfo.email,
           accessToken,
-        });
+        };
+        const signInResult = await googleSignIn(googleParams);
         console.log("[Google Auth Web] Backend result:", signInResult);
         if (!signInResult.success) {
-          setGoogleError(signInResult.error || "Could not sign in with Google");
+          if (signInResult.accountExists) {
+            setPendingGoogleParams(googleParams);
+            setShowLinkModal(true);
+          } else {
+            setGoogleError(signInResult.error || "Could not sign in with Google");
+          }
         }
       } catch (error: any) {
         console.error("[Google Auth Web] Error:", error);
@@ -233,6 +245,29 @@ export default function LoginScreen() {
       setForgotSent(true);
     } finally {
       setForgotLoading(false);
+    }
+  };
+
+  const handleLinkAccount = async () => {
+    if (!pendingGoogleParams || !linkPassword.trim()) return;
+    setLinkLoading(true);
+    setLinkError(null);
+    try {
+      const result = await googleSignIn({
+        ...pendingGoogleParams,
+        password: linkPassword.trim(),
+      });
+      if (result.success) {
+        setShowLinkModal(false);
+        setLinkPassword("");
+        setPendingGoogleParams(null);
+      } else {
+        setLinkError(result.error || "Incorrect password. Please try again.");
+      }
+    } catch (error: any) {
+      setLinkError(error?.message || "Something went wrong. Please try again.");
+    } finally {
+      setLinkLoading(false);
     }
   };
 
@@ -537,6 +572,84 @@ export default function LoginScreen() {
                 </Pressable>
               </View>
             )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Link Google Account Modal */}
+      <Modal
+        visible={showLinkModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { setShowLinkModal(false); setLinkPassword(""); setLinkError(null); }}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => { setShowLinkModal(false); setLinkPassword(""); setLinkError(null); }}
+        >
+          <Pressable style={[styles.modalContent, { backgroundColor: theme.card }]} onPress={() => {}}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>Link Google Account</Text>
+              <Pressable onPress={() => { setShowLinkModal(false); setLinkPassword(""); setLinkError(null); }}>
+                <Feather name="x" size={24} color={theme.textMuted} />
+              </Pressable>
+            </View>
+
+            <View style={[styles.successIcon, { backgroundColor: theme.primary + "20", marginBottom: Spacing.md }]}>
+              <Feather name="link" size={28} color={theme.primary} />
+            </View>
+
+            <Text style={[styles.modalDesc, { color: theme.textSecondary, textAlign: "center" }]}>
+              An account already exists for{"\n"}
+              <Text style={{ fontWeight: "700", color: theme.text }}>{pendingGoogleParams?.email}</Text>
+              {"\n\n"}Enter your existing password to sign in and link your Google account.
+            </Text>
+
+            {linkError ? (
+              <View style={[styles.errorBox, { backgroundColor: "#fee2e2", borderColor: "#fca5a5", marginBottom: Spacing.md }]}>
+                <Text style={{ color: "#b91c1c", fontSize: 13, textAlign: "center" }}>{linkError}</Text>
+              </View>
+            ) : null}
+
+            <View style={[styles.inputContainer, { backgroundColor: theme.backgroundDefault, borderColor: theme.border, marginBottom: Spacing.sm }]}>
+              <Feather name="lock" size={20} color={theme.textMuted} style={styles.inputIcon} />
+              <TextInput
+                style={[styles.input, { color: theme.text }]}
+                placeholder="Your existing password"
+                placeholderTextColor={theme.textMuted}
+                value={linkPassword}
+                onChangeText={setLinkPassword}
+                secureTextEntry={!linkPasswordVisible}
+                autoCapitalize="none"
+                autoFocus
+                onSubmitEditing={handleLinkAccount}
+                returnKeyType="done"
+              />
+              <Pressable style={styles.eyeButton} onPress={() => setLinkPasswordVisible(v => !v)}>
+                <Feather name={linkPasswordVisible ? "eye-off" : "eye"} size={20} color={theme.textMuted} />
+              </Pressable>
+            </View>
+
+            <Pressable
+              style={[styles.modalButton, { backgroundColor: theme.primary, opacity: linkLoading || !linkPassword.trim() ? 0.7 : 1 }]}
+              onPress={handleLinkAccount}
+              disabled={linkLoading || !linkPassword.trim()}
+            >
+              {linkLoading ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <Text style={styles.modalButtonText}>Sign In and Link Google</Text>
+              )}
+            </Pressable>
+
+            <Pressable
+              style={[styles.secondaryButton]}
+              onPress={() => { setShowLinkModal(false); setLinkPassword(""); setLinkError(null); }}
+            >
+              <Text style={[styles.secondaryButtonText, { color: theme.textMuted, fontSize: 13 }]}>
+                Cancel — use email and password instead
+              </Text>
+            </Pressable>
           </Pressable>
         </Pressable>
       </Modal>

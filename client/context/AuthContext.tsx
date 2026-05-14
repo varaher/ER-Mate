@@ -19,7 +19,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (data: RegisterData) => Promise<{ success: boolean; error?: string }>;
-  googleSignIn: (params: { name: string; email: string; idToken?: string; accessToken?: string }) => Promise<{ success: boolean; error?: string }>;
+  googleSignIn: (params: { name: string; email: string; idToken?: string; accessToken?: string; password?: string }) => Promise<{ success: boolean; error?: string; accountExists?: boolean }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -117,7 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const googleSignIn = async (params: { name: string; email: string; idToken?: string; accessToken?: string }) => {
+  const googleSignIn = async (params: { name: string; email: string; idToken?: string; accessToken?: string; password?: string }) => {
     try {
       await AsyncStorage.removeItem("token");
       await AsyncStorage.removeItem("user");
@@ -133,15 +133,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (!response.ok) {
         let errorMsg = "Google sign-in failed";
+        let accountExists = false;
         try {
           const errData = JSON.parse(responseText);
           errorMsg = errData.error || errData.message || errorMsg;
+          if (errorMsg.toLowerCase().includes("already exists") || errorMsg.toLowerCase().includes("already registered")) {
+            accountExists = true;
+          }
         } catch {
           if (responseText.trim().startsWith("<")) {
             errorMsg = "Server is temporarily unavailable. Please try again in a moment.";
           }
         }
-        return { success: false, error: errorMsg };
+        return { success: false, error: errorMsg, accountExists };
       }
 
       let data: any;
