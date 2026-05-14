@@ -45,8 +45,8 @@ const FAQ_ITEMS = [
     answer: "From the Dashboard, find a completed/discharged case and tap the download icon. You can export as PDF or Word document. The export includes all case details including vitals, assessments, treatments, and disposition.",
   },
   {
-    question: "What is the AI Diagnosis feature?",
-    answer: "In the Treatment tab of a case sheet, you will find the AI Diagnosis panel. It analyzes the patient's clinical data and suggests differential diagnoses with confidence levels, citing medical literature references. You can provide feedback to help the AI improve.",
+    question: "What is the Clinical Decision Support feature?",
+    answer: "In the Treatment tab of a case sheet, you will find the Clinical Decision Support panel. It surfaces literature-referenced conditions to rule out based on the patient's clinical data, ranked by severity. This is a physician review tool and does not constitute a diagnosis — all clinical decisions remain with the treating physician. You can provide feedback to help improve the suggestions.",
   },
   {
     question: "How are pediatric patients handled?",

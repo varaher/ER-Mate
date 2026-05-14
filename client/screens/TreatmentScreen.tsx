@@ -206,7 +206,7 @@ export default function TreatmentScreen() {
           ) : (
             <>
               <Feather name="cpu" size={20} color={theme.primary} />
-              <Text style={[styles.aiBtnText, { color: theme.primary }]}>Get AI Diagnosis</Text>
+              <Text style={[styles.aiBtnText, { color: theme.primary }]}>Get Clinical Support</Text>
             </>
           )}
         </Pressable>

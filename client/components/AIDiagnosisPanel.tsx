@@ -360,7 +360,7 @@ export function AIDiagnosisPanel({
                   </View>
                   <View style={[styles.confidenceBadge, { backgroundColor: getConfidenceColor(suggestion.confidence) + "20" }]}>
                     <Text style={[styles.confidenceText, { color: getConfidenceColor(suggestion.confidence) }]}>
-                      {suggestion.confidence.toUpperCase()}
+                      {suggestion.confidence === "high" ? "CONSISTENT" : suggestion.confidence === "moderate" ? "POSSIBLE" : "LESS LIKELY"}
                     </Text>
                   </View>
                 </View>
@@ -445,15 +445,15 @@ export function AIDiagnosisPanel({
                     style={[styles.feedbackButton, styles.acceptButton]}
                     onPress={() => submitFeedback(suggestion.id, "accepted", suggestion.diagnosis)}
                   >
-                    <Feather name="thumbs-up" size={14} color="#22C55E" />
-                    <Text style={[styles.feedbackText, { color: "#22C55E" }]}>Accept</Text>
+                    <Feather name="plus-circle" size={14} color="#22C55E" />
+                    <Text style={[styles.feedbackText, { color: "#22C55E" }]}>Add to Case</Text>
                   </Pressable>
                   <Pressable
                     style={[styles.feedbackButton, styles.rejectButton]}
                     onPress={() => submitFeedback(suggestion.id, "rejected", suggestion.diagnosis)}
                   >
-                    <Feather name="thumbs-down" size={14} color="#EF4444" />
-                    <Text style={[styles.feedbackText, { color: "#EF4444" }]}>Reject</Text>
+                    <Feather name="x-circle" size={14} color="#EF4444" />
+                    <Text style={[styles.feedbackText, { color: "#EF4444" }]}>Exclude</Text>
                   </Pressable>
                 </>
               ) : (
@@ -464,7 +464,7 @@ export function AIDiagnosisPanel({
                     color={feedback === "accepted" ? "#22C55E" : "#EF4444"}
                   />
                   <Text style={[styles.feedbackGivenText, { color: feedback === "accepted" ? "#22C55E" : "#EF4444" }]}>
-                    {feedback === "accepted" ? "Accepted - added to diagnosis" : "Rejected"}
+                    {feedback === "accepted" ? "Added to working list" : "Excluded"}
                   </Text>
                 </View>
               )}
@@ -575,7 +575,7 @@ export function AIDiagnosisPanel({
       <View style={styles.header}>
         <View style={styles.titleRow}>
           <Feather name="cpu" size={20} color="#8B5CF6" />
-          <Text style={[styles.title, { color: theme.text }]}>AI Diagnosis Assistant</Text>
+          <Text style={[styles.title, { color: theme.text }]}>Clinical Decision Support</Text>
         </View>
         <Pressable
           style={[styles.analyzeButton, isLoading && styles.buttonDisabled]}
@@ -587,14 +587,21 @@ export function AIDiagnosisPanel({
           ) : (
             <>
               <Feather name="zap" size={16} color="#FFFFFF" />
-              <Text style={styles.analyzeButtonText}>Analyze</Text>
+              <Text style={styles.analyzeButtonText}>Review</Text>
             </>
           )}
         </Pressable>
       </View>
 
+      <View style={[styles.disclaimerBanner, { backgroundColor: "#8B5CF620", borderColor: "#8B5CF640" }]}>
+        <Feather name="shield" size={13} color="#8B5CF6" />
+        <Text style={[styles.disclaimerText, { color: "#8B5CF6" }]}>
+          For physician review only. These prompts do not constitute a diagnosis. All clinical decisions remain with the treating physician.
+        </Text>
+      </View>
+
       <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-        Evidence-based analysis with real-time medical literature search. Tap [citations] to view sources.
+        Literature-referenced prompts to support clinical reasoning. Tap [citations] to view sources.
       </Text>
 
       {isLoading ? (
@@ -621,7 +628,7 @@ export function AIDiagnosisPanel({
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
             <Feather name="list" size={16} color={theme.text} />
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>Provisional Diagnoses (Severity Ranked)</Text>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Conditions to Rule Out (Severity Ranked)</Text>
           </View>
           {suggestions.map((s, i) => renderSuggestion(s, i))}
         </View>
@@ -1005,6 +1012,21 @@ const styles = StyleSheet.create({
   sourceJournal: {
     fontSize: FontSizes.xs,
     marginTop: 1,
+  },
+  disclaimerBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 6,
+    padding: Spacing.sm,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginBottom: Spacing.xs,
+  },
+  disclaimerText: {
+    flex: 1,
+    fontSize: FontSizes.xs,
+    lineHeight: 16,
+    fontStyle: "italic",
   },
   emptyState: {
     alignItems: "center",

@@ -91,8 +91,8 @@ const STEPS: TutorialStep[] = [
     icon: "cpu",
     iconColor: "#F59E0B",
     iconBg: "#FEF3C7",
-    title: "AI Diagnosis",
-    description: "Get evidence-based differential diagnoses with medical literature citations.",
+    title: "Clinical Decision Support",
+    description: "Prompt your clinical reasoning with severity-ranked conditions to rule out, backed by medical literature citations.",
     tips: [
       "Found in the Treatment tab",
       "Cites PubMed, guidelines, and textbooks",

@@ -428,7 +428,7 @@ export default function UpgradeScreen() {
           {[
             "Smart Dictation (record & auto-fill)",
             "ABG AI Interpretation",
-            "Provisional AI Diagnosis",
+            "Clinical Decision Support",
             "AI Differential Reasoning Panel",
             "Generate Discharge Summary (AI)",
             "Course in Hospital AI Generation",
