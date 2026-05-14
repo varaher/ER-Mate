@@ -34,11 +34,38 @@ interface SubscriptionStatus {
   total_credits_used?: number;
 }
 
-const CREDIT_PACKS = [
-  { credits: 50, price: 499, popular: false },
-  { credits: 100, price: 899, popular: true },
-  { credits: 300, price: 2499, popular: false },
-];
+const PRICING = {
+  IN: {
+    symbol: "Rs.",
+    basePlan: 799,
+    basePlanLabel: "Rs. 799/month",
+    basePlanFreeLabel: "Rs. 799",
+    afterTrialLabel: "Then Rs. 799/month. Cancel anytime.",
+    termsLabel: "You will only be charged Rs. 799/month starting from the second month.",
+    creditPacks: [
+      { credits: 50, price: 499, priceLabel: "Rs. 499", perLabel: "Rs. 9.98/credit", popular: false },
+      { credits: 100, price: 899, priceLabel: "Rs. 899", perLabel: "Rs. 8.99/credit", popular: true },
+      { credits: 300, price: 2499, priceLabel: "Rs. 2,499", perLabel: "Rs. 8.33/credit", popular: false },
+    ],
+    ctaLabel: "Start Free Trial — Rs. 0 for 1st Month",
+    activePriceLabel: "Rs. 799",
+  },
+  INTL: {
+    symbol: "$",
+    basePlan: 14.99,
+    basePlanLabel: "$14.99/month",
+    basePlanFreeLabel: "$14.99",
+    afterTrialLabel: "Then $14.99/month. Cancel anytime.",
+    termsLabel: "You will only be charged $14.99/month starting from the second month.",
+    creditPacks: [
+      { credits: 50, price: 8.99, priceLabel: "$8.99", perLabel: "$0.18/credit", popular: false },
+      { credits: 100, price: 14.99, priceLabel: "$14.99", perLabel: "$0.15/credit", popular: true },
+      { credits: 300, price: 34.99, priceLabel: "$34.99", perLabel: "$0.12/credit", popular: false },
+    ],
+    ctaLabel: "Start Free Trial — $0 for 1st Month",
+    activePriceLabel: "$14.99",
+  },
+};
 
 export default function UpgradeScreen() {
   const navigation = useNavigation();
@@ -51,10 +78,25 @@ export default function UpgradeScreen() {
   const { lockReason, lockMessage } = route.params || {};
   const [subStatus, setSubStatus] = useState<SubscriptionStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isIndia, setIsIndia] = useState(true);
+  const [regionLoading, setRegionLoading] = useState(true);
 
   useEffect(() => {
+    detectRegion();
     fetchSubscriptionStatus();
   }, []);
+
+  const detectRegion = async () => {
+    try {
+      const res = await fetch("https://ipapi.co/json/");
+      const data = await res.json();
+      setIsIndia(data.country_code === "IN");
+    } catch {
+      setIsIndia(true);
+    } finally {
+      setRegionLoading(false);
+    }
+  };
 
   const fetchSubscriptionStatus = async () => {
     if (!user?.id) {
@@ -63,15 +105,27 @@ export default function UpgradeScreen() {
     }
     try {
       const baseUrl = getApiUrl();
-      const statusUrl = new URL(`/api/subscription/status?userId=${encodeURIComponent(user.id)}&userEmail=${encodeURIComponent(user.email || "")}`, baseUrl).href;
+      const statusUrl = new URL(
+        `/api/subscription/status?userId=${encodeURIComponent(user.id)}&userEmail=${encodeURIComponent(user.email || "")}`,
+        baseUrl
+      ).href;
       const res = await fetch(statusUrl);
       const text = await res.text();
       let data: any;
       try {
         data = JSON.parse(text);
       } catch {
-        console.warn("[UpgradeScreen] Subscription status returned non-JSON:", text.substring(0, 200));
-        data = { plan: "free", casesUsed: 0, casesLimit: 10, casesRemaining: 10, priceInr: 799, freeCaseLimit: 10, status: "active", currentPeriodEnd: null, credits_balance: 0 };
+        data = {
+          plan: "free",
+          casesUsed: 0,
+          casesLimit: 10,
+          casesRemaining: 10,
+          priceInr: 799,
+          freeCaseLimit: 10,
+          status: "active",
+          currentPeriodEnd: null,
+          credits_balance: 0,
+        };
       }
       setSubStatus(data);
     } catch (err) {
@@ -81,6 +135,7 @@ export default function UpgradeScreen() {
     }
   };
 
+  const pricing = isIndia ? PRICING.IN : PRICING.INTL;
   const isPremium = subStatus?.plan === "premium";
   const creditsBalance = subStatus?.credits_balance ?? 0;
   const casesUsed = subStatus?.casesUsed ?? 0;
@@ -90,15 +145,15 @@ export default function UpgradeScreen() {
   const handleUpgrade = () => {
     Alert.alert(
       "Start Free Trial",
-      "Get your first month FREE - no charges for 30 days!\n\nPayment integration is being set up. For early access, please contact support@ermate.app to activate your free trial.",
+      `Get your first month FREE — no charges for 30 days!\n\nPayment integration is being set up. For early access, please contact support@ermate.app to activate your free trial.`,
       [{ text: "OK" }]
     );
   };
 
-  const handleBuyCredits = (pack: typeof CREDIT_PACKS[0]) => {
+  const handleBuyCredits = (pack: typeof pricing.creditPacks[0]) => {
     Alert.alert(
       "Buy AI Credits",
-      `Purchase ${pack.credits} AI credits for Rs. ${pack.price}?\n\nPayment integration is being set up. Please contact support@ermate.app for credit purchases.`,
+      `Purchase ${pack.credits} AI credits for ${pack.priceLabel}?\n\nPayment integration is being set up. Please contact support@ermate.app for credit purchases.`,
       [{ text: "Cancel" }, { text: "OK" }]
     );
   };
@@ -111,7 +166,7 @@ export default function UpgradeScreen() {
     );
   };
 
-  if (loading) {
+  if (loading || regionLoading) {
     return (
       <View style={[styles.container, styles.center, { backgroundColor: theme.backgroundDefault }]}>
         <ActivityIndicator size="large" color={theme.primary} />
@@ -140,14 +195,24 @@ export default function UpgradeScreen() {
           </View>
         ) : null}
 
-        <Text style={[styles.heading, { color: theme.text }]}>
-          {isPremium ? "Your Base Plan" : "Upgrade to Base Plan"}
-        </Text>
-        <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-          {isPremium
-            ? "Unlimited EMR with AI-powered features"
-            : "Get unlimited EMR and 20 AI credits every month"}
-        </Text>
+        <View style={styles.headingRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.heading, { color: theme.text }]}>
+              {isPremium ? "Your Base Plan" : "Upgrade to Base Plan"}
+            </Text>
+            <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
+              {isPremium
+                ? "Unlimited EMR with AI-powered features"
+                : "Get unlimited EMR and 20 AI credits every month"}
+            </Text>
+          </View>
+          <View style={[styles.regionBadge, { backgroundColor: isIndia ? "#ecfdf5" : "#eff6ff" }]}>
+            <Text style={[styles.regionFlag]}>{isIndia ? "IN" : "INTL"}</Text>
+            <Text style={[styles.regionCurrency, { color: isIndia ? "#047857" : "#1d4ed8" }]}>
+              {isIndia ? "INR" : "USD"}
+            </Text>
+          </View>
+        </View>
 
         {!isPremium ? (
           <View style={[styles.freeTrialBanner, { backgroundColor: "#ecfdf5", borderColor: TriageColors.green }]}>
@@ -174,7 +239,7 @@ export default function UpgradeScreen() {
             {creditsBalance > 0 && creditsBalance <= 10 ? (
               <View style={[styles.creditWarning, { backgroundColor: "#fef3c7" }]}>
                 <Feather name="alert-triangle" size={14} color="#d97706" />
-                <Text style={styles.creditWarningText}>Low credits - consider buying more</Text>
+                <Text style={styles.creditWarningText}>Low credits — consider buying more</Text>
               </View>
             ) : null}
             {creditsBalance === 0 ? (
@@ -203,7 +268,7 @@ export default function UpgradeScreen() {
                     styles.usageBarFill,
                     {
                       backgroundColor: casesRemaining === 0 ? TriageColors.red : theme.primary,
-                      width: `${Math.min(100, (casesUsed / casesLimit) * 100)}%`,
+                      width: `${Math.min(100, (casesUsed / casesLimit) * 100)}%` as any,
                     },
                   ]}
                 />
@@ -211,9 +276,7 @@ export default function UpgradeScreen() {
             </View>
             <Text style={[styles.usageText, { color: theme.textSecondary }]}>
               {casesUsed} of {casesLimit} free cases used
-              {casesRemaining !== null && casesRemaining > 0
-                ? ` (${casesRemaining} remaining)`
-                : ""}
+              {casesRemaining !== null && casesRemaining > 0 ? ` (${casesRemaining} remaining)` : ""}
             </Text>
             {casesRemaining === 0 ? (
               <Text style={[styles.usageWarning, { color: TriageColors.red }]}>
@@ -227,7 +290,9 @@ export default function UpgradeScreen() {
           <View style={[styles.planCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <Text style={[styles.planLabel, { color: theme.textSecondary }]}>FREE</Text>
             <View style={styles.priceRow}>
-              <Text style={[styles.priceAmount, { color: theme.text }]}>Rs. 0</Text>
+              <Text style={[styles.priceAmount, { color: theme.text }]}>
+                {isIndia ? "Rs. 0" : "$0"}
+              </Text>
             </View>
             <View style={styles.featuresList}>
               {[
@@ -244,9 +309,7 @@ export default function UpgradeScreen() {
               ))}
             </View>
             <View style={[styles.currentBadge, { backgroundColor: theme.backgroundDefault }]}>
-              <Text style={[styles.currentBadgeText, { color: theme.textSecondary }]}>
-                CURRENT PLAN
-              </Text>
+              <Text style={[styles.currentBadgeText, { color: theme.textSecondary }]}>CURRENT PLAN</Text>
             </View>
           </View>
         ) : null}
@@ -270,20 +333,24 @@ export default function UpgradeScreen() {
           <View style={styles.priceRow}>
             {!isPremium ? (
               <>
-                <Text style={[styles.priceStrikethrough, { color: theme.textMuted }]}>Rs. 799</Text>
+                <Text style={[styles.priceStrikethrough, { color: theme.textMuted }]}>
+                  {pricing.basePlanFreeLabel}
+                </Text>
                 <Text style={[styles.priceAmount, { color: TriageColors.green }]}>FREE</Text>
                 <Text style={[styles.pricePeriod, { color: theme.textSecondary }]}>for 1st month</Text>
               </>
             ) : (
               <>
-                <Text style={[styles.priceAmount, { color: theme.primary }]}>Rs. 799</Text>
+                <Text style={[styles.priceAmount, { color: theme.primary }]}>
+                  {pricing.activePriceLabel}
+                </Text>
                 <Text style={[styles.pricePeriod, { color: theme.textSecondary }]}>/month</Text>
               </>
             )}
           </View>
           {!isPremium ? (
             <Text style={[styles.priceAfterTrial, { color: theme.textSecondary }]}>
-              Then Rs. 799/month. Cancel anytime.
+              {pricing.afterTrialLabel}
             </Text>
           ) : null}
           <View style={styles.featuresList}>
@@ -299,18 +366,18 @@ export default function UpgradeScreen() {
               "Document scanning",
               "Pediatric drug calculator",
               "Priority support",
-            ].filter(Boolean).map((feature, i) => (
-              <View key={i} style={styles.featureRow}>
-                <Feather name="check" size={16} color={theme.primary} />
-                <Text style={[styles.featureText, { color: theme.text }]}>{feature}</Text>
-              </View>
-            ))}
+            ]
+              .filter(Boolean)
+              .map((feature, i) => (
+                <View key={i} style={styles.featureRow}>
+                  <Feather name="check" size={16} color={theme.primary} />
+                  <Text style={[styles.featureText, { color: theme.text }]}>{feature}</Text>
+                </View>
+              ))}
           </View>
           {isPremium ? (
             <View style={[styles.currentBadge, { backgroundColor: TriageColors.green + "20" }]}>
-              <Text style={[styles.currentBadgeText, { color: TriageColors.green }]}>
-                ACTIVE PLAN
-              </Text>
+              <Text style={[styles.currentBadgeText, { color: TriageColors.green }]}>ACTIVE PLAN</Text>
             </View>
           ) : null}
         </View>
@@ -321,9 +388,8 @@ export default function UpgradeScreen() {
             <Text style={[styles.sectionSubtext, { color: theme.textSecondary }]}>
               Credits are added instantly and never expire
             </Text>
-
             <View style={styles.packsContainer}>
-              {CREDIT_PACKS.map((pack, i) => (
+              {pricing.creditPacks.map((pack, i) => (
                 <Pressable
                   key={i}
                   style={({ pressed }) => [
@@ -344,10 +410,8 @@ export default function UpgradeScreen() {
                   ) : null}
                   <Text style={[styles.packCredits, { color: theme.text }]}>{pack.credits}</Text>
                   <Text style={[styles.packLabel, { color: theme.textSecondary }]}>Credits</Text>
-                  <Text style={[styles.packPrice, { color: theme.primary }]}>Rs. {pack.price}</Text>
-                  <Text style={[styles.packPer, { color: theme.textMuted }]}>
-                    Rs. {(pack.price / pack.credits).toFixed(1)}/credit
-                  </Text>
+                  <Text style={[styles.packPrice, { color: theme.primary }]}>{pack.priceLabel}</Text>
+                  <Text style={[styles.packPer, { color: theme.textMuted }]}>{pack.perLabel}</Text>
                 </Pressable>
               ))}
             </View>
@@ -356,7 +420,9 @@ export default function UpgradeScreen() {
 
         <View style={[styles.creditInfoCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
           <Text style={[styles.creditInfoTitle, { color: theme.text }]}>How AI Credits Work</Text>
-          <Text style={[styles.creditInfoSubtitle, { color: theme.primary }]}>Every AI action = 1 Credit. Simple.</Text>
+          <Text style={[styles.creditInfoSubtitle, { color: theme.primary }]}>
+            Every AI action = 1 Credit. Simple.
+          </Text>
 
           <Text style={[styles.creditSectionLabel, { color: theme.text }]}>Uses 1 Credit Each:</Text>
           {[
@@ -398,15 +464,21 @@ export default function UpgradeScreen() {
 
           <View style={styles.creditInfoRow}>
             <Feather name="refresh-cw" size={14} color={theme.primary} />
-            <Text style={[styles.creditInfoText, { color: theme.textSecondary }]}>+20 credits added every month with active subscription</Text>
+            <Text style={[styles.creditInfoText, { color: theme.textSecondary }]}>
+              +20 credits added every month with active subscription
+            </Text>
           </View>
           <View style={styles.creditInfoRow}>
             <Feather name="clock" size={14} color={theme.primary} />
-            <Text style={[styles.creditInfoText, { color: theme.textSecondary }]}>Unused credits roll over forever - they never expire</Text>
+            <Text style={[styles.creditInfoText, { color: theme.textSecondary }]}>
+              Unused credits roll over forever — they never expire
+            </Text>
           </View>
           <View style={styles.creditInfoRow}>
             <Feather name="shield" size={14} color={theme.primary} />
-            <Text style={[styles.creditInfoText, { color: theme.textSecondary }]}>Credits usable only while subscription is active</Text>
+            <Text style={[styles.creditInfoText, { color: theme.textSecondary }]}>
+              Credits usable only while subscription is active
+            </Text>
           </View>
         </View>
 
@@ -429,14 +501,14 @@ export default function UpgradeScreen() {
             onPress={handleUpgrade}
           >
             <Feather name="gift" size={20} color="#FFFFFF" />
-            <Text style={styles.upgradeBtnText}>Start Free Trial - Rs. 0 for 1st Month</Text>
+            <Text style={styles.upgradeBtnText}>{pricing.ctaLabel}</Text>
           </Pressable>
         )}
 
         <Text style={[styles.terms, { color: theme.textMuted }]}>
           {isPremium
             ? "By subscribing, you agree to our Terms of Service and Privacy Policy. Cancel anytime. Credits remain stored if subscription is paused."
-            : "First month is completely free. You will only be charged Rs. 799/month starting from the second month. Cancel anytime during the trial at no cost."}
+            : `First month is completely free. ${pricing.termsLabel} Cancel anytime during the trial at no cost.`}
         </Text>
       </ScrollView>
     </View>
@@ -458,8 +530,24 @@ const styles = StyleSheet.create({
   lockText: { flex: 1 },
   lockTitle: { ...Typography.bodyMedium },
   lockMessage: { ...Typography.small, marginTop: Spacing.xs },
+  headingRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: Spacing.md,
+    gap: Spacing.md,
+  },
   heading: { ...Typography.h2, marginBottom: Spacing.xs },
-  subtitle: { ...Typography.body, marginBottom: Spacing.md },
+  subtitle: { ...Typography.body },
+  regionBadge: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+    minWidth: 48,
+    marginTop: 4,
+  },
+  regionFlag: { fontSize: 11, fontWeight: "700", color: "#374151" },
+  regionCurrency: { fontSize: 10, fontWeight: "600", marginTop: 1 },
   freeTrialBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -485,7 +573,11 @@ const styles = StyleSheet.create({
     textDecorationLine: "line-through",
     marginRight: Spacing.sm,
   },
-  priceAfterTrial: { ...Typography.small, marginBottom: Spacing.md, marginTop: -Spacing.xs },
+  priceAfterTrial: {
+    ...Typography.small,
+    marginBottom: Spacing.md,
+    marginTop: -Spacing.xs,
+  },
   creditsCard: {
     padding: Spacing.lg,
     borderRadius: BorderRadius.lg,
@@ -527,15 +619,8 @@ const styles = StyleSheet.create({
   },
   usageTitle: { ...Typography.bodyMedium },
   usageBarContainer: { marginBottom: Spacing.sm },
-  usageBarBg: {
-    height: 8,
-    borderRadius: 4,
-    overflow: "hidden",
-  },
-  usageBarFill: {
-    height: "100%",
-    borderRadius: 4,
-  },
+  usageBarBg: { height: 8, borderRadius: 4, overflow: "hidden" },
+  usageBarFill: { height: "100%", borderRadius: 4 },
   usageText: { ...Typography.small },
   usageWarning: { ...Typography.small, marginTop: Spacing.xs, fontWeight: "600" },
   planCard: {
@@ -546,7 +631,12 @@ const styles = StyleSheet.create({
     position: "relative",
     overflow: "hidden",
   },
-  planLabel: { ...Typography.caption, fontWeight: "700", letterSpacing: 1, marginBottom: Spacing.xs },
+  planLabel: {
+    ...Typography.caption,
+    fontWeight: "700",
+    letterSpacing: 1,
+    marginBottom: Spacing.xs,
+  },
   priceRow: { flexDirection: "row", alignItems: "baseline", marginBottom: Spacing.md },
   priceAmount: { fontSize: 32, fontWeight: "700" },
   pricePeriod: { ...Typography.body, marginLeft: Spacing.xs },
@@ -572,11 +662,7 @@ const styles = StyleSheet.create({
   currentBadgeText: { fontSize: 11, fontWeight: "700", letterSpacing: 0.5 },
   sectionHeading: { ...Typography.h3, marginTop: Spacing.lg, marginBottom: Spacing.xs },
   sectionSubtext: { ...Typography.small, marginBottom: Spacing.md },
-  packsContainer: {
-    flexDirection: "row",
-    gap: Spacing.sm,
-    marginBottom: Spacing.lg,
-  },
+  packsContainer: { flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.md },
   packCard: {
     flex: 1,
     padding: Spacing.md,
@@ -590,48 +676,52 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    paddingVertical: 2,
+    paddingVertical: 3,
     alignItems: "center",
   },
-  popularText: { color: "#FFFFFF", fontSize: 8, fontWeight: "800", letterSpacing: 0.5 },
-  packCredits: { fontSize: 28, fontWeight: "800", marginTop: Spacing.md },
-  packLabel: { fontSize: 11, fontWeight: "600", marginBottom: Spacing.sm },
+  popularText: { color: "#FFFFFF", fontSize: 9, fontWeight: "700" },
+  packCredits: { fontSize: 28, fontWeight: "800", marginTop: Spacing.lg },
+  packLabel: { ...Typography.caption, marginBottom: Spacing.xs },
   packPrice: { fontSize: 16, fontWeight: "700" },
-  packPer: { fontSize: 10, marginTop: 2 },
+  packPer: { ...Typography.caption, textAlign: "center", marginTop: 2 },
   creditInfoCard: {
     padding: Spacing.lg,
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
-    marginBottom: Spacing.md,
-    gap: Spacing.md,
+    marginBottom: Spacing.lg,
   },
-  creditInfoTitle: { ...Typography.bodyMedium, marginBottom: 0 },
-  creditInfoSubtitle: { fontSize: 13, fontWeight: "700", marginBottom: Spacing.md },
-  creditSectionLabel: { fontSize: 13, fontWeight: "700", marginBottom: Spacing.xs },
-  creditDivider: { height: 1, marginVertical: Spacing.xs },
+  creditInfoTitle: { ...Typography.h4, marginBottom: Spacing.xs },
+  creditInfoSubtitle: { ...Typography.bodyMedium, marginBottom: Spacing.md },
+  creditSectionLabel: { ...Typography.label, marginBottom: Spacing.sm },
   creditInfoRow: {
     flexDirection: "row",
     alignItems: "flex-start",
     gap: Spacing.sm,
+    marginBottom: Spacing.sm,
   },
   creditInfoText: { ...Typography.small, flex: 1 },
+  creditDivider: { height: 1, marginVertical: Spacing.md },
   upgradeBtn: {
-    height: Spacing.buttonHeight,
-    borderRadius: BorderRadius.md,
-    justifyContent: "center",
-    alignItems: "center",
     flexDirection: "row",
-    gap: Spacing.sm,
-    marginTop: Spacing.lg,
-  },
-  upgradeBtnText: { color: "#FFFFFF", ...Typography.h4 },
-  manageBtn: {
-    height: Spacing.buttonHeight,
-    borderRadius: BorderRadius.md,
-    justifyContent: "center",
     alignItems: "center",
-    marginTop: Spacing.lg,
+    justifyContent: "center",
+    gap: Spacing.sm,
+    paddingVertical: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    marginBottom: Spacing.md,
   },
-  manageBtnText: { ...Typography.bodyMedium },
-  terms: { ...Typography.caption, textAlign: "center", marginTop: Spacing.lg },
+  upgradeBtnText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  manageBtn: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    marginBottom: Spacing.md,
+  },
+  manageBtnText: { fontSize: 16, fontWeight: "600" },
+  terms: { ...Typography.caption, textAlign: "center", paddingHorizontal: Spacing.md },
 });
