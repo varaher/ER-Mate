@@ -8,7 +8,7 @@ export function getApiUrl(): string {
     host = "er-mate.replit.app";
   }
 
-  if (Platform.OS === "web" && !host.includes(':')) {
+  if (Platform.OS === "web" && !host.includes(':') && (host.includes('localhost') || host.includes('127.0.0.1'))) {
     host = `${host}:5000`;
   }
   
