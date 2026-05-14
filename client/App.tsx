@@ -6,6 +6,8 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
+import * as Font from "expo-font";
+import { Feather, MaterialIcons, MaterialCommunityIcons, Ionicons, FontAwesome } from "@expo/vector-icons";
 
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/lib/query-client";
@@ -20,6 +22,14 @@ if (Platform.OS !== "web") {
 }
 
 export default function App() {
+  const [fontsLoaded] = Font.useFonts({
+    ...Feather.font,
+    ...MaterialIcons.font,
+    ...MaterialCommunityIcons.font,
+    ...Ionicons.font,
+    ...FontAwesome.font,
+  });
+
   useEffect(() => {
     if (Platform.OS !== "web") {
       SplashScreen.hideAsync().catch(() => {});

@@ -85,6 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (res.success && res.data) {
         const { access_token, user: userData } = res.data;
         console.log("[AuthContext] Got new token, length:", access_token?.length);
+        queryClient.clear();
         await AsyncStorage.setItem("token", access_token);
         await AsyncStorage.setItem("user", JSON.stringify(userData));
         setToken(access_token);
@@ -104,6 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (res.success && res.data) {
         const { access_token, user: userData } = res.data;
+        queryClient.clear();
         await AsyncStorage.setItem("token", access_token);
         await AsyncStorage.setItem("user", JSON.stringify(userData));
         setToken(access_token);
@@ -155,6 +157,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, error: "Server returned an unexpected response. Please try again." };
       }
 
+      queryClient.clear();
       const { access_token, user: userData } = data;
 
       if (access_token && userData) {

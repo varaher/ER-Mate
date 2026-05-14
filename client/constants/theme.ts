@@ -1,8 +1,8 @@
 import { Platform } from "react-native";
 
 // ErMate Medical Theme - Emergency Room EMR
-const tintColorLight = "#2563eb";
-const tintColorDark = "#3b82f6";
+const tintColorLight = "#10b981";
+const tintColorDark = "#34d399";
 
 export const Colors = {
   light: {
@@ -12,22 +12,22 @@ export const Colors = {
     buttonText: "#FFFFFF",
     tabIconDefault: "#64748b",
     tabIconSelected: tintColorLight,
-    link: "#2563eb",
+    link: "#10b981",
     backgroundRoot: "#FFFFFF",
     backgroundDefault: "#f8fafc",
     backgroundSecondary: "#f1f5f9",
     backgroundTertiary: "#e2e8f0",
-    primary: "#2563eb",
-    primaryDark: "#1e40af",
-    primaryLight: "#eff6ff",
+    primary: "#10b981",
+    primaryDark: "#059669",
+    primaryLight: "#ecfdf5",
     success: "#22c55e",
     successLight: "#f0fdf4",
     warning: "#f97316",
     warningLight: "#fff7ed",
     danger: "#dc2626",
     dangerLight: "#fef2f2",
-    info: "#3b82f6",
-    infoLight: "#eff6ff",
+    info: "#0ea5e9",
+    infoLight: "#f0f9ff",
     border: "#e2e8f0",
     borderLight: "#f1f5f9",
     card: "#FFFFFF",
@@ -40,22 +40,22 @@ export const Colors = {
     buttonText: "#FFFFFF",
     tabIconDefault: "#64748b",
     tabIconSelected: tintColorDark,
-    link: "#3b82f6",
+    link: "#34d399",
     backgroundRoot: "#0f172a",
     backgroundDefault: "#1e293b",
     backgroundSecondary: "#334155",
     backgroundTertiary: "#475569",
-    primary: "#3b82f6",
-    primaryDark: "#2563eb",
-    primaryLight: "#1e3a5f",
+    primary: "#34d399",
+    primaryDark: "#10b981",
+    primaryLight: "#064e3b",
     success: "#22c55e",
     successLight: "#14532d",
     warning: "#f97316",
     warningLight: "#7c2d12",
     danger: "#ef4444",
     dangerLight: "#7f1d1d",
-    info: "#3b82f6",
-    infoLight: "#1e3a5f",
+    info: "#38bdf8",
+    infoLight: "#0c4a6e",
     border: "#334155",
     borderLight: "#1e293b",
     card: "#1e293b",

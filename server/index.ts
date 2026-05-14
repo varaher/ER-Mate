@@ -243,6 +243,24 @@ function configureExpoAndLanding(app: express.Application) {
     }
   });
 
+  // Serve Expo asset requests that use ?unstable_path query param (e.g. vector icon fonts)
+  app.get("/assets/", (req: Request, res: Response, next: NextFunction) => {
+    const unstablePath = req.query.unstable_path as string | undefined;
+    if (!unstablePath) return next();
+
+    // Resolve relative to project root, prevent directory traversal
+    const resolved = path.resolve(process.cwd(), unstablePath.replace(/^\.\//, ""));
+    const cwd = path.resolve(process.cwd());
+    if (!resolved.startsWith(cwd)) {
+      return res.status(403).send("Forbidden");
+    }
+
+    if (fs.existsSync(resolved)) {
+      return res.sendFile(resolved);
+    }
+    next();
+  });
+
   app.use("/assets", express.static(path.resolve(process.cwd(), "assets")));
   app.use(express.static(path.resolve(process.cwd(), "static-build")));
   app.use(express.static(path.resolve(process.cwd(), "static-build/web")));
