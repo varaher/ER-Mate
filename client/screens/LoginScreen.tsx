@@ -65,8 +65,24 @@ export default function LoginScreen() {
     if (!hash) return;
     const params = new URLSearchParams(hash);
     const accessToken = params.get("access_token");
+    const googleErrorParam = params.get("error");
+    const errorDescription = params.get("error_description");
     const savedState = sessionStorage.getItem("google_oauth_state");
     const returnedState = params.get("state");
+
+    // Google returned an error (e.g. redirect_uri_mismatch, access_denied)
+    if (googleErrorParam) {
+      window.history.replaceState(null, "", window.location.pathname);
+      sessionStorage.removeItem("google_oauth_state");
+      const msg = errorDescription
+        ? decodeURIComponent(errorDescription.replace(/\+/g, " "))
+        : googleErrorParam === "access_denied"
+        ? "Sign-in was cancelled."
+        : `Google sign-in error: ${googleErrorParam}`;
+      setGoogleError(msg);
+      return;
+    }
+
     if (!accessToken) return;
     if (savedState && returnedState && savedState !== returnedState) {
       setGoogleError("Sign-in failed: security state mismatch. Please try again.");

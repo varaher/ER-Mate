@@ -590,7 +590,7 @@ function createWebPWAFiles(baseUrl) {
     JSON.stringify(manifest, null, 2)
   );
 
-  const sw = `const CACHE = 'ermate-pwa-v1';
+  const sw = `const CACHE = 'ermate-pwa-v2';
 const PRECACHE = ['/web/bundle.js', '/assets/images/icon.png', '/assets/images/favicon.png'];
 
 self.addEventListener('install', event => {
