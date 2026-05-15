@@ -30,7 +30,7 @@ import { AIDiagnosisPanel } from "@/components/AIDiagnosisPanel";
 import SmartDictation, { SmartDictationExtracted } from "@/components/SmartDictation";
 import { useTheme } from "@/hooks/useTheme";
 import { useCase } from "@/context/CaseContext";
-import { apiGet, apiPatch, apiPut, apiUpload, invalidateCases } from "@/lib/api";
+import { apiGet, apiPatch, apiPut, apiUpload, invalidateCases, saveClinicalDataToServer } from "@/lib/api";
 import { getApiUrl } from "@/lib/query-client";
 import { cacheCasePayload } from "@/lib/caseCache";
 import { recordCaseTime, getTimeSavedMinutes } from "@/hooks/useCaseTimer";
@@ -1232,6 +1232,7 @@ export default function CaseSheetScreen() {
       const res = await apiPut(`/cases/${caseId}`, payload);
       console.log("Commit response:", res.success, res.error || "");
       if (res.success) {
+        saveClinicalDataToServer(caseId, payload).catch(() => {});
         await invalidateCases();
         const effectiveDraftId = currentDraftId || localDraftIdRef.current;
         if (effectiveDraftId) {

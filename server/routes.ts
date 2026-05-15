@@ -239,6 +239,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/proxy/clinical-data/:caseId", async (req: Request, res: Response) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader) return res.status(401).json({ error: "No auth token" });
+      const token = authHeader.replace(/^Bearer\s+/i, "");
+      const jwtPayload = decodeJwt(token);
+      if (!jwtPayload) return res.status(401).json({ error: "Invalid token" });
+      const userId = jwtPayload.sub || jwtPayload.id || jwtPayload.user_id || jwtPayload.email;
+      if (!userId) return res.status(401).json({ error: "Cannot identify user" });
+
+      const { caseId } = req.params;
+      const payload = req.body;
+      const db = getDb();
+      if (!db) return res.status(503).json({ error: "Database unavailable" });
+
+      const { caseClinicalData } = await import("@shared/schema");
+      const { sql: drizzleSqlFn } = await import("drizzle-orm");
+      await db.insert(caseClinicalData).values({
+        caseId,
+        userId,
+        payload,
+      }).onConflictDoUpdate({
+        target: [caseClinicalData.caseId, caseClinicalData.userId],
+        set: {
+          payload,
+          updatedAt: drizzleSqlFn`CURRENT_TIMESTAMP`,
+        },
+      });
+
+      console.log(`[CLINICAL] Saved clinical data for case ${caseId} user ${userId}`);
+      return res.json({ success: true });
+    } catch (err: any) {
+      console.error("[CLINICAL] POST error:", err);
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/proxy/clinical-data/:caseId", async (req: Request, res: Response) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader) return res.status(401).json({ error: "No auth token" });
+      const token = authHeader.replace(/^Bearer\s+/i, "");
+      const jwtPayload = decodeJwt(token);
+      if (!jwtPayload) return res.status(401).json({ error: "Invalid token" });
+      const userId = jwtPayload.sub || jwtPayload.id || jwtPayload.user_id || jwtPayload.email;
+      if (!userId) return res.status(401).json({ error: "Cannot identify user" });
+
+      const { caseId } = req.params;
+      const db = getDb();
+      if (!db) return res.status(503).json({ error: "Database unavailable" });
+
+      const { caseClinicalData } = await import("@shared/schema");
+      const { eq, and } = await import("drizzle-orm");
+      const rows = await db.select().from(caseClinicalData)
+        .where(and(eq(caseClinicalData.caseId, caseId), eq(caseClinicalData.userId, userId)))
+        .limit(1);
+
+      if (rows.length === 0) return res.json({ found: false });
+      return res.json({ found: true, payload: rows[0].payload, updatedAt: rows[0].updatedAt });
+    } catch (err: any) {
+      console.error("[CLINICAL] GET error:", err);
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post("/api/auth/generate-link-code", async (req: Request, res: Response) => {
     try {
       const { userId, userEmail, userName, token } = req.body;

@@ -315,4 +315,40 @@ export async function deleteCaseFromProxy(caseId: string): Promise<void> {
   }
 }
 
+export async function saveClinicalDataToServer(caseId: string, payload: any): Promise<void> {
+  try {
+    const token = await getToken();
+    const proxyUrl = new URL(`/api/proxy/clinical-data/${caseId}`, getApiUrl()).href;
+    await fetch(proxyUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch (err) {
+    console.warn("[API] saveClinicalDataToServer failed (non-blocking):", err);
+  }
+}
+
+export async function getClinicalDataFromServer(caseId: string): Promise<any | null> {
+  try {
+    const token = await getToken();
+    const proxyUrl = new URL(`/api/proxy/clinical-data/${caseId}`, getApiUrl()).href;
+    const res = await fetch(proxyUrl, {
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.found ? data.payload : null;
+  } catch (err) {
+    console.warn("[API] getClinicalDataFromServer failed:", err);
+    return null;
+  }
+}
+
 export { getExternalApiUrl };

@@ -13,7 +13,7 @@ import { CollapsibleSection } from "@/components/CollapsibleSection";
 import SmartDictation, { SmartDictationExtracted } from "@/components/SmartDictation";
 import { AIDiagnosisPanel } from "@/components/AIDiagnosisPanel";
 import { useTheme } from "@/hooks/useTheme";
-import { apiGet, apiPatch, apiPut, invalidateCases } from "@/lib/api";
+import { apiGet, apiPatch, apiPut, invalidateCases, saveClinicalDataToServer } from "@/lib/api";
 import { getApiUrl } from "@/lib/query-client";
 import { cacheCasePayload } from "@/lib/caseCache";
 import { useCase } from "@/context/CaseContext";
@@ -740,6 +740,7 @@ export default function PediatricCaseSheetScreen() {
       const res = await apiPut(`/cases/${caseId}`, payload);
       console.log("Pediatric commit response:", res);
       if (res && res.success !== false) {
+        saveClinicalDataToServer(caseId, payload).catch(() => {});
         await invalidateCases();
         const effectiveDraftId = currentDraftId || localDraftIdRef.current;
         if (effectiveDraftId) {

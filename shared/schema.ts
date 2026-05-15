@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, serial, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, serial, integer, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -133,3 +133,19 @@ export const insertUserFeedbackSchema = createInsertSchema(userFeedback).omit({
 
 export type UserFeedbackRecord = typeof userFeedback.$inferSelect;
 export type InsertUserFeedback = z.infer<typeof insertUserFeedbackSchema>;
+
+export const caseClinicalData = pgTable("case_clinical_data", {
+  id: serial("id").primaryKey(),
+  caseId: text("case_id").notNull(),
+  userId: text("user_id").notNull(),
+  payload: jsonb("payload").notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertCaseClinicalDataSchema = createInsertSchema(caseClinicalData).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export type CaseClinicalDataRecord = typeof caseClinicalData.$inferSelect;
+export type InsertCaseClinicalData = z.infer<typeof insertCaseClinicalDataSchema>;

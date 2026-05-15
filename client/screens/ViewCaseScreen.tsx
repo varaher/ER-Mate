@@ -15,7 +15,7 @@ import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
-import { apiGet, apiPut } from "@/lib/api";
+import { apiGet, apiPut, getClinicalDataFromServer } from "@/lib/api";
 import { getCachedCaseData, mergeCaseWithCache } from "@/lib/caseCache";
 import { isPediatric } from "@/lib/pediatricVitals";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
@@ -84,30 +84,39 @@ export default function ViewCaseScreen() {
   const loadCaseData = async () => {
     try {
       setLoading(true);
-      const cached = await getCachedCaseData(caseId);
-      const res = await apiGet<any>(`/cases/${caseId}`);
+      const [cached, serverClinical, res] = await Promise.all([
+        getCachedCaseData(caseId),
+        getClinicalDataFromServer(caseId),
+        apiGet<any>(`/cases/${caseId}`),
+      ]);
       
       let mergedData: any = null;
       
       if (res.success && res.data) {
         mergedData = res.data;
-        if (cached) {
+        if (serverClinical) {
+          console.log("ViewCaseScreen: merging with server clinical data");
+          mergedData = mergeCaseWithCache(res.data, serverClinical);
+        } else if (cached) {
           console.log("ViewCaseScreen: merging with local cache");
           mergedData = mergeCaseWithCache(res.data, cached);
         }
-      } else if (cached) {
-        console.log("ViewCaseScreen: backend failed, using local cache only");
-        mergedData = {
-          id: caseId,
-          history: cached.history || {},
-          primary_assessment: cached.primary_assessment || {},
-          examination: cached.examination || {},
-          treatment: cached.treatment || {},
-          investigations: cached.investigations || {},
-          procedures: cached.procedures || {},
-          discharge_summary: cached.discharge_summary || {},
-          addendum_notes: cached.addendum_notes || [],
-        };
+      } else {
+        const fallback = serverClinical || cached;
+        if (fallback) {
+          console.log("ViewCaseScreen: backend failed, using", serverClinical ? "server clinical data" : "local cache");
+          mergedData = {
+            id: caseId,
+            history: fallback.history || {},
+            primary_assessment: fallback.primary_assessment || {},
+            examination: fallback.examination || {},
+            treatment: fallback.treatment || {},
+            investigations: fallback.investigations || {},
+            procedures: fallback.procedures || {},
+            discharge_summary: fallback.discharge_summary || {},
+            addendum_notes: fallback.addendum_notes || [],
+          };
+        }
       }
 
       if (mergedData) {
