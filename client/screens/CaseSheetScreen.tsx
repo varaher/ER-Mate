@@ -1899,10 +1899,7 @@ export default function CaseSheetScreen() {
     } else {
       const success = await commitToBackend();
       if (success) {
-        navigation.reset({
-          index: 0,
-          routes: [{ name: "Main", params: { screen: "DashboardTab" } }],
-        });
+        navigation.navigate("Main", { screen: "DashboardTab" });
       }
     }
   };
@@ -3357,7 +3354,7 @@ export default function CaseSheetScreen() {
               <Feather name="file-text" size={18} color="#FFFFFF" />
               <Text style={styles.generateSummaryBtnText}>Generate Discharge Summary</Text>
             </Pressable>
-            <Pressable style={[styles.saveDashboardBtn, { borderColor: theme.primary }]} onPress={async () => { const success = await commitToBackend(); if (success) navigation.reset({ index: 0, routes: [{ name: "Main", params: { screen: "DashboardTab" } }] }); }}>
+            <Pressable style={[styles.saveDashboardBtn, { borderColor: theme.primary }]} onPress={async () => { const success = await commitToBackend(); if (success) navigation.navigate("Main", { screen: "DashboardTab" }); }}>
               <Feather name="home" size={18} color={theme.primary} />
               <Text style={[styles.saveDashboardBtnText, { color: theme.primary }]}>Save & Go to Dashboard</Text>
             </Pressable>
