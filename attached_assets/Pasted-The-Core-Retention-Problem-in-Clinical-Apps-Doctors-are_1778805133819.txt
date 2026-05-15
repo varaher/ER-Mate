@@ -1,0 +1,25 @@
+The Core Retention Problem in Clinical Apps
+Doctors are busy, skeptical, and creatures of habit. If ErMate doesn't save time visibly in the first session, they won't return. So retention starts at onboarding, not after.
+Layer 1 — Hook Them Fast (Days 1-7)
+Onboarding should feel like a first shift — walk them through one complete patient case as a demo, not a feature tour
+Show them the time saved immediately — "This case sheet took 4 minutes. Average paper documentation: 18 minutes." Real numbers, their own session
+First voice transcription moment needs to be wow quality — if it stumbles in the first use, they're gone
+Layer 2 — Make It Indispensable (Weeks 2-6)
+Patient history continuity — if a patient returns, ErMate should surface their previous visit automatically. Doctors love this and it's immediately useful
+Shift handover notes — auto-generate a handover summary at end of shift. This solves a real daily pain point no one has fixed well
+Personal case log — every doctor builds a log of cases they've seen, searchable by diagnosis. Becomes their personal clinical record over time
+The goal here is that ErMate starts holding their data — leaving means losing something valuable
+Layer 3 — Build the Habit Loop (Month 2 onwards)
+Weekly personal stats — cases documented, time saved, most common presentations. Doctors are competitive and data-driven
+The Learn section becomes a retention engine — send one interesting EM case or guideline update per week, relevant to what they've actually been seeing clinically
+Streak mechanics in Trivia — subtle, not gamified in a cheap way. "You've answered 3 cases this week" is enough
+Layer 4 — Community and Identity (Long Term)
+This is your biggest long-term play and most apps miss it entirely.
+ErMate EM Network — anonymised case sharing. "An ErMate doctor in Pune managed a case like yours last month — here's what worked." Rare presentations become learning moments across your user base
+Leaderboards for the Learn section — residents are naturally competitive, especially around exams
+Verified ErMate ER badge for facilities — hospitals that actively use ErMate get a credibility marker. Gives institutions a reason to push adoption internally
+Contribute to guidelines — let senior users flag when AI suggestions don't match real outcomes. Makes them feel ownership over the product
+The One Metric to Watch
+Not DAU, not downloads. Track cases documented per user per week. If that number is growing, everything else follows. If it's flat or falling, no marketing spend will fix it.
+One Contrarian Idea
+Build a "dark mode for night shifts" — sounds trivial, but ER doctors work nights constantly. An app that looks and feels like it was designed for 3am earns loyalty that features alone don't
