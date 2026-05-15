@@ -50,55 +50,6 @@ export async function cacheCasePayload(caseId: string, payload: any): Promise<vo
     examination: payload.examination || existing.examination || {},
     updatedAt: new Date().toISOString(),
   };
-
-  const keys = Object.keys(cache);
-  if (keys.length > 50) {
-    const sorted = keys.sort((a, b) => {
-      return (cache[a].updatedAt || "").localeCompare(cache[b].updatedAt || "");
-    });
-    delete cache[sorted[0]];
-  }
-
-  await saveCache(cache);
-}
-
-export async function cacheAddendumNotes(caseId: string, notes: string[]): Promise<void> {
-  const cache = await loadCache();
-  if (!cache[caseId]) {
-    cache[caseId] = {
-      treatment: {},
-      investigations: {},
-      procedures: {},
-      addendum_notes: [],
-      discharge_summary: {},
-      primary_assessment: {},
-      history: {},
-      examination: {},
-      updatedAt: new Date().toISOString(),
-    };
-  }
-  cache[caseId].addendum_notes = notes;
-  cache[caseId].updatedAt = new Date().toISOString();
-  await saveCache(cache);
-}
-
-export async function cacheDischargeSummary(caseId: string, summary: any): Promise<void> {
-  const cache = await loadCache();
-  if (!cache[caseId]) {
-    cache[caseId] = {
-      treatment: {},
-      investigations: {},
-      procedures: {},
-      addendum_notes: [],
-      discharge_summary: {},
-      primary_assessment: {},
-      history: {},
-      examination: {},
-      updatedAt: new Date().toISOString(),
-    };
-  }
-  cache[caseId].discharge_summary = summary;
-  cache[caseId].updatedAt = new Date().toISOString();
   await saveCache(cache);
 }
 
@@ -107,34 +58,81 @@ export async function getCachedCaseData(caseId: string): Promise<CaseCacheEntry 
   return cache[caseId] || null;
 }
 
+function hasData(val: any): boolean {
+  if (!val) return false;
+  if (typeof val === "string") return val.trim().length > 0;
+  if (Array.isArray(val)) return val.length > 0;
+  if (typeof val === "object") return Object.keys(val).length > 0;
+  return Boolean(val);
+}
+
 export function mergeCaseWithCache(caseData: any, cached: CaseCacheEntry): any {
   const merged = { ...caseData };
 
-  if (!merged.treatment) merged.treatment = {};
+  if (cached.history && hasData(cached.history)) {
+    if (!merged.history) merged.history = {};
+    const mergedHistory = { ...merged.history };
+    for (const key of Object.keys(cached.history)) {
+      if (hasData(cached.history[key])) {
+        mergedHistory[key] = cached.history[key];
+      }
+    }
+    merged.history = mergedHistory;
+  }
 
-  if ((!merged.treatment.medications || merged.treatment.medications.length === 0) && cached.treatment.medications?.length > 0) {
-    merged.treatment.medications = cached.treatment.medications;
+  if (cached.primary_assessment && hasData(cached.primary_assessment)) {
+    if (!merged.primary_assessment) merged.primary_assessment = {};
+    const mergedPA = { ...merged.primary_assessment };
+    for (const key of Object.keys(cached.primary_assessment)) {
+      if (hasData(cached.primary_assessment[key])) {
+        mergedPA[key] = cached.primary_assessment[key];
+      }
+    }
+    merged.primary_assessment = mergedPA;
   }
-  if ((!merged.treatment.infusions || merged.treatment.infusions.length === 0) && cached.treatment.infusions?.length > 0) {
-    merged.treatment.infusions = cached.treatment.infusions;
+
+  if (cached.examination && hasData(cached.examination)) {
+    if (!merged.examination) merged.examination = {};
+    const mergedExam = { ...merged.examination };
+    for (const key of Object.keys(cached.examination)) {
+      if (hasData(cached.examination[key])) {
+        mergedExam[key] = cached.examination[key];
+      }
+    }
+    merged.examination = mergedExam;
   }
-  if (!merged.treatment.primary_diagnosis && cached.treatment.primary_diagnosis) {
-    merged.treatment.primary_diagnosis = cached.treatment.primary_diagnosis;
+
+  if (!merged.treatment) merged.treatment = {};
+  if (cached.treatment && hasData(cached.treatment)) {
+    const mergedTreatment = { ...merged.treatment };
+    for (const key of Object.keys(cached.treatment)) {
+      if (hasData(cached.treatment[key])) {
+        mergedTreatment[key] = cached.treatment[key];
+      }
+    }
+    merged.treatment = mergedTreatment;
   }
-  if ((!merged.treatment.provisional_diagnoses || merged.treatment.provisional_diagnoses.length === 0) && cached.treatment.provisional_diagnoses?.length > 0) {
-    merged.treatment.provisional_diagnoses = cached.treatment.provisional_diagnoses;
+
+  if (!merged.investigations) merged.investigations = {};
+  if (cached.investigations && hasData(cached.investigations)) {
+    const mergedInv = { ...merged.investigations };
+    for (const key of Object.keys(cached.investigations)) {
+      if (hasData(cached.investigations[key])) {
+        mergedInv[key] = cached.investigations[key];
+      }
+    }
+    merged.investigations = mergedInv;
   }
-  if ((!merged.treatment.differential_diagnoses || merged.treatment.differential_diagnoses.length === 0) && cached.treatment.differential_diagnoses?.length > 0) {
-    merged.treatment.differential_diagnoses = cached.treatment.differential_diagnoses;
-  }
-  if (!merged.treatment.fluids && cached.treatment.fluids) {
-    merged.treatment.fluids = cached.treatment.fluids;
-  }
-  if (!merged.treatment.other_medications && cached.treatment.other_medications) {
-    merged.treatment.other_medications = cached.treatment.other_medications;
-  }
-  if (!merged.treatment.intervention_notes && cached.treatment.intervention_notes) {
-    merged.treatment.intervention_notes = cached.treatment.intervention_notes;
+
+  if (!merged.procedures) merged.procedures = {};
+  if (cached.procedures && hasData(cached.procedures)) {
+    const mergedProc = { ...merged.procedures };
+    for (const key of Object.keys(cached.procedures)) {
+      if (hasData(cached.procedures[key])) {
+        mergedProc[key] = cached.procedures[key];
+      }
+    }
+    merged.procedures = mergedProc;
   }
 
   const backendNotes = merged.treatment?.addendum_notes || merged.addendum_notes || [];
@@ -145,76 +143,9 @@ export function mergeCaseWithCache(caseData: any, cached: CaseCacheEntry): any {
     merged.addendum_notes = cachedNotesList;
   }
 
-  if (cached.discharge_summary && Object.keys(cached.discharge_summary).length > 0) {
-    if (!merged.discharge_summary || Object.keys(merged.discharge_summary).length === 0) {
+  if (cached.discharge_summary && hasData(cached.discharge_summary)) {
+    if (!merged.discharge_summary || !hasData(merged.discharge_summary)) {
       merged.discharge_summary = cached.discharge_summary;
-    }
-  }
-
-  if (!merged.investigations) merged.investigations = {};
-  if ((!merged.investigations.panels_selected || merged.investigations.panels_selected.length === 0) && cached.investigations.panels_selected?.length > 0) {
-    merged.investigations.panels_selected = cached.investigations.panels_selected;
-  }
-  if ((!merged.investigations.imaging || merged.investigations.imaging.length === 0) && cached.investigations.imaging?.length > 0) {
-    merged.investigations.imaging = cached.investigations.imaging;
-  }
-  if (!merged.investigations.results_notes && cached.investigations.results_notes) {
-    merged.investigations.results_notes = cached.investigations.results_notes;
-  }
-
-  if (!merged.procedures) merged.procedures = {};
-  if ((!merged.procedures.procedures_performed || merged.procedures.procedures_performed.length === 0) && cached.procedures.procedures_performed?.length > 0) {
-    merged.procedures.procedures_performed = cached.procedures.procedures_performed;
-  }
-  if (!merged.procedures.general_notes && cached.procedures.general_notes) {
-    merged.procedures.general_notes = cached.procedures.general_notes;
-  }
-
-  if (cached.primary_assessment && Object.keys(cached.primary_assessment).length > 0) {
-    if (!merged.primary_assessment) merged.primary_assessment = {};
-    if (cached.primary_assessment.pat && !merged.primary_assessment.pat) {
-      merged.primary_assessment.pat = cached.primary_assessment.pat;
-    }
-    if (cached.primary_assessment.airway && !merged.primary_assessment.airway) {
-      merged.primary_assessment.airway = cached.primary_assessment.airway;
-    }
-    if (cached.primary_assessment.breathing && !merged.primary_assessment.breathing) {
-      merged.primary_assessment.breathing = cached.primary_assessment.breathing;
-    }
-    if (cached.primary_assessment.circulation && !merged.primary_assessment.circulation) {
-      merged.primary_assessment.circulation = cached.primary_assessment.circulation;
-    }
-    if (cached.primary_assessment.disability && !merged.primary_assessment.disability) {
-      merged.primary_assessment.disability = cached.primary_assessment.disability;
-    }
-    if (cached.primary_assessment.exposure && !merged.primary_assessment.exposure) {
-      merged.primary_assessment.exposure = cached.primary_assessment.exposure;
-    }
-    if (cached.primary_assessment.efast && !merged.primary_assessment.efast) {
-      merged.primary_assessment.efast = cached.primary_assessment.efast;
-    }
-  }
-
-  if (cached.history && Object.keys(cached.history).length > 0) {
-    if (!merged.history) merged.history = {};
-    const historyFields = ['allergies', 'currentMedications', 'lastDoseMedications', 'medicationsInEnvironment', 'healthHistory', 'underlyingConditions', 'immunizationStatus', 'lastMeal', 'lmp', 'events', 'treatmentBeforeArrival', 'signsAndSymptoms'];
-    for (const field of historyFields) {
-      if (cached.history[field] && !merged.history[field]) {
-        merged.history[field] = cached.history[field];
-      }
-    }
-  }
-
-  if (cached.examination && Object.keys(cached.examination).length > 0) {
-    if (!merged.examination) merged.examination = {};
-    if (cached.examination.heent && !merged.examination.heent) {
-      merged.examination.heent = cached.examination.heent;
-    }
-    const examFields = ['respiratory', 'cardiovascular', 'abdomen', 'back', 'extremities'];
-    for (const field of examFields) {
-      if (cached.examination[field] && !merged.examination[field]) {
-        merged.examination[field] = cached.examination[field];
-      }
     }
   }
 

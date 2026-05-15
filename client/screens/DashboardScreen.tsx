@@ -798,52 +798,55 @@ export default function DashboardScreen() {
                       </Text>
                     ) : null}
 
-                    <View style={styles.caseBottomRow}>
-                      <View style={styles.timeInfo}>
-                        <Feather name="clock" size={14} color={theme.textMuted} />
-                        <Text style={[styles.timeText, { color: theme.textMuted }]}>
-                          {formatTime(caseItem.created_at)} | {time.display}
-                        </Text>
-                        {time.exceeds4Hours && status.text !== "Discharged" ? (
-                          <View style={[styles.warningBadge, { backgroundColor: "#fef3c7" }]}>
-                            <Text style={styles.warningText}>Over 4h</Text>
-                          </View>
-                        ) : null}
-                      </View>
-                      <View style={styles.caseActions}>
+                    <View style={styles.timeInfo}>
+                      <Feather name="clock" size={14} color={theme.textMuted} />
+                      <Text style={[styles.timeText, { color: theme.textMuted }]}>
+                        {formatTime(caseItem.created_at)} | {time.display}
+                      </Text>
+                      {time.exceeds4Hours && status.text !== "Discharged" ? (
+                        <View style={[styles.warningBadge, { backgroundColor: "#fef3c7" }]}>
+                          <Text style={styles.warningText}>Over 4h</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    <View style={styles.caseActions}>
+                      <Pressable
+                        style={[styles.actionBtn, { backgroundColor: theme.primaryLight }]}
+                        onPress={() => navigation.navigate("ViewCase", { caseId: caseItem.id })}
+                      >
+                        <Feather name="eye" size={16} color={theme.primary} />
+                        <Text style={[styles.actionBtnLabel, { color: theme.primary }]}>View</Text>
+                      </Pressable>
+                      <Pressable
+                        style={[styles.actionBtn, { backgroundColor: theme.successLight }]}
+                        onPress={() => navigation.navigate("ViewDischargeSummary", { caseId: caseItem.id })}
+                      >
+                        <Feather name="file-text" size={16} color={theme.success} />
+                        <Text style={[styles.actionBtnLabel, { color: theme.success }]}>Summary</Text>
+                      </Pressable>
+                      <Pressable
+                        style={[styles.actionBtn, { backgroundColor: "#e0f2fe" }]}
+                        onPress={() => navigation.navigate("DischargeSummary", { caseId: caseItem.id })}
+                      >
+                        <Feather name="clipboard" size={16} color="#0284c7" />
+                        <Text style={[styles.actionBtnLabel, { color: "#0284c7" }]}>Discharge</Text>
+                      </Pressable>
+                      <Pressable
+                        style={[styles.actionBtn, { backgroundColor: "#fef3c7" }]}
+                        onPress={() => navigation.navigate("AddendumNotes", { caseId: caseItem.id })}
+                      >
+                        <Feather name="edit" size={16} color="#d97706" />
+                        <Text style={[styles.actionBtnLabel, { color: "#d97706" }]}>Notes</Text>
+                      </Pressable>
+                      {canDownload(caseItem.status) ? (
                         <Pressable
-                          style={[styles.actionBtn, { backgroundColor: theme.primaryLight }]}
-                          onPress={() => navigation.navigate("ViewCase", { caseId: caseItem.id })}
+                          style={[styles.actionBtn, { backgroundColor: "#f3e8ff" }]}
+                          onPress={() => openDownloadModal(caseItem)}
                         >
-                          <Feather name="eye" size={16} color={theme.primary} />
+                          <Feather name="download" size={16} color="#9333ea" />
+                          <Text style={[styles.actionBtnLabel, { color: "#9333ea" }]}>Export</Text>
                         </Pressable>
-                        <Pressable
-                          style={[styles.actionBtn, { backgroundColor: theme.successLight }]}
-                          onPress={() => navigation.navigate("ViewDischargeSummary", { caseId: caseItem.id })}
-                        >
-                          <Feather name="file-text" size={16} color={theme.success} />
-                        </Pressable>
-                        <Pressable
-                          style={[styles.actionBtn, { backgroundColor: "#e0f2fe" }]}
-                          onPress={() => navigation.navigate("DischargeSummary", { caseId: caseItem.id })}
-                        >
-                          <Feather name="clipboard" size={16} color="#0284c7" />
-                        </Pressable>
-                        <Pressable
-                          style={[styles.actionBtn, { backgroundColor: "#fef3c7" }]}
-                          onPress={() => navigation.navigate("AddendumNotes", { caseId: caseItem.id })}
-                        >
-                          <Feather name="edit" size={16} color="#d97706" />
-                        </Pressable>
-                        {canDownload(caseItem.status) ? (
-                          <Pressable
-                            style={[styles.actionBtn, { backgroundColor: "#f3e8ff" }]}
-                            onPress={() => openDownloadModal(caseItem)}
-                          >
-                            <Feather name="download" size={16} color="#9333ea" />
-                          </Pressable>
-                        ) : null}
-                      </View>
+                      ) : null}
                     </View>
                   </View>
                 </Pressable>
@@ -1063,12 +1066,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: Spacing.sm,
   },
-  timeInfo: { flexDirection: "row", alignItems: "center", gap: 4 },
+  timeInfo: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: Spacing.sm },
   timeText: { ...Typography.caption },
   warningBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginLeft: 6 },
   warningText: { fontSize: 10, fontWeight: "600", color: "#d97706" },
-  caseActions: { flexDirection: "row", gap: Spacing.sm },
-  actionBtn: { padding: 6, borderRadius: BorderRadius.sm },
+  caseActions: { flexDirection: "row", gap: Spacing.xs, marginTop: Spacing.sm },
+  actionBtn: { paddingVertical: 6, paddingHorizontal: 8, borderRadius: BorderRadius.sm, alignItems: "center", gap: 2, flex: 1 },
+  actionBtnLabel: { fontSize: 9, fontWeight: "600", textAlign: "center" },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",

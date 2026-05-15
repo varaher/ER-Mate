@@ -84,15 +84,33 @@ export default function ViewCaseScreen() {
   const loadCaseData = async () => {
     try {
       setLoading(true);
+      const cached = await getCachedCaseData(caseId);
       const res = await apiGet<any>(`/cases/${caseId}`);
+      
+      let mergedData: any = null;
+      
       if (res.success && res.data) {
-        const cached = await getCachedCaseData(caseId);
-        let mergedData = res.data;
+        mergedData = res.data;
         if (cached) {
           console.log("ViewCaseScreen: merging with local cache");
           mergedData = mergeCaseWithCache(res.data, cached);
         }
+      } else if (cached) {
+        console.log("ViewCaseScreen: backend failed, using local cache only");
+        mergedData = {
+          id: caseId,
+          history: cached.history || {},
+          primary_assessment: cached.primary_assessment || {},
+          examination: cached.examination || {},
+          treatment: cached.treatment || {},
+          investigations: cached.investigations || {},
+          procedures: cached.procedures || {},
+          discharge_summary: cached.discharge_summary || {},
+          addendum_notes: cached.addendum_notes || [],
+        };
+      }
 
+      if (mergedData) {
         const medications = mergedData.treatment?.medications 
           || mergedData.treatment?.medications_given 
           || mergedData.treatment?.given_medications
@@ -102,8 +120,6 @@ export default function ViewCaseScreen() {
           || mergedData.disposition?.discharge_medications
           || [];
         
-        console.log("ViewCaseScreen: found medications:", JSON.stringify(medications, null, 2));
-        
         if (!mergedData.treatment) {
           mergedData.treatment = {};
         }
@@ -112,16 +128,17 @@ export default function ViewCaseScreen() {
         }
         
         setCaseData(mergedData);
+        const src = res.success && res.data ? res.data : mergedData;
         editableFieldsRef.current = {
-          presenting_complaint: res.data.presenting_complaint?.text || res.data.history?.signs_and_symptoms || res.data.sample?.signsSymptoms || "",
-          hopi: res.data.history?.hpi || res.data.history?.events_hopi || "",
-          past_medical: Array.isArray(res.data.history?.past_medical) ? res.data.history.past_medical.join(", ") : (res.data.history?.past_medical || ""),
-          past_surgical: res.data.history?.past_surgical || "",
-          allergies: Array.isArray(res.data.history?.allergies) ? res.data.history.allergies.join(", ") : (res.data.history?.allergies || ""),
-          medications: res.data.history?.medications || res.data.history?.drug_history || "",
-          intervention_notes: res.data.treatment?.intervention_notes || "",
-          differential_diagnoses: Array.isArray(res.data.treatment?.differential_diagnoses) ? res.data.treatment.differential_diagnoses.join(", ") : "",
-          provisional_diagnoses: Array.isArray(res.data.treatment?.provisional_diagnoses) ? res.data.treatment.provisional_diagnoses.join(", ") : "",
+          presenting_complaint: src.presenting_complaint?.text || src.history?.signs_and_symptoms || src.sample?.signsSymptoms || "",
+          hopi: src.history?.hpi || src.history?.events_hopi || "",
+          past_medical: Array.isArray(src.history?.past_medical) ? src.history.past_medical.join(", ") : (src.history?.past_medical || ""),
+          past_surgical: src.history?.past_surgical || "",
+          allergies: Array.isArray(src.history?.allergies) ? src.history.allergies.join(", ") : (src.history?.allergies || ""),
+          medications: src.history?.medications || src.history?.drug_history || "",
+          intervention_notes: src.treatment?.intervention_notes || "",
+          differential_diagnoses: Array.isArray(src.treatment?.differential_diagnoses) ? src.treatment.differential_diagnoses.join(", ") : "",
+          provisional_diagnoses: Array.isArray(src.treatment?.provisional_diagnoses) ? src.treatment.provisional_diagnoses.join(", ") : "",
         };
       }
     } catch (err) {
