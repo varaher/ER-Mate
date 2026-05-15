@@ -9,15 +9,16 @@ import {
   RefreshControl,
   ActivityIndicator,
   TextInput,
+  Alert,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
-import { fetchFromApi } from "@/lib/api";
+import { fetchCasesFromProxy, deleteCaseFromProxy } from "@/lib/api";
 import { isPediatric } from "@/lib/pediatricVitals";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
@@ -55,17 +56,47 @@ export default function CasesScreen() {
   const { theme } = useTheme();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "active" | "discharged">("all");
   const [viewMode, setViewMode] = useState<"list" | "grouped">("list");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const { data: rawCases = [], isLoading: loading, refetch, isRefetching } = useQuery<CaseItem[]>({
     queryKey: ["cases", user?.id],
-    queryFn: () => fetchFromApi<CaseItem[]>("/cases"),
+    queryFn: () => fetchCasesFromProxy<CaseItem[]>(),
     refetchOnMount: true,
     enabled: !!user?.id,
   });
+
+  const handleDeleteCase = (item: CaseItem) => {
+    Alert.alert(
+      "Delete Case",
+      `Delete ${item.patient?.name || "this patient"}'s case? This cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            setDeletingId(item.id);
+            try {
+              await deleteCaseFromProxy(item.id);
+              queryClient.setQueryData<CaseItem[]>(
+                ["cases", user?.id],
+                (old) => (old ? old.filter((c) => c.id !== item.id) : [])
+              );
+            } catch (err: any) {
+              Alert.alert("Error", err.message || "Failed to delete case");
+            } finally {
+              setDeletingId(null);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const cases = useMemo(() => {
     const sorted = [...rawCases];
@@ -161,6 +192,17 @@ export default function CasesScreen() {
           {item.status === "completed" || item.status === "discharged" ? "Done" : "Active"}
         </Text>
       </View>
+      <Pressable
+        style={styles.deleteBtn}
+        onPress={() => handleDeleteCase(item)}
+        hitSlop={8}
+      >
+        {deletingId === item.id ? (
+          <ActivityIndicator size="small" color={theme.error || "#EF4444"} />
+        ) : (
+          <Feather name="trash-2" size={16} color={theme.error || "#EF4444"} />
+        )}
+      </Pressable>
     </Pressable>
   );
 
@@ -332,6 +374,7 @@ const styles = StyleSheet.create({
   complaint: { ...Typography.caption, marginTop: 4, fontStyle: "italic" },
   statusBadge: { paddingHorizontal: Spacing.sm, paddingVertical: 4, borderRadius: BorderRadius.full },
   statusText: { ...Typography.caption, fontWeight: "600" },
+  deleteBtn: { padding: 6, marginLeft: 4 },
   emptyState: { alignItems: "center", paddingVertical: Spacing["4xl"] },
   emptyText: { ...Typography.body, marginTop: Spacing.md },
 });

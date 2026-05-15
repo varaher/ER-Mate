@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { queryClient } from "@/lib/query-client";
+import { queryClient, getApiUrl } from "@/lib/query-client";
 
 function getExternalApiUrl(): string {
   const apiUrl = process.env.EXPO_PUBLIC_EXTERNAL_API_URL || "https://er-emr-backend.onrender.com/api";
@@ -281,6 +281,38 @@ export async function invalidateCases() {
 
 export async function invalidateCase(caseId: string) {
   return queryClient.invalidateQueries({ queryKey: ["cases", caseId] });
+}
+
+export async function fetchCasesFromProxy<T = any[]>(): Promise<T> {
+  const token = await getToken();
+  const proxyUrl = new URL("/api/proxy/cases", getApiUrl()).href;
+  const res = await fetch(proxyUrl, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || "Failed to fetch cases");
+  }
+  return res.json();
+}
+
+export async function deleteCaseFromProxy(caseId: string): Promise<void> {
+  const token = await getToken();
+  const proxyUrl = new URL(`/api/proxy/cases/${caseId}`, getApiUrl()).href;
+  const res = await fetch(proxyUrl, {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || "Failed to delete case");
+  }
 }
 
 export { getExternalApiUrl };

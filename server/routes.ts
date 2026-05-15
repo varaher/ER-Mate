@@ -150,7 +150,95 @@ function generateCode(): string {
   return code;
 }
 
+function decodeJwt(token: string): Record<string, any> | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    const payloadBase64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const payload = Buffer.from(payloadBase64, "base64").toString("utf8");
+    return JSON.parse(payload);
+  } catch {
+    return null;
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
+  const EXTERNAL_API = process.env.EXPO_PUBLIC_EXTERNAL_API_URL || "https://er-emr-backend.onrender.com/api";
+
+  app.get("/api/proxy/cases", async (req: Request, res: Response) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader) return res.status(401).json({ error: "No auth token" });
+
+      const externalRes = await fetch(`${EXTERNAL_API}/cases`, {
+        headers: { Authorization: authHeader, "Content-Type": "application/json" },
+      });
+
+      const responseText = await externalRes.text();
+      if (!externalRes.ok) {
+        try { return res.status(externalRes.status).json(JSON.parse(responseText)); }
+        catch { return res.status(externalRes.status).send(responseText); }
+      }
+
+      let casesData: any[];
+      try {
+        const parsed = JSON.parse(responseText);
+        casesData = Array.isArray(parsed) ? parsed : (Array.isArray(parsed?.data) ? parsed.data : []);
+      } catch {
+        return res.status(500).json({ error: "Invalid response from backend" });
+      }
+
+      const token = authHeader.replace(/^Bearer\s+/i, "");
+      const jwtPayload = decodeJwt(token);
+
+      if (jwtPayload && casesData.length > 0) {
+        const userId = jwtPayload.sub || jwtPayload.id || jwtPayload.user_id;
+        const userEmail = jwtPayload.email;
+        const sample = casesData[0];
+        const hasUserField =
+          "doctor_id" in sample || "user_id" in sample ||
+          "created_by" in sample || "doctor_email" in sample;
+
+        if (hasUserField) {
+          const filtered = casesData.filter((c: any) => {
+            if (userId && (c.doctor_id === userId || c.user_id === userId || c.created_by === userId)) return true;
+            if (userEmail && c.doctor_email === userEmail) return true;
+            return false;
+          });
+          console.log(`[PROXY] Cases: ${casesData.length} total → ${filtered.length} for user ${userEmail || userId}`);
+          return res.json(filtered);
+        } else {
+          console.log(`[PROXY] No user field found on cases. Keys: ${Object.keys(sample).join(", ")}. Returning all ${casesData.length}.`);
+        }
+      }
+
+      return res.json(casesData);
+    } catch (err: any) {
+      console.error("[PROXY] GET /cases error:", err);
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/proxy/cases/:id", async (req: Request, res: Response) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader) return res.status(401).json({ error: "No auth token" });
+
+      const { id } = req.params;
+      const externalRes = await fetch(`${EXTERNAL_API}/cases/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: authHeader, "Content-Type": "application/json" },
+      });
+
+      const responseText = await externalRes.text();
+      try { return res.status(externalRes.status).json(JSON.parse(responseText)); }
+      catch { return res.status(externalRes.status).send(responseText); }
+    } catch (err: any) {
+      console.error("[PROXY] DELETE /cases/:id error:", err);
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post("/api/auth/generate-link-code", async (req: Request, res: Response) => {
     try {
       const { userId, userEmail, userName, token } = req.body;

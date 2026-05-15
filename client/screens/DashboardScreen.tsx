@@ -22,7 +22,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as IntentLauncher from "expo-intent-launcher";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
-import { fetchFromApi } from "@/lib/api";
+import { fetchFromApi, fetchCasesFromProxy } from "@/lib/api";
 import { getApiUrl } from "@/lib/query-client";
 import { isPediatric } from "@/lib/pediatricVitals";
 import { getCachedCaseData, mergeCaseWithCache } from "@/lib/caseCache";
@@ -104,7 +104,7 @@ export default function DashboardScreen() {
 
   const { data: cases = [], isLoading: loading, error: queryError, refetch, isRefetching } = useQuery<CaseItem[]>({
     queryKey: ["cases", user?.id],
-    queryFn: () => fetchFromApi<CaseItem[]>("/cases"),
+    queryFn: () => fetchCasesFromProxy<CaseItem[]>(),
     refetchOnMount: true,
     enabled: !!user?.id,
   });
@@ -441,7 +441,35 @@ export default function DashboardScreen() {
       const endpoint = type === "discharge"
         ? (format === "pdf" ? "/api/export/discharge-pdf" : "/api/export/discharge-docx")
         : (format === "pdf" ? "/api/export/casesheet-pdf" : "/api/export/casesheet-docx");
-      
+
+      // For casesheet export: clinical detail sections (history, exam, treatment, etc.)
+      // live primarily in the local cache (entered by the user on this device). The backend
+      // reliably stores patient/triage/vitals/abcde. Build the export payload cache-first.
+      const buildCasesheetPayload = () => ({
+        ...caseResponse,
+        ...(cached?.primary_assessment && Object.keys(cached.primary_assessment).length > 0
+          ? { primary_assessment: cached.primary_assessment }
+          : {}),
+        ...(cached?.history && Object.keys(cached.history).length > 0
+          ? { history: cached.history }
+          : {}),
+        ...(cached?.examination && Object.keys(cached.examination).length > 0
+          ? { examination: cached.examination }
+          : {}),
+        ...(cached?.treatment && Object.keys(cached.treatment).length > 0
+          ? { treatment: { ...(caseResponse.treatment || {}), ...cached.treatment } }
+          : {}),
+        ...(cached?.investigations && Object.keys(cached.investigations).length > 0
+          ? { investigations: { ...(caseResponse.investigations || {}), ...cached.investigations } }
+          : {}),
+        ...(cached?.procedures && Object.keys(cached.procedures).length > 0
+          ? { procedures: { ...(caseResponse.procedures || {}), ...cached.procedures } }
+          : {}),
+        ...(cached?.addendum_notes && cached.addendum_notes.length > 0
+          ? { addendum_notes: cached.addendum_notes }
+          : {}),
+      });
+
       const exportData = type === "discharge"
         ? {
             patient: caseData.patient,
@@ -450,7 +478,7 @@ export default function DashboardScreen() {
               : buildDischargeSummaryFromCase(caseData),
             created_at: caseData.created_at,
           }
-        : caseData;
+        : buildCasesheetPayload();
 
       const typePrefix = type === "discharge" ? "discharge" : "casesheet";
       const extension = format === "pdf" ? "pdf" : "docx";
