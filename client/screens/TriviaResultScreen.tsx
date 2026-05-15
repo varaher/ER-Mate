@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -21,6 +21,7 @@ import {
   TriviaQuestion,
 } from "@/data/triviaQuestions";
 import type { QuizAnswer } from "./TriviaQuizScreen";
+import { useTriviaStreak } from "@/hooks/useTriviaStreak";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteProps = NativeStackScreenProps<RootStackParamList, "TriviaResult">["route"];
@@ -34,6 +35,16 @@ export default function TriviaResultScreen() {
 
   const { questions: questionIds, answers, totalTime } = route.params;
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
+  const { weeklyCount, increment } = useTriviaStreak();
+  const [newWeeklyCount, setNewWeeklyCount] = useState<number | null>(null);
+  const incrementedRef = useRef(false);
+
+  useEffect(() => {
+    if (!incrementedRef.current) {
+      incrementedRef.current = true;
+      increment().then((count) => setNewWeeklyCount(count));
+    }
+  }, []);
 
   const questions = questionIds
     .map((id) => TRIVIA_QUESTIONS.find((q) => q.id === id))
@@ -90,6 +101,14 @@ export default function TriviaResultScreen() {
           <Feather name={gradeInfo.icon as any} size={48} color="#FFFFFF" />
           <Text style={styles.gradeText}>{gradeInfo.grade}</Text>
           <Text style={styles.gradeLabel}>{gradeInfo.label}</Text>
+          {newWeeklyCount !== null ? (
+            <View style={styles.streakBadge}>
+              <Feather name="zap" size={13} color={gradeInfo.color} />
+              <Text style={[styles.streakText, { color: gradeInfo.color }]}>
+                {newWeeklyCount} {newWeeklyCount === 1 ? "quiz" : "quizzes"} this week
+              </Text>
+            </View>
+          ) : null}
 
           <View style={styles.scoreRow}>
             <View style={styles.scoreItem}>
@@ -303,6 +322,20 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     color: "#FFFFFF",
     marginTop: Spacing.sm,
+  },
+  streakBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginTop: Spacing.md,
+  },
+  streakText: {
+    fontSize: 12,
+    fontWeight: "600",
   },
   gradeLabel: {
     fontSize: 18,

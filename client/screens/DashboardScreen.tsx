@@ -660,6 +660,25 @@ export default function DashboardScreen() {
           ))}
         </View>
 
+        <Pressable
+          style={({ pressed }) => [
+            styles.statsNavCard,
+            { backgroundColor: theme.card, borderColor: theme.primary + "30", opacity: pressed ? 0.85 : 1 },
+          ]}
+          onPress={() => navigation.navigate("Stats")}
+        >
+          <View style={[styles.statsNavIcon, { backgroundColor: theme.primary + "15" }]}>
+            <Feather name="bar-chart-2" size={20} color={theme.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.statsNavTitle, { color: theme.text }]}>My Weekly Stats</Text>
+            <Text style={[styles.statsNavSub, { color: theme.textSecondary }]}>
+              Cases documented, time saved, top presentations
+            </Text>
+          </View>
+          <Feather name="chevron-right" size={20} color={theme.primary} />
+        </Pressable>
+
         {aiCredits !== null ? (
           <Pressable
             style={({ pressed }) => [
@@ -1065,6 +1084,25 @@ const styles = StyleSheet.create({
   },
   downloadBtnText: { ...Typography.label },
   downloadNote: { ...Typography.small, textAlign: "center" as const },
+  statsNavCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    marginHorizontal: Spacing.lg,
+    marginTop: Spacing.md,
+  },
+  statsNavIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: BorderRadius.md,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  statsNavTitle: { ...Typography.bodyMedium, fontSize: 14 },
+  statsNavSub: { fontSize: 12, marginTop: 2 },
   creditsWidget: {
     flexDirection: "row",
     justifyContent: "space-between",

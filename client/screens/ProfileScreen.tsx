@@ -34,7 +34,16 @@ export default function ProfileScreen() {
     logout();
   };
 
+  const { nightShift } = useTheme();
+
+  const nightShiftOptions: { label: string; value: import("@/hooks/useNightShift").NightShiftPref; icon: string }[] = [
+    { label: "Auto (9pm–6am)", value: "auto", icon: "moon" },
+    { label: "Always Light", value: "light", icon: "sun" },
+    { label: "Always Dark", value: "dark", icon: "minus-circle" },
+  ];
+
   const menuItems = [
+    { icon: "bar-chart-2", label: "My Stats", onPress: () => navigation.navigate("Stats"), locked: false },
     { icon: "monitor", label: "Link to Web", onPress: () => navigation.navigate("LinkDevices"), locked: false },
     { icon: "star", label: "Upgrade Plan", onPress: () => navigation.navigate("Upgrade", {}), locked: false },
     { icon: "bell", label: "Notifications", onPress: () => navigation.navigate("Notifications"), locked: false },
@@ -95,6 +104,50 @@ export default function ProfileScreen() {
               )}
             </Pressable>
           ))}
+        </View>
+
+        <View style={[styles.section, { backgroundColor: theme.card, marginBottom: Spacing.lg }]}>
+          <View style={[styles.menuItem, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
+            <Feather name="moon" size={20} color={theme.textSecondary} />
+            <Text style={[styles.menuLabel, { color: theme.text }]}>Display Mode</Text>
+          </View>
+          <View style={[styles.nightShiftOptions]}>
+            {nightShiftOptions.map((opt) => (
+              <Pressable
+                key={opt.value}
+                style={[
+                  styles.nightShiftOption,
+                  {
+                    backgroundColor: nightShift.pref === opt.value ? theme.primary : theme.backgroundSecondary,
+                    borderColor: nightShift.pref === opt.value ? theme.primary : theme.border,
+                  },
+                ]}
+                onPress={() => nightShift.setPref(opt.value)}
+              >
+                <Feather
+                  name={opt.icon as any}
+                  size={14}
+                  color={nightShift.pref === opt.value ? "#FFFFFF" : theme.textSecondary}
+                />
+                <Text
+                  style={[
+                    styles.nightShiftLabel,
+                    { color: nightShift.pref === opt.value ? "#FFFFFF" : theme.textSecondary },
+                  ]}
+                >
+                  {opt.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          {nightShift.isNightTime && nightShift.pref === "auto" ? (
+            <View style={[styles.nightShiftActive, { backgroundColor: "#1e1b4b20" }]}>
+              <Feather name="moon" size={12} color="#818cf8" />
+              <Text style={[styles.nightShiftActiveText, { color: "#818cf8" }]}>
+                Night shift active
+              </Text>
+            </View>
+          ) : null}
         </View>
 
         <Pressable
@@ -183,6 +236,32 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   menuLabel: { flex: 1, ...Typography.body },
+  nightShiftOptions: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    padding: Spacing.md,
+    flexWrap: "wrap",
+  },
+  nightShiftOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+  },
+  nightShiftLabel: { fontSize: 12, fontWeight: "500" },
+  nightShiftActive: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    margin: Spacing.md,
+    marginTop: 0,
+    padding: Spacing.sm,
+    borderRadius: BorderRadius.md,
+  },
+  nightShiftActiveText: { fontSize: 12 },
   logoutBtn: {
     flexDirection: "row",
     alignItems: "center",

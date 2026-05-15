@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   FlatList,
+  SectionList,
   Pressable,
   RefreshControl,
   ActivityIndicator,
@@ -57,6 +58,7 @@ export default function CasesScreen() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "active" | "discharged">("all");
+  const [viewMode, setViewMode] = useState<"list" | "grouped">("list");
 
   const { data: rawCases = [], isLoading: loading, refetch, isRefetching } = useQuery<CaseItem[]>({
     queryKey: ["cases", user?.id],
@@ -90,9 +92,28 @@ export default function CasesScreen() {
     return matchesSearch && matchesFilter;
   });
 
+  const groupedSections = useMemo(() => {
+    if (viewMode !== "grouped") return [];
+    const groups: Record<string, CaseItem[]> = {};
+    filteredCases.forEach((c) => {
+      const key = c.presenting_complaint?.text?.trim() || "No Complaint Recorded";
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(c);
+    });
+    return Object.entries(groups)
+      .sort((a, b) => b[1].length - a[1].length)
+      .map(([title, data]) => ({ title, data }));
+  }, [filteredCases, viewMode]);
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  };
+
+  const navigateToCase = (item: CaseItem) => {
+    const patientAge = parseFloat(item.patient?.age) || 0;
+    const screenName = isPediatric(patientAge) ? "PediatricCaseSheet" : "CaseSheet";
+    navigation.navigate(screenName, { caseId: item.id });
   };
 
   const renderCase = ({ item }: { item: CaseItem }) => (
@@ -101,11 +122,7 @@ export default function CasesScreen() {
         styles.caseCard,
         { backgroundColor: theme.card, opacity: pressed ? 0.9 : 1 },
       ]}
-      onPress={() => {
-        const patientAge = parseFloat(item.patient?.age) || 0;
-        const screenName = isPediatric(patientAge) ? "PediatricCaseSheet" : "CaseSheet";
-        navigation.navigate(screenName, { caseId: item.id });
-      }}
+      onPress={() => navigateToCase(item)}
     >
       <View style={[styles.priorityDot, { backgroundColor: getPriorityColor(item.triage_priority) }]} />
       <View style={styles.caseInfo}>
@@ -158,7 +175,23 @@ export default function CasesScreen() {
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundDefault }]}>
       <View style={[styles.header, { backgroundColor: theme.card, paddingTop: insets.top + Spacing.md }]}>
-        <Text style={[styles.title, { color: theme.text }]}>All Cases</Text>
+        <View style={styles.titleRow}>
+          <Text style={[styles.title, { color: theme.text }]}>All Cases</Text>
+          <View style={[styles.viewToggle, { backgroundColor: theme.backgroundSecondary }]}>
+            <Pressable
+              style={[styles.toggleBtn, viewMode === "list" && { backgroundColor: theme.card }]}
+              onPress={() => setViewMode("list")}
+            >
+              <Feather name="list" size={16} color={viewMode === "list" ? theme.primary : theme.textMuted} />
+            </Pressable>
+            <Pressable
+              style={[styles.toggleBtn, viewMode === "grouped" && { backgroundColor: theme.card }]}
+              onPress={() => setViewMode("grouped")}
+            >
+              <Feather name="tag" size={16} color={viewMode === "grouped" ? theme.primary : theme.textMuted} />
+            </Pressable>
+          </View>
+        </View>
         <View style={[styles.searchContainer, { backgroundColor: theme.backgroundSecondary }]}>
           <Feather name="search" size={18} color={theme.textMuted} />
           <TextInput
@@ -187,19 +220,45 @@ export default function CasesScreen() {
         </View>
       </View>
 
-      <FlatList
-        data={filteredCases}
-        renderItem={renderCase}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Feather name="folder" size={48} color={theme.textMuted} />
-            <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No cases found</Text>
-          </View>
-        }
-      />
+      {viewMode === "grouped" ? (
+        <SectionList
+          sections={groupedSections}
+          keyExtractor={(item) => item.id}
+          renderItem={renderCase}
+          renderSectionHeader={({ section }) => (
+            <View style={[styles.sectionHeader, { backgroundColor: theme.backgroundDefault }]}>
+              <View style={[styles.sectionDot, { backgroundColor: theme.primary }]} />
+              <Text style={[styles.sectionTitle, { color: theme.text }]}>{section.title}</Text>
+              <Text style={[styles.sectionCount, { color: theme.textMuted }]}>
+                {section.data.length}
+              </Text>
+            </View>
+          )}
+          contentContainerStyle={styles.list}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <Feather name="folder" size={48} color={theme.textMuted} />
+              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No cases found</Text>
+            </View>
+          }
+          stickySectionHeadersEnabled={true}
+        />
+      ) : (
+        <FlatList
+          data={filteredCases}
+          renderItem={renderCase}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.list}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <Feather name="folder" size={48} color={theme.textMuted} />
+              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No cases found</Text>
+            </View>
+          }
+        />
+      )}
     </View>
   );
 }
@@ -214,7 +273,22 @@ const styles = StyleSheet.create({
     borderBottomColor: "rgba(0,0,0,0.05)",
     gap: Spacing.md,
   },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
   title: { ...Typography.h2 },
+  viewToggle: {
+    flexDirection: "row",
+    borderRadius: BorderRadius.md,
+    padding: 3,
+    gap: 2,
+  },
+  toggleBtn: {
+    padding: 6,
+    borderRadius: BorderRadius.sm,
+  },
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -228,6 +302,21 @@ const styles = StyleSheet.create({
   filterBtn: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.full },
   filterText: { ...Typography.label },
   list: { padding: Spacing.lg, paddingBottom: 120 },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  sectionDot: { width: 8, height: 8, borderRadius: 4 },
+  sectionTitle: { flex: 1, ...Typography.bodyMedium, fontSize: 13 },
+  sectionCount: {
+    fontSize: 12,
+    fontWeight: "600",
+    minWidth: 22,
+    textAlign: "center" as const,
+  },
   caseCard: {
     flexDirection: "row",
     alignItems: "center",

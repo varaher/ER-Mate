@@ -7,13 +7,14 @@ import {
   Pressable,
   Alert,
 } from "react-native";
-import { useNavigation, useRoute } from "@react-navigation/native";
+import { useNavigation, useRoute, useFocusEffect } from "@react-navigation/native";
 import { useHeaderHeight } from "@react-navigation/elements";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius } from "@/constants/theme";
+import { useTriviaStreak } from "@/hooks/useTriviaStreak";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import {
   CATEGORY_INFO,
@@ -31,6 +32,9 @@ export default function TriviaHomeScreen() {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const { weeklyCount, reload } = useTriviaStreak();
+
+  useFocusEffect(React.useCallback(() => { reload(); }, [reload]));
 
   const [selectedCategories, setSelectedCategories] = useState<TriviaCategory[]>([]);
   const [selectedDifficulty, setSelectedDifficulty] = useState<TriviaDifficulty | "all">("all");
@@ -87,6 +91,14 @@ export default function TriviaHomeScreen() {
           <Text style={styles.heroSubtitle}>
             Test your emergency medicine knowledge with case-based questions
           </Text>
+          {weeklyCount > 0 ? (
+            <View style={styles.streakBadge}>
+              <Feather name="zap" size={13} color={theme.primary} />
+              <Text style={[styles.streakText, { color: theme.primary }]}>
+                {weeklyCount} {weeklyCount === 1 ? "quiz" : "quizzes"} completed this week
+              </Text>
+            </View>
+          ) : null}
         </View>
 
         <Text style={[styles.sectionLabel, { color: theme.text }]}>Select Categories</Text>
@@ -264,6 +276,20 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: Spacing.xs,
     lineHeight: 20,
+  },
+  streakBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginTop: Spacing.md,
+  },
+  streakText: {
+    fontSize: 12,
+    fontWeight: "600",
   },
   sectionLabel: {
     fontSize: 17,

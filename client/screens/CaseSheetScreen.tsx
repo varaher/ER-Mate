@@ -33,6 +33,7 @@ import { useCase } from "@/context/CaseContext";
 import { apiGet, apiPatch, apiPut, apiUpload, invalidateCases } from "@/lib/api";
 import { getApiUrl } from "@/lib/query-client";
 import { cacheCasePayload } from "@/lib/caseCache";
+import { recordCaseTime, getTimeSavedMinutes } from "@/hooks/useCaseTimer";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import {
@@ -538,6 +539,8 @@ export default function CaseSheetScreen() {
   const [activeVoiceField, setActiveVoiceField] = useState<string | null>(null);
   const recordingRef = useRef<Audio.Recording | null>(null);
   const localDraftIdRef = useRef<string | null>(null);
+  const caseStartRef = useRef<number>(Date.now());
+  const [timeSavedBanner, setTimeSavedBanner] = useState<{ durationMins: number; savedMins: number } | null>(null);
   const complaintDurationRef = useRef<string>("");
   const complaintOnsetRef = useRef<string>("");
   const [modeOfArrival, setModeOfArrival] = useState("Walk-in");
@@ -1234,6 +1237,13 @@ export default function CaseSheetScreen() {
         if (effectiveDraftId) {
           await commitDraft(caseId);
         }
+        const durationMs = Date.now() - caseStartRef.current;
+        const durationMins = Math.max(1, Math.round(durationMs / 60000));
+        const savedMins = getTimeSavedMinutes(durationMins);
+        const complaint = formData?.chiefComplaint || "";
+        recordCaseTime(caseId, durationMins, complaint).catch(() => {});
+        setTimeSavedBanner({ durationMins, savedMins });
+        setTimeout(() => setTimeSavedBanner(null), 5000);
         return true;
       } else {
         console.error("Commit failed:", res.error);
@@ -3354,6 +3364,14 @@ export default function CaseSheetScreen() {
           </>
         )}
       </KeyboardAwareScrollViewCompat>
+      {timeSavedBanner ? (
+        <View style={[styles.timeSavedBanner, { backgroundColor: "#059669" }]}>
+          <Feather name="clock" size={14} color="#FFFFFF" />
+          <Text style={styles.timeSavedText}>
+            Case saved — approx. {timeSavedBanner.savedMins} min saved vs paper
+          </Text>
+        </View>
+      ) : null}
       <View style={[styles.bottomNav, { backgroundColor: theme.card, borderTopColor: theme.border, paddingBottom: insets.bottom + Spacing.sm }]}>
         <Pressable style={[styles.navBtn, styles.prevBtn]} onPress={handlePrevious} disabled={activeTab === "patient"}>
           <Feather name="arrow-left" size={18} color={activeTab === "patient" ? theme.textMuted : theme.text} />
@@ -3476,6 +3494,14 @@ const styles = StyleSheet.create({
   gcsTotalLabel: { ...Typography.body, marginRight: Spacing.sm },
   gcsTotalValue: { ...Typography.h3 },
   bottomNav: { flexDirection: "row", alignItems: "center", paddingHorizontal: Spacing.md, paddingTop: Spacing.md, borderTopWidth: 1, gap: Spacing.sm },
+  timeSavedBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+  },
+  timeSavedText: { color: "#FFFFFF", fontSize: 13, fontWeight: "500" },
   navBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: Spacing.md, borderRadius: BorderRadius.md, gap: Spacing.xs },
   prevBtn: { flex: 1 },
   navBtnText: { ...Typography.bodyMedium },
