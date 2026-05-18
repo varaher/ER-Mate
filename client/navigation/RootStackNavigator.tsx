@@ -38,6 +38,7 @@ import type { QuizAnswer } from "@/screens/TriviaQuizScreen";
 import type { TriviaCategory, TriviaDifficulty } from "@/data/triviaQuestions";
 import QuickCaseSheetScreen from "@/screens/QuickCaseSheetScreen";
 import StatsScreen from "@/screens/StatsScreen";
+import VoiceCaseSheetScreen from "@/screens/VoiceCaseSheetScreen";
 
 export type RootStackParamList = {
   Login: undefined;
@@ -45,6 +46,7 @@ export type RootStackParamList = {
   Main: undefined;
   Triage: undefined;
   QuickCaseSheet: { type: "adult" | "pediatric" };
+  VoiceCaseSheet: undefined;
   CaseSheet: { caseId: string; patientType?: string; caseData?: CaseData; triageData?: any };
   PediatricCaseSheet: { caseId: string; patientType?: string; caseData?: CaseData; triageData?: any };
   PhysicalExam: { caseId: string };
@@ -140,6 +142,14 @@ export default function RootStackNavigator() {
             options={{
               presentation: "modal",
               headerTitle: "Quick Case Sheet",
+            }}
+          />
+          <Stack.Screen
+            name="VoiceCaseSheet"
+            component={VoiceCaseSheetScreen}
+            options={{
+              presentation: "modal",
+              headerTitle: "Voice Case Entry",
             }}
           />
           <Stack.Screen
