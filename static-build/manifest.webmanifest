@@ -1,0 +1,28 @@
+{
+  "name": "ErMate - Emergency Room EMR",
+  "short_name": "ErMate",
+  "description": "Emergency Room Electronic Medical Records for EM professionals",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "orientation": "portrait-primary",
+  "categories": [
+    "medical",
+    "health"
+  ],
+  "icons": [
+    {
+      "src": "/assets/images/icon.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/images/icon.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
