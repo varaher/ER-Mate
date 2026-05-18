@@ -433,7 +433,10 @@ export default function VoiceCaseSheetScreen() {
               ? navigation.replace("ViewCase", { caseId })
               : navigation.navigate("Main" as any),
           },
-          { text: "Done", onPress: () => navigation.navigate("Main" as any) },
+          {
+            text: "Dashboard",
+            onPress: () => navigation.navigate("Main" as any),
+          },
         ]
       );
     } catch (err) {
