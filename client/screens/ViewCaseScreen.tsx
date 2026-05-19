@@ -920,31 +920,61 @@ export default function ViewCaseScreen() {
           {editMode && <Text style={[styles.editHint, { color: theme.textMuted }]}>Yellow fields are editable. Tap "Done Editing" when finished.</Text>}
         </View>
 
-        <View style={styles.buttonRow}>
-          {editMode && (
+        {editMode && (
+          <View style={[styles.buttonRow, { marginBottom: Spacing.md }]}>
             <Pressable style={[styles.saveBtn, { backgroundColor: theme.primary }]} onPress={handleSave} disabled={saving}>
+              <Feather name="save" size={16} color="#FFFFFF" />
               <Text style={styles.saveBtnText}>{saving ? "Saving..." : "Save Changes"}</Text>
             </Pressable>
-          )}
+          </View>
+        )}
+
+        <View style={styles.buttonRow}>
           <Pressable style={[styles.editBtn, { backgroundColor: theme.primary }]} onPress={() => {
             const patientAge = parseFloat(caseData?.patient?.age) || 0;
             const screenName = isPediatric(patientAge) ? "PediatricCaseSheet" : "CaseSheet";
             navigation.navigate(screenName, { caseId });
           }}>
-            <Feather name="edit-2" size={18} color="#FFFFFF" />
+            <Feather name="edit-2" size={16} color="#FFFFFF" />
             <Text style={styles.editBtnText}>Full Edit</Text>
           </Pressable>
-          <Pressable style={[styles.dischargeBtn, { backgroundColor: theme.success }]} onPress={() => navigation.navigate("DischargeSummary", { caseId })}>
-            <Feather name="edit" size={18} color="#FFFFFF" />
-            <Text style={styles.editBtnText}>Discharge</Text>
+          <Pressable
+            style={[styles.dischargeBtn, { backgroundColor: theme.primary }]}
+            onPress={() => navigation.navigate("Main" as any)}
+          >
+            <Feather name="home" size={16} color="#FFFFFF" />
+            <Text style={styles.editBtnText}>Dashboard</Text>
           </Pressable>
         </View>
 
-        <View style={[styles.buttonRow, { marginTop: Spacing.md }]}>
-          <Pressable style={[styles.dischargeBtn, { backgroundColor: "#6366f1" }]} onPress={() => navigation.navigate("ViewDischargeSummary", { caseId })}>
-            <Feather name="eye" size={18} color="#FFFFFF" />
-            <Text style={styles.editBtnText}>View Discharge Summary</Text>
-          </Pressable>
+        <View style={[styles.dischargeCard, { backgroundColor: `${theme.success}12`, borderColor: `${theme.success}40` }]}>
+          <View style={styles.dischargeCardHeader}>
+            <View style={[styles.dischargeCardIcon, { backgroundColor: theme.success }]}>
+              <Feather name="file-text" size={16} color="#FFFFFF" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.dischargeCardTitle, { color: theme.text }]}>Ready to discharge?</Text>
+              <Text style={[styles.dischargeCardDesc, { color: theme.textSecondary }]}>
+                Discharge Summary includes AI-generated "Course in Hospital" — it reads all sections of this case sheet (history, vitals, exam, investigations, treatment) and writes the full narrative automatically.
+              </Text>
+            </View>
+          </View>
+          <View style={styles.dischargeCardBtns}>
+            <Pressable
+              style={[styles.dischargeMainBtn, { backgroundColor: theme.success }]}
+              onPress={() => navigation.navigate("DischargeSummary", { caseId })}
+            >
+              <Feather name="edit" size={16} color="#FFFFFF" />
+              <Text style={styles.editBtnText}>Create Discharge Summary</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.dischargeViewBtn, { borderColor: theme.success }]}
+              onPress={() => navigation.navigate("ViewDischargeSummary", { caseId })}
+            >
+              <Feather name="eye" size={16} color={theme.success} />
+              <Text style={[styles.dischargeViewBtnText, { color: theme.success }]}>View</Text>
+            </Pressable>
+          </View>
         </View>
 
         <View style={{ height: 40 }} />
@@ -999,4 +1029,60 @@ const styles = StyleSheet.create({
   editBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", height: Spacing.buttonHeight, borderRadius: BorderRadius.md, gap: Spacing.sm },
   dischargeBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", height: Spacing.buttonHeight, borderRadius: BorderRadius.md, gap: Spacing.sm },
   editBtnText: { color: "#FFFFFF", ...Typography.bodyMedium },
+  dischargeCard: {
+    borderWidth: 1,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    marginTop: Spacing.lg,
+  },
+  dischargeCardHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  dischargeCardIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 2,
+  },
+  dischargeCardTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  dischargeCardDesc: {
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  dischargeCardBtns: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+  },
+  dischargeMainBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    height: Spacing.buttonHeight,
+    borderRadius: BorderRadius.md,
+    gap: Spacing.sm,
+  },
+  dischargeViewBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    height: Spacing.buttonHeight,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1.5,
+    gap: Spacing.xs,
+  },
+  dischargeViewBtnText: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
 });

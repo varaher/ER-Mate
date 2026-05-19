@@ -1107,13 +1107,24 @@ export default function DischargeSummaryScreen() {
 
         <View style={[styles.section, { backgroundColor: theme.card }]}>
           <CollapsibleSection title="Hospital Course & Treatment" icon="file-text" iconColor={TriageColors.blue}>
+
+            <View style={[styles.courseInfoBanner, { backgroundColor: `${TriageColors.blue}10`, borderColor: `${TriageColors.blue}30` }]}>
+              <Feather name="layers" size={13} color={TriageColors.blue} />
+              <Text style={[styles.courseInfoText, { color: theme.textSecondary }]}>
+                AI reads the entire case sheet — history, vitals, ABCDE, examination, investigations, and treatment — to write a complete clinical narrative.
+              </Text>
+            </View>
+
             <Pressable
               style={({ pressed }) => [styles.aiBtn, { backgroundColor: theme.primaryLight, opacity: pressed || generating ? 0.8 : 1, marginBottom: Spacing.md }]}
               onPress={generateCourseInHospital}
               disabled={generating}
             >
               {generating ? (
-                <ActivityIndicator color={theme.primary} />
+                <>
+                  <ActivityIndicator color={theme.primary} />
+                  <Text style={[styles.aiBtnText, { color: theme.primary }]}>Reading case sheet...</Text>
+                </>
               ) : (
                 <>
                   <Feather name="cpu" size={20} color={theme.primary} />
@@ -1389,6 +1400,20 @@ const styles = StyleSheet.create({
   mlcBadge: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs, borderRadius: BorderRadius.sm },
   mlcText: { ...Typography.caption, fontWeight: "700" },
   mlcToggle: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: Spacing.md },
+  courseInfoBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: Spacing.sm,
+    padding: Spacing.sm + 2,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    marginBottom: Spacing.md,
+  },
+  courseInfoText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 17,
+  },
   aiBtn: {
     flexDirection: "row",
     alignItems: "center",
