@@ -799,8 +799,8 @@ Respond in JSON format:
 {
   "chiefComplaint": "Main presenting complaint if mentioned",
   "historyOfPresentIllness": "A complete NARRATIVE clinical story in third person prose. Weave onset, duration, progression, character, location, severity, aggravating/relieving factors, associated symptoms, and pertinent negatives into flowing text. Do NOT use labels or bullet points. Example: 'Patient presented with severe epigastric pain of 6 hours duration, burning in character, aggravated by food intake and relieved by antacids. Associated with nausea and two episodes of non-bilious vomiting. No hematemesis or melena.'",
-  "pastMedicalHistory": "PMH if mentioned (diabetes, hypertension, etc.)",
-  "allergies": "Drug/food allergies if mentioned",
+  "pastMedicalHistory": ["Array of known conditions, one per item — e.g. Diabetes, Hypertension"],
+  "allergies": "Drug/food allergies if mentioned — use NKDA if doctor says no allergies",
   "medications": "Current medications if mentioned",
   "symptoms": ["Array of symptoms mentioned"],
   "painDetails": {

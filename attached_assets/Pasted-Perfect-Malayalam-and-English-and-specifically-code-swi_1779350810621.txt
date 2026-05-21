@@ -1,0 +1,136 @@
+Perfect. Malayalam and English — and specifically **code-switching between them** — is exactly what Sarvam Saaras v3 is built for.
+
+---
+
+## Why This Combination Is Actually Ideal for Testing
+
+Kerala ER doctors speak in a very specific pattern:
+
+```
+"Patient വന്നത് sudden onset 
+ facial weakness with, 
+ yesterday evening മുതൽ...
+ BP കൂടുതലാണ്, known diabetic,
+ VBG എടുക്കണം, 
+ Neurology inform ചെയ്തു"
+```
+
+Malayalam grammar + English medical terms mid-sentence. Sarvam handles this natively because it was trained on Indian language code-switching, not just pure Malayalam.
+
+---
+
+## Before the Device Test — One Specific Check
+
+Tell your developer to verify Sarvam is configured for Malayalam:
+
+```javascript
+// In your Sarvam transcription call
+// Verify language_code is 'unknown' 
+// not hardcoded to 'en-IN'
+
+formData.append('language_code', 'unknown'); 
+// 'unknown' = auto-detect
+// This is critical for Malayalam detection
+
+// If it's hardcoded to 'en-IN' 
+// Malayalam will be forced through 
+// English STT and produce garbage
+```
+
+If `language_code` is set to `'unknown'`, Sarvam auto-detects Malayalam and uses the correct model. If it's hardcoded to English, the transcription will fail on Malayalam words.
+
+---
+
+## Device Test Script — Malayalam + English
+
+Use this exact script for your device test. It covers every pipeline section in one recording:
+
+```
+Speak this naturally as you would 
+in a real Kerala ER consultation.
+Mix Malayalam and English freely.
+
+---
+
+"Patient പേര് Suresh, 
+ 45 വയസ്സ്, male.
+ 
+ Chest pain with, 
+ 2 മണിക്കൂർ മുൻപ് start ആയി,
+ sudden onset,
+ left side radiation ഉണ്ട്,
+ sweating also ഉണ്ട്.
+ 
+ Known diabetic, hypertension,
+ 5 വർഷമായി tablets കഴിക്കുന്നു.
+ Allergies ഒന്നുമില്ല.
+ 
+ BP 160/100,
+ HR 95,
+ SpO2 96% room air,
+ RR 20,
+ GRBS 210.
+ 
+ ECG എടുത്തു — ST elevation 
+ lead 2, 3, aVF ൽ ഉണ്ട്.
+ 
+ Inj Aspirin 300mg loading,
+ Inj Heparin 5000 units IV,
+ IV fluids NS 50ml per hour.
+ 
+ Cardiology inform ചെയ്തു,
+ Dr. Rajan on call,
+ Primary PCI consider ചെയ്യാൻ 
+ advised.
+ 
+ Case in by resident 
+ Dr. Priya Nair,
+ consultant Dr. Mathew."
+```
+
+---
+
+## What to Verify After Recording
+
+Check these 12 fields specifically:
+
+| Field | Expected |
+|---|---|
+| Patient name | Suresh |
+| Age | 45 |
+| Chief complaint | Chest pain |
+| Duration | 2 hours |
+| Onset | Sudden |
+| Past medical | [Diabetes, Hypertension] as array |
+| Allergies | NKDA |
+| BP | 160/100 |
+| ECG finding | ST elevation in leads II, III, aVF |
+| Medications | Aspirin 300mg + Heparin 5000u — split into 4 fields each |
+| Consultation | Cardiology, Dr. Rajan, Primary PCI advised |
+| Doctors | Resident Dr. Priya Nair, Consultant Dr. Mathew |
+
+---
+
+## If Any Field Fails
+
+| Problem | Likely Cause | Fix |
+|---|---|---|
+| Malayalam words appear in HPI verbatim | Translation step failing | Check `/api/voice/translate` is being called |
+| Past medical as single string | Old bug resurfaced | Verify array split in buildClinical |
+| Doctor names missing | Extraction prompt issue | Check emResident/emConsultant fields in prompt |
+| ECG finding not captured | Not in extraction schema | Add ecg findings to investigations block |
+| Medications not split | Parsing issue | Check medication array in master schema |
+
+---
+
+## After Device Test Passes
+
+You're ready for your first pilot. Suggested approach for Kerala specifically:
+
+**Start with one doctor you trust** — ideally an ER consultant or senior resident at a private hospital in Thrissur, Kochi, or Kozhikode. Not a government hospital first — procurement and IT approvals will take months.
+
+**Give them 2 weeks** with real patients. Ask them one question after each shift: *"Did the case sheet reflect what you said?"*
+
+That feedback loop will tell you more than any further development session.
+
+**The product is ready for that test.**
