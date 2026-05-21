@@ -1985,14 +1985,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { convertAudioToWav } = await import("./services/audioConvert");
       const converted = await convertAudioToWav(file.buffer, filename);
 
-      const result = await transcribeAndExtractVoice(
-        converted.buffer,
-        converted.filename,
-        patientContext,
-        mode
-      );
+      const { isSarvamAvailable, sarvamSpeechToText, sarvamTranslateToEnglish } = await import("./services/sarvamAI");
 
-      res.json(result);
+      let transcript = '';
+      let detectedLanguage = 'en-IN';
+      let englishTranscript = '';
+
+      if (isSarvamAvailable()) {
+        try {
+          console.log("[Voice] Sarvam STT: transcribing in original language...");
+          const sarvamResult = await sarvamSpeechToText(converted.buffer, converted.filename, "unknown");
+          transcript = sarvamResult.transcript || '';
+          detectedLanguage = sarvamResult.language_code || 'en-IN';
+          console.log("[Voice] Sarvam STT success. Language:", detectedLanguage, "Length:", transcript.length);
+
+          // Translate to English if not already English
+          if (transcript && detectedLanguage && !detectedLanguage.startsWith('en')) {
+            console.log("[Voice] Non-English detected, translating to English...");
+            try {
+              const translated = await sarvamTranslateToEnglish(transcript);
+              englishTranscript = translated.translated_text || transcript;
+              console.log("[Voice] Translation success. English length:", englishTranscript.length);
+            } catch (translateErr) {
+              console.warn("[Voice] Translation failed, using original:", translateErr);
+              englishTranscript = transcript;
+            }
+          } else {
+            englishTranscript = transcript;
+          }
+        } catch (sarvamError) {
+          console.warn("[Voice] Sarvam STT failed, falling back to Whisper:", sarvamError);
+          const result = await transcribeAndExtractVoice(converted.buffer, converted.filename, patientContext, 'transcribe_only');
+          transcript = result.transcript || '';
+          englishTranscript = transcript;
+        }
+      } else {
+        console.log("[Voice] Sarvam not available, using Whisper...");
+        const result = await transcribeAndExtractVoice(converted.buffer, converted.filename, patientContext, 'transcribe_only');
+        transcript = result.transcript || '';
+        englishTranscript = transcript;
+      }
+
+      res.json({ transcript, englishTranscript, detectedLanguage });
     } catch (error) {
       console.error("Voice transcription error:", error);
       res.status(500).json({ error: (error as Error).message || "Failed to transcribe audio" });

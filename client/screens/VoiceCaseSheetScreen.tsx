@@ -38,6 +38,8 @@ interface ExtractedField {
   label: string;
   value: string;
   icon: string;
+  source: 'voice' | 'prefill' | 'missing';
+  confidence: 'high' | 'medium' | 'low';
 }
 
 interface WebRecState {
@@ -69,6 +71,10 @@ export default function VoiceCaseSheetScreen() {
   // Transcript
   const [editedTranscript, setEditedTranscript] = useState("");
   const [isExtracting, setIsExtracting] = useState(false);
+
+  // Transcript + language
+  const [detectedLanguage, setDetectedLanguage] = useState("");
+  const [englishTranscript, setEnglishTranscript] = useState("");
 
   // Review
   const [extractedFields, setExtractedFields] = useState<ExtractedField[]>([]);
@@ -225,7 +231,11 @@ export default function VoiceCaseSheetScreen() {
       if (!resp.ok) throw new Error("Transcription failed");
       const data = await resp.json();
       const text = (data.transcript || "").trim();
+      const engText = (data.englishTranscript || data.transcript || "").trim();
+      const lang = data.detectedLanguage || "en-IN";
       setEditedTranscript(text);
+      setEnglishTranscript(engText);
+      setDetectedLanguage(lang);
       setStep("transcript");
     } catch (err) {
       Alert.alert("Transcription Failed", "Could not process the recording. Please try again.");
@@ -237,13 +247,15 @@ export default function VoiceCaseSheetScreen() {
   const handleExtract = async () => {
     const text = editedTranscript.trim();
     if (!text) { Alert.alert("Empty", "Please record some audio or type a transcript first."); return; }
+    // Use English translation for AI extraction; fall back to edited transcript
+    const extractText = (englishTranscript && englishTranscript !== text) ? englishTranscript : text;
     setIsExtracting(true);
     try {
       const resp = await fetch(new URL("/api/voice/extract-clinical", getApiUrl()).toString(), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          transcript: text,
+          transcript: extractText,
           patientContext: { age: parseFloat(patientAge) || 0, sex: patientSex, caseType },
         }),
       });
@@ -260,87 +272,172 @@ export default function VoiceCaseSheetScreen() {
     }
   };
 
+  const computeCompleteness = (ex: any) => {
+    const checks = [
+      { label: "Patient Name", filled: !!(ex?.patientName || patientName) },
+      { label: "Chief Complaint", filled: !!(ex?.chiefComplaint) },
+      { label: "HPI Narrative", filled: !!(ex?.historyOfPresentIllness) },
+      { label: "Past History", filled: !!(ex?.pastMedicalHistory) },
+      { label: "Primary Survey BP", filled: !!(ex?.vitalsSuggested?.bp || ex?.primarySurvey?.circulation?.bpSystolic) },
+      { label: "HR / Pulse", filled: !!(ex?.vitalsSuggested?.hr || ex?.primarySurvey?.circulation?.hr) },
+      { label: "SpO2", filled: !!(ex?.vitalsSuggested?.spo2 || ex?.primarySurvey?.breathing?.spo2) },
+      { label: "GCS", filled: !!(ex?.vitalsSuggested?.gcs || ex?.primarySurvey?.disability?.gcsTotal) },
+      { label: "Examination", filled: !!(ex?.examFindings?.general || ex?.examFindings?.cvs || ex?.examFindings?.respiratory) },
+      { label: "Diagnosis", filled: !!(ex?.diagnosis?.length > 0) },
+    ];
+    const filled = checks.filter(c => c.filled).length;
+    return { filled, total: checks.length, percent: Math.round((filled / checks.length) * 100), checks };
+  };
+
   const buildFieldList = (ex: any, transcript: string): ExtractedField[] => {
-    if (!ex) return [{ key: "raw", label: "Full Transcript", value: transcript, icon: "file-text" }];
-    const fields: ExtractedField[] = [];
-    const add = (key: string, label: string, icon: string, val?: string) => {
-      const v = val ?? ex[key];
-      if (v && typeof v === "string" && v.trim()) fields.push({ key, label, value: v, icon });
+    const conf = ex?.sectionConfidence || {};
+    const getConf = (section: string): 'high' | 'medium' | 'low' => {
+      const c = conf[section] || '';
+      if (c === 'high') return 'high';
+      if (c === 'medium') return 'medium';
+      return 'low';
     };
-    if (ex.patientName && !patientName) add("patientName", "Patient Name", "user");
-    add("emResident", "EM Resident", "user");
-    add("emConsultant", "EM Consultant", "user");
-    add("consultationGiven", "Specialist Consultation", "phone");
-    add("chiefComplaint", "Chief Complaint", "alert-circle");
-    add("historyOfPresentIllness", "History of Present Illness", "file-text");
-    add("onset", "Onset", "clock");
-    add("duration", "Duration", "clock");
-    add("associatedSymptoms", "Associated Symptoms", "list");
-    add("negativeSymptoms", "Pertinent Negatives", "minus-circle");
-    add("pastMedicalHistory", "Past Medical History", "archive");
-    add("pastSurgicalHistory", "Past Surgical History", "scissors");
-    add("allergies", "Allergies", "alert-triangle");
-    add("currentMedications", "Current Medications", "package");
-    add("treatmentNotes", "Treatment Notes", "edit-3");
-    add("investigationsOrdered", "Investigations Ordered", "search");
-    add("imagingOrdered", "Imaging Ordered", "camera");
-    if (ex.symptoms?.length > 0) fields.push({ key: "symptoms", label: "Symptoms", value: ex.symptoms.join(", "), icon: "activity" });
-    if (ex.vitalsSuggested) {
-      const vs = ex.vitalsSuggested;
-      const parts: string[] = [];
-      if (vs.bp) parts.push(`BP: ${vs.bp}`);
-      if (vs.hr) parts.push(`HR: ${vs.hr}`);
-      if (vs.rr) parts.push(`RR: ${vs.rr}`);
-      if (vs.spo2) parts.push(`SpO2: ${vs.spo2}`);
-      if (vs.temperature) parts.push(`Temp: ${vs.temperature}`);
-      if (vs.grbs) parts.push(`GRBS: ${vs.grbs}`);
-      if (vs.gcs) parts.push(`GCS: ${vs.gcs}`);
-      if (parts.length > 0) fields.push({ key: "vitals", label: "Vitals Mentioned", value: parts.join(" | "), icon: "activity" });
+
+    if (!ex) return [{ key: "raw", label: "Full Transcript", value: transcript, icon: "file-text", source: 'voice', confidence: 'low' }];
+    const fields: ExtractedField[] = [];
+
+    const addVoice = (key: string, label: string, icon: string, val: string, section: string) => {
+      if (val && val.trim()) {
+        fields.push({ key, label, value: val, icon, source: 'voice', confidence: getConf(section) });
+      }
+    };
+    const addMissing = (key: string, label: string, icon: string) => {
+      fields.push({ key, label, value: "Not mentioned — tap to add", icon, source: 'missing', confidence: 'low' });
+    };
+    const addPrefill = (key: string, label: string, icon: string, val: string) => {
+      fields.push({ key, label, value: val, icon, source: 'prefill', confidence: 'medium' });
+    };
+
+    // Patient
+    if (ex.patientName) addVoice("patientName", "Patient Name", "user", ex.patientName, "patient");
+    if (ex.emResident) addVoice("emResident", "EM Resident", "user", ex.emResident, "doctors");
+    if (ex.emConsultant) addVoice("emConsultant", "EM Consultant", "user", ex.emConsultant, "doctors");
+
+    // Consultations
+    const consultList = (ex.consultations || []).filter((c: any) => c.specialty || c.doctorName);
+    if (consultList.length > 0) {
+      addVoice("consultations", "Specialist Consultations", "phone",
+        consultList.map((c: any) => `${c.specialty}${c.doctorName ? ' (Dr. '+c.doctorName+')' : ''}${c.adviceGiven ? ': '+c.adviceGiven : ''}`).join('; '), "doctors");
+    } else if (ex.consultationGiven) {
+      addVoice("consultationGiven", "Specialist Consultation", "phone", ex.consultationGiven, "doctors");
     }
+
+    // Chief Complaint
+    if (ex.chiefComplaint) addVoice("chiefComplaint", "Chief Complaint", "alert-circle", ex.chiefComplaint, "chiefComplaint");
+    else addMissing("chiefComplaint", "Chief Complaint", "alert-circle");
+
+    // HPI
+    if (ex.historyOfPresentIllness) addVoice("hpi", "History of Present Illness", "file-text", ex.historyOfPresentIllness, "hpi");
+    else addMissing("hpi", "History of Present Illness", "file-text");
+
+    if (ex.negativeSymptoms) addVoice("negativeSymptoms", "Pertinent Negatives", "minus-circle", ex.negativeSymptoms, "hpi");
+
+    // Past History
+    if (ex.pastMedicalHistory) addVoice("pastMedical", "Past Medical History", "archive", ex.pastMedicalHistory, "pastHistory");
+    else addPrefill("pastMedical", "Past Medical History", "archive", "None significant (pre-filled normal)");
+    if (ex.pastSurgicalHistory) addVoice("pastSurgical", "Past Surgical History", "scissors", ex.pastSurgicalHistory, "pastHistory");
+    if (ex.allergies) addVoice("allergies", "Allergies", "alert-triangle", ex.allergies, "pastHistory");
+    else addPrefill("allergies", "Allergies", "alert-triangle", "NKDA (pre-filled normal)");
+    if (ex.currentMedications) addVoice("currentMeds", "Current Medications", "package", ex.currentMedications, "pastHistory");
+
+    // Primary Survey / Vitals
+    const vs = ex.vitalsSuggested || {};
+    const ps = ex.primarySurvey || {};
+    const vitalParts: string[] = [];
+    const bp = vs.bp || (ps.circulation?.bpSystolic && ps.circulation?.bpDiastolic ? `${ps.circulation.bpSystolic}/${ps.circulation.bpDiastolic}` : "");
+    const hr = vs.hr || ps.circulation?.hr || "";
+    const rr = vs.rr || ps.breathing?.rr || "";
+    const spo2 = vs.spo2 || ps.breathing?.spo2 || "";
+    const temp = vs.temperature || ps.exposure?.temperature || "";
+    const grbs = vs.grbs || ps.disability?.grbs || "";
+    const gcs = vs.gcs || ps.disability?.gcsTotal || "";
+    if (bp) vitalParts.push(`BP: ${bp}`);
+    if (hr) vitalParts.push(`HR: ${hr}`);
+    if (rr) vitalParts.push(`RR: ${rr}`);
+    if (spo2) vitalParts.push(`SpO2: ${spo2}`);
+    if (temp) vitalParts.push(`Temp: ${temp}`);
+    if (grbs) vitalParts.push(`GRBS: ${grbs}`);
+    if (gcs) vitalParts.push(`GCS: ${gcs}`);
+    if (vitalParts.length > 0) addVoice("vitals", "Primary Survey / Vitals", "activity", vitalParts.join("  |  "), "primarySurvey");
+    else addMissing("vitals", "Primary Survey / Vitals", "activity");
+
+    // Airway & Breathing details
+    if (ps.airway?.status) addVoice("airway", "Airway", "wind", `${ps.airway.status}${ps.airway.findings ? ' — '+ps.airway.findings : ''}`, "primarySurvey");
+    if (ps.breathing?.auscultation) addVoice("auscultation", "Auscultation", "headphones", ps.breathing.auscultation, "primarySurvey");
+    if (ps.disability?.pupils) addVoice("pupils", "Pupils", "eye", ps.disability.pupils, "primarySurvey");
+
+    // VBG
     if (ex.vbgResults) {
       const vbg = ex.vbgResults;
       const parts: string[] = [];
-      if (vbg.ph) parts.push(`pH: ${vbg.ph}`);
-      if (vbg.pco2) parts.push(`PCO2: ${vbg.pco2}`);
-      if (vbg.po2) parts.push(`PO2: ${vbg.po2}`);
-      if (vbg.hco3) parts.push(`HCO3: ${vbg.hco3}`);
-      if (vbg.lactate) parts.push(`Lactate: ${vbg.lactate}`);
-      if (vbg.hemoglobin) parts.push(`Hb: ${vbg.hemoglobin}`);
-      if (vbg.sodium) parts.push(`Na: ${vbg.sodium}`);
-      if (vbg.potassium) parts.push(`K: ${vbg.potassium}`);
-      if (vbg.creatinine) parts.push(`Cr: ${vbg.creatinine}`);
-      if (parts.length > 0) fields.push({ key: "vbgResults", label: "VBG / ABG Results", value: parts.join(" | "), icon: "droplet" });
+      if (vbg.ph) parts.push(`pH ${vbg.ph}`);
+      if (vbg.pco2) parts.push(`PCO2 ${vbg.pco2}`);
+      if (vbg.po2) parts.push(`PO2 ${vbg.po2}`);
+      if (vbg.hco3) parts.push(`HCO3 ${vbg.hco3}`);
+      if (vbg.lactate) parts.push(`Lac ${vbg.lactate}`);
+      if (vbg.hemoglobin) parts.push(`Hb ${vbg.hemoglobin}`);
+      if (vbg.sodium) parts.push(`Na ${vbg.sodium}`);
+      if (vbg.potassium) parts.push(`K ${vbg.potassium}`);
+      if (vbg.creatinine) parts.push(`Cr ${vbg.creatinine}`);
+      if (parts.length > 0) addVoice("vbg", "VBG / ABG", "droplet", parts.join("  |  "), "investigations");
     }
-    if (ex.examFindings) {
-      const ef = ex.examFindings;
-      const parts: string[] = [];
-      if (ef.general) parts.push(`General: ${ef.general}`);
-      if (ef.cvs) parts.push(`CVS: ${ef.cvs}`);
-      if (ef.respiratory) parts.push(`Resp: ${ef.respiratory}`);
-      if (ef.abdomen) parts.push(`Abd: ${ef.abdomen}`);
-      if (ef.cns) parts.push(`CNS: ${ef.cns}`);
-      if (ef.heent) parts.push(`HEENT: ${ef.heent}`);
-      if (ef.musculoskeletal) parts.push(`MSK: ${ef.musculoskeletal}`);
-      if (parts.length > 0) fields.push({ key: "examFindings", label: "Examination Findings", value: parts.join(" | "), icon: "search" });
-    }
+
+    // Exam
+    const ef = ex.examFindings || {};
+    const examParts: string[] = [];
+    if (ef.general) examParts.push(`General: ${ef.general}`);
+    if (ef.cvs) examParts.push(`CVS: ${ef.cvs}`);
+    if (ef.respiratory) examParts.push(`Resp: ${ef.respiratory}`);
+    if (ef.abdomen) examParts.push(`Abd: ${ef.abdomen}`);
+    if (ef.cns) examParts.push(`CNS: ${ef.cns}`);
+    if (ef.heent) examParts.push(`HEENT: ${ef.heent}`);
+    if (ef.musculoskeletal) examParts.push(`MSK: ${ef.musculoskeletal}`);
+    if (examParts.length > 0) addVoice("exam", "Examination Findings", "search", examParts.join("  |  "), "examination");
+    else addPrefill("exam", "Examination Findings", "search", "Within normal limits (pre-filled)");
+
+    // Investigations
+    if (ex.investigationsOrdered) addVoice("labs", "Labs Ordered", "clipboard", ex.investigationsOrdered, "investigations");
+    if (ex.imagingOrdered) addVoice("imaging", "Imaging Ordered", "camera", ex.imagingOrdered, "investigations");
+
+    // Treatment
     if (ex.prescribedMedications?.length > 0) {
-      fields.push({
-        key: "medications",
-        label: "Prescribed Medications",
-        value: ex.prescribedMedications.map((m: any) => `${m.name} ${m.dose || ""} ${m.route || ""} ${m.frequency || ""}`.trim()).join(", "),
-        icon: "thermometer",
-      });
+      const meds = ex.prescribedMedications.filter((m: any) => m.name);
+      if (meds.length > 0) addVoice("medications", `Medications (${meds.length})`, "thermometer",
+        meds.map((m: any) => `${m.name} ${m.dose || ''} ${m.route || ''} ${m.frequency || ''}`.trim()).join('\n'), "treatment");
     }
     if (ex.prescribedInfusions?.length > 0) {
-      fields.push({
-        key: "infusions",
-        label: "Infusions / IV Fluids",
-        value: ex.prescribedInfusions.map((i: any) => `${i.name} ${i.dose || ""} ${i.rate ? "@ "+i.rate : ""}`.trim()).join(", "),
-        icon: "droplet",
-      });
+      const inf = ex.prescribedInfusions.filter((i: any) => i.name);
+      if (inf.length > 0) addVoice("infusions", `IV Fluids (${inf.length})`, "droplet",
+        inf.map((i: any) => `${i.name} ${i.dose || ''} ${i.rate ? '@ '+i.rate : ''}`.trim()).join('\n'), "treatment");
     }
-    if (ex.diagnosis?.length > 0) fields.push({ key: "diagnosis", label: "Working Diagnosis", value: ex.diagnosis.join(", "), icon: "clipboard" });
-    if (ex.differentialDiagnosis?.length > 0) fields.push({ key: "differentialDiagnosis", label: "Differentials", value: ex.differentialDiagnosis.join(", "), icon: "git-branch" });
+    if (ex.treatmentNotes) addVoice("treatmentNotes", "Treatment Notes", "edit-3", ex.treatmentNotes, "treatment");
+
+    // Diagnosis
+    if (ex.diagnosis?.length > 0) addVoice("diagnosis", "Working Diagnosis", "clipboard", ex.diagnosis.join(', '), "diagnosis");
+    else addMissing("diagnosis", "Working Diagnosis", "clipboard");
+    if (ex.differentialDiagnosis?.length > 0) addVoice("differentials", "Differentials", "git-branch", ex.differentialDiagnosis.join(', '), "diagnosis");
+
+    // Disposition
+    if (ex.disposition?.plan) addVoice("disposition", "Disposition Plan", "log-out", ex.disposition.plan, "disposition");
+
+    // Psychological screen
+    const psych = ex.psychologicalAssessment;
+    if (psych) {
+      const flags = [
+        psych.suicidalIdeation ? 'Suicidal ideation' : null,
+        psych.selfHarm ? 'Self-harm history' : null,
+        psych.substanceAbuse ? 'Substance abuse' : null,
+        psych.psychiatricHistory ? 'Psychiatric history' : null,
+      ].filter(Boolean);
+      if (flags.length > 0) addVoice("psychological", "Psychological Flags", "alert-triangle", flags.join(', '), "psychological");
+      else addPrefill("psychological", "Psychological Screen", "check-circle", "Screened — no flags identified");
+    }
+
     return fields;
   };
 
@@ -754,12 +851,22 @@ export default function VoiceCaseSheetScreen() {
       {step === "transcript" && (
         <View style={[s.transcriptRoot, { paddingBottom: botPad }]}>
           <View style={s.transcriptHeader}>
-            <View style={[s.badge, { backgroundColor: `${ACCENT}15` }]}>
-              <Feather name="file-text" size={13} color={ACCENT} />
-              <Text style={[s.badgeText, { color: ACCENT }]}>Transcript Ready</Text>
+            <View style={s.transcriptBadgeRow}>
+              <View style={[s.badge, { backgroundColor: `${ACCENT}15` }]}>
+                <Feather name="file-text" size={13} color={ACCENT} />
+                <Text style={[s.badgeText, { color: ACCENT }]}>Transcript Ready</Text>
+              </View>
+              {detectedLanguage && !detectedLanguage.startsWith('en') && (
+                <View style={[s.badge, { backgroundColor: "#06b6d415" }]}>
+                  <Feather name="globe" size={13} color="#06b6d4" />
+                  <Text style={[s.badgeText, { color: "#06b6d4" }]}>{detectedLanguage.toUpperCase()}</Text>
+                </View>
+              )}
             </View>
             <Text style={[s.transcriptHint, { color: theme.textSecondary }]}>
-              Review and edit if needed, then extract clinical fields
+              {detectedLanguage && !detectedLanguage.startsWith('en')
+                ? "Original language shown — AI will extract using English translation"
+                : "Review and edit if needed, then extract clinical fields"}
             </Text>
           </View>
 
@@ -799,80 +906,141 @@ export default function VoiceCaseSheetScreen() {
       )}
 
       {/* ── STEP 4: REVIEW & SAVE ──────────────────────────────────────────────── */}
-      {step === "review" && (
-        <View style={[s.reviewRoot, { paddingBottom: botPad }]}>
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.reviewScroll}>
-            <View style={[s.reviewBanner, { backgroundColor: `${ACCENT}10`, borderColor: `${ACCENT}30` }]}>
-              <Feather name="check-circle" size={16} color={ACCENT} />
-              <Text style={[s.reviewBannerText, { color: theme.text }]}>
-                {extractedFields.length} fields extracted from voice recording
-              </Text>
-            </View>
+      {step === "review" && (() => {
+        const completeness = computeCompleteness(rawExtracted);
+        const voiceCount = extractedFields.filter(f => f.source === 'voice').length;
+        const missingCount = extractedFields.filter(f => f.source === 'missing').length;
+        return (
+          <View style={[s.reviewRoot, { paddingBottom: botPad }]}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.reviewScroll}>
 
-            <View style={[s.patientChip, { backgroundColor: theme.card, borderColor: theme.border }]}>
-              <Feather name="user" size={14} color={theme.textSecondary} />
-              <Text style={[s.patientChipText, { color: theme.text }]}>
-                {patientName}  ·  {patientAge} yrs  ·  {patientSex}  ·  {caseType === "pediatric" ? "Pediatric" : "Adult"}
-              </Text>
-            </View>
-
-            <Text style={[s.sectionLabel, { color: theme.textSecondary, marginTop: Spacing.md }]}>
-              Verify extracted fields before saving
-            </Text>
-
-            {extractedFields.length === 0 && (
-              <View style={[s.emptyFields, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                <Feather name="alert-circle" size={20} color={theme.textMuted} />
-                <Text style={[s.emptyFieldsText, { color: theme.textMuted }]}>
-                  No specific fields extracted. The transcript will be saved as history.
+              {/* Completeness bar */}
+              <View style={[s.completenessCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                <View style={s.completenessRow}>
+                  <Text style={[s.completenessTitle, { color: theme.text }]}>Case Completeness</Text>
+                  <Text style={[s.completenessScore, { color: completeness.percent >= 70 ? "#16a34a" : completeness.percent >= 40 ? "#d97706" : "#dc2626" }]}>
+                    {completeness.filled}/{completeness.total}
+                  </Text>
+                </View>
+                <View style={[s.progressTrack, { backgroundColor: theme.backgroundSecondary }]}>
+                  <View style={[s.progressFill, {
+                    width: `${completeness.percent}%` as any,
+                    backgroundColor: completeness.percent >= 70 ? "#16a34a" : completeness.percent >= 40 ? "#d97706" : "#dc2626",
+                  }]} />
+                </View>
+                <Text style={[s.completenessHint, { color: theme.textMuted }]}>
+                  {completeness.percent >= 80 ? "Excellent documentation" : completeness.percent >= 60 ? "Good — consider adding missing fields" : "Add more details for complete documentation"}
                 </Text>
               </View>
-            )}
 
-            {extractedFields.map(f => (
-              <View key={f.key} style={[s.fieldCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                <View style={[s.fieldIcon, { backgroundColor: `${ACCENT}15` }]}>
-                  <Feather name={f.icon as any} size={13} color={ACCENT} />
+              {/* Legend */}
+              <View style={s.legendRow}>
+                <View style={s.legendItem}>
+                  <View style={[s.legendDot, { backgroundColor: "#16a34a" }]} />
+                  <Text style={[s.legendText, { color: theme.textMuted }]}>Voice captured</Text>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[s.fieldLabel, { color: theme.textSecondary }]}>{f.label}</Text>
-                  <Text style={[s.fieldValue, { color: theme.text }]} numberOfLines={4}>{f.value}</Text>
+                <View style={s.legendItem}>
+                  <View style={[s.legendDot, { backgroundColor: "#d97706" }]} />
+                  <Text style={[s.legendText, { color: theme.textMuted }]}>Not mentioned</Text>
+                </View>
+                <View style={s.legendItem}>
+                  <View style={[s.legendDot, { backgroundColor: "#94a3b8" }]} />
+                  <Text style={[s.legendText, { color: theme.textMuted }]}>Pre-filled normal</Text>
                 </View>
               </View>
-            ))}
 
-            <View style={[s.noAiBanner, { backgroundColor: theme.card, borderColor: theme.border }]}>
-              <Feather name="shield" size={14} color={theme.textSecondary} />
-              <Text style={[s.noAiText, { color: theme.textSecondary }]}>
-                This case is saved without AI diagnosis or ABG analysis. You can view and edit it from Cases.
+              {/* Language badge if non-English */}
+              {detectedLanguage && !detectedLanguage.startsWith('en') && (
+                <View style={[s.langBadge, { backgroundColor: "#06b6d415", borderColor: "#06b6d430" }]}>
+                  <Feather name="globe" size={13} color="#06b6d4" />
+                  <Text style={[s.langBadgeText, { color: "#06b6d4" }]}>
+                    Dictated in {detectedLanguage} — translated to English for extraction
+                  </Text>
+                </View>
+              )}
+
+              {/* Patient chip */}
+              <View style={[s.patientChip, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                <Feather name="user" size={14} color={theme.textSecondary} />
+                <Text style={[s.patientChipText, { color: theme.text }]}>
+                  {patientName}  ·  {patientAge} yrs  ·  {patientSex}  ·  {caseType === "pediatric" ? "Pediatric" : "Adult"}
+                </Text>
+              </View>
+
+              <Text style={[s.sectionLabel, { color: theme.textSecondary, marginTop: Spacing.md }]}>
+                {voiceCount} extracted  ·  {missingCount} missing
               </Text>
-            </View>
-          </ScrollView>
 
-          <View style={s.reviewActions}>
-            <Pressable
-              style={[s.outlineBtn, { borderColor: theme.border, backgroundColor: theme.card }]}
-              onPress={() => setStep("transcript")}
-            >
-              <Feather name="edit-2" size={15} color={theme.text} />
-              <Text style={[s.outlineBtnText, { color: theme.text }]}>Edit</Text>
-            </Pressable>
-            <Pressable
-              style={[s.primaryBtn, { flex: 1, backgroundColor: ACCENT }]}
-              onPress={handleSave}
-              disabled={isSaving}
-            >
-              {isSaving
-                ? <ActivityIndicator size="small" color="#fff" />
-                : <>
-                    <Feather name="save" size={15} color="#fff" />
-                    <Text style={s.primaryBtnText}>Save to Case Sheet</Text>
-                  </>
-              }
-            </Pressable>
+              {extractedFields.map(f => {
+                const isVoice = f.source === 'voice';
+                const isMissing = f.source === 'missing';
+                const isPrefill = f.source === 'prefill';
+                const borderColor = isVoice
+                  ? (f.confidence === 'high' ? "#16a34a" : f.confidence === 'medium' ? "#22c55e" : "#d97706")
+                  : isMissing ? "#d97706" : "#94a3b8";
+                const iconBg = isVoice ? `${borderColor}18` : isPrefill ? "#94a3b818" : "#d9780618";
+                const iconColor = borderColor;
+
+                return (
+                  <View key={f.key} style={[s.fieldCard, { backgroundColor: theme.card, borderColor: theme.border, borderLeftColor: borderColor, borderLeftWidth: 3 }]}>
+                    <View style={[s.fieldIcon, { backgroundColor: iconBg }]}>
+                      <Feather name={
+                        isVoice ? (f.icon as any) : isMissing ? "alert-circle" : "check-circle"
+                      } size={13} color={iconColor} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={s.fieldLabelRow}>
+                        <Text style={[s.fieldLabel, { color: theme.textSecondary }]}>{f.label}</Text>
+                        {isPrefill && (
+                          <View style={[s.fieldBadge, { backgroundColor: "#94a3b820" }]}>
+                            <Text style={[s.fieldBadgeText, { color: "#94a3b8" }]}>pre-filled</Text>
+                          </View>
+                        )}
+                        {isMissing && (
+                          <View style={[s.fieldBadge, { backgroundColor: "#d9780618" }]}>
+                            <Text style={[s.fieldBadgeText, { color: "#d97706" }]}>missing</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={[s.fieldValue, { color: isMissing ? theme.textMuted : theme.text }]} numberOfLines={5}>{f.value}</Text>
+                    </View>
+                  </View>
+                );
+              })}
+
+              <View style={[s.noAiBanner, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                <Feather name="shield" size={14} color={theme.textSecondary} />
+                <Text style={[s.noAiText, { color: theme.textSecondary }]}>
+                  Saved without AI diagnosis. You can add clinical decision support from the case sheet.
+                </Text>
+              </View>
+            </ScrollView>
+
+            <View style={s.reviewActions}>
+              <Pressable
+                style={[s.outlineBtn, { borderColor: theme.border, backgroundColor: theme.card }]}
+                onPress={() => setStep("transcript")}
+              >
+                <Feather name="edit-2" size={15} color={theme.text} />
+                <Text style={[s.outlineBtnText, { color: theme.text }]}>Edit</Text>
+              </Pressable>
+              <Pressable
+                style={[s.primaryBtn, { flex: 1, backgroundColor: ACCENT }]}
+                onPress={handleSave}
+                disabled={isSaving}
+              >
+                {isSaving
+                  ? <ActivityIndicator size="small" color="#fff" />
+                  : <>
+                      <Feather name="save" size={15} color="#fff" />
+                      <Text style={s.primaryBtnText}>Save Case</Text>
+                    </>
+                }
+              </Pressable>
+            </View>
           </View>
-        </View>
-      )}
+        );
+      })()}
     </View>
   );
 }
@@ -954,69 +1122,53 @@ const s = StyleSheet.create({
   transcriptHeader: { marginBottom: Spacing.md },
   badge: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", paddingHorizontal: Spacing.sm, paddingVertical: 4, borderRadius: BorderRadius.full, marginBottom: Spacing.xs },
   badgeText: { fontSize: Typography.xs, fontWeight: "600" },
+  transcriptBadgeRow: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, flexWrap: "wrap" },
   transcriptHint: { fontSize: Typography.sm, lineHeight: 18 },
   transcriptInput: { flex: 1, borderRadius: BorderRadius.md, borderWidth: 1, padding: Spacing.md, fontSize: Typography.base, lineHeight: 22, marginBottom: Spacing.md },
 
   // Review
   reviewRoot: { flex: 1 },
   reviewScroll: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, paddingBottom: Spacing.xl },
-  reviewBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    marginBottom: Spacing.md,
-  },
-  reviewBannerText: { flex: 1, fontSize: Typography.sm, fontWeight: "600" },
+  // Completeness
+  completenessCard: { padding: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1, marginBottom: Spacing.sm },
+  completenessRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: Spacing.sm },
+  completenessTitle: { fontSize: Typography.sm, fontWeight: "700" },
+  completenessScore: { fontSize: Typography.base, fontWeight: "800" },
+  progressTrack: { height: 8, borderRadius: 4, overflow: "hidden", marginBottom: Spacing.xs },
+  progressFill: { height: 8, borderRadius: 4 },
+  completenessHint: { fontSize: Typography.xs },
+  // Legend
+  legendRow: { flexDirection: "row", gap: Spacing.md, marginBottom: Spacing.sm },
+  legendItem: { flexDirection: "row", alignItems: "center", gap: 5 },
+  legendDot: { width: 10, height: 10, borderRadius: 5 },
+  legendText: { fontSize: Typography.xs },
+  // Language badge
+  langBadge: { flexDirection: "row", alignItems: "center", gap: Spacing.xs, padding: Spacing.sm, borderRadius: BorderRadius.md, borderWidth: 1, marginBottom: Spacing.sm },
+  langBadgeText: { flex: 1, fontSize: Typography.xs, fontWeight: "500" },
+  // Patient + fields
   patientChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    padding: Spacing.sm + 2,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    marginBottom: Spacing.xs,
+    flexDirection: "row", alignItems: "center", gap: Spacing.sm,
+    padding: Spacing.sm + 2, borderRadius: BorderRadius.md, borderWidth: 1, marginBottom: Spacing.xs,
   },
   patientChipText: { fontSize: Typography.sm, fontWeight: "500" },
-  emptyFields: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: Spacing.sm,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    marginBottom: Spacing.sm,
-  },
-  emptyFieldsText: { flex: 1, fontSize: Typography.sm, lineHeight: 18 },
   fieldCard: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: Spacing.sm,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    marginBottom: Spacing.xs,
+    flexDirection: "row", alignItems: "flex-start", gap: Spacing.sm,
+    padding: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1, marginBottom: Spacing.xs,
+    overflow: "hidden",
   },
   fieldIcon: { width: 28, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center", marginTop: 2 },
-  fieldLabel: { fontSize: Typography.xs, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 3 },
+  fieldLabelRow: { flexDirection: "row", alignItems: "center", gap: Spacing.xs, marginBottom: 3 },
+  fieldLabel: { fontSize: Typography.xs, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5 },
+  fieldBadge: { paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 },
+  fieldBadgeText: { fontSize: 9, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 },
   fieldValue: { fontSize: Typography.sm, lineHeight: 19 },
   noAiBanner: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: Spacing.sm,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    marginTop: Spacing.md,
+    flexDirection: "row", alignItems: "flex-start", gap: Spacing.sm,
+    padding: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1, marginTop: Spacing.md,
   },
   noAiText: { flex: 1, fontSize: Typography.xs, lineHeight: 17 },
   reviewActions: {
-    flexDirection: "row",
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    flexDirection: "row", gap: Spacing.sm,
+    paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md, borderTopWidth: StyleSheet.hairlineWidth,
   },
 });

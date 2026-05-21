@@ -1,0 +1,735 @@
+Now I have the complete picture. Let me give you the full rewired plan combining everything — the bug fixes, the unified input strategy, the pre-fill system, and the Sarvam AI multilingual pipeline.
+
+---
+
+# ErMate — Complete Technical & Product Rewire Plan
+
+## The Architecture in One Diagram
+
+```
+Doctor speaks (any Indian language)
+         ↓
+Sarvam AI Saaras v3
+(Speech → Text in original language)
+         ↓
+Language detected automatically
+         ↓
+Translation to English
+(Sarvam translate API)
+         ↓
+Master Extraction Prompt
+(Claude/GPT reads English transcript)
+         ↓
+Master JSON Schema (all fields)
+         ↓
+Confidence scoring per section
+         ↓
+Pre-filled normals + voice data merged
+         ↓
+Review screen (colour coded)
+         ↓
+Single atomic save with auth token
+         ↓
+Case sheet + Discharge Summary ready
+```
+
+---
+
+## Part 1 — Sarvam AI Pipeline Rewire
+
+### Current Problem
+Sarvam transcribes speech but the language handling between transcription → translation → extraction is fragmented. Fields drop silently.
+
+### Fixed Pipeline
+
+```javascript
+// Step 1 — Transcribe with Sarvam
+const transcribeWithSarvam = async (audioBlob) => {
+  const formData = new FormData();
+  formData.append('file', audioBlob, 'recording.wav');
+  formData.append('model', 'saaras-v2');
+  formData.append('language_code', 'unknown'); // auto-detect
+  formData.append('with_timestamps', false);
+  formData.append('punctuation_mode', 'intelligent');
+
+  const response = await fetch(
+    'https://api.sarvam.ai/speech-to-text',
+    {
+      method: 'POST',
+      headers: { 'api-subscription-key': SARVAM_KEY },
+      body: formData
+    }
+  );
+
+  const data = await response.json();
+  return {
+    transcript: data.transcript,
+    detectedLanguage: data.language_code // e.g. "ta-IN", "hi-IN"
+  };
+};
+
+// Step 2 — Translate to English if needed
+const translateToEnglish = async (text, sourceLang) => {
+  if (sourceLang === 'en-IN') return text; // already English
+  
+  const response = await fetch(
+    'https://api.sarvam.ai/translate',
+    {
+      method: 'POST',
+      headers: {
+        'api-subscription-key': SARVAM_KEY,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        input: text,
+        source_language_code: sourceLang,
+        target_language_code: 'en-IN',
+        speaker_gender: 'Male',
+        mode: 'formal',
+        enable_preprocessing: true
+      })
+    }
+  );
+
+  const data = await response.json();
+  return data.translated_text;
+};
+
+// Step 3 — Extract into master schema
+const extractClinicalData = async (englishTranscript) => {
+  const response = await fetch(
+    'https://api.anthropic.com/v1/messages',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4000,
+        messages: [{
+          role: 'user',
+          content: MASTER_EXTRACTION_PROMPT(englishTranscript)
+        }]
+      })
+    }
+  );
+
+  const data = await response.json();
+  const raw = data.content[0].text;
+  
+  // Strip any markdown if model adds it
+  const clean = raw
+    .replace(/```json/g, '')
+    .replace(/```/g, '')
+    .trim();
+    
+  return JSON.parse(clean);
+};
+
+// Master orchestrator — never call these separately
+const processVoiceCase = async (audioBlob) => {
+  try {
+    // 1. Transcribe
+    const { transcript, detectedLanguage } = 
+      await transcribeWithSarvam(audioBlob);
+    
+    // 2. Translate
+    const englishTranscript = 
+      await translateToEnglish(transcript, detectedLanguage);
+    
+    // 3. Extract
+    const extracted = 
+      await extractClinicalData(englishTranscript);
+    
+    // 4. Merge with pre-filled normals
+    const merged = mergeWithNormals(extracted, patientAge);
+    
+    return {
+      transcript,           // original language — show to doctor
+      englishTranscript,    // translated — used for extraction
+      detectedLanguage,
+      extracted: merged,
+      success: true
+    };
+    
+  } catch (error) {
+    // Fallback to Whisper if Sarvam fails
+    return await fallbackToWhisper(audioBlob);
+  }
+};
+```
+
+---
+
+## Part 2 — Master Extraction Prompt
+
+Replace the current prompt entirely with this:
+
+```javascript
+const MASTER_EXTRACTION_PROMPT = (transcript) => `
+You are a clinical documentation AI for an Indian emergency department.
+
+The transcript below is from an ER doctor dictating a patient case.
+It has been translated to English from the doctor's original language.
+Medical abbreviations used may include Indian EM conventions:
+k/c/o (known case of), h/o (history of), GRBS, OHA, NKDA, 
+c/o (complaints of), b/l (bilateral), a/w (associated with).
+
+Extract ALL clinical information and return a single valid JSON 
+object. Follow these rules exactly:
+
+RULES:
+1. Return JSON only — no explanation, no markdown, no preamble
+2. Every field must be present — use "" for missing strings, 
+   [] for missing arrays, false for missing booleans
+3. Medications: always split into drug, dose, route, frequency
+4. GCS: extract E, V, M individually AND calculate total
+5. VBG/ABG: extract every parameter as a separate field
+6. Past medical history: always an array, never a string
+7. Consultations: extract specialty + doctor name + advice separately
+8. Negative history ("no fever", "no seizures"): 
+   goes into hpi.negativeHistory as array
+9. If doctor says "informed" or "consulted" anyone: 
+   capture in consultations array
+10. Add confidence field to each section:
+    "high" = explicitly stated
+    "medium" = inferred from context  
+    "low" = unclear or partial
+
+SCHEMA TO FILL:
+{
+  "patient": {
+    "name": "",
+    "age": "",
+    "gender": "",
+    "arrivalDate": "",
+    "arrivalTime": "",
+    "modeOfArrival": "",
+    "uhid": "",
+    "phone": "",
+    "mlcCase": false,
+    "confidence": ""
+  },
+  "doctors": {
+    "emResident": "",
+    "emConsultant": "",
+    "consultations": [
+      {
+        "specialty": "",
+        "doctorName": "",
+        "adviceGiven": ""
+      }
+    ],
+    "confidence": ""
+  },
+  "chiefComplaint": {
+    "complaint": "",
+    "duration": "",
+    "onset": "",
+    "progression": "",
+    "confidence": ""
+  },
+  "hpi": {
+    "narrative": "",
+    "associatedSymptoms": [],
+    "negativeHistory": [],
+    "confidence": ""
+  },
+  "pastHistory": {
+    "medical": [],
+    "surgical": [],
+    "medications": [],
+    "allergies": "",
+    "familyHistory": "",
+    "socialHistory": "",
+    "lastMeal": "",
+    "confidence": ""
+  },
+  "primarySurvey": {
+    "airway": {
+      "status": "",
+      "findings": "",
+      "confidence": ""
+    },
+    "breathing": {
+      "spo2": "",
+      "rr": "",
+      "workOfBreathing": "",
+      "oxygenDevice": "",
+      "auscultation": "",
+      "confidence": ""
+    },
+    "circulation": {
+      "hr": "",
+      "bpSystolic": "",
+      "bpDiastolic": "",
+      "crt": "",
+      "ivAccess": "",
+      "cvs": "",
+      "confidence": ""
+    },
+    "disability": {
+      "gcsE": "",
+      "gcsV": "",
+      "gcsM": "",
+      "gcsTotal": "",
+      "pupils": "",
+      "grbs": "",
+      "focalDeficit": "",
+      "power": "",
+      "confidence": ""
+    },
+    "exposure": {
+      "temperature": "",
+      "findings": "",
+      "confidence": ""
+    }
+  },
+  "examination": {
+    "generalAppearance": "",
+    "cvs": "",
+    "respiratory": "",
+    "abdomen": "",
+    "cns": "",
+    "extremities": "",
+    "heent": "",
+    "confidence": ""
+  },
+  "investigations": {
+    "labsOrdered": [],
+    "imagingOrdered": [],
+    "vbg": {
+      "ph": "",
+      "pco2": "",
+      "po2": "",
+      "hco3": "",
+      "lactate": "",
+      "hb": "",
+      "sodium": "",
+      "potassium": "",
+      "creatinine": "",
+      "glucose": "",
+      "confidence": ""
+    },
+    "ecg": "",
+    "efast": "",
+    "resultsSummary": "",
+    "confidence": ""
+  },
+  "treatment": {
+    "medications": [
+      {
+        "drug": "",
+        "dose": "",
+        "route": "",
+        "frequency": ""
+      }
+    ],
+    "ivFluids": [
+      {
+        "fluid": "",
+        "rate": "",
+        "dilution": ""
+      }
+    ],
+    "procedures": [],
+    "confidence": ""
+  },
+  "diagnosis": {
+    "provisional": "",
+    "differentials": [],
+    "confidence": ""
+  },
+  "disposition": {
+    "plan": "",
+    "pendingReports": "",
+    "followUp": "",
+    "confidence": ""
+  },
+  "psychological": {
+    "assessed": false,
+    "suicidalIdeation": false,
+    "selfHarm": false,
+    "substanceAbuse": false,
+    "psychiatricHistory": false,
+    "notes": "",
+    "confidence": ""
+  }
+}
+
+TRANSCRIPT:
+${transcript}
+`;
+```
+
+---
+
+## Part 3 — Pre-fill Normal Values
+
+```javascript
+const ADULT_NORMALS = {
+  primarySurvey: {
+    airway: {
+      status: "Patent",
+      findings: "Airway patent, self-maintained"
+    },
+    breathing: {
+      spo2: "98",
+      rr: "18",
+      workOfBreathing: "Normal, no accessory muscle use",
+      oxygenDevice: "Room air",
+      auscultation: "Air entry bilaterally equal and clear, " +
+                    "no added sounds"
+    },
+    circulation: {
+      hr: "80",
+      bpSystolic: "120",
+      bpDiastolic: "80",
+      crt: "< 2 seconds",
+      ivAccess: "",
+      cvs: "S1 S2 heard, no murmurs"
+    },
+    disability: {
+      gcsE: "4",
+      gcsV: "5",
+      gcsM: "6",
+      gcsTotal: "15",
+      pupils: "Bilaterally equal and reactive to light",
+      focalDeficit: "No focal neurological deficit",
+      power: "5/5 in all four limbs"
+    },
+    exposure: {
+      temperature: "98.6",
+      findings: "No external injuries, no rash"
+    }
+  },
+  examination: {
+    generalAppearance: "Conscious, oriented, " +
+                       "comfortable at rest",
+    cvs: "S1 S2 heard, no murmurs, " +
+         "no added sounds",
+    respiratory: "Normal vesicular breath sounds, " +
+                 "no wheeze, no crepitations",
+    abdomen: "Soft, non-tender, no organomegaly, " +
+             "bowel sounds present",
+    cns: "Higher functions intact, " +
+         "no focal neurological deficit",
+    extremities: "No cyanosis, no clubbing, " +
+                 "no edema",
+    heent: "No pallor, no icterus, " +
+           "no lymphadenopathy"
+  },
+  pastHistory: {
+    allergies: "NKDA"
+  }
+};
+
+// Pediatric normals by age band
+const PEDIATRIC_NORMALS = (ageInYears) => {
+  if (ageInYears < 1) return {
+    hr: "120-160", bpSys: "70-90",
+    rr: "30-60", spo2: "95-100"
+  };
+  if (ageInYears < 5) return {
+    hr: "100-140", bpSys: "80-100",
+    rr: "24-40", spo2: "95-100"
+  };
+  if (ageInYears < 12) return {
+    hr: "80-120", bpSys: "90-110",
+    rr: "18-30", spo2: "95-100"
+  };
+  return { // 12-16
+    hr: "60-100", bpSys: "100-120",
+    rr: "12-20", spo2: "95-100"
+  };
+};
+
+// Merge extracted voice data with normals
+// Voice data wins — normals only fill empty fields
+const mergeWithNormals = (extracted, age) => {
+  const normals = age <= 16
+    ? PEDIATRIC_NORMALS(age)
+    : ADULT_NORMALS;
+
+  const merged = deepMerge(normals, extracted);
+
+  // Tag every field with its source
+  return tagSources(merged, extracted);
+};
+
+// Source tagging — drives colour coding on review screen
+const tagSources = (merged, voiceData) => {
+  // Walk every field
+  // If it exists in voiceData → source: "voice"
+  // If it came from normals → source: "prefill"
+  // If doctor typed it → source: "typed" (set later)
+  return walkAndTag(merged, voiceData);
+};
+```
+
+---
+
+## Part 4 — Review Screen Logic
+
+```javascript
+// Colour coding based on source + confidence
+const getFieldColour = (field) => {
+  if (field.source === 'typed') return 'green';
+  if (field.source === 'voice') {
+    if (field.confidence === 'high')   return 'green';
+    if (field.confidence === 'medium') return 'amber';
+    if (field.confidence === 'low')    return 'red';
+  }
+  if (field.source === 'prefill') return 'grey';
+  return 'grey';
+};
+
+// Completeness score shown at top of review
+const getCompleteness = (caseData) => {
+  const required = [
+    'patient.name', 'patient.age',
+    'chiefComplaint.complaint',
+    'hpi.narrative',
+    'primarySurvey.circulation.bp',
+    'primarySurvey.disability.gcsTotal',
+    'diagnosis.provisional'
+  ];
+  
+  const filled = required.filter(path => 
+    getNestedValue(caseData, path) !== ""
+  );
+  
+  return {
+    score: filled.length,
+    total: required.length,
+    percent: Math.round(
+      (filled.length / required.length) * 100
+    )
+  };
+};
+```
+
+**Review Screen UI:**
+
+```
+┌─────────────────────────────────────┐
+│  Case Review                        │
+│  ████████████░░  14 of 18 complete  │
+├─────────────────────────────────────┤
+│ ✅ Patient        Rajesh, 60M       │
+│ ✅ Doctors        Dr. Athna / Christo│
+│ ✅ Chief Complaint Facial weakness  │
+│ ✅ HOPI           Captured          │
+│ ✅ Past History   T2DM, HTN, CLD... │
+│ ⚠️ Allergies      Not mentioned 🎙  │
+│ ✅ Primary Survey ABCDE captured    │
+│ ✅ VBG            pH 7.35, full     │
+│ ✅ Medications    2 drugs captured  │
+│ ⚠️ Diagnosis      Not stated 🎙     │
+│ 🔘 Surgical Hx   Normal (prefilled) │
+│ 🔘 Psych Screen  Normal (prefilled) │
+├─────────────────────────────────────┤
+│         💾  SAVE CASE               │
+└─────────────────────────────────────┘
+
+✅ Green  = voice captured, high confidence
+⚠️ Amber  = not mentioned or uncertain
+🔘 Grey   = normal value prefilled
+```
+
+---
+
+## Part 5 — Single Atomic Save
+
+```javascript
+const saveCase = async (mergedData) => {
+  const token = await getAuthToken();
+  
+  if (!token) {
+    throw new Error('Not authenticated — please log in again');
+  }
+
+  // Build complete payload — one object, one call
+  const payload = {
+    // Patient
+    patientName:    mergedData.patient.name,
+    patientAge:     mergedData.patient.age,
+    patientGender:  mergedData.patient.gender,
+    arrivalTime:    mergedData.patient.arrivalTime,
+    modeOfArrival:  mergedData.patient.modeOfArrival,
+    mlcCase:        mergedData.patient.mlcCase,
+
+    // Doctors
+    emResident:     mergedData.doctors.emResident,
+    emConsultant:   mergedData.doctors.emConsultant,
+    consultations:  mergedData.doctors.consultations,
+
+    // Full clinical data — all sections
+    clinicalData: {
+      chiefComplaint:  mergedData.chiefComplaint,
+      hpi:             mergedData.hpi,
+      pastHistory:     mergedData.pastHistory,
+      primarySurvey:   mergedData.primarySurvey,
+      examination:     mergedData.examination,
+      investigations:  mergedData.investigations,
+      treatment:       mergedData.treatment,
+      diagnosis:       mergedData.diagnosis,
+      disposition:     mergedData.disposition,
+      psychological:   mergedData.psychological
+    },
+
+    // Metadata
+    inputMethod:      'voice',
+    originalLanguage: mergedData.detectedLanguage,
+    originalTranscript: mergedData.transcript
+  };
+
+  const response = await fetch('/api/cases', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const err = await response.json();
+    throw new Error(err.message || 'Save failed');
+  }
+
+  return response.json();
+};
+```
+
+---
+
+## Part 6 — Discharge Summary Generation
+
+Using the saved case data, generate the summary in English regardless of what language the doctor spoke in:
+
+```javascript
+const generateDischargeSummary = async (caseData) => {
+  const prompt = `
+You are writing a formal discharge summary for an Indian 
+emergency department. Write in professional medical English.
+
+Use the following case data:
+
+Patient: ${caseData.patient.name}, 
+         ${caseData.patient.age}Y 
+         ${caseData.patient.gender}
+Arrival: ${caseData.patient.arrivalDate} 
+         at ${caseData.patient.arrivalTime}
+EM Team: Resident: ${caseData.doctors.emResident} | 
+         Consultant: ${caseData.doctors.emConsultant}
+
+Chief Complaint: ${caseData.chiefComplaint.complaint} 
+                 since ${caseData.chiefComplaint.duration}
+
+History: ${caseData.hpi.narrative}
+
+Past History: ${caseData.pastHistory.medical.join(', ')}
+
+Vitals on Arrival:
+BP ${caseData.primarySurvey.circulation.bpSystolic}/
+   ${caseData.primarySurvey.circulation.bpDiastolic} mmHg
+HR ${caseData.primarySurvey.circulation.hr} bpm
+SpO2 ${caseData.primarySurvey.breathing.spo2}%
+RR ${caseData.primarySurvey.breathing.rr}/min
+GCS ${caseData.primarySurvey.disability.gcsTotal}/15
+GRBS ${caseData.primarySurvey.disability.grbs} mg/dL
+
+VBG: pH ${caseData.investigations.vbg.ph}, 
+     PCO2 ${caseData.investigations.vbg.pco2},
+     HCO3 ${caseData.investigations.vbg.hco3},
+     Lactate ${caseData.investigations.vbg.lactate}
+
+Examination: ${caseData.examination.generalAppearance}
+CVS: ${caseData.examination.cvs}
+RS: ${caseData.examination.respiratory}
+Abdomen: ${caseData.examination.abdomen}
+CNS: ${caseData.examination.cns}
+
+Treatment Given:
+${caseData.treatment.medications.map(m => 
+  `${m.drug} ${m.dose} ${m.route} ${m.frequency}`
+).join('\n')}
+${caseData.treatment.ivFluids.map(f =>
+  `${f.fluid} at ${f.rate}`
+).join('\n')}
+
+Diagnosis: ${caseData.diagnosis.provisional}
+Differentials: ${caseData.diagnosis.differentials.join(', ')}
+
+Consultations: ${caseData.doctors.consultations.map(c =>
+  `${c.specialty} (${c.doctorName}): ${c.adviceGiven}`
+).join('\n')}
+
+Plan: ${caseData.disposition.plan}
+
+Write a complete, professional discharge summary with these 
+sections:
+1. Presenting Complaint
+2. History of Present Illness  
+3. Examination Findings
+4. Investigations
+5. Course in Hospital & Treatment
+6. Diagnosis
+7. Condition at Discharge
+8. Discharge Advice & Follow-up
+
+Keep clinical tone. Use standard medical English. 
+Do not add information not present in the data above.
+`;
+
+  // Call Claude for generation
+  const response = await fetch(
+    'https://api.anthropic.com/v1/messages',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 2000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    }
+  );
+
+  const data = await response.json();
+  return data.content[0].text;
+};
+```
+
+---
+
+## Part 7 — What to Tell Your Developer
+
+Give them this priority order. Nothing else gets built until Row 1 is done.
+
+| Row | Task | Why |
+|---|---|---|
+| 1 | Single voice pipeline: Sarvam → translate → extract → merge normals → review → atomic save | This is the entire product |
+| 2 | Master JSON schema locked and used everywhere | Prevents reactive field-by-field fixes forever |
+| 3 | Pre-fill normals on case open by age | Doctors only correct, never create |
+| 4 | Review screen with colour coding + completeness score | Catches silent failures before save |
+| 5 | Discharge summary using master schema as input | Guaranteed to have all fields |
+| 6 | Tab reorder: Patient → History → Primary → Exam → Treatment → Notes | Matches clinical thinking |
+| 7 | Medical vs Trauma toggle | Changes tab order for trauma cases |
+| 8 | Mic on medication entry field | Completes voice input everywhere |
+
+---
+
+**The single sentence for your developer:**
+
+*Every field in the app must map to one field in the master schema — voice fills it, typing fills it, scanning fills it, pre-fill fills it — and the save function sends all of it in one call with one auth token, every time.*
+
+Want me to now write the complete test suite with Rajesh's case as Test Case 1?

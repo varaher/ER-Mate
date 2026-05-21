@@ -520,6 +520,7 @@ export default function CaseSheetScreen() {
   const { caseId } = route.params;
 
   const [activeTab, setActiveTab] = useState<TabType>("patient");
+  const [caseMode, setCaseMode] = useState<"Medical" | "Trauma">("Medical");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
@@ -1357,6 +1358,10 @@ export default function CaseSheetScreen() {
           const sectionKey = section as keyof ATLSFormData;
           const current = (formData[sectionKey] as any)?.[field] || "";
           updateFormData(sectionKey, field, current ? `${current} ${text}` : text);
+        } else if (fieldKey === "medication.name") {
+          setNewMedication((prev) => ({ ...prev, name: prev.name ? `${prev.name} ${text}` : text }));
+        } else if (fieldKey === "medication.dose") {
+          setNewMedication((prev) => ({ ...prev, dose: prev.dose ? `${prev.dose} ${text}` : text }));
         }
       }
     } catch (err) {
@@ -1892,8 +1897,13 @@ export default function CaseSheetScreen() {
     handleSave(true);
   };
 
+  const getTabOrder = (): TabType[] =>
+    caseMode === "Trauma"
+      ? ["patient", "primary", "exam", "history", "treatment", "notes", "disposition"]
+      : ["patient", "history", "primary", "exam", "treatment", "notes", "disposition"];
+
   const handleNext = async () => {
-    const tabs: TabType[] = ["patient", "primary", "history", "exam", "treatment", "notes", "disposition"];
+    const tabs = getTabOrder();
     const currentIndex = tabs.indexOf(activeTab);
     if (currentIndex < tabs.length - 1) {
       setActiveTab(tabs[currentIndex + 1]);
@@ -1906,7 +1916,7 @@ export default function CaseSheetScreen() {
   };
 
   const handlePrevious = () => {
-    const tabs: TabType[] = ["patient", "primary", "history", "exam", "treatment", "notes", "disposition"];
+    const tabs = getTabOrder();
     const currentIndex = tabs.indexOf(activeTab);
     if (currentIndex > 0) {
       setActiveTab(tabs[currentIndex - 1]);
@@ -2015,11 +2025,36 @@ export default function CaseSheetScreen() {
             <Pressable style={styles.headerIcon}><Feather name="mic" size={20} color={theme.textSecondary} /></Pressable>
           </View>
         </View>
+        <View style={styles.caseModeRow}>
+          {(["Medical", "Trauma"] as const).map((m) => (
+            <Pressable
+              key={m}
+              style={[styles.caseModeBtn, {
+                backgroundColor: caseMode === m ? (m === "Trauma" ? "#dc2626" : theme.primary) : theme.backgroundSecondary,
+                borderColor: caseMode === m ? (m === "Trauma" ? "#dc2626" : theme.primary) : theme.border,
+              }]}
+              onPress={() => setCaseMode(m)}
+            >
+              <Feather name={m === "Trauma" ? "alert-triangle" : "activity"} size={12} color={caseMode === m ? "#fff" : theme.textSecondary} />
+              <Text style={[styles.caseModeBtnText, { color: caseMode === m ? "#fff" : theme.textSecondary }]}>{m}</Text>
+            </Pressable>
+          ))}
+        </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabBar}>
           <TabButton tab="patient" label="Patient" icon="user" />
-          <TabButton tab="primary" label="Primary" icon="activity" />
-          <TabButton tab="history" label="History" icon="file-text" />
-          <TabButton tab="exam" label="Exam" icon="clipboard" />
+          {caseMode === "Trauma" ? (
+            <>
+              <TabButton tab="primary" label="Primary" icon="activity" />
+              <TabButton tab="exam" label="Exam" icon="clipboard" />
+              <TabButton tab="history" label="History" icon="file-text" />
+            </>
+          ) : (
+            <>
+              <TabButton tab="history" label="History" icon="file-text" />
+              <TabButton tab="primary" label="Primary" icon="activity" />
+              <TabButton tab="exam" label="Exam" icon="clipboard" />
+            </>
+          )}
           <TabButton tab="treatment" label="Treatment" icon="plus-square" />
           <TabButton tab="notes" label="Notes" icon="file" />
           <TabButton tab="disposition" label="Disposition" icon="log-out" />
@@ -3107,20 +3142,26 @@ export default function CaseSheetScreen() {
               <Text style={[styles.cardTitle, { color: theme.text }]}>Treatment Given</Text>
               <Text style={[styles.fieldLabel, { color: theme.text }]}>Medications</Text>
               <View style={styles.medicationInputRow}>
-                <TextInput
-                  style={[styles.medicationInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, flex: 2 }]}
-                  placeholder="Drug Name"
-                  placeholderTextColor={theme.textMuted}
-                  value={newMedication.name}
-                  onChangeText={(v) => setNewMedication((prev) => ({ ...prev, name: v }))}
-                />
-                <TextInput
-                  style={[styles.medicationInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, flex: 1 }]}
-                  placeholder="Dose"
-                  placeholderTextColor={theme.textMuted}
-                  value={newMedication.dose}
-                  onChangeText={(v) => setNewMedication((prev) => ({ ...prev, dose: v }))}
-                />
+                <View style={{ flex: 2, flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <TextInput
+                    style={[styles.medicationInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, flex: 1 }]}
+                    placeholder="Drug Name"
+                    placeholderTextColor={theme.textMuted}
+                    value={newMedication.name}
+                    onChangeText={(v) => setNewMedication((prev) => ({ ...prev, name: v }))}
+                  />
+                  <VoiceButton fieldKey="medication.name" small />
+                </View>
+                <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <TextInput
+                    style={[styles.medicationInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, flex: 1 }]}
+                    placeholder="Dose"
+                    placeholderTextColor={theme.textMuted}
+                    value={newMedication.dose}
+                    onChangeText={(v) => setNewMedication((prev) => ({ ...prev, dose: v }))}
+                  />
+                  <VoiceButton fieldKey="medication.dose" small />
+                </View>
               </View>
               <View style={styles.medicationInputRow}>
                 <TextInput
@@ -3440,6 +3481,9 @@ const styles = StyleSheet.create({
   savedText: { ...Typography.small, marginTop: 2 },
   headerRight: { flexDirection: "row", gap: Spacing.sm },
   headerIcon: { padding: Spacing.sm },
+  caseModeRow: { flexDirection: "row", gap: Spacing.xs, paddingHorizontal: Spacing.md, paddingTop: Spacing.xs },
+  caseModeBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: Spacing.md, paddingVertical: 5, borderRadius: BorderRadius.full, borderWidth: 1 },
+  caseModeBtnText: { fontSize: 12, fontWeight: "700" },
   tabBar: { paddingHorizontal: Spacing.md, gap: Spacing.sm, paddingVertical: Spacing.sm },
   tabBtn: { flexDirection: "row", alignItems: "center", paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm, borderRadius: BorderRadius.full, gap: Spacing.xs },
   tabBtnText: { fontSize: 13, fontWeight: "600" },

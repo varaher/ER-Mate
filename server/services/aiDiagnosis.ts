@@ -1098,7 +1098,18 @@ export async function transcribeAndExtractVoice(
   return { transcript };
 }
 
+export interface MasterConsultation {
+  specialty: string;
+  doctorName: string;
+  adviceGiven: string;
+}
+
 export interface SmartDictationResult {
+  // Patient info
+  patientName?: string;
+  patientAge?: string;
+  patientSex?: string;
+  // Chief complaint (legacy string)
   chiefComplaint?: string;
   historyOfPresentIllness?: string;
   onset?: string;
@@ -1119,41 +1130,54 @@ export interface SmartDictationResult {
   developmentalHistory?: string;
   symptoms?: string[];
   painDetails?: {
-    location?: string;
-    severity?: string;
-    character?: string;
-    onset?: string;
-    duration?: string;
-    aggravatingFactors?: string;
-    relievingFactors?: string;
-    associatedSymptoms?: string;
+    location?: string; severity?: string; character?: string; onset?: string;
+    duration?: string; aggravatingFactors?: string; relievingFactors?: string; associatedSymptoms?: string;
   };
   vitalsSuggested?: {
-    bp?: string;
-    hr?: string;
-    rr?: string;
-    spo2?: string;
-    temperature?: string;
-    grbs?: string;
+    bp?: string; hr?: string; rr?: string; spo2?: string; temperature?: string; grbs?: string; gcs?: string;
+  };
+  vbgResults?: {
+    ph?: string; pco2?: string; po2?: string; hco3?: string; lactate?: string;
+    hemoglobin?: string; sodium?: string; potassium?: string; creatinine?: string; glucose?: string;
   };
   examFindings?: {
-    general?: string;
-    cvs?: string;
-    respiratory?: string;
-    abdomen?: string;
-    cns?: string;
-    musculoskeletal?: string;
-    skin?: string;
-    heent?: string;
+    general?: string; cvs?: string; respiratory?: string; abdomen?: string;
+    cns?: string; musculoskeletal?: string; skin?: string; heent?: string;
+  };
+  // Doctor fields
+  emResident?: string;
+  emConsultant?: string;
+  consultationGiven?: string;
+  consultations?: MasterConsultation[];
+  // Master schema structured fields
+  primarySurvey?: {
+    airway?: { status?: string; findings?: string; confidence?: string; };
+    breathing?: { spo2?: string; rr?: string; workOfBreathing?: string; oxygenDevice?: string; auscultation?: string; confidence?: string; };
+    circulation?: { hr?: string; bpSystolic?: string; bpDiastolic?: string; crt?: string; ivAccess?: string; cvs?: string; confidence?: string; };
+    disability?: { gcsE?: string; gcsV?: string; gcsM?: string; gcsTotal?: string; pupils?: string; grbs?: string; focalDeficit?: string; power?: string; confidence?: string; };
+    exposure?: { temperature?: string; findings?: string; confidence?: string; };
+  };
+  disposition?: { plan?: string; pendingReports?: string; followUp?: string; confidence?: string; };
+  psychologicalAssessment?: {
+    assessed?: boolean; suicidalIdeation?: boolean; selfHarm?: boolean;
+    substanceAbuse?: boolean; psychiatricHistory?: boolean; notes?: string; confidence?: string;
+  };
+  sectionConfidence?: {
+    patient?: string; doctors?: string; chiefComplaint?: string; hpi?: string;
+    pastHistory?: string; primarySurvey?: string; examination?: string;
+    investigations?: string; treatment?: string; diagnosis?: string; disposition?: string;
   };
   diagnosis?: string[];
   differentialDiagnosis?: string[];
+  prescribedMedications?: Array<{ name: string; dose: string; route: string; frequency: string; }>;
+  prescribedInfusions?: Array<{ name: string; dose?: string; rate?: string; dilution?: string; }>;
   treatmentNotes?: string;
   investigationsOrdered?: string;
   imagingOrdered?: string;
   rawTranscription?: string;
   fieldsPopulated?: string[];
   restAllNormal?: boolean;
+  detectedLanguage?: string;
 }
 
 export async function extractSmartDictation(
@@ -1166,112 +1190,101 @@ export async function extractSmartDictation(
     return { rawTranscription: transcription };
   }
 
-  const isPediatric = patientContext?.caseType === 'pediatric' || 
+  const isPediatric = patientContext?.caseType === 'pediatric' ||
     (patientContext?.age !== undefined && patientContext.age <= 16);
 
   const contextInfo = patientContext
-    ? `Patient context: ${patientContext.age || "unknown"} year old ${patientContext.sex || "patient"}${patientContext.chiefComplaint ? `, presenting with: ${patientContext.chiefComplaint}` : ""}. Case type: ${isPediatric ? "Pediatric (PALS)" : "Adult (ATLS)"}.`
+    ? `Patient context: ${patientContext.age || "unknown"} year old ${patientContext.sex || "patient"}. Case type: ${isPediatric ? "Pediatric (PALS)" : "Adult (ATLS)"}. Note: transcript may have been translated to English from the doctor's original language.`
     : "No patient context provided";
 
-  const pediatricFields = isPediatric ? `
-  "immunizationHistory": "Vaccination history if mentioned",
-  "birthHistory": "Birth history - term/preterm, birth weight, NICU stay, etc. if mentioned",
-  "feedingHistory": "Breastfeeding/formula/weaning history if mentioned",
-  "developmentalHistory": "Developmental milestones if mentioned",` : "";
+  const pediatricExtra = isPediatric ? `,
+    "immunizationHistory": "Vaccination history if mentioned",
+    "birthHistory": "Birth history - term/preterm, birth weight, NICU stay if mentioned",
+    "feedingHistory": "Breastfeeding/formula/weaning if mentioned",
+    "developmentalHistory": "Developmental milestones if mentioned"` : "";
 
-  const prompt = `You are an expert Emergency Medicine clinical documentation assistant. A physician is dictating a patient's complete history in one continuous narrative. Your job is to carefully parse this dictation and extract every piece of clinical information, placing it into the correct case sheet field.
+  const prompt = `You are a clinical documentation AI for an Indian emergency department.
+The transcript below is a doctor dictating a patient case (may have been translated to English).
+Indian EM abbreviations: k/c/o = known case of, h/o = history of, GRBS = glucose, OHA = oral hypoglycemic agents, NKDA = no known drug allergies, c/o = complaints of, b/l = bilateral, a/w = associated with, e/e = equal and reactive, NAD = no acute distress, o/e = on examination.
 
 ${contextInfo}
 
-Voice dictation transcript:
+RULES:
+1. Return JSON ONLY — no markdown, no explanation
+2. Use "" for missing strings, [] for missing arrays, false for missing booleans
+3. Medications: split into drug + dose + route + frequency
+4. GCS: extract E, V, M individually AND compute total (E+V+M)
+5. VBG/ABG: extract every parameter as a separate field
+6. Past medical history: always an array of strings
+7. Consultations: array with specialty + doctorName + adviceGiven
+8. Negative findings: put in hpi.negativeHistory array
+9. confidence per section: "high" = explicitly stated, "medium" = inferred, "low" = unclear, "" = not mentioned
+
+TRANSCRIPT:
 "${transcription}"
 
-IMPORTANT INSTRUCTIONS:
-1. Parse the ENTIRE dictation carefully. Doctors may speak in informal/shorthand style.
-2. Recognize common medical abbreviations: "pt" = patient, "c/o" = complaining of, "h/o" = history of, "k/c/o" = known case of, "OHA" = oral hypoglycemic agents, "dx" = diagnosis, "rx" = treatment, "hx" = history, "sx" = symptoms, "o/e" = on examination, "NAD" = no acute distress, "GRBS" = random blood sugar, etc.
-3. Differentiate between: presenting complaints vs past history vs examination findings vs diagnosis.
-4. If something is mentioned as a NEGATIVE finding (e.g., "not associated with vomiting"), put it in "negativeSymptoms".
-5. Only include fields that have actual content from the transcript. Omit empty fields entirely.
-6. Be precise - do not invent or assume information not stated.
-7. Include a "fieldsPopulated" array listing which fields you filled, so the UI can show what was auto-populated.
-8. ALWAYS extract patient name and age if mentioned. Doctors often start with "Patient name Raju, 45 year old male..." or "Name: Meena, Age 32" or similar patterns. Extract these into patientName and patientAge fields.
-
-Respond in JSON format:
+SCHEMA (fill every field, use "" for not mentioned):
 {
-  "patientName": "Patient's name if mentioned in dictation",
-  "patientAge": "Patient's age if mentioned (just the number as string, e.g. '45')",
-  "patientSex": "Patient's sex/gender if mentioned (Male/Female/Other)",
-  "chiefComplaint": "Main presenting complaint(s) - what the patient came in for",
-  "historyOfPresentIllness": "A complete NARRATIVE clinical story written in the third person. MUST weave ALL of the following into flowing prose (do NOT use labels or bullet points): onset and timing, duration, progression, character/nature of symptoms, location (if pain), severity, aggravating/relieving factors, associated symptoms, pertinent negatives. Example: 'A 45-year-old male presented to the ER with complaints of severe retrosternal chest pain of sudden onset approximately 2 hours ago while climbing stairs. The pain is crushing in nature, radiating to the left arm, aggravated by exertion, and partially relieved by rest. It is associated with profuse sweating and breathlessness. There is no history of vomiting, syncope, or palpitations.' Write it as a clinical HPI paragraph that a doctor would write in medical records.",
-  "onset": "When symptoms started (e.g., '2 days ago', 'sudden onset') - ALSO weave this into historyOfPresentIllness narrative",
-  "duration": "Duration of symptoms - ALSO weave this into historyOfPresentIllness narrative",
-  "progression": "How symptoms progressed - ALSO weave this into historyOfPresentIllness narrative",
-  "associatedSymptoms": "Symptoms that accompany the chief complaint - ALSO weave this into historyOfPresentIllness narrative",
-  "negativeSymptoms": "Pertinent negatives explicitly mentioned - ALSO weave this into historyOfPresentIllness narrative",
-  "pastMedicalHistory": "Known medical conditions (diabetes, hypertension, asthma, etc.)",
-  "pastSurgicalHistory": "Previous surgeries if mentioned",
-  "allergies": "Drug or food allergies if mentioned",
-  "currentMedications": "Current medications the patient is taking",
-  "familyHistory": "Family medical history if mentioned",
-  "socialHistory": "Smoking, alcohol, occupation, etc. if mentioned",
-  "menstrualHistory": "Menstrual/obstetric history if mentioned and relevant",${pediatricFields}
-  "symptoms": ["Array of individual symptoms extracted"],
+  "patientName": "",
+  "patientAge": "",
+  "patientSex": "",
+  "chiefComplaint": "Main presenting complaint",
+  "onset": "When symptoms started",
+  "duration": "Duration of symptoms",
+  "progression": "How symptoms progressed",
+  "historyOfPresentIllness": "Complete narrative clinical story in third person — weave onset, duration, progression, character, location, severity, aggravating/relieving factors, associated symptoms, pertinent negatives into flowing prose",
+  "associatedSymptoms": "Symptoms accompanying chief complaint",
+  "negativeSymptoms": "Pertinent negatives explicitly mentioned",
+  "symptoms": [],
+  "pastMedicalHistory": "Known conditions (T2DM, HTN, etc.)",
+  "pastSurgicalHistory": "Previous surgeries",
+  "allergies": "Drug/food allergies or NKDA",
+  "currentMedications": "Current medications",
+  "familyHistory": "Family history",
+  "socialHistory": "Smoking, alcohol, occupation"${pediatricExtra},
+  "menstrualHistory": "Menstrual/obstetric history if mentioned",
   "painDetails": {
-    "location": "Where the pain is",
-    "severity": "Pain score or description",
-    "character": "Nature of pain (sharp, dull, colicky, burning, etc.)",
-    "onset": "When pain started",
-    "duration": "How long",
-    "aggravatingFactors": "What makes it worse",
-    "relievingFactors": "What makes it better",
-    "associatedSymptoms": "Symptoms with the pain"
+    "location": "", "severity": "", "character": "", "onset": "",
+    "duration": "", "aggravatingFactors": "", "relievingFactors": "", "associatedSymptoms": ""
   },
   "vitalsSuggested": {
-    "bp": "Blood pressure if mentioned",
-    "hr": "Heart rate if mentioned",
-    "rr": "Respiratory rate if mentioned",
-    "spo2": "SpO2 if mentioned",
-    "temperature": "Temperature if mentioned",
-    "grbs": "Blood sugar if mentioned",
-    "gcs": "GCS score if mentioned e.g. E4V5M6"
+    "bp": "systolic/diastolic", "hr": "", "rr": "", "spo2": "", "temperature": "", "grbs": "", "gcs": "E_V_M total"
+  },
+  "primarySurvey": {
+    "airway": { "status": "", "findings": "", "confidence": "" },
+    "breathing": { "spo2": "", "rr": "", "workOfBreathing": "", "oxygenDevice": "", "auscultation": "", "confidence": "" },
+    "circulation": { "hr": "", "bpSystolic": "", "bpDiastolic": "", "crt": "", "ivAccess": "", "cvs": "", "confidence": "" },
+    "disability": { "gcsE": "", "gcsV": "", "gcsM": "", "gcsTotal": "", "pupils": "", "grbs": "", "focalDeficit": "", "power": "", "confidence": "" },
+    "exposure": { "temperature": "", "findings": "", "confidence": "" }
   },
   "vbgResults": {
-    "ph": "pH value if mentioned (e.g. '7.357')",
-    "pco2": "PCO2 value if mentioned",
-    "po2": "PO2 value if mentioned",
-    "hco3": "Bicarbonate/HCO3 value if mentioned",
-    "lactate": "Lactate value if mentioned",
-    "hemoglobin": "Hemoglobin/Hb value from VBG/ABG if mentioned",
-    "sodium": "Sodium value if mentioned",
-    "potassium": "Potassium value if mentioned",
-    "creatinine": "Creatinine value if mentioned",
-    "glucose": "Glucose from VBG/ABG if mentioned",
-    "spo2_vbg": "SpO2 from VBG/ABG if different from pulse ox"
+    "ph": "", "pco2": "", "po2": "", "hco3": "", "lactate": "",
+    "hemoglobin": "", "sodium": "", "potassium": "", "creatinine": "", "glucose": ""
   },
   "examFindings": {
-    "general": "General appearance/examination findings",
-    "cvs": "Cardiovascular examination findings",
-    "respiratory": "Respiratory examination findings",
-    "abdomen": "Abdominal examination findings",
-    "cns": "Neurological examination findings",
-    "musculoskeletal": "MSK findings if mentioned",
-    "skin": "Skin/wound findings if mentioned",
-    "heent": "Head, eyes, ears, nose, throat findings if mentioned"
+    "general": "", "cvs": "", "respiratory": "", "abdomen": "", "cns": "", "musculoskeletal": "", "skin": "", "heent": ""
   },
-  "emResident": "Name of EM resident/junior doctor if mentioned (e.g. 'Dr. Athna Navas', 'resident Dr. Smith')",
-  "emConsultant": "Name of EM consultant/senior doctor if mentioned (e.g. 'consultant Dr. Christo', 'Dr. MB')",
-  "consultationGiven": "Any specialist consultation called/given (e.g. 'neuromedicine Dr. Shajan', 'cardiology on-call')",
-  "diagnosis": ["Primary diagnosis or working diagnosis"],
-  "differentialDiagnosis": ["Differential diagnoses if mentioned"],
-  "prescribedMedications": [
-    {"name": "Drug name", "dose": "Dose with units", "route": "PO/IV/IM/SC/etc", "frequency": "stat/OD/BD/TDS/SOS/etc"}
-  ],
-  "prescribedInfusions": [
-    {"name": "Fluid or drug name (NS, RL, Dopamine, etc)", "dose": "Amount if mentioned", "rate": "Rate of infusion e.g. 50ml/hr"}
-  ],
-  "treatmentNotes": "Any other treatment plans, advice, or notes not captured in medications/infusions",
-  "investigationsOrdered": "Labs ordered if mentioned (CBC, RFT, LFT, etc.)",
-  "imagingOrdered": "Imaging ordered if mentioned (X-ray, CT, MRI, USG, etc.)",
+  "emResident": "",
+  "emConsultant": "",
+  "consultationGiven": "",
+  "consultations": [{ "specialty": "", "doctorName": "", "adviceGiven": "" }],
+  "diagnosis": [],
+  "differentialDiagnosis": [],
+  "prescribedMedications": [{ "name": "", "dose": "", "route": "", "frequency": "" }],
+  "prescribedInfusions": [{ "name": "", "dose": "", "rate": "" }],
+  "disposition": { "plan": "", "pendingReports": "", "followUp": "" },
+  "psychologicalAssessment": {
+    "assessed": false, "suicidalIdeation": false, "selfHarm": false,
+    "substanceAbuse": false, "psychiatricHistory": false, "notes": ""
+  },
+  "treatmentNotes": "",
+  "investigationsOrdered": "",
+  "imagingOrdered": "",
+  "sectionConfidence": {
+    "patient": "", "chiefComplaint": "", "hpi": "", "pastHistory": "",
+    "primarySurvey": "", "examination": "", "investigations": "",
+    "treatment": "", "diagnosis": "", "disposition": ""
+  },
   "restAllNormal": false,
   "fieldsPopulated": ["Array of field names that were populated"]
 }
@@ -1290,7 +1303,7 @@ SPECIAL INSTRUCTION - "REST ALL NORMAL" DETECTION:
         { role: "user", content: prompt },
       ],
       temperature: 0.1,
-      max_tokens: 3000,
+      max_tokens: 4000,
       response_format: { type: "json_object" },
     });
 
@@ -1301,6 +1314,20 @@ SPECIAL INSTRUCTION - "REST ALL NORMAL" DETECTION:
 
     const extracted = JSON.parse(content) as SmartDictationResult;
     extracted.rawTranscription = transcription;
+    // Populate primarySurvey vitalsSuggested from structured primarySurvey if vitalsSuggested is empty
+    if (extracted.primarySurvey && !extracted.vitalsSuggested?.bp) {
+      const ps = extracted.primarySurvey;
+      extracted.vitalsSuggested = {
+        bp: ps.circulation?.bpSystolic && ps.circulation?.bpDiastolic
+          ? `${ps.circulation.bpSystolic}/${ps.circulation.bpDiastolic}` : extracted.vitalsSuggested?.bp || "",
+        hr: ps.circulation?.hr || extracted.vitalsSuggested?.hr || "",
+        rr: ps.breathing?.rr || extracted.vitalsSuggested?.rr || "",
+        spo2: ps.breathing?.spo2 || extracted.vitalsSuggested?.spo2 || "",
+        temperature: ps.exposure?.temperature || extracted.vitalsSuggested?.temperature || "",
+        grbs: ps.disability?.grbs || extracted.vitalsSuggested?.grbs || "",
+        gcs: ps.disability?.gcsTotal || extracted.vitalsSuggested?.gcs || "",
+      };
+    }
     return extracted;
   } catch (error) {
     console.error("Failed to extract smart dictation data:", error);
