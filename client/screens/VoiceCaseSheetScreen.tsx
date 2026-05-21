@@ -247,9 +247,32 @@ export default function VoiceCaseSheetScreen() {
   const handleExtract = async () => {
     const text = editedTranscript.trim();
     if (!text) { Alert.alert("Empty", "Please record some audio or type a transcript first."); return; }
-    // Use English translation for AI extraction; fall back to edited transcript
-    const extractText = (englishTranscript && englishTranscript !== text) ? englishTranscript : text;
     setIsExtracting(true);
+
+    // If the doctor edited the transcript in a non-English language, re-translate before extraction
+    let extractText = text;
+    const isNonEnglish = detectedLanguage && !detectedLanguage.startsWith("en");
+    try {
+      if (isNonEnglish) {
+        const tResp = await fetch(new URL("/api/voice/translate", getApiUrl()).toString(), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, sourceLanguage: detectedLanguage }),
+        });
+        if (tResp.ok) {
+          const tData = await tResp.json();
+          const translated = (tData.englishText || "").trim();
+          if (translated) {
+            extractText = translated;
+            setEnglishTranscript(translated);
+          }
+        }
+      } else if (englishTranscript && englishTranscript !== text) {
+        // Original transcript was non-English but doctor switched to English editing
+        extractText = englishTranscript;
+      }
+    } catch (_) { /* translation best-effort, fall back to edited text */ }
+
     try {
       const resp = await fetch(new URL("/api/voice/extract-clinical", getApiUrl()).toString(), {
         method: "POST",
@@ -273,17 +296,33 @@ export default function VoiceCaseSheetScreen() {
   };
 
   const computeCompleteness = (ex: any) => {
+    const ps = ex?.primarySurvey || {};
+    const vs = ex?.vitalsSuggested || {};
     const checks = [
+      // Patient
       { label: "Patient Name", filled: !!(ex?.patientName || patientName) },
+      { label: "Patient Age", filled: !!patientAge },
+      // Complaint
       { label: "Chief Complaint", filled: !!(ex?.chiefComplaint) },
+      { label: "Duration", filled: !!(ex?.duration) },
+      // History
       { label: "HPI Narrative", filled: !!(ex?.historyOfPresentIllness) },
-      { label: "Past History", filled: !!(ex?.pastMedicalHistory) },
-      { label: "Primary Survey BP", filled: !!(ex?.vitalsSuggested?.bp || ex?.primarySurvey?.circulation?.bpSystolic) },
-      { label: "HR / Pulse", filled: !!(ex?.vitalsSuggested?.hr || ex?.primarySurvey?.circulation?.hr) },
-      { label: "SpO2", filled: !!(ex?.vitalsSuggested?.spo2 || ex?.primarySurvey?.breathing?.spo2) },
-      { label: "GCS", filled: !!(ex?.vitalsSuggested?.gcs || ex?.primarySurvey?.disability?.gcsTotal) },
-      { label: "Examination", filled: !!(ex?.examFindings?.general || ex?.examFindings?.cvs || ex?.examFindings?.respiratory) },
-      { label: "Diagnosis", filled: !!(ex?.diagnosis?.length > 0) },
+      { label: "Past Medical History", filled: !!(ex?.pastMedicalHistory) },
+      // Primary survey vitals
+      { label: "BP", filled: !!(vs.bp || (ps.circulation?.bpSystolic && ps.circulation?.bpDiastolic)) },
+      { label: "HR / Pulse", filled: !!(vs.hr || ps.circulation?.hr) },
+      { label: "SpO2", filled: !!(vs.spo2 || ps.breathing?.spo2) },
+      { label: "GCS", filled: !!(vs.gcs || ps.disability?.gcsTotal) },
+      // Primary survey clinical
+      { label: "Airway Assessment", filled: !!(ps.airway?.status || ps.airway?.findings) },
+      { label: "Auscultation", filled: !!(ps.breathing?.auscultation) },
+      // Investigations
+      { label: "VBG / Labs", filled: !!(ex?.vbgResults?.ph || ex?.investigationsOrdered) },
+      // Team
+      { label: "EM Resident", filled: !!(ex?.emResident) },
+      // Diagnosis + Disposition
+      { label: "Working Diagnosis", filled: !!(ex?.diagnosis?.length > 0) },
+      { label: "Disposition Plan", filled: !!(ex?.disposition?.plan) },
     ];
     const filled = checks.filter(c => c.filled).length;
     return { filled, total: checks.length, percent: Math.round((filled / checks.length) * 100), checks };
@@ -366,10 +405,42 @@ export default function VoiceCaseSheetScreen() {
     if (vitalParts.length > 0) addVoice("vitals", "Primary Survey / Vitals", "activity", vitalParts.join("  |  "), "primarySurvey");
     else addMissing("vitals", "Primary Survey / Vitals", "activity");
 
-    // Airway & Breathing details
-    if (ps.airway?.status) addVoice("airway", "Airway", "wind", `${ps.airway.status}${ps.airway.findings ? ' — '+ps.airway.findings : ''}`, "primarySurvey");
-    if (ps.breathing?.auscultation) addVoice("auscultation", "Auscultation", "headphones", ps.breathing.auscultation, "primarySurvey");
+    // Airway
+    if (ps.airway?.status || ps.airway?.findings) {
+      addVoice("airway", "Airway", "wind", `${ps.airway.status || ""}${ps.airway.findings ? ' — '+ps.airway.findings : ''}`.trim(), "primarySurvey");
+    } else {
+      addPrefill("airway", "Airway", "wind", "Patent, self-maintained");
+    }
+
+    // Breathing
+    if (ps.breathing?.auscultation) {
+      addVoice("auscultation", "Auscultation", "headphones", ps.breathing.auscultation, "primarySurvey");
+    } else {
+      addPrefill("auscultation", "Auscultation", "headphones", "Air entry bilaterally equal and clear, no wheeze or crepts");
+    }
+    if (ps.breathing?.workOfBreathing) addVoice("wob", "Work of Breathing", "activity", ps.breathing.workOfBreathing, "primarySurvey");
+    else addPrefill("wob", "Work of Breathing", "activity", "No accessory muscle use");
+    if (ps.breathing?.oxygenDevice) addVoice("o2device", "Oxygen Device", "wind", ps.breathing.oxygenDevice, "primarySurvey");
+    else addPrefill("o2device", "Oxygen Device", "wind", "Room air");
+
+    // Circulation
+    const crt = ps.circulation?.crt;
+    const cvs = ex?.examFindings?.cvs;
+    if (crt) addVoice("crt", "Capillary Refill", "clock", crt, "primarySurvey");
+    else addPrefill("crt", "Capillary Refill", "clock", "< 2 seconds");
+    if (cvs) addVoice("cvs", "CVS Auscultation", "heart", cvs, "examination");
+    else addPrefill("cvs", "CVS Auscultation", "heart", "S1 S2 heard, no murmurs");
+
+    // Disability
     if (ps.disability?.pupils) addVoice("pupils", "Pupils", "eye", ps.disability.pupils, "primarySurvey");
+    else addPrefill("pupils", "Pupils", "eye", "Bilaterally equal and reactive to light");
+    if (ps.disability?.power) addVoice("power", "Motor Power", "zap", ps.disability.power, "primarySurvey");
+    else addPrefill("power", "Motor Power", "zap", "5/5 all four limbs, no focal deficit");
+
+    // Exposure
+    const exposure = ps.exposure?.findings || ex?.examFindings?.musculoskeletal;
+    if (exposure) addVoice("exposure", "Exposure / Skin", "search", exposure, "primarySurvey");
+    else addPrefill("exposure", "Exposure / Skin", "search", "No external injuries, no rash, no pedal oedema");
 
     // VBG
     if (ex.vbgResults) {
@@ -481,9 +552,17 @@ export default function VoiceCaseSheetScreen() {
       vbg.creatinine ? `Cr ${vbg.creatinine}` : "",
     ].filter(Boolean).join(", ") : "";
 
-    const consultationNote = ex?.consultationGiven
-      ? `Consultation: ${ex.consultationGiven}. `
-      : "";
+    // Build consultation note from master schema consultations array, fallback to legacy field
+    const consultationsArr: string[] = (ex?.consultations || [])
+      .filter((c: any) => c.specialty || c.doctorName)
+      .map((c: any) => [
+        c.specialty,
+        c.doctorName ? `Dr. ${c.doctorName}` : "",
+        c.adviceGiven ? `— ${c.adviceGiven}` : "",
+      ].filter(Boolean).join(" "));
+    const consultationNote = consultationsArr.length > 0
+      ? `Consultations: ${consultationsArr.join("; ")}. `
+      : ex?.consultationGiven ? `Consultation: ${ex.consultationGiven}. ` : "";
     const treatmentNotes = consultationNote + (ex?.treatmentNotes || "");
 
     return {
@@ -499,15 +578,37 @@ export default function VoiceCaseSheetScreen() {
         family_history: ex?.familyHistory || "",
         social_history: ex?.socialHistory || "",
       },
-      examination: ex?.examFindings ? {
-        general_appearance: ex.examFindings.general || "",
-        cvs_additional_notes: ex.examFindings.cvs || "",
-        respiratory_additional_notes: ex.examFindings.respiratory || "",
-        abdomen_additional_notes: ex.examFindings.abdomen || "",
-        cns_additional_notes: ex.examFindings.cns || "",
-        heent: ex.examFindings.heent || "",
-        musculoskeletal: ex.examFindings.musculoskeletal || "",
-      } : {},
+      primary_survey: {
+        airway: ex?.primarySurvey?.airway?.status || ex?.primarySurvey?.airway?.findings || "Patent, self-maintained",
+        airway_intervention: ex?.primarySurvey?.airway?.intervention || "",
+        breathing_rate: ex?.primarySurvey?.breathing?.rr || ex?.vitalsSuggested?.rr || "",
+        spo2: ex?.primarySurvey?.breathing?.spo2 || ex?.vitalsSuggested?.spo2 || "",
+        auscultation: ex?.primarySurvey?.breathing?.auscultation || "Air entry bilaterally equal and clear",
+        work_of_breathing: ex?.primarySurvey?.breathing?.workOfBreathing || "No accessory muscle use",
+        oxygen_device: ex?.primarySurvey?.breathing?.oxygenDevice || "Room air",
+        bp_systolic: ex?.primarySurvey?.circulation?.bpSystolic || "",
+        bp_diastolic: ex?.primarySurvey?.circulation?.bpDiastolic || "",
+        heart_rate: ex?.primarySurvey?.circulation?.hr || ex?.vitalsSuggested?.hr || "",
+        crt: ex?.primarySurvey?.circulation?.crt || "< 2 seconds",
+        gcs_total: ex?.primarySurvey?.disability?.gcsTotal || ex?.vitalsSuggested?.gcs || "",
+        gcs_e: ex?.primarySurvey?.disability?.gcsE || "",
+        gcs_v: ex?.primarySurvey?.disability?.gcsV || "",
+        gcs_m: ex?.primarySurvey?.disability?.gcsM || "",
+        pupils: ex?.primarySurvey?.disability?.pupils || "Bilaterally equal and reactive to light",
+        power: ex?.primarySurvey?.disability?.power || "5/5 all four limbs",
+        grbs: ex?.primarySurvey?.disability?.grbs || ex?.vitalsSuggested?.grbs || "",
+        temperature: ex?.primarySurvey?.exposure?.temperature || ex?.vitalsSuggested?.temperature || "",
+        exposure_findings: ex?.primarySurvey?.exposure?.findings || "No external injuries, no rash, no pedal oedema",
+      },
+      examination: {
+        general_appearance: ex?.examFindings?.general || "Conscious, oriented, comfortable at rest",
+        cvs_additional_notes: ex?.examFindings?.cvs || "S1 S2 heard, no murmurs",
+        respiratory_additional_notes: ex?.examFindings?.respiratory || "Normal vesicular breath sounds bilaterally",
+        abdomen_additional_notes: ex?.examFindings?.abdomen || "Soft, non-tender, no organomegaly",
+        cns_additional_notes: ex?.examFindings?.cns || "No focal neurological deficit",
+        heent: ex?.examFindings?.heent || "",
+        musculoskeletal: ex?.examFindings?.musculoskeletal || "",
+      },
       treatment: {
         primary_diagnosis: ex?.diagnosis?.[0] || "",
         provisional_diagnoses: ex?.diagnosis || [],
@@ -516,6 +617,7 @@ export default function VoiceCaseSheetScreen() {
         infusions: ex?.prescribedInfusions || [],
         intervention_notes: treatmentNotes.trim(),
         course_in_hospital: treatmentNotes.trim(),
+        consultations: (ex?.consultations || []).filter((c: any) => c.specialty || c.doctorName),
       },
       investigations: {
         individual_tests: ex?.investigationsOrdered
@@ -524,7 +626,7 @@ export default function VoiceCaseSheetScreen() {
         imaging: ex?.imagingOrdered
           ? ex.imagingOrdered.split(/[,;]+/).map((s: string) => s.trim()).filter((s: string) => s)
           : [],
-        vbg: vbgText ? {
+        vbg: vbg ? {
           ph: vbg?.ph || "",
           pco2: vbg?.pco2 || "",
           po2: vbg?.po2 || "",
@@ -536,8 +638,23 @@ export default function VoiceCaseSheetScreen() {
           creatinine: vbg?.creatinine || "",
           raw: vbgText,
         } : undefined,
+        vbg_raw: vbgText || undefined,
       },
+      disposition: {
+        plan: ex?.disposition?.plan || "",
+        follow_up: ex?.disposition?.followUp || "",
+        discharge_instructions: ex?.disposition?.dischargeInstructions || "",
+      },
+      psychological_assessment: ex?.psychologicalAssessment ? {
+        suicidal_ideation: ex.psychologicalAssessment.suicidalIdeation || false,
+        self_harm: ex.psychologicalAssessment.selfHarm || false,
+        substance_abuse: ex.psychologicalAssessment.substanceAbuse || false,
+        psychiatric_history: ex.psychologicalAssessment.psychiatricHistory || false,
+        notes: ex.psychologicalAssessment.notes || "",
+      } : undefined,
       voice_transcript: transcript,
+      detected_language: detectedLanguage || "en-IN",
+      english_transcript: englishTranscript || transcript,
     };
   };
 

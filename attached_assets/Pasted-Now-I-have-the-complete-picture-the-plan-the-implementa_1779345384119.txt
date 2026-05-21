@@ -1,0 +1,173 @@
+Now I have the complete picture — the plan, the implementation, and what your developer actually built. Let me give you an honest review.
+
+---
+
+# Implementation Review
+
+## What Was Done Correctly ✅
+
+**Row 1 — Sarvam Pipeline**
+The three-step flow (transcribe → translate → extract) is correctly structured. Storing both original transcript and English translation is exactly right — doctors can verify what was heard in their own language. The language badge is a nice touch.
+
+**Row 2 — Master Schema**
+Moving to 4000 tokens is correct. The old 3000 limit was silently truncating complex cases like Rajesh's.
+
+**Row 4 — Review Screen**
+Completeness bar with colour coded borders is the right approach. The legend explaining green/amber/grey is important for doctor trust.
+
+**Row 7 — Medical vs Trauma Toggle**
+Tab reorder based on case type is clinically sound. ATLS primary-survey-first for trauma is exactly correct.
+
+**Row 8 — Mic on Medications**
+Good. This closes the last voice gap in the treatment section.
+
+---
+
+## What's Missing or Incomplete ⚠️
+
+### 1. Pre-fill Normals Are Incomplete
+The implementation only pre-fills four fields with grey cards:
+- Past Medical History → "None significant"
+- Allergies → "NKDA"
+- Examination Findings → "Within normal limits"
+- Psychological Screen → "Screened — no flags"
+
+**What's missing:** The entire ABCDE primary survey pre-fill. This is the most important one. When a doctor says Rajesh's airway is patent, breathing is clear, that shouldn't need to be said — it should be pre-filled and the doctor only corrects what's abnormal. The four fields above are history fields. The clinical examination normals were not implemented.
+
+**Fix needed:**
+```javascript
+// These need to be added to pre-fill
+const ABCDE_NORMALS = {
+  airway: "Patent, self-maintained",
+  breathing: {
+    auscultation: "Air entry bilaterally equal and clear",
+    workOfBreathing: "No accessory muscle use",
+    oxygenDevice: "Room air"
+  },
+  circulation: {
+    crt: "< 2 seconds",
+    cvs: "S1 S2 heard, no murmurs"
+  },
+  disability: {
+    pupils: "Bilaterally equal and reactive",
+    focalDeficit: "No focal neurological deficit",
+    power: "5/5 all four limbs"
+  },
+  exposure: "No external injuries, no rash",
+  examination: {
+    general: "Conscious, oriented, comfortable at rest",
+    cvs: "S1 S2 heard, no murmurs",
+    respiratory: "Normal vesicular breath sounds",
+    abdomen: "Soft, non-tender, no organomegaly",
+    cns: "No focal neurological deficit",
+    extremities: "No cyanosis, no clubbing, no edema"
+  }
+};
+```
+
+---
+
+### 2. Translation Step Has a Gap
+The pipeline correctly translates to English before extraction. But the **original language transcript is shown to the doctor for review** — which is right. However, if the doctor edits the transcript in the original language and re-runs extraction, that edited text needs to go through translation again before hitting the AI.
+
+Currently it's unclear if the re-extraction path handles this. 
+
+**Fix needed:**
+```javascript
+// On re-extract after doctor edits transcript
+const handleReExtract = async (editedTranscript) => {
+  // Must translate again — doctor may have 
+  // edited in Tamil/Hindi/Malayalam
+  const englishVersion = await translateToEnglish(
+    editedTranscript, 
+    detectedLanguage  // use stored language from first pass
+  );
+  
+  const extracted = await extractClinicalData(englishVersion);
+  // proceed to review
+};
+```
+
+---
+
+### 3. Completeness Score Fields Are Too Few
+The review screen shows "filled/10" but only tracks 10 fields. For a complex case like Rajesh you have 18+ meaningful fields. The completeness bar will show 100% even when VBG, consultations, and disposition are empty.
+
+**Fix needed — expand required fields to:**
+```javascript
+const REQUIRED_FIELDS = [
+  'patient.name',
+  'patient.age', 
+  'chiefComplaint.complaint',
+  'chiefComplaint.duration',
+  'hpi.narrative',
+  'primarySurvey.circulation.bpSystolic',
+  'primarySurvey.circulation.hr',
+  'primarySurvey.breathing.spo2',
+  'primarySurvey.disability.gcsTotal',
+  'pastHistory.medical',       // array, check length
+  'investigations.vbg.ph',     // if VBG was done
+  'treatment.medications',     // array, check length
+  'doctors.emResident',
+  'doctors.emConsultant',
+  'diagnosis.provisional',
+  'disposition.plan'
+];
+```
+
+---
+
+### 4. Discharge Summary Not Yet Connected to Master Schema
+The implementation document doesn't mention discharge summary generation being updated to use the new master schema fields. This means the discharge summary will still miss VBG, consultations, and detailed examination findings — the same gaps that existed before.
+
+**This needs to be explicitly connected:**
+```javascript
+// Discharge summary must read from the same
+// master schema fields — not old field names
+const generateSummary = async (caseId) => {
+  const caseData = await fetchCase(caseId);
+  
+  // Verify these new fields exist before generating
+  const hasVBG = caseData.clinicalData
+    ?.investigations?.vbg?.ph;
+  const hasConsultations = caseData.clinicalData
+    ?.doctors?.consultations?.length > 0;
+    
+  // Pass complete master schema data to prompt
+  return await callDischargePrompt(caseData);
+};
+```
+
+---
+
+### 5. Silent Failure Still Possible in One Place
+The atomic save was fixed with auth token. But the **Voice Case Entry still has a separate code path** from the standard case sheet save. If a doctor uses Voice Entry, does it go through the same single atomic save function? Or does it still use the old fragmented fetch calls?
+
+This needs to be confirmed and unified.
+
+---
+
+## Test This Right Now
+
+Run Rajesh's full dictation through the updated app and check these 8 things specifically:
+
+| Check | Expected Result |
+|---|---|
+| Language detected | "en-IN" shown in badge |
+| Past medical history | Array: ["T2DM", "HTN", "DLP", "CLD"] |
+| VBG fields | pH 7.357, PCO2 50.5, HCO3 27.6, Lactate 2.1 |
+| Doctors | Resident: Dr. Athna Navas, Consultant: Dr. Christo MB |
+| Consultation | Neuromedicine, Dr. Shajan, MRI brain advised |
+| Medications | Inj Pantoprazole 40mg IV stat — split into 4 fields |
+| IV Fluids | NS at 50ml/hr |
+| Discharge summary | Contains VBG + consultation + all medications |
+
+---
+
+## Overall Assessment
+
+Your developer did about **65-70% of what was planned**. The pipeline architecture is correct and the hardest structural work is done. What remains is mostly completing the pre-fill normals for ABCDE, fixing the re-extraction translation path, expanding the completeness score, and connecting the discharge summary to the new schema.
+
+**Do not move to new features yet.** Run the Rajesh test. If all 8 checks above pass, the foundation is solid. If any fail, fix those first.
+
+Want me to write the exact Rajesh test script your developer can run to verify all 8 points?

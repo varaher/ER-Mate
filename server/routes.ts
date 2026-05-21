@@ -1903,13 +1903,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Summary data is required" });
       }
 
+      // Format VBG from master schema if present
+      const vbgRaw = summary_data.vbg_results || summary_data.investigations_data?.vbg || {};
+      const vbgParts: string[] = [];
+      if (vbgRaw.ph) vbgParts.push(`pH ${vbgRaw.ph}`);
+      if (vbgRaw.pco2) vbgParts.push(`PCO2 ${vbgRaw.pco2}`);
+      if (vbgRaw.po2) vbgParts.push(`PO2 ${vbgRaw.po2}`);
+      if (vbgRaw.hco3) vbgParts.push(`HCO3 ${vbgRaw.hco3}`);
+      if (vbgRaw.lactate) vbgParts.push(`Lac ${vbgRaw.lactate}`);
+      if (vbgRaw.hemoglobin) vbgParts.push(`Hb ${vbgRaw.hemoglobin}`);
+      if (vbgRaw.sodium) vbgParts.push(`Na ${vbgRaw.sodium}`);
+      if (vbgRaw.potassium) vbgParts.push(`K ${vbgRaw.potassium}`);
+      const vbgText = vbgParts.length > 0 ? `VBG: ${vbgParts.join(", ")}` : "";
+
+      // Format consultations from master schema array
+      const consultationsArr: string[] = (summary_data.consultations || [])
+        .filter((c: any) => c.specialty || c.doctorName)
+        .map((c: any) => [
+          c.specialty,
+          c.doctorName ? `Dr. ${c.doctorName}` : "",
+          c.adviceGiven ? `(${c.adviceGiven})` : "",
+        ].filter(Boolean).join(" "));
+      const consultationText = consultationsArr.length > 0
+        ? `\nConsultations: ${consultationsArr.join("; ")}`
+        : "";
+
+      const fullInvestigations = [
+        summary_data.investigations || "",
+        vbgText,
+      ].filter(Boolean).join("\n");
+
       const mappedData = {
         chief_complaint: summary_data.presenting_complaint || "",
         diagnosis: summary_data.diagnosis || "",
         treatment_given: summary_data.course_in_hospital || "",
         medications: summary_data.discharge_medications || "",
-        investigations: summary_data.investigations || "",
-        procedures: "",
+        investigations: fullInvestigations,
+        procedures: consultationText,
         patient: {
           age: summary_data.patient_age,
           gender: summary_data.patient_sex,
