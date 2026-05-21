@@ -1933,19 +1933,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
         vbgText,
       ].filter(Boolean).join("\n");
 
+      // Build examination and primary_survey_findings from clinical data
+      const clinData = summary_data.clinical_data || {};
+      const examData = clinData.examination || summary_data.examination_data || {};
+      const psData = clinData.primary_survey || summary_data.primary_survey_data || {};
+
       const mappedData = {
         chief_complaint: summary_data.presenting_complaint || "",
         diagnosis: summary_data.diagnosis || "",
         treatment_given: summary_data.course_in_hospital || "",
         medications: summary_data.discharge_medications || "",
         investigations: fullInvestigations,
-        procedures: consultationText,
+        // Consultations go in their own field — NOT in procedures
+        consultations_text: consultationText.replace(/^\n/, ""),
+        // Procedures = actual interventions only
+        procedures: summary_data.procedures || "",
         patient: {
           age: summary_data.patient_age,
           gender: summary_data.patient_sex,
         },
         vitals: summary_data.vitals_arrival || {},
         primary_assessment: summary_data.primary_assessment || {},
+        // Pass specific examination findings
+        examination: {
+          general_appearance: examData.general_appearance || "",
+          cvs_additional_notes: examData.cvs_additional_notes || "",
+          respiratory_additional_notes: examData.respiratory_additional_notes || "",
+          abdomen_additional_notes: examData.abdomen_additional_notes || "",
+          cns_additional_notes: examData.cns_additional_notes || "",
+        },
+        // Pass ABCDE primary survey specifics
+        primary_survey_findings: {
+          airway: psData.airway || "",
+          auscultation: psData.auscultation || "",
+          work_of_breathing: psData.work_of_breathing || "",
+          oxygen_device: psData.oxygen_device || "",
+          crt: psData.crt || "",
+          pupils: psData.pupils || "",
+          power: psData.power || "",
+          exposure_findings: psData.exposure_findings || "",
+        },
         history_of_present_illness: summary_data.history_of_present_illness || "",
         past_medical_history: summary_data.past_medical_history || "",
         allergy: summary_data.allergy || "",

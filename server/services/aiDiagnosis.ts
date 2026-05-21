@@ -441,8 +441,10 @@ export interface DischargeSummaryInput {
   medications?: any;
   investigations?: any;
   vitals?: Record<string, string>;
-  examination?: Record<string, any>;
+  examination?: Record<string, string>;
+  primary_survey_findings?: Record<string, string>;
   procedures?: string;
+  consultations_text?: string;
   primary_assessment?: Record<string, string>;
   history_of_present_illness?: string;
   past_medical_history?: string;
@@ -478,41 +480,78 @@ export async function generateCourseInHospital(summaryData: DischargeSummaryInpu
     ? Object.entries(summaryData.primary_assessment).filter(([_, v]) => v).map(([k, v]) => `${k}: ${v}`).join("; ")
     : "";
 
+  // Build detailed examination text from specific ABCDE findings
+  const examLines: string[] = [];
+  const ex = summaryData.examination || {};
+  const ps = summaryData.primary_survey_findings || {};
+  if (ex.general_appearance || ps.general) examLines.push(`General: ${ex.general_appearance || ps.general}`);
+  if (ps.airway) examLines.push(`Airway: ${ps.airway}`);
+  if (ps.auscultation || ex.respiratory_additional_notes) examLines.push(`Respiratory: ${ps.auscultation || ex.respiratory_additional_notes}`);
+  if (ps.work_of_breathing) examLines.push(`Work of Breathing: ${ps.work_of_breathing}`);
+  if (ps.oxygen_device) examLines.push(`Oxygen: ${ps.oxygen_device}`);
+  if (ex.cvs_additional_notes || ps.crt) examLines.push(`CVS: ${ex.cvs_additional_notes || ""}${ps.crt ? ` CRT ${ps.crt}` : ""}`);
+  if (ex.abdomen_additional_notes) examLines.push(`Abdomen: ${ex.abdomen_additional_notes}`);
+  if (ex.cns_additional_notes || ps.pupils || ps.power) {
+    const cnsLine = [ex.cns_additional_notes, ps.pupils ? `Pupils: ${ps.pupils}` : "", ps.power ? `Power: ${ps.power}` : ""].filter(Boolean).join(". ");
+    if (cnsLine) examLines.push(`CNS: ${cnsLine}`);
+  }
+  if (ps.exposure_findings) examLines.push(`Exposure: ${ps.exposure_findings}`);
+  const examinationText = examLines.length > 0 ? examLines.join("\n") : (primaryAssessmentText || "Not documented");
+
   const prompt = `You are a senior emergency medicine physician writing a discharge summary. Generate a professional "Course in Hospital" section based on the following case details.
 
 CRITICAL RULES:
-- ONLY describe what is documented below. Do NOT assume, infer, or add any treatments, medications, or procedures that are not explicitly listed.
-- If a medication was given as an injection (Inj.), do NOT say it was given as a tablet (Tab.) or vice versa. Use the exact route/form documented.
-- If no medications are documented, simply state "No specific medications were administered in the ER."
-- Do NOT add any clinical decisions, reasoning, or treatment plans that are not documented below.
+- ONLY describe what is documented below. Do NOT assume, infer, or add any treatments, medications, or procedures not explicitly listed.
+- If a medication was given as an injection (Inj.), do NOT say it was given as a tablet (Tab.) or vice versa. Use the exact route and form documented.
+- If no medications are documented, state "No specific medications were administered in the ER."
+- Consultations are NOT procedures. List them in the Consultations section only.
 - Be strictly factual. No fabrication or speculation.
 
+--- CASE DETAILS ---
 Patient: ${patientInfo}
 Chief Complaint: ${summaryData.chief_complaint || "Not specified"}
 History of Present Illness: ${summaryData.history_of_present_illness || "Not documented"}
 Past Medical History: ${summaryData.past_medical_history || "None"}
 Allergies: ${summaryData.allergy || "NKDA"}
-Vitals at Arrival: ${vitalsText || "Not documented"}
-Primary Assessment (ABCDE): ${primaryAssessmentText || "Not documented"}
+
+Vitals at Arrival:
+${vitalsText || "Not documented"}
+
+Examination on Arrival:
+${examinationText}
+
 Working Diagnosis: ${summaryData.diagnosis || "To be determined"}
-Medications Administered: ${medicationsText || "None documented"}
-Investigations: ${investigationsText || "None documented"}
-Procedures: ${summaryData.procedures || "None"}
+
+Investigations:
+${investigationsText || "None documented"}
+
+Medications Administered:
+${medicationsText || "None documented"}
+
+Consultations:
+${summaryData.consultations_text || "None"}
+
+Procedures (interventions only — not consultations):
+${summaryData.procedures || "None"}
+
 Disposition: ${summaryData.disposition_type || "Not specified"}
 Condition at Discharge: ${summaryData.condition_at_discharge || "Not specified"}
 
-Write a concise, professional clinical narrative (2-4 paragraphs) describing:
-1. Presentation and initial assessment
-2. Investigations performed and key findings (only if documented)
-3. Treatment provided - list ONLY the exact medications/interventions documented above
-4. Clinical response and disposition
+--- INSTRUCTIONS ---
+Write a concise, professional clinical narrative (2-4 paragraphs) in Indian ER documentation style:
+1. Presentation — chief complaint, brief history, relevant PMH
+2. Examination — specific findings from above (vitals + ABCDE, not generic "within normal limits")
+3. Investigations and findings (include VBG values if documented, do not mention if absent)
+4. Treatment given (exact medications and routes only)
+5. Consultations (if any — name the specialty and advice given)
+6. Disposition and clinical response
 
-Use professional medical terminology. Be strictly factual based ONLY on the data provided above.
+Use professional medical terminology. Be strictly factual based ONLY on the data provided.
 
 Respond in JSON format:
 {
   "course_in_hospital": "The detailed course narrative...",
-  "diagnosis": "Refined diagnosis based on the case (if chief complaint suggests one)"
+  "diagnosis": "Primary diagnosis based on documented findings"
 }`;
 
   try {
@@ -1159,8 +1198,16 @@ export interface SmartDictationResult {
   };
   disposition?: { plan?: string; pendingReports?: string; followUp?: string; confidence?: string; };
   psychologicalAssessment?: {
-    assessed?: boolean; suicidalIdeation?: boolean; selfHarm?: boolean;
-    substanceAbuse?: boolean; psychiatricHistory?: boolean; notes?: string; confidence?: string;
+    assessed?: boolean;
+    suicidalIdeation?: boolean;
+    selfHarm?: boolean;
+    intentToHarmOthers?: boolean;
+    substanceAbuse?: boolean;
+    psychiatricHistory?: boolean;
+    currentlyOnPsychiatricTreatment?: boolean;
+    hasSupportSystem?: boolean;
+    notes?: string;
+    confidence?: string;
   };
   sectionConfidence?: {
     patient?: string; doctors?: string; chiefComplaint?: string; hpi?: string;
@@ -1274,8 +1321,15 @@ SCHEMA (fill every field, use "" for not mentioned):
   "prescribedInfusions": [{ "name": "", "dose": "", "rate": "" }],
   "disposition": { "plan": "", "pendingReports": "", "followUp": "" },
   "psychologicalAssessment": {
-    "assessed": false, "suicidalIdeation": false, "selfHarm": false,
-    "substanceAbuse": false, "psychiatricHistory": false, "notes": ""
+    "assessed": false,
+    "suicidalIdeation": false,
+    "selfHarm": false,
+    "intentToHarmOthers": false,
+    "substanceAbuse": false,
+    "psychiatricHistory": false,
+    "currentlyOnPsychiatricTreatment": false,
+    "hasSupportSystem": false,
+    "notes": ""
   },
   "treatmentNotes": "",
   "investigationsOrdered": "",

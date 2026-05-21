@@ -1,0 +1,178 @@
+Good progress. All 5 gaps addressed. Let me give you the same honest review I gave last time.
+
+---
+
+# Gap Fix Review
+
+## What's Now Correctly Fixed ✅
+
+**Gap 1 — ABCDE Pre-fills**
+Complete and clinically accurate. All the right normal values — airway patent, bilateral air entry, S1S2, pupils equal and reactive, 5/5 power, no pedal oedema. This is the most impactful fix for daily use.
+
+**Gap 2 — Re-translation on Edit**
+The logic is correct. Doctor edits in Tamil → re-calls translate → then extracts from fresh English. This was a real patient safety gap and it's now closed.
+
+**Gap 5 — Voice Save Path**
+buildClinical now sends the complete picture in one call. Primary survey, consultations, disposition, psychological — all included. This directly fixes the Rajesh problem where most of the case was silently dropped.
+
+---
+
+## What Needs Verification ⚠️
+
+### Gap 3 — Completeness Score
+16 fields is better than 10. But I notice VBG is checked as "VBG/Labs ordered" — meaning it passes as complete if *any* lab is ordered, even if the VBG values themselves are empty.
+
+**This needs to be two separate checks:**
+```javascript
+// Current — too loose
+'investigations.labsOrdered' // passes if any lab mentioned
+
+// Should be
+'investigations.labsOrdered',  // labs check
+'investigations.vbg.ph',       // VBG check — only if 
+                                // VBG was mentioned
+```
+
+The VBG check should be **conditional** — only required if the doctor mentioned a VBG in their dictation. Otherwise a simple chest pain case without VBG will always show as incomplete.
+
+```javascript
+// Conditional required fields
+const getRequiredFields = (caseData) => {
+  const base = [
+    'patient.name',
+    'patient.age',
+    'chiefComplaint.complaint',
+    // ... core fields always required
+  ];
+  
+  // Only require VBG if it was mentioned
+  const mentionedVBG = 
+    caseData.investigations?.vbg?.ph !== "";
+  if (mentionedVBG) {
+    base.push('investigations.vbg.lactate');
+    base.push('investigations.vbg.hco3');
+  }
+  
+  // Only require consultation fields 
+  // if a consultation was mentioned
+  const hasConsult = 
+    caseData.doctors?.consultations?.length > 0;
+  if (hasConsult) {
+    base.push('doctors.consultations[0].adviceGiven');
+  }
+  
+  return base;
+};
+```
+
+---
+
+### Gap 4 — Discharge Summary Schema Connection
+The fix injects VBG and consultations into the prompt — that's right. But there's one missing piece: **the examination findings from the new ABCDE pre-fill normals are not being passed to the discharge summary prompt.**
+
+Right now the discharge summary will say "Examination: Within normal limits" as a generic line rather than the specific findings — "Air entry bilaterally equal and clear, S1S2 heard, abdomen soft non-tender" — which are now stored in the master schema.
+
+**Fix needed in the discharge prompt:**
+```javascript
+// Add this to the discharge summary prompt
+Examination on Arrival:
+General: ${caseData.examination.general}
+CVS: ${caseData.primarySurvey.circulation.cvs}
+Respiratory: ${caseData.primarySurvey.breathing.auscultation}
+Abdomen: ${caseData.examination.abdomen}
+CNS: ${caseData.examination.cns} 
+     Pupils: ${caseData.primarySurvey.disability.pupils}
+     Power: ${caseData.primarySurvey.disability.power}
+```
+
+This makes the discharge summary read like an actual clinical document rather than a templated report.
+
+---
+
+## One New Issue Spotted 🔴
+
+The implementation mentions:
+
+*"VBG appears in the Investigations section and consultations appear under Procedures in the generated course narrative"*
+
+**Consultations should NOT appear under Procedures.** In Indian ER documentation, procedures are interventions — intubation, central line, chest tube. Consultations are a separate section.
+
+The discharge summary structure should be:
+
+```
+1. Presenting Complaint
+2. History
+3. Examination
+4. Investigations          ← VBG here
+5. Course in Hospital
+6. Consultations           ← separate section, not under procedures
+7. Procedures              ← only actual interventions
+8. Diagnosis
+9. Discharge Advice
+```
+
+This is a one-line fix in the discharge prompt — move consultations out of the procedures block into their own section.
+
+---
+
+## Rajesh Test — Run This Now
+
+Before anything else, run this exact dictation and check each output:
+
+```
+"Patient name is Rajesh, 60-year-old male. 
+Came to ER on 21 May 2026 at 10:33 AM. 
+Case in by resident Dr. Athna Navas, 
+consultant Dr. Christo MB. 
+Complaints of right-sided facial weakness 
+since yesterday evening. No limb weakness, 
+no seizures, no ENT bleed, no fever, no trauma. 
+Known case of T2DM, hypertension, dyslipidemia, 
+CLD, history of nasal polyps removed, GERD. 
+On examination — conscious, oriented, airway patent, 
+SpO2 98% room air, RR 18, air entry bilaterally clear. 
+BP 150/90, HR 98, S1S2 heard, abdomen soft. 
+GCS E4V5M6, pupils equal and reactive, 
+right-sided LMN facial palsy noted, 
+power 5/5 bilateral upper and lower limb. 
+GRBS 189. VBG — pH 7.357, PCO2 50.5, 
+HCO3 27.6, lactate 2.1, Hb 17.4, 
+sodium 141, potassium 4.2, creatinine 0.92. 
+Inj Pantoprazole 40mg IV stat given. 
+IV fluids NS at 50ml per hour. 
+Informed neuromedicine on call Dr. Shajan — 
+advised MRI brain with angiography. 
+Routine bloods sent. Plan — 
+neuromedicine consultation once reports arrive."
+```
+
+**Expected output — check all 10:**
+
+| # | Field | Expected |
+|---|---|---|
+| 1 | Patient name | Rajesh |
+| 2 | Past medical history | Array of 5 items — T2DM, HTN, DLP, CLD, GERD |
+| 3 | Resident | Dr. Athna Navas |
+| 4 | Consultant | Dr. Christo MB |
+| 5 | Consultation | Neuromedicine, Dr. Shajan, MRI brain with angiography |
+| 6 | Pantoprazole | Drug/Dose/Route/Frequency in 4 separate fields |
+| 7 | IV Fluids | NS, 50ml/hr in separate fields |
+| 8 | VBG pH | 7.357 — not empty |
+| 9 | Facial palsy | Captured in disability or examination findings |
+| 10 | Discharge summary | Contains VBG + Dr. Shajan consultation as separate section |
+
+---
+
+## Overall Assessment
+
+After this round you're at roughly **80% of the full plan**. The architecture is now solid. The three remaining items before you can call the voice pipeline production-ready:
+
+1. Conditional completeness scoring for VBG
+2. Examination findings flowing into discharge summary
+3. Consultations moved out of procedures in discharge summary
+
+None of these are architectural changes — they're prompt and logic tweaks. One more focused session should close them.
+
+**Then run the Rajesh test. If all 10 pass, ship it.**
+
+Want me to write the exact discharge summary prompt in full — with all sections in correct clinical order — so your developer can replace the current one directly?

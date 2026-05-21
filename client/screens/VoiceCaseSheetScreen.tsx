@@ -298,13 +298,16 @@ export default function VoiceCaseSheetScreen() {
   const computeCompleteness = (ex: any) => {
     const ps = ex?.primarySurvey || {};
     const vs = ex?.vitalsSuggested || {};
+    const hasVBGMentioned = !!(ex?.vbgResults?.ph || ex?.vbgResults?.pco2 || ex?.vbgResults?.hco3);
+    const hasConsultMentioned = !!(ex?.consultations?.length > 0 || ex?.consultationGiven);
+
     const checks = [
       // Patient
       { label: "Patient Name", filled: !!(ex?.patientName || patientName) },
       { label: "Patient Age", filled: !!patientAge },
       // Complaint
       { label: "Chief Complaint", filled: !!(ex?.chiefComplaint) },
-      { label: "Duration", filled: !!(ex?.duration) },
+      { label: "Duration / Onset", filled: !!(ex?.duration || ex?.onset) },
       // History
       { label: "HPI Narrative", filled: !!(ex?.historyOfPresentIllness) },
       { label: "Past Medical History", filled: !!(ex?.pastMedicalHistory) },
@@ -316,13 +319,23 @@ export default function VoiceCaseSheetScreen() {
       // Primary survey clinical
       { label: "Airway Assessment", filled: !!(ps.airway?.status || ps.airway?.findings) },
       { label: "Auscultation", filled: !!(ps.breathing?.auscultation) },
-      // Investigations
-      { label: "VBG / Labs", filled: !!(ex?.vbgResults?.ph || ex?.investigationsOrdered) },
+      // Labs always required
+      { label: "Labs / Investigations", filled: !!(ex?.investigationsOrdered || ex?.imagingOrdered || hasVBGMentioned) },
       // Team
       { label: "EM Resident", filled: !!(ex?.emResident) },
       // Diagnosis + Disposition
       { label: "Working Diagnosis", filled: !!(ex?.diagnosis?.length > 0) },
       { label: "Disposition Plan", filled: !!(ex?.disposition?.plan) },
+      // Conditional: VBG completeness only if VBG was mentioned
+      ...(hasVBGMentioned ? [
+        { label: "VBG — pH", filled: !!(ex?.vbgResults?.ph) },
+        { label: "VBG — HCO3", filled: !!(ex?.vbgResults?.hco3) },
+        { label: "VBG — Lactate", filled: !!(ex?.vbgResults?.lactate) },
+      ] : []),
+      // Conditional: consultation advice only if consultation mentioned
+      ...(hasConsultMentioned ? [
+        { label: "Consultation Advice", filled: !!(ex?.consultations?.[0]?.adviceGiven || ex?.consultationGiven) },
+      ] : []),
     ];
     const filled = checks.filter(c => c.filled).length;
     return { filled, total: checks.length, percent: Math.round((filled / checks.length) * 100), checks };
@@ -648,8 +661,11 @@ export default function VoiceCaseSheetScreen() {
       psychological_assessment: ex?.psychologicalAssessment ? {
         suicidal_ideation: ex.psychologicalAssessment.suicidalIdeation || false,
         self_harm: ex.psychologicalAssessment.selfHarm || false,
+        intent_to_harm_others: ex.psychologicalAssessment.intentToHarmOthers || false,
         substance_abuse: ex.psychologicalAssessment.substanceAbuse || false,
         psychiatric_history: ex.psychologicalAssessment.psychiatricHistory || false,
+        currently_on_psychiatric_treatment: ex.psychologicalAssessment.currentlyOnPsychiatricTreatment || false,
+        has_support_system: ex.psychologicalAssessment.hasSupportSystem || false,
         notes: ex.psychologicalAssessment.notes || "",
       } : undefined,
       voice_transcript: transcript,
