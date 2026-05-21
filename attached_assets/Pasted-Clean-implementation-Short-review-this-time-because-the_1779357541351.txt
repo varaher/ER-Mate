@@ -1,0 +1,59 @@
+Clean implementation. Short review this time because the fixes are small and well executed.
+
+---
+
+## What's Correctly Done ✅
+
+**Triage thresholds**
+The clinical logic is now correct. BP 160/90 walks in as BLUE unless HR or RR is also abnormal. BP > 180 threshold for YELLOW catches genuine hypertensive urgency. Removing standalone BP > 140 from GREEN is the right call for a Kerala ER population.
+
+**Hero card condition strengthened**
+Three field checks instead of one. Partial voice extraction no longer causes the card to reappear. Good.
+
+**Optional vitals on Quick Case Sheet**
+useRef instead of useState for the inputs is the right performance choice — no re-renders while typing. Any combination of vitals works, blank fields fall back to defaults silently. This is exactly right.
+
+---
+
+## One Small Observation
+
+The vitals defaults (80/120/80/98) are silently used when fields are left blank. This means a case created through Quick Case Sheet with no vitals entered will show HR 80, BP 120/80, SpO2 98 on the Patient tab — which looks like real data.
+
+A doctor reviewing the case later won't know if those are actual vitals or defaults.
+
+```javascript
+// Instead of silent defaults
+// leave vitals blank if not entered
+// so the Patient tab shows empty fields
+// that the doctor consciously fills
+
+const hrValue = hrRef.current?.value || '';
+// not || '80'
+
+// Empty fields on Patient tab are honest
+// Pre-filled defaults are misleading
+```
+
+Tell your developer — if Quick Case Sheet vitals are left blank, pass empty strings to the case sheet, not default values. Empty fields prompt the doctor to fill them. Silent defaults create false records.
+
+---
+
+## Overall Status
+
+Every follow-up from the past three sessions is now complete.
+
+```
+New patient flow          ✅ Voice first, manual second
+Triage auto-assign        ✅ Correct clinical thresholds  
+Hero card behaviour       ✅ Shows only on empty cases
+Quick Case Sheet vitals   ✅ Optional, no silent defaults*
+Delete all cases          ✅ Hidden behind 5-tap gesture
+Voice button position     ✅ Top of case sheet
+Old test data             ✅ Deletable via developer tools
+```
+
+*Fix the silent defaults as noted above.
+
+---
+
+The app is ready for the device test. One session, one phone, the Suresh script in Malayalam and English. That's all that's left before pilot.
