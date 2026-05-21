@@ -84,6 +84,7 @@ export default function DashboardScreen() {
   const [aiCredits, setAiCredits] = useState<number | null>(null);
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialChecked, setTutorialChecked] = useState(false);
+  const [showNewPatientModal, setShowNewPatientModal] = useState(false);
 
   useEffect(() => {
     const checkTutorial = async () => {
@@ -616,7 +617,7 @@ export default function DashboardScreen() {
             styles.newPatientBtn,
             { backgroundColor: theme.card, borderColor: theme.primary, opacity: pressed ? 0.9 : 1 },
           ]}
-          onPress={() => navigation.navigate("Triage")}
+          onPress={() => setShowNewPatientModal(true)}
         >
           <View style={[styles.newPatientIcon, { backgroundColor: theme.primary }]}>
             <Feather name="plus" size={24} color="#FFFFFF" />
@@ -624,7 +625,7 @@ export default function DashboardScreen() {
           <View style={styles.newPatientText}>
             <Text style={[styles.newPatientTitle, { color: theme.text }]}>New Patient</Text>
             <Text style={[styles.newPatientSubtitle, { color: theme.textSecondary }]}>
-              Start triage assessment
+              Voice dictation or manual entry
             </Text>
           </View>
           <Feather name="chevron-right" size={24} color={theme.primary} />
@@ -931,6 +932,61 @@ export default function DashboardScreen() {
           </View>
         </Pressable>
       </Modal>
+
+      <Modal
+        visible={showNewPatientModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowNewPatientModal(false)}
+      >
+        <Pressable style={styles.newPatientModalOverlay} onPress={() => setShowNewPatientModal(false)}>
+          <Pressable style={[styles.newPatientModalSheet, { backgroundColor: theme.card }]} onPress={() => {}}>
+            <View style={[styles.newPatientModalHandle, { backgroundColor: theme.border }]} />
+            <Text style={[styles.newPatientModalTitle, { color: theme.text }]}>Start New Case</Text>
+            <Text style={[styles.newPatientModalSub, { color: theme.textSecondary }]}>How do you want to document this patient?</Text>
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.newPatientOption,
+                { backgroundColor: theme.primary, opacity: pressed ? 0.9 : 1, marginBottom: Spacing.md },
+              ]}
+              onPress={() => {
+                setShowNewPatientModal(false);
+                navigation.navigate("VoiceCaseSheet");
+              }}
+            >
+              <View style={styles.newPatientOptionIcon}>
+                <Feather name="mic" size={28} color="#FFFFFF" />
+              </View>
+              <View style={styles.newPatientOptionText}>
+                <Text style={styles.newPatientOptionTitle}>Speak This Case</Text>
+                <Text style={styles.newPatientOptionSub}>Talk naturally — ErMate fills everything including triage</Text>
+              </View>
+              <Feather name="chevron-right" size={20} color="#FFFFFF" />
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.newPatientOption,
+                { backgroundColor: theme.card, borderWidth: 1.5, borderColor: theme.border, opacity: pressed ? 0.8 : 1 },
+              ]}
+              onPress={() => {
+                setShowNewPatientModal(false);
+                navigation.navigate("Triage");
+              }}
+            >
+              <View style={[styles.newPatientOptionIcon, { backgroundColor: theme.backgroundSecondary }]}>
+                <Feather name="edit-3" size={24} color={theme.textSecondary} />
+              </View>
+              <View style={styles.newPatientOptionText}>
+                <Text style={[styles.newPatientOptionTitle, { color: theme.text }]}>Fill Manually</Text>
+                <Text style={[styles.newPatientOptionSub, { color: theme.textSecondary }]}>Triage form then case sheet, step by step</Text>
+              </View>
+              <Feather name="chevron-right" size={20} color={theme.textMuted} />
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -1155,4 +1211,42 @@ const styles = StyleSheet.create({
   creditsWidgetRight: { alignItems: "flex-end" },
   creditsWidgetValue: { fontSize: 24, fontWeight: "800" },
   creditsWidgetLabel: { fontSize: 10, fontWeight: "500" },
+  newPatientModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  newPatientModalSheet: {
+    borderTopLeftRadius: BorderRadius.xl,
+    borderTopRightRadius: BorderRadius.xl,
+    padding: Spacing.xl,
+    paddingBottom: 40,
+  },
+  newPatientModalHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: Spacing.lg,
+  },
+  newPatientModalTitle: { ...Typography.h3, marginBottom: Spacing.xs },
+  newPatientModalSub: { ...Typography.body, marginBottom: Spacing.xl },
+  newPatientOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+  },
+  newPatientOptionIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  newPatientOptionText: { flex: 1 },
+  newPatientOptionTitle: { fontSize: 16, fontWeight: "700", color: "#FFFFFF", marginBottom: 2 },
+  newPatientOptionSub: { fontSize: 12, color: "rgba(255,255,255,0.8)", lineHeight: 16 },
 });

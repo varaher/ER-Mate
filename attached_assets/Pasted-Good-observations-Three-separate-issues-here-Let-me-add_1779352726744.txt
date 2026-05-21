@@ -1,0 +1,211 @@
+Good observations. Three separate issues here. Let me address each clearly.
+
+---
+
+## Issue 1 — Old Test Data Visible in Your Account
+
+Looking at Image 4 — "Test Child", single letters like "A", "Q", "E", duplicate "Beena C Matthew" entries, old February dates. These are all in **your account only**.
+
+**This is not a data leak between users.** Each doctor sees only their own cases. Another doctor logging in sees their own cases, not yours.
+
+**But you need to clean this up before any pilot** for two reasons:
+- Looks unprofessional if you demo the app
+- Test data mixed with real patients creates confusion
+
+Tell your developer:
+```
+Add a "Delete All Test Data" button 
+in Profile → Settings 
+visible only to admin accounts.
+
+Or manually delete these cases 
+from the database directly 
+before the pilot.
+```
+
+---
+
+## Issue 2 — Voice Recording Not Visible on Case Sheet
+
+You're right. Looking at the screenshots from earlier, the voice entry is buried. A doctor opening Adult Case Sheet should see the microphone **immediately** — not after scrolling.
+
+**Current flow problem:**
+```
+Open Adult Case Sheet
+         ↓
+Sees Patient tab with vitals form
+Voice dictation is below the fold
+Doctor doesn't see it
+Starts typing manually
+```
+
+**What it should be:**
+```
+Open Adult Case Sheet
+         ↓
+Voice mic is the FIRST thing visible
+Big, prominent, impossible to miss
+"Tap to speak this case"
+         ↓
+Doctor taps → speaks everything
+→ case fills automatically
+```
+
+Tell your developer:
+```
+On Adult Case Sheet and 
+Pediatric Case Sheet opening screen —
+move the Vibe Dictation / 
+Voice recording button to the 
+very top, above everything else.
+
+It should be the primary action,
+not something you scroll to find.
+
+Style it prominently:
+Large purple circle mic button
+"Speak this case" label below it
+Full width card at the top
+```
+
+---
+
+## Issue 3 — Triage Blocking New Patient Flow
+
+This is your most important observation and you're absolutely correct.
+
+**The current problem:**
+```
+Doctor taps New Patient
+         ↓
+Triage screen opens
+         ↓
+Expects vitals, symptoms, 
+triage category
+         ↓
+Doctor hasn't seen the patient 
+properly yet
+         ↓
+Skips triage or enters wrong data
+         ↓
+Only then reaches case sheet
+         ↓
+Voice recording starts here
+         ↓
+But patient name/age already 
+entered in triage — 
+now entered twice
+```
+
+**What actually happens in a Kerala ER:**
+
+```
+Patient walks in or arrives by ambulance
+         ↓
+Doctor glances at patient
+         ↓
+Opens ErMate
+         ↓
+Wants to immediately start 
+recording the consultation
+         ↓
+Triage is a barrier, not a help
+```
+
+**The right flow:**
+
+```
+Doctor taps + (new case)
+         ↓
+Two clear options ONLY:
+
+┌─────────────────────────────────┐
+│  🎙 Speak This Case             │
+│  Talk naturally — ErMate fills  │
+│  everything including triage    │
+│                                 │  
+│  ✏️  Fill Manually              │
+│  Triage → Case Sheet step by   │
+│  step                           │
+└─────────────────────────────────┘
+```
+
+**Voice path — no triage screen at all:**
+```
+Doctor taps "Speak This Case"
+         ↓
+Microphone opens immediately
+         ↓
+Doctor speaks naturally — 
+patient name, age, complaint, 
+vitals, history, everything
+         ↓
+ErMate extracts triage category 
+automatically from the vitals 
+mentioned in the dictation
+         ↓
+Case sheet opens pre-filled
+         ↓
+Triage data already populated 
+from what was spoken
+```
+
+**Manual path — triage first:**
+```
+Doctor taps "Fill Manually"
+         ↓
+Quick patient details screen
+(name, age, sex only — 
+not full triage form)
+         ↓
+Then case sheet opens
+         ↓
+Doctor fills as needed
+```
+
+**Triage category should be auto-assigned** from vitals in the voice dictation — not a separate screen the doctor has to fill before they've even properly assessed the patient.
+
+---
+
+## Tell Your Developer — 3 Tasks
+
+**Task 1 — Clean test data**
+```
+Manually delete all test cases 
+from the database for your 
+account before pilot.
+Add admin delete function 
+for future use.
+```
+
+**Task 2 — Voice button to top of case sheet**
+```
+On Adult Case Sheet and 
+Pediatric Case Sheet:
+Move voice dictation card 
+to the very top of the screen.
+Above vitals, above everything.
+Large, prominent, primary action.
+```
+
+**Task 3 — Redesign new patient flow**
+```
+When doctor taps + or New Patient:
+Show two options only:
+1. "Speak This Case" → mic opens immediately
+2. "Fill Manually" → quick name/age form → case sheet
+
+Remove triage as a mandatory 
+blocking step for voice flow.
+
+Triage category auto-calculated 
+from vitals extracted in voice dictation.
+Triage data populated from voice — 
+not entered separately.
+```
+
+---
+
+This fixes the biggest real-world friction point. A doctor in a busy Kerala ER will not go through a triage form before every patient. If the app requires it, they'll abandon it after day one.
+
+The voice button should be the first thing they see and the only thing they need to tap.

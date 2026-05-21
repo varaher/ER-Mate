@@ -1317,7 +1317,28 @@ export default function PediatricCaseSheetScreen() {
       </View>
       <KeyboardAwareScrollViewCompat contentContainerStyle={[styles.content, { paddingBottom: 100 }]}>
         {activeTab === "patient" && patient && (
-          <View style={[styles.card, { backgroundColor: theme.card }]}>
+          <>
+            <View style={[styles.card, { backgroundColor: theme.card, borderLeftWidth: 3, borderLeftColor: theme.primary }]}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginBottom: Spacing.md }}>
+                <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.primary, justifyContent: "center", alignItems: "center" }}>
+                  <Feather name="mic" size={20} color="#FFFFFF" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.cardTitle, { color: theme.text }]}>Speak This Case</Text>
+                  <Text style={[styles.cardSubtitle, { color: theme.textSecondary }]}>Talk naturally — ErMate fills the case sheet automatically</Text>
+                </View>
+              </View>
+              <SmartDictation
+                onDataExtracted={handleSmartDictation}
+                patientContext={{
+                  age: patient?.age,
+                  sex: patient?.sex,
+                  chiefComplaint: patient?.chief_complaint,
+                  caseType: 'pediatric',
+                }}
+              />
+            </View>
+            <View style={[styles.card, { backgroundColor: theme.card }]}>
             <View style={styles.patientHeader}>
               <View style={styles.patientInfo}>
                 <Text style={[styles.patientName, { color: theme.text }]}>{patient.name}</Text>
@@ -1427,20 +1448,8 @@ export default function PediatricCaseSheetScreen() {
               <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.md }]}>Informant</Text>
               <Text style={[styles.fieldValue, { color: theme.textSecondary }]}>{patient.informant_name || "Not specified"}{patient.informant_reliability ? ` (${patient.informant_reliability})` : ""}</Text>
             </View>
-            <View style={[styles.card, { backgroundColor: theme.card }]}>
-              <Text style={[styles.cardTitle, { color: theme.text }]}>Case Sheet Dictation</Text>
-              <Text style={[styles.cardSubtitle, { color: theme.textSecondary }]}>Dictate full patient history, exam findings, and plan.</Text>
-              <SmartDictation
-                onDataExtracted={handleSmartDictation}
-                patientContext={{
-                  age: patient?.age,
-                  sex: patient?.sex,
-                  chiefComplaint: patient?.chief_complaint,
-                  caseType: 'pediatric',
-                }}
-              />
-            </View>
           </View>
+          </>
         )}
         {activeTab === "primary" && (
           <>

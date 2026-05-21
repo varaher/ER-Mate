@@ -6,6 +6,8 @@ import {
   ScrollView,
   Pressable,
   Modal,
+  Alert,
+  ActivityIndicator,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -13,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
+import { fetchCasesFromProxy, deleteCaseFromProxy } from "@/lib/api";
 import { Spacing, BorderRadius, Typography } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -24,9 +27,47 @@ export default function ProfileScreen() {
   const { user, logout } = useAuth();
   const insets = useSafeAreaInsets();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [clearingCases, setClearingCases] = useState(false);
 
   const handleLogout = () => {
     setShowLogoutModal(true);
+  };
+
+  const handleClearTestData = () => {
+    Alert.alert(
+      "Delete All Cases",
+      "This will permanently delete every case in your account. This cannot be undone. Are you sure?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete All",
+          style: "destructive",
+          onPress: async () => {
+            setClearingCases(true);
+            try {
+              const cases = await fetchCasesFromProxy<any[]>();
+              const ids: string[] = Array.isArray(cases) ? cases.map((c: any) => c.id).filter(Boolean) : [];
+              if (ids.length === 0) {
+                Alert.alert("No Cases", "Your account has no cases to delete.");
+                return;
+              }
+              let deleted = 0;
+              for (const id of ids) {
+                try {
+                  await deleteCaseFromProxy(id);
+                  deleted++;
+                } catch {}
+              }
+              Alert.alert("Done", `${deleted} of ${ids.length} cases deleted.`);
+            } catch (err) {
+              Alert.alert("Error", "Could not fetch cases. Please try again.");
+            } finally {
+              setClearingCases(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const confirmLogout = () => {
@@ -148,6 +189,29 @@ export default function ProfileScreen() {
               </Text>
             </View>
           ) : null}
+        </View>
+
+        <View style={[styles.section, { backgroundColor: theme.card, marginBottom: Spacing.lg }]}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.menuItem,
+              { opacity: clearingCases ? 0.5 : pressed ? 0.7 : 1 },
+            ]}
+            onPress={clearingCases ? undefined : handleClearTestData}
+            disabled={clearingCases}
+          >
+            {clearingCases ? (
+              <ActivityIndicator size="small" color={theme.danger} />
+            ) : (
+              <Feather name="trash-2" size={20} color={theme.danger} />
+            )}
+            <Text style={[styles.menuLabel, { color: theme.danger }]}>
+              {clearingCases ? "Deleting cases..." : "Delete All Cases"}
+            </Text>
+            {!clearingCases ? (
+              <Feather name="chevron-right" size={20} color={theme.danger} />
+            ) : null}
+          </Pressable>
         </View>
 
         <Pressable
