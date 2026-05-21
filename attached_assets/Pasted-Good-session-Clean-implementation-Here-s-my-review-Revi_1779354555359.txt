@@ -1,0 +1,164 @@
+Good session. Clean implementation. Here's my review.
+
+---
+
+# Review
+
+## What's Correctly Done ✅
+
+**5-tap avatar to reveal developer tools**
+This is the right pattern. Impossible to trigger accidentally, familiar to anyone who's seen Android developer options. Real doctors won't find it. Good.
+
+**Case count in delete confirmation**
+"Delete 18 Cases" instead of "Delete All" is exactly right. The doctor knows precisely what they're about to lose.
+
+**Triage auto-assignment from voice vitals**
+The priority logic is clinically sound. RED for SpO2 < 90 or GCS < 9 or BP < 80 is correct emergency medicine triage. Dashboard counts will now work correctly for voice cases.
+
+**Hero card hiding when HPI filled**
+Correct condition. Case from voice entry → HPI populated → card gone. Fresh manual case → HPI empty → card visible. Clean.
+
+**Fill Manually → Quick form**
+Right decision. Three fields then case sheet. Full triage screen removed from the new patient path.
+
+---
+
+## Concerns ⚠️
+
+### 1. Triage Logic — One Clinical Gap
+
+The current logic assigns YELLOW for BP > 160. But in Indian ER practice, BP 160/90 in a known hypertensive patient walking in with a minor complaint is extremely common and not urgent. Isolated hypertension without symptoms is typically GREEN or BLUE.
+
+The BP threshold for ORANGE/YELLOW should be paired with symptoms, not standalone:
+
+```javascript
+const computeTriageFromVitals = (vitals) => {
+  const { hr, bpSystolic, spo2, gcsTotal, rr } = vitals;
+  
+  // Red — immediate threat to life
+  if (spo2 < 90 || gcsTotal < 9 || 
+      bpSystolic < 80) return { 
+        priority: 1, color: 'RED' 
+      };
+  
+  // Orange — very urgent
+  if (spo2 < 94 || gcsTotal < 13 || 
+      bpSystolic < 100 || hr > 120 ||
+      rr > 30) return { 
+        priority: 2, color: 'ORANGE' 
+      };
+  
+  // Yellow — urgent
+  if (spo2 < 96 || hr > 100 || 
+      rr > 24 ||
+      bpSystolic > 180  // raised threshold
+      ) return { 
+        priority: 3, color: 'YELLOW' 
+      };
+  
+  // Green — semi-urgent  
+  // Remove standalone BP > 140 from here
+  // A known hypertensive walking in 
+  // is not semi-urgent by BP alone
+  if (hr > 90 || rr > 20) return { 
+    priority: 4, color: 'GREEN' 
+  };
+  
+  // Blue — non-urgent
+  return { priority: 5, color: 'BLUE' };
+};
+```
+
+Raise the BP threshold for YELLOW from 160 to 180, and remove standalone BP > 140 from GREEN. Otherwise every known hypertensive patient in Kerala — which is a very large number — will incorrectly show as semi-urgent.
+
+---
+
+### 2. Hero Card Condition — Fragile Check
+
+The hero card hides based on `formData.sample.eventsHopi` being populated. This is one specific field path. If a doctor opens a case through Quick Case Sheet (manual entry, no HPI yet) and then navigates to the Patient tab, the hero card will still show correctly — good.
+
+But what if the voice extraction fails partway through and HPI is empty even though voice was attempted? The hero card will reappear on a case that already has partial data, which could confuse the doctor into thinking they need to re-dictate.
+
+A safer condition:
+
+```javascript
+// Hide hero card if ANY of these are filled
+// not just HPI
+const caseHasContent = 
+  formData.sample.eventsHopi ||
+  formData.chief_complaint ||
+  formData.past_medical_history?.length > 0 ||
+  formData.bp_systolic;
+
+// Show hero card only on truly empty cases
+{!caseHasContent && <VoiceHeroCard />}
+```
+
+This way the card only appears on completely blank cases.
+
+---
+
+### 3. Quick Case Sheet as Manual Path — Missing Vitals
+
+The manual path now goes Quick Case Sheet (name, age, sex) → case sheet. But Quick Case Sheet doesn't capture vitals at entry. The doctor then has to go to the Patient tab and fill vitals manually.
+
+For a doctor who wants to do a quick manual entry — not voice — this means:
+- Screen 1: Name, age, sex
+- Screen 2: Patient tab → scroll to vitals → fill HR, BP, SpO2, RR, GCS, GRBS manually
+
+That's actually more steps than before. Consider adding a minimal vitals row to the Quick Case Sheet screen:
+
+```
+Quick Case Sheet
+─────────────────
+Name *
+Age *
+Sex
+
+─── Vitals (optional) ───
+HR    BP      SpO2
+[   ] [  /  ] [   ]
+
+→ Open Case Sheet
+```
+
+Optional vitals on Quick Case Sheet. If filled, they pre-populate the Patient tab. If skipped, doctor fills them on the case sheet. This makes the manual path genuinely faster.
+
+---
+
+## Overall Assessment
+
+| Item | Status |
+|---|---|
+| 5-tap developer tools | ✅ Done correctly |
+| Case count in delete alert | ✅ Done correctly |
+| Triage auto-assign | ✅ Done — BP threshold needs adjustment |
+| Hero card hiding | ✅ Done — condition needs strengthening |
+| Fill Manually → Quick form | ✅ Done — consider optional vitals |
+
+---
+
+## What to Tell Your Developer — 3 Small Fixes
+
+```
+1. Triage BP threshold
+   Change YELLOW from BP > 160 
+   to BP > 180
+   Remove BP > 140 from GREEN entirely
+   Prevents over-triaging known 
+   hypertensives
+
+2. Hero card condition
+   Hide when ANY field has content —
+   not just HPI
+   Prevents reappearing on 
+   partially filled cases
+
+3. Quick Case Sheet optional vitals
+   Add HR, BP, SpO2 as optional 
+   fields below name/age/sex
+   Pre-populate Patient tab if filled
+   Skip if not filled
+```
+
+These are all minor. One short developer session. After these three the new patient flow is complete.

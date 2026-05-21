@@ -2068,7 +2068,7 @@ export default function CaseSheetScreen() {
       <KeyboardAwareScrollViewCompat contentContainerStyle={[styles.content, { paddingBottom: 100 }]} showsVerticalScrollIndicator={false}>
         {activeTab === "patient" && (
           <>
-            {!formData.sample.eventsHopi ? (
+            {!(formData.sample.eventsHopi || formData.sample.signsSymptoms || formData.sample.pastMedicalHistory) ? (
               <View style={[styles.card, { backgroundColor: theme.card, borderLeftWidth: 3, borderLeftColor: theme.primary }]}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginBottom: Spacing.md }}>
                   <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.primary, justifyContent: "center", alignItems: "center" }}>

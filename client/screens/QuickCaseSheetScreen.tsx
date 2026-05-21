@@ -39,6 +39,10 @@ export default function QuickCaseSheetScreen() {
   const [sex, setSex] = useState("Male");
   const uhidRef = useRef("");
   const phoneRef = useRef("");
+  const hrRef = useRef("");
+  const bpSysRef = useRef("");
+  const bpDiaRef = useRef("");
+  const spo2Ref = useRef("");
 
   const handleCreate = async () => {
     const name = nameRef.current.trim();
@@ -71,11 +75,11 @@ export default function QuickCaseSheetScreen() {
           arrival_datetime: new Date().toISOString(),
         },
         vitals_at_arrival: {
-          hr: 80,
-          bp_systolic: 120,
-          bp_diastolic: 80,
+          hr: parseInt(hrRef.current) || 80,
+          bp_systolic: parseInt(bpSysRef.current) || 120,
+          bp_diastolic: parseInt(bpDiaRef.current) || 80,
           rr: 16,
-          spo2: 98,
+          spo2: parseInt(spo2Ref.current) || 98,
           temperature: 36.8,
           gcs_e: 4,
           gcs_v: 5,
@@ -191,6 +195,56 @@ export default function QuickCaseSheetScreen() {
                 <Text style={[styles.sexBtnText, { color: sex === s ? "#FFFFFF" : theme.text }]}>{s}</Text>
               </Pressable>
             ))}
+          </View>
+        </View>
+
+        <Text style={[styles.sectionLabel, { color: theme.textSecondary, marginTop: Spacing.md }]}>Vitals (Optional)</Text>
+        <View style={[styles.inputGroup, { backgroundColor: theme.card }]}>
+          <View style={styles.vitalsRow}>
+            <View style={styles.vitalCell}>
+              <Text style={[styles.vitalLabel, { color: theme.textSecondary }]}>HR (bpm)</Text>
+              <TextInput
+                style={[styles.vitalInput, { backgroundColor: theme.backgroundSecondary, color: theme.text }]}
+                placeholder="--"
+                placeholderTextColor={theme.textMuted}
+                keyboardType="numeric"
+                maxLength={3}
+                onChangeText={(t) => { hrRef.current = t; }}
+              />
+            </View>
+            <View style={[styles.vitalCell, { flex: 2 }]}>
+              <Text style={[styles.vitalLabel, { color: theme.textSecondary }]}>BP (sys / dia)</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                <TextInput
+                  style={[styles.vitalInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, flex: 1 }]}
+                  placeholder="120"
+                  placeholderTextColor={theme.textMuted}
+                  keyboardType="numeric"
+                  maxLength={3}
+                  onChangeText={(t) => { bpSysRef.current = t; }}
+                />
+                <Text style={{ color: theme.textMuted, fontWeight: "700" }}>/</Text>
+                <TextInput
+                  style={[styles.vitalInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, flex: 1 }]}
+                  placeholder="80"
+                  placeholderTextColor={theme.textMuted}
+                  keyboardType="numeric"
+                  maxLength={3}
+                  onChangeText={(t) => { bpDiaRef.current = t; }}
+                />
+              </View>
+            </View>
+            <View style={styles.vitalCell}>
+              <Text style={[styles.vitalLabel, { color: theme.textSecondary }]}>SpO2 (%)</Text>
+              <TextInput
+                style={[styles.vitalInput, { backgroundColor: theme.backgroundSecondary, color: theme.text }]}
+                placeholder="--"
+                placeholderTextColor={theme.textMuted}
+                keyboardType="numeric"
+                maxLength={3}
+                onChangeText={(t) => { spo2Ref.current = t; }}
+              />
+            </View>
           </View>
         </View>
 
@@ -311,4 +365,14 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
   },
   triageLinkText: { fontSize: Typography.sm, fontWeight: "500" },
+  vitalsRow: { flexDirection: "row", gap: Spacing.sm },
+  vitalCell: { flex: 1 },
+  vitalLabel: { fontSize: 11, fontWeight: "500", marginBottom: 4 },
+  vitalInput: {
+    height: 40,
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: Spacing.sm,
+    fontSize: Typography.base,
+    textAlign: "center",
+  },
 });

@@ -1318,7 +1318,7 @@ export default function PediatricCaseSheetScreen() {
       <KeyboardAwareScrollViewCompat contentContainerStyle={[styles.content, { paddingBottom: 100 }]}>
         {activeTab === "patient" && patient && (
           <>
-            {!historyData.events ? (
+            {!(historyData.events || patient?.chief_complaint || (Array.isArray(historyData.healthHistory) ? historyData.healthHistory.length > 0 : !!historyData.healthHistory)) ? (
               <View style={[styles.card, { backgroundColor: theme.card, borderLeftWidth: 3, borderLeftColor: theme.primary }]}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginBottom: Spacing.md }}>
                   <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.primary, justifyContent: "center", alignItems: "center" }}>

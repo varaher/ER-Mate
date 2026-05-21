@@ -535,11 +535,11 @@ export default function VoiceCaseSheetScreen() {
     const rr = parseInt(vs.rr) || 16;
     if (spo2 < 90 || gcs < 9 || bpSys < 80)
       return { triage_color: "red", triage_priority: 1 };
-    if (spo2 < 94 || gcs < 13 || bpSys < 100 || hr > 120)
+    if (spo2 < 94 || gcs < 13 || bpSys < 100 || hr > 120 || rr > 30)
       return { triage_color: "orange", triage_priority: 2 };
-    if (spo2 < 96 || hr > 100 || bpSys > 160 || rr > 24)
+    if (spo2 < 96 || hr > 100 || rr > 24 || bpSys > 180)
       return { triage_color: "yellow", triage_priority: 3 };
-    if (hr > 90 || bpSys > 140)
+    if (hr > 90 || rr > 20)
       return { triage_color: "green", triage_priority: 4 };
     return { triage_color: "blue", triage_priority: 5 };
   };
