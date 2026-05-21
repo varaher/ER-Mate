@@ -383,6 +383,112 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ── QR-based device linking ──────────────────────────────────────────────
+  const qrSessions = new Map<string, {
+    status: "pending" | "approved";
+    authToken?: string;
+    userId?: string;
+    userEmail?: string;
+    userName?: string;
+    createdAt: number;
+    expiresAt: number;
+  }>();
+
+  setInterval(() => {
+    const now = Date.now();
+    for (const [t, d] of qrSessions.entries()) {
+      if (now > d.expiresAt) qrSessions.delete(t);
+    }
+  }, 60000);
+
+  app.post("/api/device-link/generate", async (req: Request, res: Response) => {
+    try {
+      const { randomUUID } = await import("crypto");
+      const token = randomUUID();
+      const expiresIn = 300;
+      qrSessions.set(token, {
+        status: "pending",
+        createdAt: Date.now(),
+        expiresAt: Date.now() + expiresIn * 1000,
+      });
+      const domain = process.env.REPLIT_DOMAINS
+        ? process.env.REPLIT_DOMAINS.split(",")[0].trim()
+        : process.env.REPLIT_DEV_DOMAIN || (process.env.REPL_SLUG || "ermate") + ".replit.app";
+      const qrUrl = `https://${domain}/web?qr_token=${token}`;
+      return res.json({ success: true, token, qr_url: qrUrl, expires_in: expiresIn });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/device-link/approve", async (req: Request, res: Response) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader) return res.status(401).json({ error: "Auth required" });
+      const { token } = req.body;
+      if (!token) return res.status(400).json({ error: "token required" });
+      const session = qrSessions.get(token);
+      if (!session) return res.status(404).json({ error: "Invalid or expired QR session" });
+      if (Date.now() > session.expiresAt) {
+        qrSessions.delete(token);
+        return res.status(410).json({ error: "QR code expired" });
+      }
+      const authToken = authHeader.replace(/^Bearer\s+/i, "");
+      const jwtPayload = decodeJwt(authToken);
+      session.status = "approved";
+      session.authToken = authToken;
+      session.userId = jwtPayload?.sub || jwtPayload?.id || jwtPayload?.user_id || "";
+      session.userEmail = jwtPayload?.email || "";
+      session.userName = jwtPayload?.name || "";
+      console.log(`[DeviceLink] QR approved by ${session.userEmail || session.userId}`);
+      return res.json({ success: true });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/device-link/status", async (req: Request, res: Response) => {
+    try {
+      const token = (req.query.token as string || "").trim();
+      if (!token) return res.status(400).json({ error: "token required" });
+      const session = qrSessions.get(token);
+      if (!session || Date.now() > session.expiresAt) {
+        if (session) qrSessions.delete(token);
+        return res.json({ status: "expired" });
+      }
+      if (session.status === "approved") {
+        const result = {
+          status: "approved",
+          authToken: session.authToken,
+          user: { id: session.userId, email: session.userEmail, name: session.userName },
+        };
+        qrSessions.delete(token);
+        return res.json(result);
+      }
+      return res.json({ status: "pending", expires_in: Math.floor((session.expiresAt - Date.now()) / 1000) });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/manifest.json", (_req: Request, res: Response) => {
+    res.setHeader("Content-Type", "application/manifest+json");
+    res.json({
+      name: "ErMate",
+      short_name: "ErMate",
+      description: "Emergency Room EMR — voice-powered case documentation",
+      start_url: "/web",
+      display: "standalone",
+      background_color: "#0a0e1a",
+      theme_color: "#3b82f6",
+      orientation: "portrait-primary",
+      icons: [
+        { src: "/assets/images/icon.png", sizes: "192x192", type: "image/png" },
+        { src: "/assets/images/icon.png", sizes: "512x512", type: "image/png", purpose: "any maskable" },
+      ],
+    });
+  });
+
   app.post("/api/auth/google", async (req: Request, res: Response) => {
     try {
       const { idToken, accessToken, name, email, password } = req.body;
