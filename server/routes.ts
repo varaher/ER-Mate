@@ -2090,7 +2090,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const inv = fc.investigations || {};
       const labsOrdered  = Array.isArray(inv.panels_selected) ? inv.panels_selected.join(", ") : (Array.isArray(inv.individual_tests) ? inv.individual_tests.join(", ") : s(inv.labs_ordered) || "Nil");
       const imagingOrdered = Array.isArray(inv.imaging) ? inv.imaging.join(", ") : s(inv.imaging) || "Nil";
-      const ecg           = s(inv.ecg)  || s(pa.ecg_findings)  || "Not documented";
+      const ecg           = s(inv.ecg)  || s(pa.ecg_findings)  || "Not done";
       const efast         = s(inv.efast)|| s(pa.efast_findings) || s((sd.primary_assessment as any)?.efast) || "Not done";
       const resultsSummary= s(inv.results_notes || inv.results_summary) || "Pending";
 
@@ -2177,7 +2177,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const dispPlan     = s(dispData.type || dispData.disposition_type) || s(sd.disposition_type) || "Not specified";
       const conditionDx  = s(dispData.condition || dispData.condition_at_discharge) || s(sd.condition_at_discharge) || "STABLE";
       const pendingReps  = s(dispData.pending_reports || dispData.follow_up_pending) || "Nil";
-      const followUp     = s(dispData.follow_up || dispData.follow_up_instructions) || s(sd.follow_up_advice) || "As advised";
+      const followUp     = s(dispData.follow_up || dispData.follow_up_instructions) || s(sd.follow_up_advice) || "As clinically indicated";
 
       // ── validation ─────────────────────────────────────────────────────────
       if (!complaint && !hpi && !workingDx) {

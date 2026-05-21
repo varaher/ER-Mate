@@ -549,19 +549,19 @@ export async function generateCourseInHospital(summaryData: DischargeSummaryInpu
   ].filter(Boolean).join(" | ") : (summaryData.vitals ? Object.entries(summaryData.vitals).filter(([_, v]) => v).map(([k, v]) => `${k.toUpperCase()}: ${v}`).join(" | ") : "Not documented");
 
   // ABCDE block
-  const abcdeBlock = hasRich ? `A — Airway:    ${summaryData.airway || "Patent"}
-B — Breathing: ${summaryData.auscultation || ""}; Work of breathing: ${summaryData.workBreathing || ""}; O2: ${summaryData.o2Device || "Room air"}
-C — Circulation: CRT ${summaryData.crt || "< 2s"}; ${summaryData.cvsFindings || ""}; IV Access: ${summaryData.ivAccess || ""}
-D — Disability: Pupils: ${summaryData.pupils || ""}; Power: ${summaryData.power || ""}; Focal deficit: ${summaryData.focalDeficit || "None"}
-E — Exposure:  ${summaryData.exposure || "No significant findings"}` : "";
+  const abcdeBlock = hasRich ? `A — Airway:    ${summaryData.airway || "Patent, self-maintained"}
+B — Breathing: ${summaryData.auscultation || "Air entry bilaterally equal and clear"}; Work of breathing: ${summaryData.workBreathing || "No accessory muscle use"}; O2: ${summaryData.o2Device || "Room air"}
+C — Circulation: CRT ${summaryData.crt || "< 2 seconds"}; ${summaryData.cvsFindings || "S1S2 heard, no murmurs"}; IV Access: ${summaryData.ivAccess || "Not documented"}
+D — Disability: Pupils: ${summaryData.pupils || "Bilaterally equal and reactive"}; Power: ${summaryData.power || "5/5 all four limbs"}; Focal deficit: ${summaryData.focalDeficit || "None"}
+E — Exposure:  ${summaryData.exposure || "No external injuries or significant findings"}` : "";
 
   // Systemic exam block
-  const examBlock = hasRich ? `General:     ${summaryData.examGeneral || ""}
-CVS:         ${summaryData.examCVS || ""}
-Respiratory: ${summaryData.examRespiratory || ""}
-Abdomen:     ${summaryData.examAbdomen || ""}
-CNS:         ${summaryData.examCNS || ""}
-Extremities: ${summaryData.examExtremities || ""}
+  const examBlock = hasRich ? `General:     ${summaryData.examGeneral || "Conscious, oriented, comfortable at rest"}
+CVS:         ${summaryData.examCVS || "S1S2 heard, no murmurs, no added sounds"}
+Respiratory: ${summaryData.examRespiratory || "Air entry bilaterally equal and clear, no adventitious sounds"}
+Abdomen:     ${summaryData.examAbdomen || "Soft, non-tender, bowel sounds present"}
+CNS:         ${summaryData.examCNS || "No focal neurological deficit"}
+Extremities: ${summaryData.examExtremities || "No pedal oedema, peripheral pulses present bilaterally"}
 HEENT:       ${summaryData.examHEENT || "Not examined"}` : "";
 
   // Investigations block
@@ -675,7 +675,7 @@ DISPOSITION
 Plan:            ${disp}
 Condition:       ${cond}
 Pending Reports: ${summaryData.pendingReps || "Nil"}
-Follow Up:       ${summaryData.followUp || "As advised"}
+Follow Up:       ${summaryData.followUp || "As clinically indicated"}
 
 ═══════════════════════════════════════
 

@@ -1,0 +1,437 @@
+Give these exact instructions to your developer:
+
+---
+
+# This Week — 3 Tasks
+
+## Task 1 — safe() Fallback Wrapper
+
+**Tell your developer:**
+
+Add this function at the top of the discharge summary route file, then wrap every field in the prompt with it.
+
+```javascript
+// Add this once at top of discharge route
+const safe = (value, fallback = 'Not recorded') => {
+  if (value === undefined) return fallback;
+  if (value === null) return fallback;
+  if (value === '') return fallback;
+  if (Array.isArray(value) && value.length === 0) 
+    return fallback;
+  return value;
+};
+
+// Then every field in the prompt changes like this
+// BEFORE
+Airway: ${fullCase.primary_survey?.airway}
+
+// AFTER  
+Airway: ${safe(fullCase.primary_survey?.airway, 
+               'Not documented')}
+```
+
+**Specific fallbacks for clinical fields:**
+
+```javascript
+// Use these exact fallbacks — not generic "Not recorded"
+safe(history.allergies,        'NKDA')
+safe(history.past_surgical,    'Nil significant')
+safe(history.family_history,   'Not significant')
+safe(history.social_history,   'Not recorded')
+safe(investigations.ecg,       'Not done')
+safe(investigations.efast,     'Not done')
+safe(treatment.procedures,     'Nil')
+safe(doctors.consultations,    'No specialist consultations')
+safe(psychological,            'Screened — no flags identified')
+safe(disposition.follow_up,    'As clinically indicated')
+```
+
+**Done when:** Generate a discharge summary with a minimal case — only name, age, complaint filled, everything else empty. Every section should show a clinical default. No section should show "undefined", "null", or be blank.
+
+---
+
+## Task 2 — User ID Security Check
+
+**Tell your developer:**
+
+Open the device link approve endpoint and verify this exact check exists. If it doesn't, add it.
+
+```javascript
+const approveLinking = async (req, res) => {
+  try {
+    const { token } = req.body;
+    
+    // 1. Get authenticated user from token
+    const mobileUserId = req.user.id;
+    
+    // 2. Fetch the stored link data
+    const stored = await redis.get(
+      `device_link:${token}`
+    );
+    
+    // 3. Handle missing or expired token
+    if (!stored) {
+      return res.status(404).json({ 
+        error: 'QR code expired or invalid. ' +
+               'Please scan a fresh code.' 
+      });
+    }
+    
+    const linkData = JSON.parse(stored);
+    
+    // 4. THIS CHECK IS CRITICAL
+    // Verify the mobile user matches 
+    // who the QR was generated for
+    if (linkData.userId !== mobileUserId) {
+      return res.status(403).json({ 
+        error: 'This QR code belongs to ' +
+               'a different account.' 
+      });
+    }
+    
+    // 5. Mark as approved
+    await redis.setex(
+      `device_link:${token}`,
+      300,
+      JSON.stringify({
+        ...linkData,
+        status: 'approved',
+        approvedAt: Date.now()
+      })
+    );
+    
+    return res.json({ success: true });
+    
+  } catch (error) {
+    console.error('Device link approve error:', error);
+    return res.status(500).json({ 
+      error: 'Linking failed. Please try again.' 
+    });
+  }
+};
+```
+
+**Done when:** Log in as Doctor A on mobile. Generate a QR on Doctor B's desktop. Try to approve Doctor B's QR from Doctor A's mobile. Should get a 403 error, not succeed.
+
+---
+
+## Task 3 — QR Auto-Refresh on Expiry
+
+**Tell your developer:**
+
+In web-app.html, the polling loop must handle expiry gracefully with auto-refresh. No manual intervention from doctor.
+
+```javascript
+// Replace current polling with this
+let pollingInterval = null;
+let countdownInterval = null;
+let currentToken = null;
+
+const startPolling = (token) => {
+  currentToken = token;
+  
+  // Clear any existing intervals
+  if (pollingInterval) clearInterval(pollingInterval);
+  
+  pollingInterval = setInterval(async () => {
+    try {
+      const res = await fetch(
+        `/api/device-link/status?token=${token}`
+      );
+      const data = await res.json();
+      
+      if (data.status === 'approved') {
+        // Success — store token and redirect
+        clearInterval(pollingInterval);
+        clearInterval(countdownInterval);
+        localStorage.setItem('auth_token', 
+                             data.authToken);
+        window.location.href = '/dashboard';
+      }
+      
+      if (data.status === 'expired') {
+        // Auto-refresh — doctor does nothing
+        clearInterval(pollingInterval);
+        clearInterval(countdownInterval);
+        await refreshQRCode(); // generates new QR
+      }
+      
+    } catch (error) {
+      // Network error — keep polling silently
+      console.warn('Polling error:', error);
+    }
+  }, 2000);
+};
+
+// Countdown timer shown to doctor
+const startCountdown = (seconds) => {
+  let remaining = seconds;
+  
+  if (countdownInterval) clearInterval(countdownInterval);
+  
+  countdownInterval = setInterval(() => {
+    remaining -= 1;
+    
+    const mins = Math.floor(remaining / 60);
+    const secs = remaining % 60;
+    
+    document.getElementById('countdown').textContent = 
+      `Code refreshes in ${mins}:${secs
+        .toString()
+        .padStart(2, '0')}`;
+    
+    if (remaining <= 0) {
+      clearInterval(countdownInterval);
+    }
+  }, 1000);
+};
+
+// Generate fresh QR
+const refreshQRCode = async () => {
+  document.getElementById('qr-container')
+    .innerHTML = '<p>Refreshing...</p>';
+  
+  const res = await fetch('/api/device-link/generate', {
+    method: 'POST'
+  });
+  const data = await res.json();
+  
+  // Render new QR code
+  renderQRCode(data.token);
+  startPolling(data.token);
+  startCountdown(300); // 5 minutes
+};
+
+// On page load
+refreshQRCode();
+```
+
+**Done when:** Open the QR screen, wait 5 minutes without scanning. QR should automatically refresh and show a new code — no page reload, no error message, no action from doctor.
+
+---
+
+# Next Sprint — 2 Tasks
+
+## Task 4 — Service Worker for Offline Caching
+
+**Tell your developer:**
+
+Create `/public/sw.js` and register it. Cache strategy: network first, fall back to cache.
+
+```javascript
+// public/sw.js
+
+const CACHE_NAME = 'ermate-v1';
+
+// Static assets to cache on install
+const STATIC_ASSETS = [
+  '/',
+  '/dashboard',
+  '/cases',
+  '/index.html',
+  // Add your main JS and CSS bundle paths
+];
+
+// Install — cache static assets
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(STATIC_ASSETS);
+    })
+  );
+});
+
+// Activate — clean old caches
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((keys) => {
+      return Promise.all(
+        keys
+          .filter((key) => key !== CACHE_NAME)
+          .map((key) => caches.delete(key))
+      );
+    })
+  );
+});
+
+// Fetch — network first, cache fallback
+self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+  
+  // API calls — network only, no caching
+  if (url.pathname.startsWith('/api/')) {
+    return; // let it fail naturally if offline
+  }
+  
+  // Case pages — cache for offline
+  event.respondWith(
+    fetch(event.request)
+      .then((response) => {
+        // Cache successful responses
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then((cache) => {
+          cache.put(event.request, clone);
+        });
+        return response;
+      })
+      .catch(() => {
+        // Network failed — serve from cache
+        return caches.match(event.request)
+          .then((cached) => {
+            if (cached) return cached;
+            
+            // Nothing in cache either
+            return new Response(
+              `<html>
+                <body style="font-family:sans-serif;
+                             padding:40px;
+                             text-align:center">
+                  <h2>You're offline</h2>
+                  <p>Cases you've already opened 
+                     are available below.</p>
+                  <a href="/cases">View cached cases</a>
+                </body>
+              </html>`,
+              { headers: { 
+                'Content-Type': 'text/html' 
+              }}
+            );
+          });
+      })
+  );
+});
+```
+
+**Register in your main app entry:**
+
+```javascript
+// In index.js or App.js
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('/sw.js')
+      .then((reg) => {
+        console.log('SW registered:', reg.scope);
+      })
+      .catch((err) => {
+        console.warn('SW registration failed:', err);
+      });
+  });
+}
+```
+
+**Done when:** Open 3 cases on mobile. Turn off WiFi. Open those same 3 cases — they should load. Trying to open a 4th case not previously opened should show the offline message.
+
+---
+
+## Task 5 — End-to-End Test Checklist
+
+**Tell your developer to run this exact sequence before any pilot:**
+
+```
+TEST SEQUENCE — run in order, 
+check every item
+
+□ 1. Login
+      Open ermate.in
+      Sign in with Google
+      Dashboard loads with 0 cases
+
+□ 2. New case via Voice Entry
+      Tap + → Voice Case Entry
+      Speak a full patient case 
+      in any Indian language
+      Verify language badge appears
+      Verify transcript shows 
+      in original language
+
+□ 3. Extract and Review
+      Tap Extract Clinical Data
+      Review screen opens
+      Completeness bar shows correctly
+      Green/amber/grey coding visible
+      No field shows "undefined"
+
+□ 4. Save
+      Tap Save Case
+      No error
+      Redirects to View Case or Dashboard
+      Case appears in Today's Patients
+
+□ 5. View Case
+      Open the saved case
+      All sections populated
+      No blank sections
+      VBG shows if dictated
+      Consultation shows if dictated
+      Doctors names show correctly
+
+□ 6. Case Sheet Edit
+      Tap Full Edit
+      Open each tab
+      Pre-filled normals visible 
+      in grey on untouched fields
+      Medical/Trauma toggle works
+      Voice mic works on 
+      medication field
+
+□ 7. Discharge Summary
+      From View Case tap 
+      "Create Discharge Summary"
+      Generation starts immediately
+      — no extra button tap needed
+      Screen opens with content 
+      already generating
+      All case sheet data visible
+      in locked sections
+      ER meds in Treatment section
+      Discharge meds section 
+      separate and editable
+      Condition at discharge 
+      — tap to select works
+      Advice field pre-filled 
+      by diagnosis
+
+□ 8. Export
+      Tap Download PDF
+      PDF downloads with 
+      all sections filled
+      No section blank or 
+      showing "undefined"
+      Doctor names in signature section
+      Tap Download DOCX
+      Word doc downloads correctly
+
+□ 9. WhatsApp Share
+      Tap Share after PDF download
+      Device share sheet opens
+      Can select WhatsApp
+      PDF attaches correctly
+
+□ 10. Device Linking
+       Open ermate.in on desktop
+       QR code appears
+       Countdown timer visible
+       Open ErMate on phone
+       Go to Profile → Link Device
+       Scan QR
+       Desktop redirects to 
+       dashboard automatically
+       Wait 5 minutes without scanning
+       QR auto-refreshes — 
+       no manual action needed
+
+□ 11. Offline Test
+       Open 2-3 cases on mobile
+       Turn off WiFi
+       Reopen those cases
+       They load from cache
+       New case attempt shows 
+       offline message cleanly
+```
+
+**Done when:** All 11 boxes checked with no failures. Only then schedule a pilot.
+
+---
+
+Give this document to your developer as-is. Each task has a clear "Done when" condition so there's no ambiguity about whether it's complete.

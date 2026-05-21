@@ -240,20 +240,22 @@ function configureExpoAndLanding(app: express.Application) {
       if (tsFolder) cacheVersion = `ermate-pwa-${tsFolder}`;
     } catch {}
 
+    const offlineHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ErMate — Offline</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#0a0e1a;color:#f0f4ff;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}.card{background:#1a2236;border:1px solid #2a3a55;border-radius:20px;padding:40px 32px;max-width:400px;text-align:center}.icon{width:56px;height:56px;border-radius:14px;background:#1f2d45;display:flex;align-items:center;justify-content:center;margin:0 auto 20px}svg{width:28px;height:28px;stroke:#94a3b8;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}h2{font-size:20px;font-weight:700;margin-bottom:8px}p{font-size:14px;color:#94a3b8;line-height:1.6;margin-bottom:24px}a{display:inline-block;background:#3b82f6;color:#fff;text-decoration:none;padding:10px 24px;border-radius:10px;font-size:14px;font-weight:600}</style></head><body><div class="card"><div class="icon"><svg viewBox="0 0 24 24"><path d="M1 6s4-2 11-2 11 2 11 2"/><path d="M1 18s4 2 11 2 11-2 11-2"/><line x1="1" y1="12" x2="23" y2="12"/><line x1="12" y1="4" x2="12" y2="20"/></svg></div><h2>You are offline</h2><p>Cases you have already opened are available below. New cases and updates require a connection.</p><a href="/web">View Cached Cases</a></div></body></html>`;
+
     const swContent = `
 const CACHE = '${cacheVersion}';
-const PRECACHE = ['/web/bundle.js', '/assets/images/icon.png', '/assets/images/favicon.png'];
+const PRECACHE = ['/web', '/assets/images/icon.png', '/assets/images/favicon.png'];
 
-// Install: pre-cache assets but do NOT skipWaiting — wait for user confirmation
+// Install — pre-cache key assets
 self.addEventListener('install', function(event) {
   event.waitUntil(
     caches.open(CACHE).then(function(cache) {
       return cache.addAll(PRECACHE).catch(function() {});
-    })
+    }).then(function() { return self.skipWaiting(); })
   );
 });
 
-// Activate: clear old caches, then claim clients
+// Activate — delete old caches, claim clients immediately
 self.addEventListener('activate', function(event) {
   event.waitUntil(
     caches.keys().then(function(keys) {
@@ -264,27 +266,41 @@ self.addEventListener('activate', function(event) {
   );
 });
 
-// Message: trigger activation when app sends SKIP_WAITING
+// Message — allow manual skip-waiting
 self.addEventListener('message', function(event) {
-  if (event.data && event.data.type === 'SKIP_WAITING') {
-    self.skipWaiting();
-  }
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
-// Fetch: stale-while-revalidate for non-API requests
+// Offline fallback HTML
+const OFFLINE_HTML = ${JSON.stringify(offlineHtml)};
+
+// Fetch — network first, cache fallback, offline page last resort
 self.addEventListener('fetch', function(event) {
-  if (event.request.url.includes('/api/')) return;
   if (event.request.method !== 'GET') return;
+
+  // API calls — never cache, let them fail naturally if offline
+  var url = new URL(event.request.url);
+  if (url.pathname.startsWith('/api/')) return;
+
   event.respondWith(
-    caches.match(event.request).then(function(cached) {
-      var network = fetch(event.request).then(function(res) {
-        if (res && res.status === 200) {
-          var clone = res.clone();
-          caches.open(CACHE).then(function(c) { c.put(event.request, clone); });
+    fetch(event.request).then(function(networkRes) {
+      // Network succeeded — update cache in background, return fresh response
+      if (networkRes && networkRes.status === 200) {
+        var clone = networkRes.clone();
+        caches.open(CACHE).then(function(cache) { cache.put(event.request, clone); });
+      }
+      return networkRes;
+    }).catch(function() {
+      // Network failed — try cache
+      return caches.match(event.request).then(function(cached) {
+        if (cached) return cached;
+        // Nothing in cache — return offline page for navigation requests
+        if (event.request.mode === 'navigate') {
+          return new Response(OFFLINE_HTML, { headers: { 'Content-Type': 'text/html' } });
         }
-        return res;
+        // For non-navigation (images, scripts) just fail silently
+        return new Response('', { status: 503 });
       });
-      return cached || network;
     })
   );
 });
