@@ -1,0 +1,371 @@
+Exactly the right concern. Let me audit this completely.
+
+---
+
+# Discharge Summary ↔ Case Sheet Data Audit
+
+## What the Case Sheet Captures (All Tabs)
+
+```
+Patient Tab          History Tab           Primary Tab
+─────────────        ───────────           ───────────
+Name                 Chief Complaint        A - Airway
+Age / Gender         Duration / Onset       B - Breathing
+UHID                 HPI Narrative          C - Circulation
+Arrival Time         Signs & Symptoms       D - Disability
+Mode of Arrival      Past Medical Hx        E - Exposure
+MLC Status           Past Surgical Hx       VBG/ABG
+EM Resident          Medications            ECG
+EM Consultant        Allergies              EFAST
+                     Family History         
+                     Social History         
+                     Last Meal              
+                     Psychological Screen   
+
+Exam Tab             Treatment Tab          
+────────             ─────────────          
+General Appearance   Medications            
+CVS                  IV Fluids              
+Respiratory          Procedures Done        
+Abdomen              Working Diagnosis      
+CNS                  Differentials          
+Extremities          Consultations          
+HEENT                Disposition Plan       
+```
+
+---
+
+## What the Discharge Summary Currently Pulls
+
+Based on the code your developer has built so far:
+
+| Field | Pulled? | Notes |
+|---|---|---|
+| Patient name/age/gender | ✅ | |
+| Arrival time | ✅ | |
+| EM Resident + Consultant | ✅ | |
+| Chief Complaint + Duration | ✅ | |
+| HPI Narrative | ✅ | |
+| Past Medical History | ✅ | array now |
+| VBG values | ✅ | just fixed |
+| Medications | ✅ | |
+| IV Fluids | ✅ | |
+| Consultations | ✅ | just fixed, own section |
+| Examination (ABCDE specific) | ✅ | just fixed |
+| Working Diagnosis | ✅ | |
+| Disposition Plan | ✅ | |
+| MLC Status | ⚠️ | present in case sheet, not in discharge prompt |
+| Mode of Arrival | ⚠️ | not passed to discharge |
+| Signs & Symptoms | ⚠️ | separate from HPI, not passed |
+| Allergies | ⚠️ | not in discharge summary |
+| Past Surgical History | ⚠️ | not passed |
+| Current Medications (pre-existing) | ⚠️ | confused with treatment meds |
+| ECG findings | ⚠️ | ordered but findings not passed |
+| EFAST findings | ⚠️ | not passed |
+| Procedures Done | ⚠️ | checkboxes not passed |
+| Differentials | ⚠️ | not in discharge prompt |
+| Psychological Screen | ⚠️ | flags not in discharge |
+| Family / Social History | ❌ | never passed |
+| Last Meal | ❌ | not relevant for discharge |
+| UHID | ⚠️ | in patient card but not discharge header |
+
+---
+
+## The Core Problem
+
+Your developer is building the discharge summary prompt by **manually listing fields** to pass. Every time a new field is added to the case sheet, someone has to remember to also add it to the discharge route. That's how gaps happen.
+
+**The fix is to pass the entire master schema object once — not field by field.**
+
+---
+
+## The Right Architecture
+
+```javascript
+// In the discharge route — pass everything
+const generateDischargeSummary = async (caseId) => {
+  const token = await getAuthToken();
+  
+  // Fetch the complete saved case
+  const caseResponse = await fetch(
+    `/api/cases/${caseId}`,
+    { headers: { 'Authorization': `Bearer ${token}` }}
+  );
+  const fullCase = await caseResponse.json();
+
+  // Pass the ENTIRE case object to the prompt
+  // AI reads what it needs — nothing is forgotten
+  const response = await fetch(
+    '/api/ai/discharge-summary',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        caseId,
+        fullCase  // ← entire master schema, not cherry-picked fields
+      })
+    }
+  );
+};
+```
+
+**On the backend, the discharge prompt receives the full object:**
+
+```javascript
+const DISCHARGE_PROMPT = (fullCase) => {
+  const p = fullCase.patient;
+  const h = fullCase.clinicalData;
+
+  return `
+You are writing a formal discharge summary for an Indian 
+emergency department. Write in professional medical English.
+Never leave a section blank — use clinical defaults if data 
+is absent (e.g. "Not assessed", "NKDA", "Nil significant").
+
+═══════════════════════════════════════
+PATIENT INFORMATION
+═══════════════════════════════════════
+Name:           ${p.name}
+Age / Gender:   ${p.age} years / ${p.gender}
+UHID:           ${p.uhid || 'Not recorded'}
+MLC Case:       ${p.mlcCase ? 'YES — MLC documented' : 'No'}
+Mode of Arrival:${p.modeOfArrival}
+Date & Time:    ${p.arrivalDate} at ${p.arrivalTime}
+EM Resident:    ${h.doctors.emResident}
+EM Consultant:  ${h.doctors.emConsultant}
+
+═══════════════════════════════════════
+PRESENTING COMPLAINT
+═══════════════════════════════════════
+${h.chiefComplaint.complaint} — 
+since ${h.chiefComplaint.duration} 
+(${h.chiefComplaint.onset} onset)
+
+Signs & Symptoms: 
+${h.hpi.associatedSymptoms.join(', ') || 'None additional'}
+
+Pertinent Negatives: 
+${h.hpi.negativeHistory.join(', ') || 'None documented'}
+
+═══════════════════════════════════════
+HISTORY
+═══════════════════════════════════════
+History of Present Illness:
+${h.hpi.narrative}
+
+Past Medical History:  
+${h.pastHistory.medical.join(', ') || 'Nil significant'}
+
+Past Surgical History: 
+${h.pastHistory.surgical.join(', ') || 'Nil'}
+
+Known Allergies:       
+${h.pastHistory.allergies || 'NKDA'}
+
+Current Medications (Pre-admission):   
+${h.pastHistory.medications.join(', ') || 'None'}
+
+Family History:  ${h.pastHistory.familyHistory || 'Not significant'}
+Social History:  ${h.pastHistory.socialHistory || 'Not recorded'}
+
+═══════════════════════════════════════
+VITALS ON ARRIVAL
+═══════════════════════════════════════
+BP:    ${h.primarySurvey.circulation.bpSystolic}/
+       ${h.primarySurvey.circulation.bpDiastolic} mmHg
+HR:    ${h.primarySurvey.circulation.hr} bpm
+RR:    ${h.primarySurvey.breathing.rr} /min
+SpO2:  ${h.primarySurvey.breathing.spo2}%
+Temp:  ${h.primarySurvey.exposure.temperature}°F
+GCS:   ${h.primarySurvey.disability.gcsTotal}/15 
+       (E${h.primarySurvey.disability.gcsE}
+        V${h.primarySurvey.disability.gcsV}
+        M${h.primarySurvey.disability.gcsM})
+GRBS:  ${h.primarySurvey.disability.grbs} mg/dL
+
+═══════════════════════════════════════
+PRIMARY SURVEY (ABCDE)
+═══════════════════════════════════════
+A — Airway:    
+${h.primarySurvey.airway.findings}
+
+B — Breathing: 
+${h.primarySurvey.breathing.auscultation}
+Work of breathing: ${h.primarySurvey.breathing.workOfBreathing}
+O2 device: ${h.primarySurvey.breathing.oxygenDevice}
+
+C — Circulation: 
+CRT ${h.primarySurvey.circulation.crt}
+${h.primarySurvey.circulation.cvs}
+IV Access: ${h.primarySurvey.circulation.ivAccess || 'Not documented'}
+
+D — Disability: 
+Pupils: ${h.primarySurvey.disability.pupils}
+Power: ${h.primarySurvey.disability.power}
+Focal deficit: ${h.primarySurvey.disability.focalDeficit}
+
+E — Exposure: 
+${h.primarySurvey.exposure.findings}
+
+═══════════════════════════════════════
+SYSTEMIC EXAMINATION
+═══════════════════════════════════════
+General:     ${h.examination.generalAppearance}
+CVS:         ${h.examination.cvs}
+Respiratory: ${h.examination.respiratory}
+Abdomen:     ${h.examination.abdomen}
+CNS:         ${h.examination.cns}
+Extremities: ${h.examination.extremities}
+HEENT:       ${h.examination.heent || 'Not examined'}
+
+═══════════════════════════════════════
+INVESTIGATIONS
+═══════════════════════════════════════
+Labs Ordered: 
+${h.investigations.labsOrdered.join(', ') || 'Nil'}
+
+Imaging: 
+${h.investigations.imagingOrdered.join(', ') || 'Nil'}
+
+ECG: ${h.investigations.ecg || 'Not done'}
+EFAST: ${h.investigations.efast || 'Not done'}
+
+${h.investigations.vbg.ph ? `
+VBG Results:
+pH ${h.investigations.vbg.ph} | 
+PCO2 ${h.investigations.vbg.pco2} mmHg | 
+HCO3 ${h.investigations.vbg.hco3} mEq/L |
+Lactate ${h.investigations.vbg.lactate} mmol/L | 
+Hb ${h.investigations.vbg.hb} g/dL |
+Na ${h.investigations.vbg.sodium} | 
+K ${h.investigations.vbg.potassium} | 
+Cr ${h.investigations.vbg.creatinine}
+` : 'VBG: Not done'}
+
+Results Summary: 
+${h.investigations.resultsSummary || 'Pending'}
+
+═══════════════════════════════════════
+TREATMENT IN EMERGENCY
+═══════════════════════════════════════
+Medications Given:
+${h.treatment.medications.map(m =>
+  `• ${m.drug} ${m.dose} ${m.route} ${m.frequency}`
+).join('\n') || 'Nil'}
+
+IV Fluids:
+${h.treatment.ivFluids.map(f =>
+  `• ${f.fluid} at ${f.rate}`
+  + (f.dilution ? ` in ${f.dilution}` : '')
+).join('\n') || 'Nil'}
+
+Procedures Performed:
+${h.treatment.procedures.join(', ') || 'Nil'}
+
+═══════════════════════════════════════
+CONSULTATIONS
+═══════════════════════════════════════
+${h.doctors.consultations.length > 0
+  ? h.doctors.consultations.map(c =>
+      `• ${c.specialty} (${c.doctorName}): ${c.adviceGiven}`
+    ).join('\n')
+  : 'No specialist consultations during this visit'}
+
+═══════════════════════════════════════
+PSYCHOLOGICAL SCREEN
+═══════════════════════════════════════
+${h.psychological.assessed ? `
+Suicidal Ideation:     ${h.psychological.suicidalIdeation ? 'YES — flagged' : 'No'}
+Self-Harm History:     ${h.psychological.selfHarm ? 'YES — flagged' : 'No'}
+Intent to Harm Others: ${h.psychological.intentToHarmOthers ? 'YES — flagged' : 'No'}
+Substance Abuse:       ${h.psychological.substanceAbuse ? 'YES — flagged' : 'No'}
+Psychiatric History:   ${h.psychological.psychiatricHistory ? 'YES' : 'No'}
+On Psychiatric Rx:     ${h.psychological.currentlyOnTreatment ? 'YES' : 'No'}
+Support System:        ${h.psychological.hasSupportSystem ? 'Present' : 'Not documented'}
+Notes: ${h.psychological.notes || 'Nil'}
+` : 'Psychological screen: Not assessed during this visit'}
+
+═══════════════════════════════════════
+DIAGNOSIS
+═══════════════════════════════════════
+Working Diagnosis: ${h.diagnosis.provisional}
+
+Differentials Considered:
+${h.diagnosis.differentials.join(', ') || 'None documented'}
+
+═══════════════════════════════════════
+DISPOSITION & PLAN
+═══════════════════════════════════════
+${h.disposition.plan}
+Pending Reports: ${h.disposition.pendingReports || 'Nil'}
+Follow Up: ${h.disposition.followUp || 'As advised'}
+
+═══════════════════════════════════════
+
+Now write the AI-generated COURSE IN HOSPITAL section only.
+This is a flowing clinical narrative paragraph (not bullet points)
+that summarises:
+- What the patient presented with
+- Key findings on assessment
+- What was done in the ER
+- Consultations obtained
+- Response to treatment
+- Condition at the time of disposition
+
+Write in past tense. Professional Indian ER medical English.
+Do not repeat the structured data above verbatim — 
+synthesise it into a coherent clinical story.
+`;
+};
+```
+
+---
+
+## What This Gives You
+
+Every section of the case sheet flows automatically into the discharge summary. No field is manually cherry-picked. When you add a new field to the master schema in future, it appears in the discharge summary automatically — no developer intervention needed.
+
+The AI only writes the **Course in Hospital** narrative. Everything else is structured data rendered directly from the case — no hallucination risk, no missing fields.
+
+---
+
+## Tell Your Developer
+
+Three things to implement:
+
+**1. Backend discharge route — pass fullCase, not cherry-picked fields**
+Fetch the complete case by ID and pass the entire object to the prompt function above.
+
+**2. Frontend discharge screen — no changes needed**
+The existing PDF/DOCX export buttons stay exactly as they are. The data flowing into them just becomes complete.
+
+**3. Add one validation before generating**
+```javascript
+// Before calling the AI for Course in Hospital
+// Check that minimum data exists
+const canGenerateSummary = (fullCase) => {
+  const h = fullCase.clinicalData;
+  return (
+    h.chiefComplaint.complaint !== "" &&
+    h.hpi.narrative !== "" &&
+    h.diagnosis.provisional !== ""
+  );
+};
+
+// If not ready — show specific message
+if (!canGenerateSummary(fullCase)) {
+  alert(
+    'Please complete Chief Complaint, ' +
+    'HPI, and Working Diagnosis ' + 
+    'before generating the discharge summary.'
+  );
+  return;
+}
+```
+
+This prevents blank or nonsensical summaries when a case is incomplete.
+
+Want me to now write the complete Rajesh test script — the exact dictation, the expected JSON output field by field, and the expected discharge summary text — so your developer has a definitive pass/fail benchmark?

@@ -430,11 +430,74 @@ export async function getLearningInsights(): Promise<string[]> {
 }
 
 export interface DischargeSummaryInput {
-  patient?: {
-    name?: string;
-    age?: number;
-    gender?: string;
-  };
+  // Rich structured fields (from full_case route)
+  patientName?: string;
+  patientAge?: string;
+  patientSex?: string;
+  uhid?: string;
+  mlcStatus?: string;
+  modeArrival?: string;
+  arrivalDate?: string;
+  arrivalTime?: string;
+  emResident?: string;
+  emConsultant?: string;
+  complaint?: string;
+  duration?: string;
+  onset?: string;
+  signsSymptoms?: string;
+  hpi?: string;
+  pastMedical?: string;
+  pastSurgical?: string;
+  allergies?: string;
+  preMeds?: string;
+  familyHx?: string;
+  socialHx?: string;
+  bp?: string;
+  hr?: string;
+  rr?: string;
+  spo2?: string;
+  temp?: string;
+  grbs?: string;
+  gcsE?: string;
+  gcsV?: string;
+  gcsM?: string;
+  gcsTot?: string;
+  airway?: string;
+  auscultation?: string;
+  workBreathing?: string;
+  o2Device?: string;
+  crt?: string;
+  cvsFindings?: string;
+  ivAccess?: string;
+  pupils?: string;
+  power?: string;
+  focalDeficit?: string;
+  exposure?: string;
+  examGeneral?: string;
+  examCVS?: string;
+  examRespiratory?: string;
+  examAbdomen?: string;
+  examCNS?: string;
+  examExtremities?: string;
+  examHEENT?: string;
+  labsOrdered?: string;
+  imagingOrdered?: string;
+  ecg?: string;
+  efast?: string;
+  resultsSummary?: string;
+  vbgSection?: string;
+  medsText?: string;
+  proceduresText?: string;
+  consultText?: string;
+  psychText?: string;
+  workingDx?: string;
+  differentials?: string;
+  dispPlan?: string;
+  conditionDx?: string;
+  pendingReps?: string;
+  followUp?: string;
+  // Legacy fields (fallback)
+  patient?: { name?: string; age?: number | string; gender?: string; };
   chief_complaint?: string;
   diagnosis?: string;
   treatment_given?: string;
@@ -455,103 +518,172 @@ export interface DischargeSummaryInput {
 
 export async function generateCourseInHospital(summaryData: DischargeSummaryInput): Promise<{ course_in_hospital: string; diagnosis?: string }> {
   const openai = getOpenAIClient();
-  
+
   if (!openai) {
     throw new Error("AI service not available - OpenAI not configured");
   }
 
-  const patientInfo = summaryData.patient
-    ? `${summaryData.patient.age || "unknown age"} year old ${summaryData.patient.gender || "patient"}`
-    : "Patient";
+  // Use rich structured fields when available, fall back to legacy fields
+  const hasRich = !!(summaryData.patientName || summaryData.complaint || summaryData.hpi);
 
-  const medicationsText = Array.isArray(summaryData.medications)
-    ? summaryData.medications.map((m: any) => `${m.name || ""} ${m.dose || ""} ${m.route || ""} ${m.frequency || ""}`).filter(Boolean).join(", ")
-    : (typeof summaryData.medications === "string" ? summaryData.medications : "") || "";
+  const pName   = summaryData.patientName   || `${summaryData.patient?.age || "?"} yr ${summaryData.patient?.gender || "patient"}`;
+  const pAge    = summaryData.patientAge    || String(summaryData.patient?.age || "Unknown");
+  const pSex    = summaryData.patientSex    || summaryData.patient?.gender || "";
+  const chief   = summaryData.complaint     || summaryData.chief_complaint || "Not specified";
+  const hpiTxt  = summaryData.hpi           || summaryData.history_of_present_illness || "Not documented";
+  const pmh     = summaryData.pastMedical   || summaryData.past_medical_history || "Nil significant";
+  const dxTxt   = summaryData.workingDx     || summaryData.diagnosis || "To be determined";
+  const disp    = summaryData.dispPlan      || summaryData.disposition_type || "Not specified";
+  const cond    = summaryData.conditionDx   || summaryData.condition_at_discharge || "STABLE";
 
-  const investigationsText = Array.isArray(summaryData.investigations)
-    ? summaryData.investigations.map((i: any) => `${i.name || i.test || ""}: ${i.result || i.value || "pending"}`).filter(Boolean).join(", ")
-    : (typeof summaryData.investigations === "string" ? summaryData.investigations : "") || "";
+  // Vitals block
+  const vitalsBlock = hasRich ? [
+    summaryData.bp    ? `BP: ${summaryData.bp} mmHg`     : "",
+    summaryData.hr    ? `HR: ${summaryData.hr} bpm`       : "",
+    summaryData.rr    ? `RR: ${summaryData.rr} /min`      : "",
+    summaryData.spo2  ? `SpO2: ${summaryData.spo2}%`      : "",
+    summaryData.temp  ? `Temp: ${summaryData.temp}°F`     : "",
+    summaryData.gcsTot ? `GCS: ${summaryData.gcsTot}/15 (E${summaryData.gcsE} V${summaryData.gcsV} M${summaryData.gcsM})` : "",
+    summaryData.grbs  ? `GRBS: ${summaryData.grbs} mg/dL` : "",
+  ].filter(Boolean).join(" | ") : (summaryData.vitals ? Object.entries(summaryData.vitals).filter(([_, v]) => v).map(([k, v]) => `${k.toUpperCase()}: ${v}`).join(" | ") : "Not documented");
 
-  const vitalsText = summaryData.vitals 
-    ? Object.entries(summaryData.vitals).filter(([_, v]) => v).map(([k, v]) => `${k.toUpperCase()}: ${v}`).join(", ")
-    : "";
+  // ABCDE block
+  const abcdeBlock = hasRich ? `A — Airway:    ${summaryData.airway || "Patent"}
+B — Breathing: ${summaryData.auscultation || ""}; Work of breathing: ${summaryData.workBreathing || ""}; O2: ${summaryData.o2Device || "Room air"}
+C — Circulation: CRT ${summaryData.crt || "< 2s"}; ${summaryData.cvsFindings || ""}; IV Access: ${summaryData.ivAccess || ""}
+D — Disability: Pupils: ${summaryData.pupils || ""}; Power: ${summaryData.power || ""}; Focal deficit: ${summaryData.focalDeficit || "None"}
+E — Exposure:  ${summaryData.exposure || "No significant findings"}` : "";
 
-  const primaryAssessmentText = summaryData.primary_assessment
-    ? Object.entries(summaryData.primary_assessment).filter(([_, v]) => v).map(([k, v]) => `${k}: ${v}`).join("; ")
-    : "";
+  // Systemic exam block
+  const examBlock = hasRich ? `General:     ${summaryData.examGeneral || ""}
+CVS:         ${summaryData.examCVS || ""}
+Respiratory: ${summaryData.examRespiratory || ""}
+Abdomen:     ${summaryData.examAbdomen || ""}
+CNS:         ${summaryData.examCNS || ""}
+Extremities: ${summaryData.examExtremities || ""}
+HEENT:       ${summaryData.examHEENT || "Not examined"}` : "";
 
-  // Build detailed examination text from specific ABCDE findings
-  const examLines: string[] = [];
-  const ex = summaryData.examination || {};
-  const ps = summaryData.primary_survey_findings || {};
-  if (ex.general_appearance || ps.general) examLines.push(`General: ${ex.general_appearance || ps.general}`);
-  if (ps.airway) examLines.push(`Airway: ${ps.airway}`);
-  if (ps.auscultation || ex.respiratory_additional_notes) examLines.push(`Respiratory: ${ps.auscultation || ex.respiratory_additional_notes}`);
-  if (ps.work_of_breathing) examLines.push(`Work of Breathing: ${ps.work_of_breathing}`);
-  if (ps.oxygen_device) examLines.push(`Oxygen: ${ps.oxygen_device}`);
-  if (ex.cvs_additional_notes || ps.crt) examLines.push(`CVS: ${ex.cvs_additional_notes || ""}${ps.crt ? ` CRT ${ps.crt}` : ""}`);
-  if (ex.abdomen_additional_notes) examLines.push(`Abdomen: ${ex.abdomen_additional_notes}`);
-  if (ex.cns_additional_notes || ps.pupils || ps.power) {
-    const cnsLine = [ex.cns_additional_notes, ps.pupils ? `Pupils: ${ps.pupils}` : "", ps.power ? `Power: ${ps.power}` : ""].filter(Boolean).join(". ");
-    if (cnsLine) examLines.push(`CNS: ${cnsLine}`);
-  }
-  if (ps.exposure_findings) examLines.push(`Exposure: ${ps.exposure_findings}`);
-  const examinationText = examLines.length > 0 ? examLines.join("\n") : (primaryAssessmentText || "Not documented");
+  // Investigations block
+  const invBlock = hasRich ? `Labs Ordered:  ${summaryData.labsOrdered || "Nil"}
+Imaging:       ${summaryData.imagingOrdered || "Nil"}
+ECG:           ${summaryData.ecg || "Not done"}
+EFAST:         ${summaryData.efast || "Not done"}
+VBG:           ${summaryData.vbgSection || "Not done"}
+Results:       ${summaryData.resultsSummary || "Pending"}` : (typeof summaryData.investigations === "string" ? summaryData.investigations : "");
 
-  const prompt = `You are a senior emergency medicine physician writing a discharge summary. Generate a professional "Course in Hospital" section based on the following case details.
+  // Meds block
+  const medsBlock = hasRich ? (summaryData.medsText || "Nil") : (Array.isArray(summaryData.medications)
+    ? summaryData.medications.map((m: any) => `• ${m.name || ""} ${m.dose || ""} ${m.route || ""} ${m.frequency || ""}`.trim()).join("\n")
+    : String(summaryData.medications || "Nil"));
+
+  const prompt = `You are a senior emergency medicine physician writing a formal Indian ER discharge summary. 
 
 CRITICAL RULES:
-- ONLY describe what is documented below. Do NOT assume, infer, or add any treatments, medications, or procedures not explicitly listed.
-- If a medication was given as an injection (Inj.), do NOT say it was given as a tablet (Tab.) or vice versa. Use the exact route and form documented.
-- If no medications are documented, state "No specific medications were administered in the ER."
-- Consultations are NOT procedures. List them in the Consultations section only.
-- Be strictly factual. No fabrication or speculation.
+- ONLY use what is explicitly documented below. Never infer, assume, or fabricate.
+- Use exact drug names, doses, and routes as documented — do not alter them.
+- Consultations are a separate event from procedures — do NOT merge them.
+- If VBG is "Not done", do not mention VBG in the narrative.
+- Write in past tense. Professional Indian ER medical English.
+- Do NOT repeat the structured data verbatim — synthesise into a coherent clinical story.
 
---- CASE DETAILS ---
-Patient: ${patientInfo}
-Chief Complaint: ${summaryData.chief_complaint || "Not specified"}
-History of Present Illness: ${summaryData.history_of_present_illness || "Not documented"}
-Past Medical History: ${summaryData.past_medical_history || "None"}
-Allergies: ${summaryData.allergy || "NKDA"}
+═══════════════════════════════════════
+PATIENT
+═══════════════════════════════════════
+Name:            ${pName}
+Age / Gender:    ${pAge} years / ${pSex}
+UHID:            ${summaryData.uhid || "Not recorded"}
+MLC Case:        ${summaryData.mlcStatus || "No"}
+Mode of Arrival: ${summaryData.modeArrival || "Not recorded"}
+Date / Time:     ${summaryData.arrivalDate || ""} ${summaryData.arrivalTime || ""}
+EM Resident:     ${summaryData.emResident || "Not documented"}
+EM Consultant:   ${summaryData.emConsultant || "Not documented"}
 
-Vitals at Arrival:
-${vitalsText || "Not documented"}
+═══════════════════════════════════════
+PRESENTING COMPLAINT
+═══════════════════════════════════════
+${chief}${summaryData.duration ? ` — since ${summaryData.duration}` : ""}${summaryData.onset ? ` (${summaryData.onset} onset)` : ""}
+${summaryData.signsSymptoms ? `\nAssociated symptoms: ${summaryData.signsSymptoms}` : ""}
 
-Examination on Arrival:
-${examinationText}
+═══════════════════════════════════════
+HISTORY
+═══════════════════════════════════════
+HPI:
+${hpiTxt}
 
-Working Diagnosis: ${summaryData.diagnosis || "To be determined"}
+Past Medical History:  ${pmh}
+Past Surgical History: ${summaryData.pastSurgical || "Nil"}
+Known Allergies:       ${summaryData.allergies || summaryData.allergy || "NKDA"}
+Pre-admission Medications: ${summaryData.preMeds || "None"}
+Family History:  ${summaryData.familyHx || "Not significant"}
+Social History:  ${summaryData.socialHx || "Not recorded"}
 
-Investigations:
-${investigationsText || "None documented"}
+═══════════════════════════════════════
+VITALS ON ARRIVAL
+═══════════════════════════════════════
+${vitalsBlock || "Not documented"}
 
-Medications Administered:
-${medicationsText || "None documented"}
+═══════════════════════════════════════
+PRIMARY SURVEY (ABCDE)
+═══════════════════════════════════════
+${abcdeBlock || "(see examination)"}
 
-Consultations:
-${summaryData.consultations_text || "None"}
+═══════════════════════════════════════
+SYSTEMIC EXAMINATION
+═══════════════════════════════════════
+${examBlock || "(not separately documented)"}
 
-Procedures (interventions only — not consultations):
-${summaryData.procedures || "None"}
+═══════════════════════════════════════
+INVESTIGATIONS
+═══════════════════════════════════════
+${invBlock || "None documented"}
 
-Disposition: ${summaryData.disposition_type || "Not specified"}
-Condition at Discharge: ${summaryData.condition_at_discharge || "Not specified"}
+═══════════════════════════════════════
+TREATMENT IN EMERGENCY
+═══════════════════════════════════════
+Medications / Fluids:
+${medsBlock}
 
---- INSTRUCTIONS ---
-Write a concise, professional clinical narrative (2-4 paragraphs) in Indian ER documentation style:
-1. Presentation — chief complaint, brief history, relevant PMH
-2. Examination — specific findings from above (vitals + ABCDE, not generic "within normal limits")
-3. Investigations and findings (include VBG values if documented, do not mention if absent)
-4. Treatment given (exact medications and routes only)
-5. Consultations (if any — name the specialty and advice given)
-6. Disposition and clinical response
+Procedures (interventions only):
+${summaryData.proceduresText || summaryData.procedures || "Nil"}
 
-Use professional medical terminology. Be strictly factual based ONLY on the data provided.
+═══════════════════════════════════════
+CONSULTATIONS
+═══════════════════════════════════════
+${summaryData.consultText || summaryData.consultations_text || "No specialist consultations during this visit"}
 
-Respond in JSON format:
+═══════════════════════════════════════
+PSYCHOLOGICAL SCREEN
+═══════════════════════════════════════
+${summaryData.psychText || "Not assessed during this visit"}
+
+═══════════════════════════════════════
+DIAGNOSIS
+═══════════════════════════════════════
+Working Diagnosis: ${dxTxt}
+Differentials:     ${summaryData.differentials || "None documented"}
+
+═══════════════════════════════════════
+DISPOSITION
+═══════════════════════════════════════
+Plan:            ${disp}
+Condition:       ${cond}
+Pending Reports: ${summaryData.pendingReps || "Nil"}
+Follow Up:       ${summaryData.followUp || "As advised"}
+
+═══════════════════════════════════════
+
+Now write ONLY the "Course in Hospital" section — a flowing clinical narrative (3–5 sentences, 2 paragraphs max) covering:
+1. What the patient presented with and key history
+2. Examination findings (specific values, not "within normal limits")
+3. Investigations done and key results (mention VBG values only if documented above as "Not done" skip it)
+4. Treatment administered in the ER
+5. Consultations obtained (if any)
+6. Response to treatment and disposition
+
+Respond in JSON:
 {
-  "course_in_hospital": "The detailed course narrative...",
-  "diagnosis": "Primary diagnosis based on documented findings"
+  "course_in_hospital": "...",
+  "diagnosis": "Primary diagnosis"
 }`;
 
   try {

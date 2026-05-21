@@ -1897,93 +1897,201 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/ai/discharge-summary", async (req: Request, res: Response) => {
     try {
-      const { case_id, summary_data } = req.body;
-      
-      if (!summary_data) {
+      const { case_id, summary_data, full_case } = req.body;
+
+      if (!summary_data && !full_case) {
         return res.status(400).json({ error: "Summary data is required" });
       }
 
-      // Format VBG from master schema if present
-      const vbgRaw = summary_data.vbg_results || summary_data.investigations_data?.vbg || {};
+      // ── helpers ────────────────────────────────────────────────────────────
+      const s = (v: any): string => {
+        if (v == null) return "";
+        if (Array.isArray(v)) return v.map((x: any) => (typeof x === "object" ? x.text || x.name || JSON.stringify(x) : String(x))).filter(Boolean).join(", ");
+        if (typeof v === "object") return v.text || v.name || "";
+        return String(v);
+      };
+
+      // Use full_case when available (preferred), else fall back to summary_data fields
+      const fc = full_case || {};
+      const sd = summary_data || {};
+
+      // ── patient ────────────────────────────────────────────────────────────
+      const pt = fc.patient || {};
+      const patientName = s(pt.name) || s(pt.full_name) || "Unknown";
+      const patientAge  = s(pt.age)  || s(sd.patient_age) || "Unknown";
+      const patientSex  = s(pt.sex)  || s(pt.gender)      || s(sd.patient_sex) || "";
+      const uhid        = s(pt.uhid) || s(pt.patient_id)  || "Not recorded";
+      const mlcStatus   = fc.mlc ? "YES — MLC documented" : "No";
+      const modeArrival = s(fc.mode_of_arrival) || "Not recorded";
+      const arrivalDate = s(fc.arrival_date) || s(fc.created_at || "").split("T")[0] || "";
+      const arrivalTime = s(fc.arrival_time) || "";
+      const emResident  = s(fc.em_resident)  || s(sd.ed_resident)   || "";
+      const emConsultant= s(fc.em_consultant)|| s(sd.ed_consultant) || "";
+
+      // ── history / complaint ────────────────────────────────────────────────
+      const hist = fc.history || {};
+      const complaint   = s(fc.presenting_complaint?.text || fc.presenting_complaint) || s(sd.presenting_complaint) || "";
+      const duration    = s(fc.presenting_complaint?.duration) || "";
+      const onset       = s(fc.presenting_complaint?.onset_type) || "";
+      const hpi         = s(hist.hpi || hist.events_hopi) || s(sd.history_of_present_illness) || "";
+      const signsSymptoms = s(hist.signs_and_symptoms) || "";
+      const pastMedical = Array.isArray(hist.past_medical) ? hist.past_medical.join(", ") : s(hist.past_medical) || s(sd.past_medical_history) || "Nil significant";
+      const pastSurgical= s(hist.past_surgical) || "Nil";
+      const allergies   = Array.isArray(hist.allergies) ? hist.allergies.join(", ") : s(hist.allergies) || s(sd.allergy) || "NKDA";
+      const preMeds     = s(hist.medications || hist.drug_history) || "None";
+      const familyHx    = s(hist.family_history) || s(sd.family_history) || "Not significant";
+      const socialHx    = s(hist.social_history) || "Not recorded";
+
+      // ── primary survey / vitals ────────────────────────────────────────────
+      const ps  = fc.primary_survey  || {};
+      const pa  = fc.primary_assessment || {};
+      const sdV = (sd.vitals_arrival || {}) as Record<string, string>;
+
+      const bp     = s(ps.bp_systolic && ps.bp_diastolic ? `${ps.bp_systolic}/${ps.bp_diastolic}` : "") || s(pa.circulation_bp_systolic && pa.circulation_bp_diastolic ? `${pa.circulation_bp_systolic}/${pa.circulation_bp_diastolic}` : "") || sdV.bp || "";
+      const hr     = s(ps.heart_rate) || s(pa.circulation_hr) || sdV.hr || "";
+      const rr     = s(ps.breathing_rate) || s(pa.breathing_rr) || sdV.rr || "";
+      const spo2   = s(ps.spo2) || s(pa.breathing_spo2) || sdV.spo2 || "";
+      const temp   = s(ps.temperature) || s(pa.exposure_temperature) || sdV.temp || "";
+      const grbs   = s(ps.grbs) || s(pa.disability_grbs) || sdV.grbs || "";
+      const gcsE   = s(ps.gcs_e) || s(pa.disability_gcs_e) || "";
+      const gcsV   = s(ps.gcs_v) || s(pa.disability_gcs_v) || "";
+      const gcsM   = s(ps.gcs_m) || s(pa.disability_gcs_m) || "";
+      const gcsTot = s(ps.gcs_total) || s(pa.disability_gcs_total) || sdV.gcs || "";
+
+      const airway         = s(ps.airway || ps.airway_status)         || s(pa.airway_status)  || s((sd.primary_assessment as any)?.airway)  || "Patent, self-maintained";
+      const auscultation   = s(ps.auscultation)                       || s(pa.breathing_auscultation)                                    || "Air entry bilaterally equal and clear";
+      const workBreathing  = s(ps.work_of_breathing)                  || s(pa.breathing_work_of_breathing)                               || "No accessory muscle use";
+      const o2Device       = s(ps.oxygen_device)                      || s(pa.breathing_oxygen_device)                                   || "Room air";
+      const crt            = s(ps.crt)                                || s(pa.circulation_crt)                                           || "< 2 seconds";
+      const cvsFindings    = s(ps.cvs_findings)                       || s(pa.circulation_cvs)                                           || "";
+      const ivAccess       = s(ps.iv_access)                          || s(pa.circulation_iv_access)                                     || "Not documented";
+      const pupils         = s(ps.pupils)                             || s(pa.disability_pupils)                                         || "Bilaterally equal and reactive";
+      const power          = s(ps.power)                              || s(pa.disability_power)                                          || "5/5 all four limbs";
+      const focalDeficit   = s(ps.focal_deficit)                      || s(pa.disability_focal_deficit)                                  || "None";
+      const exposure       = s(ps.exposure_findings)                  || s(pa.exposure_findings)                                         || s((sd.primary_assessment as any)?.exposure) || "";
+
+      // ── systemic examination ───────────────────────────────────────────────
+      const ex = fc.examination || {};
+      const examGeneral     = s(ex.general_appearance)            || s((sd.systemic_exam as any)?.general)      || "Conscious, oriented, comfortable at rest";
+      const examCVS         = s(ex.cvs_additional_notes)          || s((sd.systemic_exam as any)?.cvs)          || cvsFindings || "S1 S2 heard, no murmurs";
+      const examRespiratory = s(ex.respiratory_additional_notes)  || s((sd.systemic_exam as any)?.chest)        || auscultation;
+      const examAbdomen     = s(ex.abdomen_additional_notes)      || s((sd.systemic_exam as any)?.pa)           || "Soft, non-tender, bowel sounds present";
+      const examCNS         = s(ex.cns_additional_notes)          || s((sd.systemic_exam as any)?.cns)          || "No focal neurological deficit";
+      const examExtremities = s(ex.extremities_findings || ex.musculoskeletal) || s((sd.systemic_exam as any)?.extremities) || "No pedal oedema, pulses present";
+      const examHEENT       = s(ex.heent) || "Not examined";
+
+      // ── investigations ─────────────────────────────────────────────────────
+      const inv = fc.investigations || {};
+      const labsOrdered  = Array.isArray(inv.panels_selected) ? inv.panels_selected.join(", ") : (Array.isArray(inv.individual_tests) ? inv.individual_tests.join(", ") : s(inv.labs_ordered) || "Nil");
+      const imagingOrdered = Array.isArray(inv.imaging) ? inv.imaging.join(", ") : s(inv.imaging) || "Nil";
+      const ecg           = s(inv.ecg)  || s(pa.ecg_findings)  || "Not documented";
+      const efast         = s(inv.efast)|| s(pa.efast_findings) || s((sd.primary_assessment as any)?.efast) || "Not done";
+      const resultsSummary= s(inv.results_notes || inv.results_summary) || "Pending";
+
+      // VBG — prefer structured object from investigations.vbg
+      const vbgObj = inv.vbg || fc.vbg_results || {};
       const vbgParts: string[] = [];
-      if (vbgRaw.ph) vbgParts.push(`pH ${vbgRaw.ph}`);
-      if (vbgRaw.pco2) vbgParts.push(`PCO2 ${vbgRaw.pco2}`);
-      if (vbgRaw.po2) vbgParts.push(`PO2 ${vbgRaw.po2}`);
-      if (vbgRaw.hco3) vbgParts.push(`HCO3 ${vbgRaw.hco3}`);
-      if (vbgRaw.lactate) vbgParts.push(`Lac ${vbgRaw.lactate}`);
-      if (vbgRaw.hemoglobin) vbgParts.push(`Hb ${vbgRaw.hemoglobin}`);
-      if (vbgRaw.sodium) vbgParts.push(`Na ${vbgRaw.sodium}`);
-      if (vbgRaw.potassium) vbgParts.push(`K ${vbgRaw.potassium}`);
-      const vbgText = vbgParts.length > 0 ? `VBG: ${vbgParts.join(", ")}` : "";
+      if (vbgObj.ph)         vbgParts.push(`pH ${vbgObj.ph}`);
+      if (vbgObj.pco2)       vbgParts.push(`PCO2 ${vbgObj.pco2} mmHg`);
+      if (vbgObj.hco3)       vbgParts.push(`HCO3 ${vbgObj.hco3} mEq/L`);
+      if (vbgObj.lactate)    vbgParts.push(`Lactate ${vbgObj.lactate} mmol/L`);
+      if (vbgObj.hemoglobin) vbgParts.push(`Hb ${vbgObj.hemoglobin} g/dL`);
+      if (vbgObj.sodium)     vbgParts.push(`Na ${vbgObj.sodium}`);
+      if (vbgObj.potassium)  vbgParts.push(`K ${vbgObj.potassium}`);
+      if (vbgObj.creatinine) vbgParts.push(`Cr ${vbgObj.creatinine}`);
+      const vbgSection = vbgParts.length > 0 ? vbgParts.join(" | ") : "Not done";
 
-      // Format consultations from master schema array
-      const consultationsArr: string[] = (summary_data.consultations || [])
-        .filter((c: any) => c.specialty || c.doctorName)
-        .map((c: any) => [
-          c.specialty,
-          c.doctorName ? `Dr. ${c.doctorName}` : "",
-          c.adviceGiven ? `(${c.adviceGiven})` : "",
-        ].filter(Boolean).join(" "));
-      const consultationText = consultationsArr.length > 0
-        ? `\nConsultations: ${consultationsArr.join("; ")}`
-        : "";
+      // ── treatment ──────────────────────────────────────────────────────────
+      const trt = fc.treatment || {};
+      const medications: any[]  = Array.isArray(trt.medications)  ? trt.medications  : [];
+      const infusions: any[]    = Array.isArray(trt.infusions)     ? trt.infusions    : [];
+      const fluids: any         = trt.fluids || "";
+      const medsText = [
+        ...medications.map((m: any) => `• ${m.name || m.drug || ""} ${m.dose || ""} ${m.route || ""} ${m.frequency || ""}`.trim()),
+        ...infusions.map((f: any)   => `• ${f.name || f.fluid || ""} ${f.dose || ""} ${f.rate ? `at ${f.rate}` : ""}${f.dilution ? ` in ${f.dilution}` : ""}`.trim()),
+        ...(fluids ? [`• ${fluids}`] : []),
+      ].filter(Boolean).join("\n") || s(sd.discharge_medications) || "Nil";
 
-      const fullInvestigations = [
-        summary_data.investigations || "",
-        vbgText,
-      ].filter(Boolean).join("\n");
+      // ── procedures ─────────────────────────────────────────────────────────
+      const procData = fc.procedures || {};
+      const procList: any[] = Array.isArray(procData.procedures_performed) ? procData.procedures_performed : [];
+      const proceduresText = procList.map((p: any) => p.name || p).join(", ") || procData.general_notes || "Nil";
 
-      // Build examination and primary_survey_findings from clinical data
-      const clinData = summary_data.clinical_data || {};
-      const examData = clinData.examination || summary_data.examination_data || {};
-      const psData = clinData.primary_survey || summary_data.primary_survey_data || {};
+      // ── consultations ──────────────────────────────────────────────────────
+      const consultations: any[] = Array.isArray(trt.consultations) ? trt.consultations : [];
+      const consultText = consultations.filter((c: any) => c.specialty || c.doctorName).length > 0
+        ? consultations.filter((c: any) => c.specialty || c.doctorName).map((c: any) =>
+            `• ${c.specialty || "Specialist"}${c.doctorName ? ` (Dr. ${c.doctorName})` : ""}: ${c.adviceGiven || "Advice pending"}`
+          ).join("\n")
+        : "No specialist consultations during this visit";
+
+      // ── psychological ──────────────────────────────────────────────────────
+      const psych = fc.psychological || fc.psychological_assessment || {};
+      const psychAssessed = psych.assessed !== false && Object.keys(psych).length > 0;
+      const psychText = psychAssessed ? [
+        psych.suicidal_ideation ? "Suicidal Ideation: YES — flagged" : "Suicidal Ideation: No",
+        psych.self_harm ? "Self-Harm History: YES — flagged" : "Self-Harm History: No",
+        psych.intent_to_harm_others ? "Intent to Harm Others: YES — flagged" : "Intent to Harm Others: No",
+        psych.substance_abuse ? "Substance Abuse: YES — flagged" : "Substance Abuse: No",
+        psych.psychiatric_history ? "Psychiatric History: YES" : "Psychiatric History: No",
+        psych.currently_on_psychiatric_treatment ? "On Psychiatric Rx: YES" : "On Psychiatric Rx: No",
+        psych.has_support_system ? "Support System: Present" : "Support System: Not documented",
+        psych.notes ? `Notes: ${psych.notes}` : "",
+      ].filter(Boolean).join("\n")
+        : "Psychological screen: Not assessed during this visit";
+
+      // ── diagnosis / disposition ────────────────────────────────────────────
+      const workingDx    = s(trt.primary_diagnosis || trt.provisional_diagnoses?.[0]) || s(sd.diagnosis) || "To be determined";
+      const differentials= Array.isArray(trt.differential_diagnoses) ? trt.differential_diagnoses.join(", ") : s(trt.differential_diagnoses) || "None documented";
+      const dispData     = fc.disposition || {};
+      const dispPlan     = s(dispData.type || dispData.disposition_type) || s(sd.disposition_type) || "Not specified";
+      const conditionDx  = s(dispData.condition || dispData.condition_at_discharge) || s(sd.condition_at_discharge) || "STABLE";
+      const pendingReps  = s(dispData.pending_reports || dispData.follow_up_pending) || "Nil";
+      const followUp     = s(dispData.follow_up || dispData.follow_up_instructions) || s(sd.follow_up_advice) || "As advised";
+
+      // ── validation ─────────────────────────────────────────────────────────
+      if (!complaint && !hpi && !workingDx) {
+        return res.status(400).json({
+          error: "Please complete Chief Complaint, HPI, and Working Diagnosis before generating the discharge summary."
+        });
+      }
 
       const mappedData = {
-        chief_complaint: summary_data.presenting_complaint || "",
-        diagnosis: summary_data.diagnosis || "",
-        treatment_given: summary_data.course_in_hospital || "",
-        medications: summary_data.discharge_medications || "",
-        investigations: fullInvestigations,
-        // Consultations go in their own field — NOT in procedures
-        consultations_text: consultationText.replace(/^\n/, ""),
-        // Procedures = actual interventions only
-        procedures: summary_data.procedures || "",
-        patient: {
-          age: summary_data.patient_age,
-          gender: summary_data.patient_sex,
-        },
-        vitals: summary_data.vitals_arrival || {},
-        primary_assessment: summary_data.primary_assessment || {},
-        // Pass specific examination findings
-        examination: {
-          general_appearance: examData.general_appearance || "",
-          cvs_additional_notes: examData.cvs_additional_notes || "",
-          respiratory_additional_notes: examData.respiratory_additional_notes || "",
-          abdomen_additional_notes: examData.abdomen_additional_notes || "",
-          cns_additional_notes: examData.cns_additional_notes || "",
-        },
-        // Pass ABCDE primary survey specifics
-        primary_survey_findings: {
-          airway: psData.airway || "",
-          auscultation: psData.auscultation || "",
-          work_of_breathing: psData.work_of_breathing || "",
-          oxygen_device: psData.oxygen_device || "",
-          crt: psData.crt || "",
-          pupils: psData.pupils || "",
-          power: psData.power || "",
-          exposure_findings: psData.exposure_findings || "",
-        },
-        history_of_present_illness: summary_data.history_of_present_illness || "",
-        past_medical_history: summary_data.past_medical_history || "",
-        allergy: summary_data.allergy || "",
-        disposition_type: summary_data.disposition_type || "",
-        condition_at_discharge: summary_data.condition_at_discharge || "",
+        // Structured prompt fields
+        patientName, patientAge, patientSex, uhid, mlcStatus, modeArrival,
+        arrivalDate, arrivalTime, emResident, emConsultant,
+        complaint, duration, onset, signsSymptoms, hpi,
+        pastMedical, pastSurgical, allergies, preMeds, familyHx, socialHx,
+        bp, hr, rr, spo2, temp, grbs, gcsE, gcsV, gcsM, gcsTot,
+        airway, auscultation, workBreathing, o2Device, crt, cvsFindings, ivAccess,
+        pupils, power, focalDeficit, exposure,
+        examGeneral, examCVS, examRespiratory, examAbdomen, examCNS, examExtremities, examHEENT,
+        labsOrdered, imagingOrdered, ecg, efast, resultsSummary, vbgSection,
+        medsText, proceduresText, consultText, psychText,
+        workingDx, differentials, dispPlan, conditionDx, pendingReps, followUp,
+        // Legacy fallback fields
+        chief_complaint: complaint,
+        diagnosis: workingDx,
+        history_of_present_illness: hpi,
+        past_medical_history: pastMedical,
+        allergy: allergies,
+        disposition_type: dispPlan,
+        condition_at_discharge: conditionDx,
+        patient: { age: patientAge, gender: patientSex },
+        vitals: sdV,
+        medications: medications.length > 0 ? medications : sd.discharge_medications,
+        investigations: `Labs: ${labsOrdered}\nImaging: ${imagingOrdered}\nECG: ${ecg}\nEFAST: ${efast}\nVBG: ${vbgSection}\n${resultsSummary}`,
+        consultations_text: consultText,
+        procedures: proceduresText,
+        primary_assessment: { airway, auscultation, pupils, power, exposure } as any,
+        examination: { general_appearance: examGeneral, cvs_additional_notes: examCVS, respiratory_additional_notes: examRespiratory, abdomen_additional_notes: examAbdomen, cns_additional_notes: examCNS } as any,
+        primary_survey_findings: { airway, auscultation, work_of_breathing: workBreathing, oxygen_device: o2Device, crt, pupils, power, exposure_findings: exposure } as any,
       };
 
       const result = await generateCourseInHospital(mappedData);
-      
-      res.json({ 
-        success: true, 
+
+      res.json({
+        success: true,
         summary: {
           course_in_hospital: result.course_in_hospital,
           diagnosis: result.diagnosis,
