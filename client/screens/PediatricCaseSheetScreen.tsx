@@ -1318,26 +1318,28 @@ export default function PediatricCaseSheetScreen() {
       <KeyboardAwareScrollViewCompat contentContainerStyle={[styles.content, { paddingBottom: 100 }]}>
         {activeTab === "patient" && patient && (
           <>
-            <View style={[styles.card, { backgroundColor: theme.card, borderLeftWidth: 3, borderLeftColor: theme.primary }]}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginBottom: Spacing.md }}>
-                <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.primary, justifyContent: "center", alignItems: "center" }}>
-                  <Feather name="mic" size={20} color="#FFFFFF" />
+            {!historyData.events ? (
+              <View style={[styles.card, { backgroundColor: theme.card, borderLeftWidth: 3, borderLeftColor: theme.primary }]}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginBottom: Spacing.md }}>
+                  <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.primary, justifyContent: "center", alignItems: "center" }}>
+                    <Feather name="mic" size={20} color="#FFFFFF" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.cardTitle, { color: theme.text }]}>Speak This Case</Text>
+                    <Text style={[styles.cardSubtitle, { color: theme.textSecondary }]}>Talk naturally — ErMate fills the case sheet automatically</Text>
+                  </View>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.cardTitle, { color: theme.text }]}>Speak This Case</Text>
-                  <Text style={[styles.cardSubtitle, { color: theme.textSecondary }]}>Talk naturally — ErMate fills the case sheet automatically</Text>
-                </View>
+                <SmartDictation
+                  onDataExtracted={handleSmartDictation}
+                  patientContext={{
+                    age: patient?.age,
+                    sex: patient?.sex,
+                    chiefComplaint: patient?.chief_complaint,
+                    caseType: 'pediatric',
+                  }}
+                />
               </View>
-              <SmartDictation
-                onDataExtracted={handleSmartDictation}
-                patientContext={{
-                  age: patient?.age,
-                  sex: patient?.sex,
-                  chiefComplaint: patient?.chief_complaint,
-                  caseType: 'pediatric',
-                }}
-              />
-            </View>
+            ) : null}
             <View style={[styles.card, { backgroundColor: theme.card }]}>
             <View style={styles.patientHeader}>
               <View style={styles.patientInfo}>

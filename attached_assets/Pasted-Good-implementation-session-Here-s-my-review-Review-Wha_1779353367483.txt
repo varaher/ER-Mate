@@ -1,0 +1,171 @@
+Good implementation session. Here's my review.
+
+---
+
+# Review
+
+## What's Correctly Done ✅
+
+**Task 1 — Delete All Cases**
+The confirmation alert before deletion is essential — good that it's there. Deleting one by one using the existing function is the right approach rather than a bulk delete endpoint that might not exist. Spinner with count feedback ("18 of 18 cases deleted") is good UX.
+
+**Task 2 — Voice button to top**
+Moving the hero card above vitals on both Adult and Pediatric case sheets is exactly right. Removing the old buried card prevents duplicate mic buttons which would confuse doctors.
+
+**Task 3 — New patient flow**
+Two options only — "Speak This Case" and "Fill Manually" — is the right design. Voice goes directly to VoiceCaseSheet with no triage barrier. This is the most important change of the three.
+
+---
+
+## Concerns ⚠️
+
+### 1. Delete All Cases — No Undo
+
+The current implementation deletes cases one by one from the external backend. Once deleted they're gone. The confirmation alert is good but consider one additional safety net:
+
+```javascript
+// Before deleting — show count to doctor
+// so they know exactly what they're deleting
+
+const caseCount = cases.length;
+Alert.alert(
+  'Delete All Cases',
+  // Tell them exactly how many
+  `This will permanently delete all 
+  ${caseCount} cases in your account. 
+  This cannot be undone.`,
+  [
+    { text: 'Cancel', style: 'cancel' },
+    { text: `Delete ${caseCount} Cases`, 
+      style: 'destructive',
+      onPress: handleDeleteAll }
+  ]
+);
+```
+
+Also — this button should **not be visible during a pilot** to real doctors. A doctor accidentally tapping it during a busy shift and deleting real patient records is a serious risk.
+
+Tell your developer:
+```
+Add a condition — only show 
+"Delete All Cases" button if the 
+account is flagged as a dev/test account.
+
+Or move it behind a hidden gesture —
+like pressing the ErMate logo 5 times
+in Profile to reveal developer options.
+```
+
+---
+
+### 2. Triage Auto-Assignment from Voice
+
+Task 3 removes triage as a blocking step for voice flow — correct. But triage category (1-5, RED/ORANGE/YELLOW/GREEN/BLUE) is still clinically important and needs to be auto-assigned from the vitals extracted in the voice dictation.
+
+Verify this is happening:
+
+```javascript
+// After voice extraction completes
+// triage category should be calculated
+// from extracted vitals automatically
+
+const autoAssignTriage = (vitals) => {
+  const { hr, bpSystolic, spo2, gcsTotal, rr } = vitals;
+  
+  // Red — immediate
+  if (spo2 < 90 || gcsTotal < 9 || 
+      bpSystolic < 80) return 1;
+  
+  // Orange — very urgent  
+  if (spo2 < 94 || gcsTotal < 13 || 
+      bpSystolic < 100 || hr > 120) return 2;
+  
+  // Yellow — urgent
+  if (spo2 < 96 || hr > 100 || 
+      bpSystolic > 160) return 3;
+  
+  // Green — semi-urgent
+  if (hr > 90 || bpSystolic > 140) return 4;
+  
+  // Blue — non-urgent
+  return 5;
+};
+```
+
+If triage category isn't being auto-assigned, every voice case will have no triage priority badge — which means the dashboard "Critical / Pending" counts won't work correctly.
+
+---
+
+### 3. "Fill Manually" Still Goes Through Full Triage
+
+The bottom sheet sends "Fill Manually" to the full triage screen — which still asks for vitals, symptoms, and triage category before reaching the case sheet.
+
+For the manual path, consider a lighter version:
+
+```
+Fill Manually tapped
+         ↓
+Quick entry — name, age, sex only
+(same as Quick Case Sheet screen)
+         ↓
+Case sheet opens
+         ↓
+Doctor fills vitals on Patient tab
+```
+
+The full triage screen with symptom checkboxes and triage category selection is useful for a dedicated triage nurse — not for a doctor who wants to start documenting immediately. Most Kerala private ERs don't have a dedicated triage nurse. The doctor does everything.
+
+---
+
+### 4. Voice Hero Card on Case Sheet — Positioning After Voice Entry
+
+When a doctor uses the voice path (Speak This Case → dictates → saves), they land on the case sheet with it already filled. At that point the voice hero card at the top is redundant — they've already spoken the case.
+
+```javascript
+// Hide the hero card if case already 
+// has content from voice entry
+const showVoiceHeroCard = 
+  !caseData.hpi?.narrative && 
+  !caseData.chiefComplaint?.complaint;
+
+// Show only when case is empty
+// Hide once content exists
+```
+
+Otherwise the doctor sees a big "Speak This Case" button on top of a case sheet that's already filled — which is confusing.
+
+---
+
+## Overall Assessment
+
+| Task | Status |
+|---|---|
+| Delete All Cases | ✅ Done — hide from real doctors |
+| Voice button to top | ✅ Done — hide when case filled |
+| New patient flow | ✅ Done — verify triage auto-assignment |
+| Manual path lightened | ⚠️ Still full triage form |
+| Triage auto-assign from voice | ⚠️ Needs verification |
+
+---
+
+## What to Tell Your Developer — 4 Follow-ups
+
+```
+1. Delete All Cases button — 
+   show case count in confirmation alert,
+   hide button from non-dev accounts
+
+2. Auto-assign triage category 
+   from voice-extracted vitals —
+   verify this is happening after 
+   voice save
+
+3. Hide voice hero card on case sheet
+   when case already has content
+
+4. Manual path — replace full triage 
+   screen with quick name/age/sex form
+   before opening case sheet
+```
+
+These are all small changes. One more developer session should close them.

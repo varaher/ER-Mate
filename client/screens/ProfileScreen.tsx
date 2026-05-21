@@ -28,42 +28,56 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [clearingCases, setClearingCases] = useState(false);
+  const [devTapCount, setDevTapCount] = useState(0);
+  const [showDevTools, setShowDevTools] = useState(false);
+
+  const handleAvatarTap = () => {
+    const next = devTapCount + 1;
+    setDevTapCount(next);
+    if (next >= 5) {
+      setShowDevTools(true);
+      setDevTapCount(0);
+    }
+  };
 
   const handleLogout = () => {
     setShowLogoutModal(true);
   };
 
-  const handleClearTestData = () => {
+  const handleClearTestData = async () => {
+    setClearingCases(true);
+    let cases: any[] = [];
+    try {
+      const result = await fetchCasesFromProxy<any[]>();
+      cases = Array.isArray(result) ? result : [];
+    } catch {
+      setClearingCases(false);
+      Alert.alert("Error", "Could not fetch cases. Please try again.");
+      return;
+    }
+    setClearingCases(false);
+    const count = cases.length;
+    if (count === 0) {
+      Alert.alert("No Cases", "Your account has no cases to delete.");
+      return;
+    }
     Alert.alert(
       "Delete All Cases",
-      "This will permanently delete every case in your account. This cannot be undone. Are you sure?",
+      `This will permanently delete all ${count} cases in your account. This cannot be undone.`,
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Delete All",
+          text: `Delete ${count} Cases`,
           style: "destructive",
           onPress: async () => {
             setClearingCases(true);
-            try {
-              const cases = await fetchCasesFromProxy<any[]>();
-              const ids: string[] = Array.isArray(cases) ? cases.map((c: any) => c.id).filter(Boolean) : [];
-              if (ids.length === 0) {
-                Alert.alert("No Cases", "Your account has no cases to delete.");
-                return;
-              }
-              let deleted = 0;
-              for (const id of ids) {
-                try {
-                  await deleteCaseFromProxy(id);
-                  deleted++;
-                } catch {}
-              }
-              Alert.alert("Done", `${deleted} of ${ids.length} cases deleted.`);
-            } catch (err) {
-              Alert.alert("Error", "Could not fetch cases. Please try again.");
-            } finally {
-              setClearingCases(false);
+            const ids = cases.map((c: any) => c.id).filter(Boolean);
+            let deleted = 0;
+            for (const id of ids) {
+              try { await deleteCaseFromProxy(id); deleted++; } catch {}
             }
+            setClearingCases(false);
+            Alert.alert("Done", `${deleted} of ${count} cases deleted.`);
           },
         },
       ]
@@ -100,11 +114,13 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={[styles.profileCard, { backgroundColor: theme.card }]}>
-          <View style={[styles.avatar, { backgroundColor: theme.primaryLight }]}>
-            <Text style={[styles.avatarText, { color: theme.primary }]}>
-              {user?.name?.charAt(0)?.toUpperCase() || "D"}
-            </Text>
-          </View>
+          <Pressable onPress={handleAvatarTap}>
+            <View style={[styles.avatar, { backgroundColor: theme.primaryLight }]}>
+              <Text style={[styles.avatarText, { color: theme.primary }]}>
+                {user?.name?.charAt(0)?.toUpperCase() || "D"}
+              </Text>
+            </View>
+          </Pressable>
           <Text style={[styles.name, { color: theme.text }]}>{user?.name || "Doctor"}</Text>
           <Text style={[styles.email, { color: theme.textSecondary }]}>{user?.email || ""}</Text>
           {user?.hospital ? (
@@ -191,28 +207,34 @@ export default function ProfileScreen() {
           ) : null}
         </View>
 
-        <View style={[styles.section, { backgroundColor: theme.card, marginBottom: Spacing.lg }]}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.menuItem,
-              { opacity: clearingCases ? 0.5 : pressed ? 0.7 : 1 },
-            ]}
-            onPress={clearingCases ? undefined : handleClearTestData}
-            disabled={clearingCases}
-          >
-            {clearingCases ? (
-              <ActivityIndicator size="small" color={theme.danger} />
-            ) : (
-              <Feather name="trash-2" size={20} color={theme.danger} />
-            )}
-            <Text style={[styles.menuLabel, { color: theme.danger }]}>
-              {clearingCases ? "Deleting cases..." : "Delete All Cases"}
-            </Text>
-            {!clearingCases ? (
-              <Feather name="chevron-right" size={20} color={theme.danger} />
-            ) : null}
-          </Pressable>
-        </View>
+        {showDevTools ? (
+          <View style={[styles.section, { backgroundColor: theme.card, marginBottom: Spacing.lg }]}>
+            <View style={[styles.menuItem, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
+              <Feather name="tool" size={20} color={theme.textMuted} />
+              <Text style={[styles.menuLabel, { color: theme.textMuted, fontStyle: "italic" }]}>Developer Tools</Text>
+            </View>
+            <Pressable
+              style={({ pressed }) => [
+                styles.menuItem,
+                { opacity: clearingCases ? 0.5 : pressed ? 0.7 : 1 },
+              ]}
+              onPress={clearingCases ? undefined : handleClearTestData}
+              disabled={clearingCases}
+            >
+              {clearingCases ? (
+                <ActivityIndicator size="small" color={theme.danger} />
+              ) : (
+                <Feather name="trash-2" size={20} color={theme.danger} />
+              )}
+              <Text style={[styles.menuLabel, { color: theme.danger }]}>
+                {clearingCases ? "Deleting cases..." : "Delete All Cases"}
+              </Text>
+              {!clearingCases ? (
+                <Feather name="chevron-right" size={20} color={theme.danger} />
+              ) : null}
+            </Pressable>
+          </View>
+        ) : null}
 
         <Pressable
           style={({ pressed }) => [

@@ -525,6 +525,25 @@ export default function VoiceCaseSheetScreen() {
     return fields;
   };
 
+  const computeTriageFromVitals = (vs: any) => {
+    if (!vs) return { triage_color: "green", triage_priority: 4 };
+    const [sys] = (vs.bp || "120/80").split("/");
+    const bpSys = parseInt(sys) || 120;
+    const hr = parseInt(vs.hr) || 80;
+    const spo2 = parseInt(vs.spo2) || 98;
+    const gcs = parseInt(vs.gcs) || 15;
+    const rr = parseInt(vs.rr) || 16;
+    if (spo2 < 90 || gcs < 9 || bpSys < 80)
+      return { triage_color: "red", triage_priority: 1 };
+    if (spo2 < 94 || gcs < 13 || bpSys < 100 || hr > 120)
+      return { triage_color: "orange", triage_priority: 2 };
+    if (spo2 < 96 || hr > 100 || bpSys > 160 || rr > 24)
+      return { triage_color: "yellow", triage_priority: 3 };
+    if (hr > 90 || bpSys > 140)
+      return { triage_color: "green", triage_priority: 4 };
+    return { triage_color: "blue", triage_priority: 5 };
+  };
+
   const buildVitals = (vs: any) => {
     if (!vs) return { hr: 80, bp_systolic: 120, bp_diastolic: 80, rr: 16, spo2: 98, temperature: 36.8, gcs_e: 4, gcs_v: 5, gcs_m: 6, grbs: 100, pain_score: 0 };
     const [sys, dia] = (vs.bp || "120/80").split("/");
@@ -708,6 +727,7 @@ export default function VoiceCaseSheetScreen() {
           course: "",
         },
         vitals_at_arrival: buildVitals(rawExtracted?.vitalsSuggested),
+        ...computeTriageFromVitals(rawExtracted?.vitalsSuggested),
         em_resident: emResident,
         em_consultant: emConsultant,
         case_type: caseType,

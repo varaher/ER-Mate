@@ -972,7 +972,7 @@ export default function DashboardScreen() {
               ]}
               onPress={() => {
                 setShowNewPatientModal(false);
-                navigation.navigate("Triage");
+                navigation.navigate("QuickCaseSheet" as any, { type: "adult" });
               }}
             >
               <View style={[styles.newPatientOptionIcon, { backgroundColor: theme.backgroundSecondary }]}>
