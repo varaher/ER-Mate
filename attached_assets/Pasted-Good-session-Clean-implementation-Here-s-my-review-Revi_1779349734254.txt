@@ -1,0 +1,76 @@
+Good session. Clean implementation. Here's my review.
+
+---
+
+# Review
+
+## What's Confirmed Done ✅
+
+**Task 1 — safe() fallbacks**
+The three real gaps were correctly identified and fixed. ECG "Not done", follow-up "As clinically indicated", and ABCDE/exam blocks now have full clinical defaults instead of leaking empty strings. This is exactly right.
+
+**Task 2 — User ID check**
+The architectural explanation is correct. Desktop generates QR with no user attached → mobile approver becomes the authenticated user. There's no mismatch scenario to protect against. No code change needed and the reasoning is sound.
+
+**Task 3 — QR auto-refresh**
+Confirmed already implemented at the correct lines. Good that this was verified rather than re-implemented — duplicate code would have caused bugs.
+
+**Task 4 — Service worker**
+Network-first with cache fallback is the right strategy for a clinical app. API calls not intercepted is correct — stale patient data from cache would be dangerous. skipWaiting on install means doctors get the update immediately without needing a page reload mid-shift.
+
+---
+
+## One Concern Worth Checking ⚠️
+
+**Service worker cache invalidation**
+
+The SW caches pages on first visit. But when your developer ships a new build — updated JS bundle, new features — the old cached files will still be served to offline users.
+
+The current CACHE_NAME is `'ermate-v1'`. This needs to be versioned with every deployment:
+
+```javascript
+// sw.js — must change with every deploy
+const CACHE_NAME = 'ermate-v2'; // bump this each release
+
+// On activate — old cache is deleted automatically
+// because the name doesn't match
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((keys) => {
+      return Promise.all(
+        keys
+          .filter((key) => key !== CACHE_NAME)
+          .map((key) => caches.delete(key))
+      );
+    })
+  );
+});
+```
+
+**Tell your developer:** Add `CACHE_NAME` version bump to the deployment checklist. Every release = new version number. Otherwise doctors on poor connectivity will keep running old app versions from cache indefinitely.
+
+---
+
+## Overall Status
+
+Every pre-pilot task is now complete:
+
+| Task | Status |
+|---|---|
+| safe() fallbacks in discharge prompt | ✅ Done |
+| User ID security check | ✅ Not applicable — correct architecture |
+| QR auto-refresh on expiry | ✅ Already done |
+| Service worker offline caching | ✅ Done |
+| E2E test checklist | ✅ Ready to run |
+
+---
+
+## What Happens Now
+
+**One thing before anything else:**
+
+Run the Task 5 checklist end to end. All 11 items. No shortcuts. This is the moment where you find out if everything that was built actually works together as a complete flow — not just individual features in isolation.
+
+When all 11 boxes are checked, ErMate is ready for a controlled pilot with one trusted facility. Pick one ER, one consultant who will give honest feedback, and run it for 2 weeks before opening to anyone else.
+
+That pilot feedback will tell you more than any further development session can.

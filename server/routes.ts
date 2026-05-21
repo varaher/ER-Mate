@@ -619,7 +619,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       doc.on("end", () => {
         const pdfBuffer = Buffer.concat(chunks);
         res.setHeader("Content-Type", "application/pdf");
-        res.setHeader("Content-Disposition", `attachment; filename="discharge_summary_${data.patient.name.replace(/\s+/g, "_")}.pdf"`);
+        res.setHeader("Content-Disposition", `attachment; filename="discharge_summary_${(data.patient.name || "patient").replace(/\s+/g, "_")}.pdf"`);
         res.send(pdfBuffer);
       });
 
@@ -992,7 +992,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const buffer = await Packer.toBuffer(docxDoc);
       
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
-      res.setHeader("Content-Disposition", `attachment; filename="discharge_summary_${data.patient.name.replace(/\s+/g, "_")}.docx"`);
+      res.setHeader("Content-Disposition", `attachment; filename="discharge_summary_${(data.patient.name || "patient").replace(/\s+/g, "_")}.docx"`);
       res.send(Buffer.from(buffer));
     } catch (err) {
       console.error("DOCX generation error:", err);
