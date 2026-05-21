@@ -2001,16 +2001,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (vbgObj.creatinine) vbgParts.push(`Cr ${vbgObj.creatinine}`);
       const vbgSection = vbgParts.length > 0 ? vbgParts.join(" | ") : "Not done";
 
+      // ── path validator — warn in dev if key fields are missing ───────────────
+      if (process.env.NODE_ENV !== "production") {
+        const missingPaths: string[] = [];
+        const chk = (path: string, obj: any) => {
+          const val = path.split(".").reduce((o: any, k: string) => o?.[k], obj);
+          if (val === undefined || val === null || val === "") missingPaths.push(path);
+        };
+        chk("primary_survey.airway", fc);
+        chk("primary_survey.auscultation", fc);
+        chk("primary_survey.pupils", fc);
+        chk("investigations.vbg", fc);
+        chk("treatment.consultations", fc);
+        chk("history.hpi", fc);
+        chk("examination.general_appearance", fc);
+        if (missingPaths.length > 0) {
+          console.warn("[Discharge] Missing full_case paths:", missingPaths);
+        }
+      }
+
       // ── treatment ──────────────────────────────────────────────────────────
       const trt = fc.treatment || {};
       const medications: any[]  = Array.isArray(trt.medications)  ? trt.medications  : [];
       const infusions: any[]    = Array.isArray(trt.infusions)     ? trt.infusions    : [];
       const fluids: any         = trt.fluids || "";
-      const medsText = [
+      // ER treatment meds — what was GIVEN in the emergency (not discharge prescription)
+      const erMedsText = [
         ...medications.map((m: any) => `• ${m.name || m.drug || ""} ${m.dose || ""} ${m.route || ""} ${m.frequency || ""}`.trim()),
         ...infusions.map((f: any)   => `• ${f.name || f.fluid || ""} ${f.dose || ""} ${f.rate ? `at ${f.rate}` : ""}${f.dilution ? ` in ${f.dilution}` : ""}`.trim()),
         ...(fluids ? [`• ${fluids}`] : []),
-      ].filter(Boolean).join("\n") || s(sd.discharge_medications) || "Nil";
+      ].filter(Boolean).join("\n") || "Nil";
+      // Discharge medications — doctor-confirmed prescription for after discharge
+      const dischargeMedsText = s(sd.discharge_medications) || "To be completed by treating physician";
+      // medsText alias for backward-compat with the prompt function
+      const medsText = erMedsText;
 
       // ── procedures ─────────────────────────────────────────────────────────
       const procData = fc.procedures || {};
@@ -2067,7 +2091,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         pupils, power, focalDeficit, exposure,
         examGeneral, examCVS, examRespiratory, examAbdomen, examCNS, examExtremities, examHEENT,
         labsOrdered, imagingOrdered, ecg, efast, resultsSummary, vbgSection,
-        medsText, proceduresText, consultText, psychText,
+        medsText, dischargeMedsText, proceduresText, consultText, psychText,
         workingDx, differentials, dispPlan, conditionDx, pendingReps, followUp,
         // Legacy fallback fields
         chief_complaint: complaint,

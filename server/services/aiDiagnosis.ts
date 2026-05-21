@@ -487,6 +487,7 @@ export interface DischargeSummaryInput {
   resultsSummary?: string;
   vbgSection?: string;
   medsText?: string;
+  dischargeMedsText?: string;
   proceduresText?: string;
   consultText?: string;
   psychText?: string;
@@ -638,13 +639,19 @@ INVESTIGATIONS
 ${invBlock || "None documented"}
 
 ═══════════════════════════════════════
-TREATMENT IN EMERGENCY
+TREATMENT IN EMERGENCY (administered in ER)
 ═══════════════════════════════════════
-Medications / Fluids:
+Medications / Fluids Given in ER:
 ${medsBlock}
 
-Procedures (interventions only):
+Procedures (interventions only, not consultations):
 ${summaryData.proceduresText || summaryData.procedures || "Nil"}
+
+═══════════════════════════════════════
+DISCHARGE MEDICATIONS (post-discharge prescription)
+═══════════════════════════════════════
+${summaryData.dischargeMedsText || "To be completed by treating physician"}
+NOTE: The Course in Hospital narrative must only reference ER treatment medications above, NOT discharge medications.
 
 ═══════════════════════════════════════
 CONSULTATIONS

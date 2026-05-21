@@ -1,0 +1,198 @@
+Good implementation. Here's my honest review.
+
+---
+
+# Discharge Summary Implementation Review
+
+## What's Correctly Done ✅
+
+**Full case object passing**
+The core architectural fix is right. `full_case: caseData` sent from frontend means no field can be forgotten. This is the most important change and it's done correctly.
+
+**Validation gate**
+Checking chief complaint + HPI + working diagnosis before calling AI is exactly right. Prevents blank summaries. Good defensive coding.
+
+**9-section structured prompt**
+The AI only writes the narrative. Everything else renders from data. No hallucination risk on structured fields.
+
+**Psychological flags — all 7**
+All fields now covered including the 3 that were missing before.
+
+---
+
+## What Needs Verification ⚠️
+
+### 1. Field Path Mismatches — High Risk
+
+The route reads from `full_case` using field paths like `primary_survey`, `primary_assessment`, `investigations.vbg`. But whether these exact paths exist in the saved case object depends entirely on what `buildClinical` actually writes to the backend.
+
+**Your developer must verify these paths match exactly:**
+
+```javascript
+// Route assumes these paths exist
+full_case.primary_survey.airway
+full_case.primary_assessment.breathing.auscultation
+full_case.investigations.vbg.ph
+full_case.treatment.consultations
+full_case.psychological.intent_to_harm_others
+
+// But buildClinical may have saved them as
+full_case.clinicalData.primarySurvey.airway
+full_case.clinicalData.investigations.vbg.ph
+full_case.clinicalData.doctors.consultations
+```
+
+If the paths don't match, fields silently read as `undefined` and the discharge summary has blank sections with no error. This is the same silent failure pattern that caused the original Rajesh problem.
+
+**Fix — add a path validator before the prompt:**
+```javascript
+const validateCaseShape = (fullCase) => {
+  const warnings = [];
+  
+  const check = (path) => {
+    const value = path.split('.')
+      .reduce((obj, key) => obj?.[key], fullCase);
+    if (value === undefined) {
+      warnings.push(`Missing: ${path}`);
+    }
+  };
+
+  check('primary_survey.airway');
+  check('investigations.vbg.ph');
+  check('treatment.consultations');
+  check('psychological.suicidal_ideation');
+  
+  if (warnings.length > 0) {
+    console.warn('Discharge path mismatches:', warnings);
+  }
+  
+  return warnings;
+};
+```
+
+Run this in development. Log every warning. Fix paths before shipping.
+
+---
+
+### 2. Treatment Medications vs Discharge Medications
+
+The route reads `full_case.treatment.medications` for the discharge summary. But these are **ER treatment medications** — IV Pantoprazole stat, IV fluids, etc. — not discharge medications.
+
+The discharge medication section needs to be separate. As we discussed, ER meds are the *starting point* that the doctor edits — not the final discharge prescription.
+
+**Current state:** Discharge summary probably shows "Inj Pantoprazole 40mg IV stat" as a discharge medication — which is clinically wrong.
+
+**Fix needed:**
+```javascript
+// Two separate medication blocks in the prompt
+
+// Block 1 — Treatment in ER (from case sheet, locked)
+const erMedications = fullCase.treatment?.medications || [];
+
+// Block 2 — Discharge medications (from discharge 
+// summary screen inputs, doctor edited)
+const dischargeMedications = summaryData
+  .discharge_medications || [];
+
+// If doctor hasn't filled discharge meds yet
+// show amber warning — don't copy ER meds directly
+```
+
+---
+
+### 3. Condition at Discharge — Not Connected
+
+The discharge summary has a "Condition at Discharge" field (Stable / Guarded / Critical / LAMA / DAMA etc.). This is doctor-filled on the discharge screen.
+
+The route currently reads `full_case.disposition.plan` for disposition — but condition at discharge is a separate field that comes from the discharge screen, not the case sheet.
+
+**Verify this field is:**
+- Captured on the discharge summary screen
+- Sent to the backend as part of `summary_data`
+- Read correctly in the route as `summary_data.condition_at_discharge`
+- Appearing in the generated PDF/DOCX
+
+---
+
+### 4. WhatsApp Share — Not Yet Implemented
+
+From the spec we discussed, WhatsApp sharing of the PDF is important for Indian ER practice. The current implementation has PDF and DOCX download but no share functionality.
+
+This is not blocking but should be in the next sprint:
+
+```javascript
+// React Native / Expo share
+import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system';
+
+const shareViaWhatsApp = async (pdfUri) => {
+  if (await Sharing.isAvailableAsync()) {
+    await Sharing.shareAsync(pdfUri, {
+      mimeType: 'application/pdf',
+      dialogTitle: 'Share Discharge Summary'
+    });
+  }
+};
+```
+
+---
+
+### 5. Auto-trigger Generation — Not Confirmed
+
+The spec said generation should start the moment doctor taps "Create Discharge Summary" from View Case — not after the screen opens.
+
+The implementation document doesn't confirm this was changed. If the doctor still has to tap a "Generate" button inside the discharge screen, that's an extra step that shouldn't exist.
+
+**Verify:** Does the AI call start before or after the discharge screen opens?
+
+---
+
+## PDF / DOCX Export — Clinical Format Check
+
+The exported document must never have blank sections. Verify these defaults are applied:
+
+```javascript
+const CLINICAL_DEFAULTS = {
+  allergies: 'NKDA',
+  pastSurgicalHistory: 'Nil significant',
+  familyHistory: 'Not significant',
+  socialHistory: 'Not recorded',
+  ecg: 'Not done',
+  efast: 'Not done',
+  procedures: 'Nil',
+  consultations: 'No specialist consultations',
+  psychologicalScreen: 'Screened — no flags identified',
+  mlcReference: 'Not applicable'
+};
+```
+
+---
+
+## Overall Assessment
+
+| Area | Status |
+|---|---|
+| Full case object passing | ✅ Done |
+| Validation gate | ✅ Done |
+| 9-section prompt structure | ✅ Done |
+| Psych fields complete | ✅ Done |
+| Field path verification | ⚠️ Must check |
+| ER meds vs discharge meds separation | ⚠️ Must fix |
+| Condition at discharge connection | ⚠️ Must verify |
+| Auto-trigger on View Case tap | ⚠️ Not confirmed |
+| WhatsApp share | ❌ Next sprint |
+| Clinical defaults in export | ⚠️ Must verify |
+
+---
+
+## What to Tell Your Developer Right Now
+
+Three things before this goes to any real user:
+
+**1. Run the path validator** in development with a real saved case. Log every `undefined`. Fix every mismatch. This single check will catch 80% of potential blank section issues.
+
+**2. Separate ER medications from discharge medications** in the prompt and the UI. They are clinically different things. ER meds go in "Treatment Given." Discharge meds go in "Medications at Discharge." Doctor fills duration and confirms route for discharge meds.
+
+**3. Verify condition at discharge** is captured, saved, and appearing in the export. It's the one field that can't be auto-filled and must come from the doctor's input on the discharge screen.
+
+Fix these three and the discharge summary is production-ready.
