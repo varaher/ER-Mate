@@ -774,11 +774,23 @@ export async function extractClinicalDataFromVoice(
     ? `Patient context: ${patientContext.age || "unknown"} year old ${patientContext.sex || "patient"}, presenting with: ${patientContext.chiefComplaint || "not specified"}`
     : "No patient context provided";
 
-  const prompt = `You are a clinical documentation assistant for an Emergency Room physician. Extract structured clinical information from the following voice dictation and organize it into appropriate case sheet fields.
+  const prompt = `You are a clinical documentation assistant for an Emergency Room physician. Extract structured clinical information from the following transcript and organize it into appropriate case sheet fields.
+
+IMPORTANT — AMBIENT RECORDING CONTEXT:
+This transcript may be from a natural doctor-patient-bystander conversation recorded in the ER, not a formal dictation. It may contain:
+- Doctor questions to the patient or family ("How long has this been?")
+- Patient answers in any Indian language or English ("Since yesterday evening")
+- Bystander / family member comments
+- Nurse instructions mid-recording ("Take BP", "Give this medicine")
+- Conversational fillers ("okay", "hmm", "let me see", "uh")
+- Repeated clarifying questions
+- Background noise transcribed as text
+
+Your job: Extract ONLY the clinically relevant facts from ALL speakers. Ignore conversational structure entirely. Do NOT include questions, filler phrases, nursing instructions, or direct speech verbatim. Synthesise everything into clean clinical documentation as if written by the physician after the encounter.
 
 ${contextInfo}
 
-Voice dictation transcript:
+Voice transcript:
 "${transcription}"
 
 Extract and categorize any mentioned clinical information into the following structure. Only include fields that have relevant information mentioned in the transcript. Be accurate and use medical terminology appropriately.
