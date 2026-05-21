@@ -1232,7 +1232,21 @@ Respond in JSON format:
     "rr": "Respiratory rate if mentioned",
     "spo2": "SpO2 if mentioned",
     "temperature": "Temperature if mentioned",
-    "grbs": "Blood sugar if mentioned"
+    "grbs": "Blood sugar if mentioned",
+    "gcs": "GCS score if mentioned e.g. E4V5M6"
+  },
+  "vbgResults": {
+    "ph": "pH value if mentioned (e.g. '7.357')",
+    "pco2": "PCO2 value if mentioned",
+    "po2": "PO2 value if mentioned",
+    "hco3": "Bicarbonate/HCO3 value if mentioned",
+    "lactate": "Lactate value if mentioned",
+    "hemoglobin": "Hemoglobin/Hb value from VBG/ABG if mentioned",
+    "sodium": "Sodium value if mentioned",
+    "potassium": "Potassium value if mentioned",
+    "creatinine": "Creatinine value if mentioned",
+    "glucose": "Glucose from VBG/ABG if mentioned",
+    "spo2_vbg": "SpO2 from VBG/ABG if different from pulse ox"
   },
   "examFindings": {
     "general": "General appearance/examination findings",
@@ -1244,11 +1258,20 @@ Respond in JSON format:
     "skin": "Skin/wound findings if mentioned",
     "heent": "Head, eyes, ears, nose, throat findings if mentioned"
   },
+  "emResident": "Name of EM resident/junior doctor if mentioned (e.g. 'Dr. Athna Navas', 'resident Dr. Smith')",
+  "emConsultant": "Name of EM consultant/senior doctor if mentioned (e.g. 'consultant Dr. Christo', 'Dr. MB')",
+  "consultationGiven": "Any specialist consultation called/given (e.g. 'neuromedicine Dr. Shajan', 'cardiology on-call')",
   "diagnosis": ["Primary diagnosis or working diagnosis"],
   "differentialDiagnosis": ["Differential diagnoses if mentioned"],
-  "treatmentNotes": "Any treatment plans or medications given if mentioned",
-  "investigationsOrdered": "Labs ordered if mentioned (CBC, RFT, etc.)",
-  "imagingOrdered": "Imaging ordered if mentioned (X-ray, CT, USG, etc.)",
+  "prescribedMedications": [
+    {"name": "Drug name", "dose": "Dose with units", "route": "PO/IV/IM/SC/etc", "frequency": "stat/OD/BD/TDS/SOS/etc"}
+  ],
+  "prescribedInfusions": [
+    {"name": "Fluid or drug name (NS, RL, Dopamine, etc)", "dose": "Amount if mentioned", "rate": "Rate of infusion e.g. 50ml/hr"}
+  ],
+  "treatmentNotes": "Any other treatment plans, advice, or notes not captured in medications/infusions",
+  "investigationsOrdered": "Labs ordered if mentioned (CBC, RFT, LFT, etc.)",
+  "imagingOrdered": "Imaging ordered if mentioned (X-ray, CT, MRI, USG, etc.)",
   "restAllNormal": false,
   "fieldsPopulated": ["Array of field names that were populated"]
 }

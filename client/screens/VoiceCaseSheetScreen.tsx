@@ -21,6 +21,7 @@ import { useHeaderHeight } from "@react-navigation/elements";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { getApiUrl } from "@/lib/query-client";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { apiPost, invalidateCases } from "@/lib/api";
 import { Spacing, BorderRadius, Typography } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
@@ -267,6 +268,9 @@ export default function VoiceCaseSheetScreen() {
       if (v && typeof v === "string" && v.trim()) fields.push({ key, label, value: v, icon });
     };
     if (ex.patientName && !patientName) add("patientName", "Patient Name", "user");
+    add("emResident", "EM Resident", "user");
+    add("emConsultant", "EM Consultant", "user");
+    add("consultationGiven", "Specialist Consultation", "phone");
     add("chiefComplaint", "Chief Complaint", "alert-circle");
     add("historyOfPresentIllness", "History of Present Illness", "file-text");
     add("onset", "Onset", "clock");
@@ -290,17 +294,33 @@ export default function VoiceCaseSheetScreen() {
       if (vs.spo2) parts.push(`SpO2: ${vs.spo2}`);
       if (vs.temperature) parts.push(`Temp: ${vs.temperature}`);
       if (vs.grbs) parts.push(`GRBS: ${vs.grbs}`);
+      if (vs.gcs) parts.push(`GCS: ${vs.gcs}`);
       if (parts.length > 0) fields.push({ key: "vitals", label: "Vitals Mentioned", value: parts.join(" | "), icon: "activity" });
+    }
+    if (ex.vbgResults) {
+      const vbg = ex.vbgResults;
+      const parts: string[] = [];
+      if (vbg.ph) parts.push(`pH: ${vbg.ph}`);
+      if (vbg.pco2) parts.push(`PCO2: ${vbg.pco2}`);
+      if (vbg.po2) parts.push(`PO2: ${vbg.po2}`);
+      if (vbg.hco3) parts.push(`HCO3: ${vbg.hco3}`);
+      if (vbg.lactate) parts.push(`Lactate: ${vbg.lactate}`);
+      if (vbg.hemoglobin) parts.push(`Hb: ${vbg.hemoglobin}`);
+      if (vbg.sodium) parts.push(`Na: ${vbg.sodium}`);
+      if (vbg.potassium) parts.push(`K: ${vbg.potassium}`);
+      if (vbg.creatinine) parts.push(`Cr: ${vbg.creatinine}`);
+      if (parts.length > 0) fields.push({ key: "vbgResults", label: "VBG / ABG Results", value: parts.join(" | "), icon: "droplet" });
     }
     if (ex.examFindings) {
       const ef = ex.examFindings;
       const parts: string[] = [];
       if (ef.general) parts.push(`General: ${ef.general}`);
       if (ef.cvs) parts.push(`CVS: ${ef.cvs}`);
-      if (ef.respiratory) parts.push(`Respiratory: ${ef.respiratory}`);
-      if (ef.abdomen) parts.push(`Abdomen: ${ef.abdomen}`);
+      if (ef.respiratory) parts.push(`Resp: ${ef.respiratory}`);
+      if (ef.abdomen) parts.push(`Abd: ${ef.abdomen}`);
       if (ef.cns) parts.push(`CNS: ${ef.cns}`);
       if (ef.heent) parts.push(`HEENT: ${ef.heent}`);
+      if (ef.musculoskeletal) parts.push(`MSK: ${ef.musculoskeletal}`);
       if (parts.length > 0) fields.push({ key: "examFindings", label: "Examination Findings", value: parts.join(" | "), icon: "search" });
     }
     if (ex.prescribedMedications?.length > 0) {
@@ -315,10 +335,12 @@ export default function VoiceCaseSheetScreen() {
       fields.push({
         key: "infusions",
         label: "Infusions / IV Fluids",
-        value: ex.prescribedInfusions.map((i: any) => `${i.name} ${i.dose || ""} ${i.dilution ? "in "+i.dilution : ""} ${i.rate ? "@ "+i.rate : ""}`.trim()).join(", "),
+        value: ex.prescribedInfusions.map((i: any) => `${i.name} ${i.dose || ""} ${i.rate ? "@ "+i.rate : ""}`.trim()).join(", "),
         icon: "droplet",
       });
     }
+    if (ex.diagnosis?.length > 0) fields.push({ key: "diagnosis", label: "Working Diagnosis", value: ex.diagnosis.join(", "), icon: "clipboard" });
+    if (ex.differentialDiagnosis?.length > 0) fields.push({ key: "differentialDiagnosis", label: "Differentials", value: ex.differentialDiagnosis.join(", "), icon: "git-branch" });
     return fields;
   };
 
@@ -338,44 +360,104 @@ export default function VoiceCaseSheetScreen() {
     };
   };
 
-  const buildClinical = (ex: any, transcript: string) => ({
-    history: {
-      hpi: ex?.historyOfPresentIllness || transcript,
-      events_hopi: transcript,
-      past_medical: ex?.pastMedicalHistory || "",
-      past_surgical: ex?.pastSurgicalHistory || "",
-      allergies: ex?.allergies ? [ex.allergies] : [],
-      medications: ex?.currentMedications || "",
-      drug_history: ex?.currentMedications || "",
-    },
-    examination: ex?.examFindings ? {
-      general_appearance: ex.examFindings.general || "",
-      cvs_additional_notes: ex.examFindings.cvs || "",
-      respiratory_additional_notes: ex.examFindings.respiratory || "",
-      abdomen_additional_notes: ex.examFindings.abdomen || "",
-      cns_additional_notes: ex.examFindings.cns || "",
-      heent: ex.examFindings.heent || "",
-    } : {},
-    treatment: {
-      primary_diagnosis: ex?.diagnosis?.[0] || "",
-      provisional_diagnoses: ex?.diagnosis || [],
-      differential_diagnoses: ex?.differentialDiagnosis || [],
-      medications: ex?.prescribedMedications || [],
-      infusions: ex?.prescribedInfusions || [],
-      intervention_notes: ex?.treatmentNotes || "",
-    },
-    investigations: {
-      individual_tests: ex?.investigationsOrdered ? [ex.investigationsOrdered] : [],
-      imaging: ex?.imagingOrdered ? [ex.imagingOrdered] : [],
-    },
-    voice_transcript: transcript,
-  });
+  const buildClinical = (ex: any, transcript: string) => {
+    const pastMedRaw = ex?.pastMedicalHistory || "";
+    const pastMedArr: string[] = pastMedRaw
+      ? pastMedRaw.split(/[,;\/\n]+/).map((s: string) => s.trim()).filter((s: string) => s.length > 0)
+      : [];
+
+    const symptomsArr: string[] = [];
+    if (ex?.symptoms?.length > 0) symptomsArr.push(...ex.symptoms);
+    if (ex?.associatedSymptoms) symptomsArr.push(ex.associatedSymptoms);
+    if (ex?.negativeSymptoms) symptomsArr.push(`Negative: ${ex.negativeSymptoms}`);
+
+    const vbg = ex?.vbgResults;
+    const vbgText = vbg ? [
+      vbg.ph ? `pH ${vbg.ph}` : "",
+      vbg.pco2 ? `PCO2 ${vbg.pco2}` : "",
+      vbg.po2 ? `PO2 ${vbg.po2}` : "",
+      vbg.hco3 ? `HCO3 ${vbg.hco3}` : "",
+      vbg.lactate ? `Lactate ${vbg.lactate}` : "",
+      vbg.hemoglobin ? `Hb ${vbg.hemoglobin}` : "",
+      vbg.sodium ? `Na ${vbg.sodium}` : "",
+      vbg.potassium ? `K ${vbg.potassium}` : "",
+      vbg.creatinine ? `Cr ${vbg.creatinine}` : "",
+    ].filter(Boolean).join(", ") : "";
+
+    const consultationNote = ex?.consultationGiven
+      ? `Consultation: ${ex.consultationGiven}. `
+      : "";
+    const treatmentNotes = consultationNote + (ex?.treatmentNotes || "");
+
+    return {
+      history: {
+        hpi: ex?.historyOfPresentIllness || transcript,
+        events_hopi: ex?.historyOfPresentIllness || transcript,
+        signs_and_symptoms: symptomsArr.join(", "),
+        past_medical: pastMedArr,
+        past_surgical: ex?.pastSurgicalHistory || "",
+        allergies: ex?.allergies ? ex.allergies.split(/[,;]+/).map((s: string) => s.trim()).filter((s: string) => s) : [],
+        medications: ex?.currentMedications || "",
+        drug_history: ex?.currentMedications || "",
+        family_history: ex?.familyHistory || "",
+        social_history: ex?.socialHistory || "",
+      },
+      examination: ex?.examFindings ? {
+        general_appearance: ex.examFindings.general || "",
+        cvs_additional_notes: ex.examFindings.cvs || "",
+        respiratory_additional_notes: ex.examFindings.respiratory || "",
+        abdomen_additional_notes: ex.examFindings.abdomen || "",
+        cns_additional_notes: ex.examFindings.cns || "",
+        heent: ex.examFindings.heent || "",
+        musculoskeletal: ex.examFindings.musculoskeletal || "",
+      } : {},
+      treatment: {
+        primary_diagnosis: ex?.diagnosis?.[0] || "",
+        provisional_diagnoses: ex?.diagnosis || [],
+        differential_diagnoses: ex?.differentialDiagnosis || [],
+        medications: ex?.prescribedMedications || [],
+        infusions: ex?.prescribedInfusions || [],
+        intervention_notes: treatmentNotes.trim(),
+        course_in_hospital: treatmentNotes.trim(),
+      },
+      investigations: {
+        individual_tests: ex?.investigationsOrdered
+          ? ex.investigationsOrdered.split(/[,;]+/).map((s: string) => s.trim()).filter((s: string) => s)
+          : [],
+        imaging: ex?.imagingOrdered
+          ? ex.imagingOrdered.split(/[,;]+/).map((s: string) => s.trim()).filter((s: string) => s)
+          : [],
+        vbg: vbgText ? {
+          ph: vbg?.ph || "",
+          pco2: vbg?.pco2 || "",
+          po2: vbg?.po2 || "",
+          hco3: vbg?.hco3 || "",
+          lactate: vbg?.lactate || "",
+          hemoglobin: vbg?.hemoglobin || "",
+          sodium: vbg?.sodium || "",
+          potassium: vbg?.potassium || "",
+          creatinine: vbg?.creatinine || "",
+          raw: vbgText,
+        } : undefined,
+      },
+      voice_transcript: transcript,
+    };
+  };
 
   const handleSave = async () => {
     if (!patientName.trim()) { Alert.alert("Required", "Patient name is required"); setStep("patient"); return; }
     if (!patientAge.trim()) { Alert.alert("Required", "Patient age is required"); setStep("patient"); return; }
     setIsSaving(true);
     try {
+      const token = await AsyncStorage.getItem("token");
+      const authHeaders: Record<string, string> = {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      };
+
+      const emResident = rawExtracted?.emResident || user?.name || "";
+      const emConsultant = rawExtracted?.emConsultant || "";
+
       const res = await apiPost<any>("/cases", {
         patient: {
           name: patientName.trim(),
@@ -391,12 +473,13 @@ export default function VoiceCaseSheetScreen() {
         },
         presenting_complaint: {
           text: rawExtracted?.chiefComplaint || "",
-          onset_type: rawExtracted?.onset || "",
+          onset_type: rawExtracted?.onset || "Sudden",
           duration: rawExtracted?.duration || "",
           course: "",
         },
         vitals_at_arrival: buildVitals(rawExtracted?.vitalsSuggested),
-        em_resident: user?.name || "",
+        em_resident: emResident,
+        em_consultant: emConsultant,
         case_type: caseType,
       });
 
@@ -406,16 +489,21 @@ export default function VoiceCaseSheetScreen() {
       if (caseId && user?.id) {
         const base = getApiUrl();
         try {
-          await fetch(`${base}/api/clinical-data/${caseId}`, {
+          const clinicalResp = await fetch(`${base}/api/clinical-data/${caseId}`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: authHeaders,
             body: JSON.stringify({ userId: user.id, clinicalData: buildClinical(rawExtracted, editedTranscript) }),
           });
-        } catch {}
+          if (!clinicalResp.ok) {
+            console.warn("[VoiceCase] Clinical data save failed:", clinicalResp.status, await clinicalResp.text().catch(() => ""));
+          }
+        } catch (e) {
+          console.warn("[VoiceCase] Clinical data save error:", e);
+        }
         try {
           await fetch(`${base}/api/subscription/increment-case`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: authHeaders,
             body: JSON.stringify({ userId: user.id, userEmail: user.email || "" }),
           });
         } catch {}
