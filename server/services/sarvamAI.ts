@@ -160,7 +160,7 @@ export async function sarvamTranslateToEnglish(
       input: text,
       source_language_code: "auto",
       target_language_code: "en-IN",
-      mode: "formal",
+      mode: "code-mixed",
       model: "mayura:v1",
       numerals_format: "international",
     }),

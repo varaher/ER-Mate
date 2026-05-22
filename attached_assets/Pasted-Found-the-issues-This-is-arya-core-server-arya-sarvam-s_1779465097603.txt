@@ -1,0 +1,221 @@
+Found the issues. This is `arya-core/server/arya/sarvam-service.ts`. Three problems visible immediately.
+
+---
+
+## Problem 1 — Wrong Speaker Name ❌
+
+```typescript
+// Current — ALL languages use "arya"
+const TTS_SPEAKERS: Record<string, string> = {
+  "hi-IN": "arya",   // ❌ "arya" is not a valid Bulbul:v2 voice
+  "ta-IN": "arya",   // ❌
+  "ml-IN": "arya",   // ❌
+  // ... all wrong
+};
+```
+
+`"arya"` is not a real Sarvam Bulbul:v2 speaker name. This is why voice output may sound wrong or fail silently.
+
+---
+
+## Problem 2 — No speaker_gender, No mode ❌
+
+```typescript
+// Current TTS call is missing both:
+body: JSON.stringify({
+  inputs: [text],
+  target_language_code: languageCode,
+  speaker: speaker,
+  model: "bulbul:v2",
+  pitch: 0,
+  pace: 1.0,
+  loudness: 1.0,
+  speech_sample_rate: 22050,
+  enable_preprocessing: true,
+  // ❌ speaker_gender missing
+  // ❌ mode missing (should be "code-mixed")
+})
+```
+
+---
+
+## Problem 3 — Translation uses "formal" mode ❌
+
+```typescript
+// Current:
+mode: "formal",   // ❌ stiff textbook language
+
+// Should be:
+mode: "code-mixed",  // ✅ natural conversation
+```
+
+---
+
+## The Complete Fixed File
+
+```typescript
+// arya-core/server/arya/sarvam-service.ts
+// Replace the TTS_SPEAKERS map and both functions
+
+// ── Fix 1: Correct speaker map ──
+const TTS_SPEAKERS: Record<string, string> = {
+  "hi-IN": "meera",     // Hindi — warm, clear
+  "mr-IN": "meera",     // Marathi
+  "pa-IN": "meera",     // Punjabi
+  "ta-IN": "pavithra",  // Tamil — natural
+  "te-IN": "ananya",    // Telugu
+  "kn-IN": "ananya",    // Kannada
+  "ml-IN": "ananya",    // Malayalam
+  "bn-IN": "ananya",    // Bengali
+  "gu-IN": "ananya",    // Gujarati
+  "od-IN": "ananya",    // Odia
+  "en-IN": "ananya",    // English
+};
+
+export function getSpeakerForLanguage(langCode: string): string {
+  return TTS_SPEAKERS[langCode] || "ananya";
+  // "ananya" as fallback — not "arya"
+}
+
+
+// ── Fix 2: TTS with speaker_gender + mode ──
+export async function sarvamTextToSpeech(
+  text: string,
+  languageCode: SarvamLanguageCode = "hi-IN",
+  speaker?: string  // now optional — resolved internally
+): Promise<TTSResult> {
+
+  // Always use correct female speaker
+  const resolvedSpeaker = TTS_SPEAKERS[languageCode] || "ananya";
+
+  const response = await fetch(`${SARVAM_BASE_URL}/text-to-speech`, {
+    method: "POST",
+    headers: {
+      "API-Subscription-Key": getApiKey(),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      inputs: [text],
+      target_language_code: languageCode,
+      speaker: resolvedSpeaker,       // ✅ correct speaker
+      speaker_gender: "Female",        // ✅ always Female
+      model: "bulbul:v2",
+      mode: "code-mixed",             // ✅ natural conversation
+      pitch: 0,
+      pace: 1.0,
+      loudness: 1.0,
+      speech_sample_rate: 22050,
+      enable_preprocessing: true,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Sarvam TTS failed (${response.status}): ${errorText}`);
+  }
+
+  const data = await response.json() as any;
+  return {
+    audioBase64: data.audios?.[0] || "",
+    format: "wav",
+  };
+}
+
+
+// ── Fix 3: Translation mode ──
+export async function sarvamTranslate(
+  text: string,
+  sourceLanguage: string,
+  targetLanguage: string
+): Promise<TranslationResult> {
+  const response = await fetch(`${SARVAM_BASE_URL}/translate`, {
+    method: "POST",
+    headers: {
+      "API-Subscription-Key": getApiKey(),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      input: text,
+      source_language_code: sourceLanguage,
+      target_language_code: targetLanguage,
+      model: "mayura:v1",
+      mode: "code-mixed",         // ✅ was "formal" — now natural
+      enable_preprocessing: false,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Sarvam translate failed (${response.status}): ${errorText}`);
+  }
+
+  const data = await response.json() as any;
+  return {
+    translatedText: data.translated_text || "",
+    sourceLanguage,
+    targetLanguage,
+  };
+}
+```
+
+---
+
+## What Each Fix Does
+
+```
+Fix 1 — Speaker names:
+  "arya" → meera/pavithra/ananya per language
+  These are the actual valid Bulbul:v2 female voices
+  "arya" was causing silent failures or wrong voice
+
+Fix 2 — speaker_gender + mode in TTS:
+  speaker_gender: "Female" → always female, no override
+  mode: "code-mixed" → natural Hindi/Tamil/Malayalam
+  Was missing both → Sarvam used defaults (unknown)
+
+Fix 3 — Translation mode:
+  "formal" → "code-mixed"
+  "formal" = textbook stiff language
+  "code-mixed" = how people actually speak
+  Big quality improvement for all responses
+```
+
+---
+
+## Also Check Main App sarvam-service.ts
+
+```
+The Replit agent already fixed the main app file:
+  server/arya/sarvam-service.ts  (root level)
+
+But this arya-core version also needs the same fixes.
+
+If arya-core is deployed separately — fix this file too.
+If arya-core is not used in production — ignore it.
+
+Check which one aryaai.in actually runs:
+  Replit → Shell → cat server/arya/sarvam-service.ts
+  Look for speaker_gender line
+  If present → main app already fixed ✅
+  If absent → main app still needs the fix ❌
+```
+
+---
+
+## Quick Summary
+
+```
+3 bugs found in this file:
+
+1. Speaker "arya" → invalid voice name
+   Fix: use meera/pavithra/ananya per language
+
+2. Missing speaker_gender: "Female"
+   Fix: add to TTS request body
+
+3. Translation mode "formal" → stiff language
+   Fix: change to "code-mixed"
+
+All 3 fixes are in the code block above.
+Copy-paste to replace the existing functions.
+```
