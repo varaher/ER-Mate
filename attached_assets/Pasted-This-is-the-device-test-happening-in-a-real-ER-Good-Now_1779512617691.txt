@@ -1,0 +1,96 @@
+This is the device test happening in a real ER. Good. Now let me look at what's happening.
+
+---
+
+## What I Can See
+
+**Image 1 & 2** — Transcript Ready screen. The transcription worked perfectly. The English text is clean and clinically complete:
+
+- Fever, cough, rhinitis 3 days
+- LSCS history, G2P2L2
+- Family history
+- Hemoptysis, malena, loose stools
+- Full ABCDE examination findings
+- BP 90/60, HR 101, SpO2 94%
+- GCS E4V5M6, power 5/5
+
+**Sarvam transcription is working.**
+
+**Image 3** — Doctor tapped "Extract Clinical Data." The button shows a loading spinner. **It's stuck on the spinner and not proceeding to Step 4 Review.**
+
+---
+
+## The Problem
+
+The extraction API call is either:
+
+1. **Timing out** — the AI extraction is taking too long on hospital WiFi
+2. **Failing silently** — returning an error but the UI shows spinner instead of an error message
+3. **Token/auth issue** — the extraction endpoint rejecting the request
+
+---
+
+## Tell Your Developer Right Now
+
+Three things to check immediately:
+
+**1. Check server logs**
+```
+What error is appearing in the 
+server logs at the exact time 
+the spinner got stuck?
+
+Look for:
+- Timeout errors
+- 401/403 auth errors  
+- JSON parse errors
+- OpenAI/Claude API errors
+```
+
+**2. Add a timeout to the extraction call**
+```javascript
+// Current call probably has no timeout
+// If AI API is slow, it hangs forever
+
+const extractWithTimeout = async (transcript) => {
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(
+      new Error('Extraction timed out')
+    ), 30000) // 30 second max
+  );
+  
+  return Promise.race([
+    extractClinicalData(transcript),
+    timeout
+  ]);
+};
+```
+
+**3. Show error instead of infinite spinner**
+```javascript
+// The UI must handle failure gracefully
+try {
+  const result = await extractWithTimeout(transcript);
+  // proceed to review
+} catch (error) {
+  // Currently showing infinite spinner
+  // Should show this instead:
+  setError(
+    'Extraction failed. Check connection ' +
+    'and try again.'
+  );
+  setLoading(false); // stop the spinner
+}
+```
+
+---
+
+## Most Likely Cause
+
+Looking at the transcript content — it's a complex case with a lot of clinical detail. The AI extraction prompt is comprehensive. On a hospital network with variable connectivity, the API call to Claude/OpenAI is likely timing out without telling the UI it failed.
+
+The fix is a 30-second timeout plus proper error display. The doctor should see "Extraction failed — tap to retry" not an infinite spinner.
+
+**This is a one-line server log check followed by a simple frontend fix. Should be resolved in under an hour.**
+
+Can you ask your developer to check the server logs right now and tell you what error appears at 10:22 AM when the spinner got stuck?

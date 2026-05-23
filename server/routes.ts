@@ -2429,7 +2429,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("[ExtractClinical] Processing transcript, length:", transcript.length);
 
       const { extractSmartDictation } = await import("./services/aiDiagnosis");
-      const extracted = await extractSmartDictation(transcript, patientContext);
+
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Extraction timed out after 30s")), 30000)
+      );
+
+      const extracted = await Promise.race([
+        extractSmartDictation(transcript, patientContext),
+        timeout,
+      ]);
 
       res.json({ extracted });
     } catch (error) {

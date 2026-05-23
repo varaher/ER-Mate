@@ -273,23 +273,35 @@ export default function VoiceCaseSheetScreen() {
       }
     } catch (_) { /* translation best-effort, fall back to edited text */ }
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 40000);
     try {
       const resp = await fetch(new URL("/api/voice/extract-clinical", getApiUrl()).toString(), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           transcript: extractText,
           patientContext: { age: parseFloat(patientAge) || 0, sex: patientSex, caseType },
         }),
       });
+      clearTimeout(timeoutId);
       if (!resp.ok) throw new Error("Extraction failed");
       const data = await resp.json();
       const extracted = data.extracted || null;
       setRawExtracted(extracted);
       setExtractedFields(buildFieldList(extracted, text));
       setStep("review");
-    } catch (err) {
-      Alert.alert("Error", "Failed to extract clinical data. Please try again.");
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      const isTimeout = err?.name === "AbortError";
+      Alert.alert(
+        isTimeout ? "Taking too long" : "Extraction failed",
+        isTimeout
+          ? "The AI is taking longer than expected. Check your connection and tap Extract again."
+          : "Could not extract clinical data. Please check your connection and try again.",
+        [{ text: "OK" }]
+      );
     } finally {
       setIsExtracting(false);
     }
