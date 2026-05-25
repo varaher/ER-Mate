@@ -4043,7 +4043,11 @@ ${resultsSummary}`,
       const { isSarvamAvailable: isSarvamAvailable2, sarvamSpeechToTextTranslate: sarvamSpeechToTextTranslate2 } = await Promise.resolve().then(() => (init_sarvamAI(), sarvamAI_exports));
       const { extractSmartDictation: extractSmartDictation2 } = await Promise.resolve().then(() => (init_aiDiagnosis(), aiDiagnosis_exports));
       let transcript = "";
-      if (isSarvamAvailable2()) {
+      const fileTooLargeForSarvam = converted.buffer.length > 9e5;
+      if (fileTooLargeForSarvam) {
+        console.log("[SmartDictation] File too large for Sarvam (", converted.buffer.length, "bytes), going straight to Whisper");
+      }
+      if (isSarvamAvailable2() && !fileTooLargeForSarvam) {
         try {
           console.log("[SmartDictation] Using Sarvam AI for speech-to-text");
           const sarvamResult = await sarvamSpeechToTextTranslate2(converted.buffer, converted.filename);

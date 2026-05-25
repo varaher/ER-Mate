@@ -2367,7 +2367,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       let transcript = '';
 
-      if (isSarvamAvailable()) {
+      // Skip Sarvam for large files (>900KB ≈ >25 seconds) — Sarvam has a 30s hard limit
+      const fileTooLargeForSarvam = converted.buffer.length > 900_000;
+      if (fileTooLargeForSarvam) {
+        console.log("[SmartDictation] File too large for Sarvam (", converted.buffer.length, "bytes), going straight to Whisper");
+      }
+
+      if (isSarvamAvailable() && !fileTooLargeForSarvam) {
         try {
           console.log("[SmartDictation] Using Sarvam AI for speech-to-text");
           const sarvamResult = await sarvamSpeechToTextTranslate(converted.buffer, converted.filename);

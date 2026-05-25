@@ -1,0 +1,135 @@
+Perfect. The logs tell us exactly what's wrong. Two separate issues, both fixable immediately.
+
+---
+
+## Issue 1 — Case Creation Failing (422 Error)
+
+```
+"Field required: body.patient.phone"
+```
+
+The external backend **requires a phone number field** but ErMate is not sending it. The case creation fails with 422 before any clinical data is saved.
+
+**Fix — add phone field to the create payload:**
+
+```javascript
+// In the extract-and-save endpoint
+// Find the case creation POST body
+// Add these missing required fields:
+
+body: JSON.stringify({
+  patient: {
+    name: patientName || 'Unknown',
+    age: patientAge || '',
+    sex: patientGender || 'Male',
+    phone: patientPhone || '',  // ← ADD THIS
+    mode_of_arrival: modeOfArrival || 'Walk-in',
+    address: 'Not provided',
+    brought_by: 'Self',
+    informant_name: patientName || 'Unknown',
+    informant_reliability: 'Reliable',
+    identification_mark: 'None noted',
+    arrival_datetime: new Date().toISOString()
+  }
+})
+```
+
+Also the log shows `name: "H"` — the patient name is only getting the first letter. The patientInfo.name is being truncated. Fix:
+
+```javascript
+// Verify full name is passed
+// not just first character
+patientName: patientInfo?.name || 
+             patientInfo?.patientName || 
+             'Unknown'
+```
+
+---
+
+## Issue 2 — Sarvam 30 Second Limit
+
+```
+"Audio duration exceeds the maximum 
+limit of 30 seconds"
+```
+
+Also ffmpeg is not installed so the audio conversion is failing before Sarvam even sees it properly.
+
+```
+[AudioConvert] ffmpeg conversion failed: 
+spawn ffmpeg ENOENT
+```
+
+**Fix — skip ffmpeg conversion, send audio directly:**
+
+```javascript
+// In sarvamAI.ts transcription function
+// Don't try to convert with ffmpeg
+// Send the webm directly to Whisper
+// for recordings over 30 seconds
+
+const fileSizeKB = audioBuffer.length / 1024;
+const estimatedSeconds = fileSizeKB / 32;
+
+if (estimatedSeconds > 25) {
+  // Skip Sarvam — go straight to Whisper
+  console.log('[STT] Long recording detected,' +
+    'using Whisper directly');
+  return await transcribeWithWhisper(audioBuffer);
+}
+
+// Under 25 seconds — use Sarvam
+return await transcribeWithSarvam(audioBuffer);
+```
+
+---
+
+## Tell Your Developer — Two Fixes
+
+**Fix 1 — Phone field (blocks case creation)**
+
+```
+In server/routes.ts
+Find the extract-and-save endpoint
+Find the case creation POST body
+Add phone: '' to the patient object
+This is required by the external backend
+```
+
+**Fix 2 — Name truncation**
+
+```
+Log shows name: "H" not full name
+Check how patientName is passed
+from frontend to the endpoint
+Verify full name reaches the server
+```
+
+**Fix 3 — Skip ffmpeg, route long audio to Whisper directly**
+
+```
+ffmpeg is not installed on the server
+Long recordings (over 25 seconds) 
+should go straight to OpenAI Whisper
+Not through Sarvam which has 30s limit
+```
+
+---
+
+## Priority Order
+
+```
+Fix 1 first — phone field
+This alone will unblock case creation
+The 422 error is the only thing 
+stopping everything from working
+
+Fix 2 next — name truncation
+Small fix, important for correct records
+
+Fix 3 after — audio routing
+Already partially working via fallback
+But cleaner to route directly
+```
+
+Fix 1 is one line. Do that first and test again. The extraction is working perfectly — chief complaint "Chronic cough" was extracted correctly. The only failure is the case creation 422.
