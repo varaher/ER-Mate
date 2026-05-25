@@ -2448,6 +2448,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/voice/save-case", async (req: Request, res: Response) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader) return res.status(401).json({ error: "No auth token" });
+
+      const {
+        patient, presenting_complaint, vitals_at_arrival, triage_color, triage_priority,
+        em_resident, em_consultant, case_type,
+        history, primary_assessment, examination, treatment,
+        userId, userEmail,
+      } = req.body;
+
+      // Step 1 — create the case on external backend
+      const createRes = await fetch(`${EXTERNAL_API}/cases`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: authHeader },
+        body: JSON.stringify({
+          patient, presenting_complaint, vitals_at_arrival,
+          triage_color, triage_priority, em_resident, em_consultant, case_type,
+        }),
+      });
+
+      if (!createRes.ok) {
+        const errText = await createRes.text();
+        console.error("[VoiceSave] Create failed:", createRes.status, errText);
+        return res.status(createRes.status).json({ error: `Failed to create case: ${errText}` });
+      }
+
+      const created = await createRes.json();
+      const caseId = created.id || created._id || created.case_id;
+      if (!caseId) return res.status(500).json({ error: "No case ID returned from backend" });
+
+      console.log("[VoiceSave] Case created:", caseId);
+
+      // Step 2 — update with full clinical data
+      const updateRes = await fetch(`${EXTERNAL_API}/cases/${caseId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: authHeader },
+        body: JSON.stringify({ history, primary_assessment, examination, treatment }),
+      });
+
+      if (!updateRes.ok) {
+        const errText = await updateRes.text();
+        console.warn("[VoiceSave] Clinical update failed (case still created):", updateRes.status, errText);
+        return res.json({ success: true, caseId, warning: "Case created but some clinical data may need to be re-entered manually." });
+      }
+
+      console.log("[VoiceSave] Clinical data saved for case:", caseId);
+
+      // Step 3 — save to local DB for PDF export (best-effort)
+      try {
+        const db = getDb();
+        if (db && userId) {
+          const { caseClinicalData } = await import("@shared/schema");
+          const { sql: drizzleSqlFn } = await import("drizzle-orm");
+          await db.insert(caseClinicalData).values({ caseId, userId, payload: req.body }).onConflictDoUpdate({
+            target: [caseClinicalData.caseId, caseClinicalData.userId],
+            set: { payload: req.body, updatedAt: drizzleSqlFn`CURRENT_TIMESTAMP` },
+          });
+        }
+      } catch (dbErr) {
+        console.warn("[VoiceSave] Local DB save failed (non-fatal):", dbErr);
+      }
+
+      // Step 4 — increment subscription case count (best-effort)
+      if (userId) {
+        try {
+          const { incrementCaseCount } = await import("./services/subscription");
+          await incrementCaseCount(userId, userEmail || "");
+        } catch {}
+      }
+
+      return res.json({ success: true, caseId });
+    } catch (err: any) {
+      console.error("[VoiceSave] Error:", err);
+      return res.status(500).json({ success: false, error: err.message || "Save failed" });
+    }
+  });
+
   app.post("/api/scan/document", upload.single('document'), async (req: Request, res: Response) => {
     try {
       const file = req.file;

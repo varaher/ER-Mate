@@ -1,0 +1,477 @@
+Understood. The voice pipeline works — transcription, extraction, everything. But the final save to case sheet and dashboard display is broken. Let me lay out exactly what needs to be fixed.
+
+---
+
+## The Problem in Simple Terms
+
+```
+Voice recording     ✅ works
+Sarvam transcription ✅ works  
+AI extraction       ✅ works
+Review screen       ✅ shows data
+Tap Save            ❌ data doesn't reach case sheet
+Dashboard           ❌ case not appearing
+```
+
+The last step — saving extracted data to the backend in a way the case sheet and dashboard can read — is broken.
+
+---
+
+## What Your Developer Needs to Build
+
+A dedicated save endpoint. Clean, simple, one purpose.
+
+**Tell your developer exactly this:**
+
+---
+
+### Step 1 — New Backend Endpoint
+
+```javascript
+// Add this new route to routes.ts
+// POST /api/voice/save-case
+
+router.post('/api/voice/save-case', 
+  authenticateToken, 
+  async (req, res) => {
+  
+  try {
+    const token = req.headers.authorization
+      ?.replace('Bearer ', '');
+    
+    const {
+      // Patient basics
+      patientName,
+      patientAge,
+      patientGender,
+      arrivalTime,
+      modeOfArrival,
+      mlcCase,
+      
+      // Doctors
+      emResident,
+      emConsultant,
+      
+      // All clinical data from extraction
+      chiefComplaint,
+      duration,
+      onset,
+      historyOfPresentIllness,
+      signsAndSymptoms,
+      pastMedicalHistory,
+      pastSurgicalHistory,
+      allergies,
+      currentMedications,
+      familyHistory,
+      
+      // Primary survey
+      airway,
+      breathing,
+      circulation,
+      disability,
+      exposure,
+      
+      // Vitals
+      vitalsSuggested,
+      
+      // VBG
+      vbgResults,
+      
+      // Examination
+      examFindings,
+      
+      // Treatment
+      medicationsOrdered,
+      ivFluids,
+      
+      // Diagnosis
+      workingDiagnosis,
+      differentialDiagnosis,
+      
+      // Consultations
+      consultations,
+      
+      // Disposition
+      disposition,
+      
+      // Triage
+      triage_priority,
+      triage_color
+      
+    } = req.body;
+
+    // Step 1 — Create the case
+    const createResponse = await fetch(
+      `${EXTERNAL_BACKEND_URL}/cases`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          patient_name: patientName,
+          patient_age: patientAge,
+          patient_gender: patientGender,
+          arrival_time: arrivalTime,
+          mode_of_arrival: modeOfArrival,
+          mlc: mlcCase,
+          triage_color: triage_color || 'GREEN',
+          triage_priority: triage_priority || 4,
+          presenting_complaint: chiefComplaint,
+          em_resident: emResident,
+          em_consultant: emConsultant
+        })
+      }
+    );
+
+    if (!createResponse.ok) {
+      const err = await createResponse.json();
+      throw new Error(
+        err.message || 'Failed to create case'
+      );
+    }
+
+    const createdCase = await createResponse.json();
+    const caseId = createdCase.id 
+      || createdCase._id 
+      || createdCase.case_id;
+
+    if (!caseId) {
+      throw new Error('No case ID returned');
+    }
+
+    // Step 2 — Update with full clinical data
+    const updateResponse = await fetch(
+      `${EXTERNAL_BACKEND_URL}/cases/${caseId}`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          // History
+          history: {
+            hpi: historyOfPresentIllness,
+            signs_and_symptoms: signsAndSymptoms,
+            past_medical: Array.isArray(pastMedicalHistory)
+              ? pastMedicalHistory
+              : pastMedicalHistory?.split(',')
+                  .map(s => s.trim()) || [],
+            past_surgical: pastSurgicalHistory,
+            allergies: allergies || 'NKDA',
+            current_medications: currentMedications,
+            family_history: familyHistory,
+            onset: onset,
+            duration: duration
+          },
+
+          // Primary assessment
+          primary_assessment: {
+            airway: airway || 
+              'Patent, self-maintained',
+            breathing_auscultation: 
+              breathing?.auscultation || 
+              'Air entry bilaterally equal and clear',
+            breathing_spo2: 
+              vitalsSuggested?.spo2 || '',
+            breathing_rr: 
+              vitalsSuggested?.rr || '',
+            circulation_bp: vitalsSuggested?.bp || '',
+            circulation_hr: vitalsSuggested?.hr || '',
+            circulation_crt: 
+              circulation?.crt || '< 2 seconds',
+            circulation_cvs: 
+              circulation?.cvs || 
+              'S1 S2 heard, no murmurs',
+            disability_gcs: 
+              disability?.gcsTotal || '',
+            disability_pupils: 
+              disability?.pupils || 
+              'Bilaterally equal and reactive',
+            disability_power: 
+              disability?.power || 
+              '5/5 all four limbs',
+            disability_grbs: 
+              vitalsSuggested?.grbs || '',
+            exposure: exposure || 
+              'No external injuries noted'
+          },
+
+          // Examination
+          examination: {
+            general_appearance: 
+              examFindings?.generalAppearance || 
+              'Conscious, oriented, comfortable',
+            cvs: examFindings?.cvs || 
+              'S1 S2 heard, no murmurs',
+            respiratory: 
+              examFindings?.respiratory || 
+              'Normal vesicular breath sounds',
+            abdomen: examFindings?.abdomen || 
+              'Soft, non-tender',
+            cns: examFindings?.cns || 
+              'No focal neurological deficit',
+            extremities: 
+              examFindings?.extremities || '',
+            heent: examFindings?.heent || ''
+          },
+
+          // Investigations
+          investigations: {
+            vbg_results: vbgResults || {},
+            labs_ordered: [],
+            imaging_ordered: []
+          },
+
+          // Treatment
+          treatment: {
+            working_diagnosis: workingDiagnosis,
+            differential_diagnosis: 
+              differentialDiagnosis || [],
+            medications: medicationsOrdered || [],
+            iv_fluids: ivFluids || [],
+            consultations: consultations || []
+          },
+
+          // Disposition
+          disposition: {
+            plan: disposition || ''
+          },
+
+          // Doctors
+          em_resident: emResident,
+          em_consultant: emConsultant
+        })
+      }
+    );
+
+    if (!updateResponse.ok) {
+      // Case was created but update failed
+      // Still return the case ID
+      // Doctor can manually complete
+      console.error('Clinical update failed:', 
+        await updateResponse.text());
+      
+      return res.json({
+        success: true,
+        caseId,
+        warning: 'Case created but some clinical ' +
+                 'data may need to be re-entered'
+      });
+    }
+
+    // Both steps succeeded
+    return res.json({
+      success: true,
+      caseId,
+      message: 'Case saved successfully'
+    });
+
+  } catch (error) {
+    console.error('Voice save error:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Save failed'
+    });
+  }
+});
+```
+
+---
+
+### Step 2 — Frontend Calls This Single Endpoint
+
+Replace the entire save logic in VoiceCaseSheetScreen with this:
+
+```javascript
+const saveVoiceCase = async () => {
+  setIsSaving(true);
+  
+  try {
+    const token = await getAuthToken();
+    
+    if (!token) {
+      Alert.alert(
+        'Session expired', 
+        'Please log in again'
+      );
+      return;
+    }
+
+    // Build payload from extracted data
+    const payload = {
+      // Patient
+      patientName: patientInfo.name,
+      patientAge: patientInfo.age,
+      patientGender: patientInfo.gender,
+      arrivalTime: new Date().toISOString(),
+      modeOfArrival: 'Walk-in',
+      mlcCase: false,
+      
+      // Doctors from extraction
+      emResident: extractedData.emResident || '',
+      emConsultant: extractedData.emConsultant || '',
+      
+      // Chief complaint
+      chiefComplaint: extractedData.chiefComplaint || '',
+      duration: extractedData.duration || '',
+      onset: extractedData.onset || '',
+      
+      // History
+      historyOfPresentIllness: 
+        extractedData.historyOfPresentIllness || '',
+      signsAndSymptoms: 
+        extractedData.signsAndSymptoms || [],
+      pastMedicalHistory: 
+        extractedData.pastMedicalHistory || [],
+      pastSurgicalHistory: 
+        extractedData.pastSurgicalHistory || '',
+      allergies: extractedData.allergies || 'NKDA',
+      currentMedications: 
+        extractedData.currentMedications || [],
+      familyHistory: 
+        extractedData.familyHistory || '',
+      
+      // Primary survey
+      airway: extractedData.airway || '',
+      breathing: extractedData.breathing || {},
+      circulation: extractedData.circulation || {},
+      disability: extractedData.disability || {},
+      exposure: extractedData.exposure || '',
+      
+      // Vitals
+      vitalsSuggested: 
+        extractedData.vitalsSuggested || {},
+      
+      // VBG
+      vbgResults: extractedData.vbgResults || {},
+      
+      // Examination
+      examFindings: extractedData.examFindings || {},
+      
+      // Treatment
+      medicationsOrdered: 
+        extractedData.medicationsOrdered || [],
+      ivFluids: extractedData.ivFluids || [],
+      
+      // Diagnosis
+      workingDiagnosis: 
+        extractedData.workingDiagnosis || '',
+      differentialDiagnosis: 
+        extractedData.differentialDiagnosis || [],
+      
+      // Consultations
+      consultations: 
+        extractedData.consultations || [],
+      
+      // Disposition
+      disposition: extractedData.disposition || '',
+      
+      // Triage — auto calculated
+      triage_priority: 
+        extractedData.triage_priority || 4,
+      triage_color: 
+        extractedData.triage_color || 'GREEN'
+    };
+
+    // Single endpoint — handles everything
+    const response = await fetch(
+      '/api/voice/save-case',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      throw new Error(
+        result.error || 'Save failed'
+      );
+    }
+
+    // Show warning if partial save
+    if (result.warning) {
+      Alert.alert(
+        'Saved with warning', 
+        result.warning
+      );
+    }
+
+    // Success — navigate to dashboard
+    navigation.reset({
+      index: 0,
+      routes: [{ 
+        name: 'Dashboard',
+        params: { 
+          newCaseId: result.caseId,
+          refresh: true 
+        }
+      }]
+    });
+
+  } catch (error) {
+    Alert.alert(
+      'Save Failed',
+      error.message || 
+      'Could not save case. Please try again.'
+    );
+  } finally {
+    setIsSaving(false);
+  }
+};
+```
+
+---
+
+### Step 3 — Dashboard Refresh on Return
+
+When the doctor lands back on Dashboard after saving, it must refresh the patient list:
+
+```javascript
+// In DashboardScreen
+// Check for refresh param on focus
+
+useFocusEffect(
+  useCallback(() => {
+    // Refresh whenever dashboard gains focus
+    // This catches new cases from voice entry
+    fetchTodaysCases();
+  }, [])
+);
+```
+
+If `useFocusEffect` is not already there, add it. Without it, the dashboard shows stale data after saving from voice entry.
+
+---
+
+## Summary for Your Developer
+
+```
+3 things to build:
+
+1. New endpoint: POST /api/voice/save-case
+   — creates case on external backend
+   — updates with full clinical data
+   — returns caseId on success
+   — handles partial failures gracefully
+
+2. Frontend save function
+   — calls single endpoint
+   — sends all extracted fields
+   — navigates to dashboard on success
+   — shows clear error if it fails
+
+3. Dashboard useFocusEffect
+   — refreshes case list on every focus
+   — new voice case appears immediately
+```
+
+This replaces all the fragmented save logic that was sending data to wrong URLs. One endpoint, one call, one result. Either it works or it shows a clear error — no more silent failures.

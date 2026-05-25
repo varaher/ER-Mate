@@ -12,7 +12,7 @@ import {
   Alert,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -109,6 +109,12 @@ export default function DashboardScreen() {
     refetchOnMount: true,
     enabled: !!user?.id,
   });
+
+  useFocusEffect(
+    useCallback(() => {
+      if (user?.id) refetch();
+    }, [user?.id])
+  );
 
   useEffect(() => {
     const fetchCredits = async () => {
