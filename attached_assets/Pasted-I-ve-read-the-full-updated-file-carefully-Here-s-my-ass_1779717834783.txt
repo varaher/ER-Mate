@@ -1,0 +1,127 @@
+I've read the full updated file carefully. Here's my assessment.
+
+---
+
+## What's Good ✅
+
+**Keep Awake implemented correctly**
+```javascript
+await activateKeepAwakeAsync("voice-recording");
+// releases in stopRecording
+deactivateKeepAwake("voice-recording");
+```
+Phone screen won't lock during recording anymore.
+
+**Re-record clears transcript correctly**
+```javascript
+onPress={() => { 
+  setStep("record"); 
+  setRecDuration(0); 
+  setEditedTranscript(""); 
+  setEnglishTranscript(""); 
+  setDetectedLanguage(""); 
+}}
+```
+Stale transcript bug is fixed.
+
+**Smart PMH split**
+The `PMH_CONTINUATION` regex that prevents "CKD, baseline Cr 2.1" from splitting incorrectly is well implemented.
+
+**Review screen flow**
+Case Saved banner → completeness bar → fields → Dashboard/View Case Sheet buttons. Clean and correct.
+
+**savedCaseId used correctly**
+```javascript
+navigation.replace("ViewCase", { caseId: savedCaseId })
+```
+Doctor goes directly to the right case after saving.
+
+---
+
+## One Critical Problem ❌
+
+**There are now TWO save paths and they conflict.**
+
+Looking at the file:
+
+**Path 1 — handleExtract** (called from transcript screen)
+```javascript
+// Calls the combined endpoint
+POST /api/voice/extract-and-save
+// Returns caseId, sets savedCaseId
+// Goes to review screen
+// Review shows "View Case Sheet" button
+```
+
+**Path 2 — handleSave** (called from... nowhere now)
+```javascript
+// Calls the old save endpoint
+POST /api/voice/save-case
+// Has the complete payload with all clinical data
+```
+
+The problem: **handleSave is never called.** The review screen buttons are:
+```javascript
+// Dashboard button
+onPress={() => navigation.navigate("Main")}
+
+// View Case Sheet button  
+onPress={() => navigation.replace("ViewCase", { caseId: savedCaseId })}
+```
+
+Neither button calls handleSave. The case was already saved by handleExtract via extract-and-save. But handleSave has the complete clinical payload with all the field mappings — history, primary_assessment, examination, treatment, adjuncts, investigations, sample, psychological.
+
+**The extract-and-save endpoint may not be sending all these fields.**
+
+---
+
+## What to Do
+
+**Option A — Keep current flow, verify extract-and-save sends everything**
+
+If extract-and-save already sends the complete clinical payload, handleSave is not needed. But verify the server's extract-and-save endpoint sends:
+```
+history, primary_assessment, examination,
+treatment, adjuncts, investigations,
+sample, psychological
+```
+
+If it does — delete handleSave entirely. Dead code.
+
+**Option B — Use handleSave as the save step**
+
+Keep extract-and-save for extraction only. After review, call handleSave which sends the complete payload to /api/voice/save-case.
+
+Change the "View Case Sheet" button to:
+```javascript
+onPress={handleSave}
+// handleSave navigates to ViewCase after saving
+```
+
+---
+
+## My Recommendation
+
+**Option A is cleaner** if extract-and-save is already complete. Check the server route — does it send the full clinical data including adjuncts, sample, psychological?
+
+If yes — delete handleSave, ship Option A.
+
+If no — use Option B, wire "View Case Sheet" to handleSave.
+
+**Ask your developer:**
+```
+Open server/routes.ts
+Find the extract-and-save endpoint
+Does the PUT body include:
+  history.hpi
+  primary_assessment.airway_status
+  adjuncts.abg.ph
+  sample.eventsHopi
+  psychological.suicidalIdeation
+
+If yes → delete handleSave from the frontend
+If no  → add those fields to extract-and-save
+         OR wire handleSave to the save button
+```
+
+One of these two. Don't have both paths in the same file.
