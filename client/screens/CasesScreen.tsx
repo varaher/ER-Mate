@@ -179,54 +179,55 @@ export default function CasesScreen() {
   };
 
   const renderCase = ({ item }: { item: CaseItem }) => (
-    <Pressable
-      style={({ pressed }) => [
-        styles.caseCard,
-        { backgroundColor: theme.card, opacity: pressed ? 0.9 : 1 },
-      ]}
-      onPress={() => navigateToCase(item)}
-    >
-      <View style={[styles.priorityDot, { backgroundColor: getPriorityColor(item.triage_priority) }]} />
-      <View style={styles.caseInfo}>
-        <Text style={[styles.patientName, { color: theme.text }]}>{item.patient?.name || "Unknown"}</Text>
-        <Text style={[styles.patientDetails, { color: theme.textSecondary }]}>
-          {item.patient?.age} yrs | {item.patient?.sex} | {formatDate(item.created_at)}
-        </Text>
-        {item.presenting_complaint?.text ? (
-          <Text style={[styles.complaint, { color: theme.textMuted }]} numberOfLines={1}>
-            {item.presenting_complaint.text}
-          </Text>
-        ) : null}
-      </View>
-      <View
-        style={[
-          styles.statusBadge,
-          {
-            backgroundColor:
-              item.status === "completed" || item.status === "discharged"
-                ? theme.successLight
-                : theme.primaryLight,
-          },
-        ]}
+    <View style={[styles.caseCard, { backgroundColor: theme.card }]}>
+      {/* Tappable row area — navigates to case */}
+      <Pressable
+        style={({ pressed }) => [styles.caseCardInner, { opacity: pressed ? 0.75 : 1 }]}
+        onPress={() => navigateToCase(item)}
       >
-        <Text
+        <View style={[styles.priorityDot, { backgroundColor: getPriorityColor(item.triage_priority) }]} />
+        <View style={styles.caseInfo}>
+          <Text style={[styles.patientName, { color: theme.text }]}>{item.patient?.name || "Unknown"}</Text>
+          <Text style={[styles.patientDetails, { color: theme.textSecondary }]}>
+            {item.patient?.age} yrs | {item.patient?.sex} | {formatDate(item.created_at)}
+          </Text>
+          {item.presenting_complaint?.text ? (
+            <Text style={[styles.complaint, { color: theme.textMuted }]} numberOfLines={1}>
+              {item.presenting_complaint.text}
+            </Text>
+          ) : null}
+        </View>
+        <View
           style={[
-            styles.statusText,
+            styles.statusBadge,
             {
-              color:
+              backgroundColor:
                 item.status === "completed" || item.status === "discharged"
-                  ? theme.success
-                  : theme.primary,
+                  ? theme.successLight
+                  : theme.primaryLight,
             },
           ]}
         >
-          {item.status === "completed" || item.status === "discharged" ? "Done" : "Active"}
-        </Text>
-      </View>
+          <Text
+            style={[
+              styles.statusText,
+              {
+                color:
+                  item.status === "completed" || item.status === "discharged"
+                    ? theme.success
+                    : theme.primary,
+              },
+            ]}
+          >
+            {item.status === "completed" || item.status === "discharged" ? "Done" : "Active"}
+          </Text>
+        </View>
+      </Pressable>
+      {/* Delete button — sibling of row, NOT nested inside it */}
       <Pressable
         style={styles.deleteBtn}
         onPress={() => handleDeleteCase(item)}
-        hitSlop={8}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       >
         {deletingId === item.id ? (
           <ActivityIndicator size="small" color={theme.error || "#EF4444"} />
@@ -234,7 +235,7 @@ export default function CasesScreen() {
           <Feather name="trash-2" size={16} color={theme.error || "#EF4444"} />
         )}
       </Pressable>
-    </Pressable>
+    </View>
   );
 
   if (loading) {
@@ -417,9 +418,15 @@ const styles = StyleSheet.create({
   caseCard: {
     flexDirection: "row",
     alignItems: "center",
-    padding: Spacing.md,
     borderRadius: BorderRadius.md,
     marginBottom: Spacing.sm,
+    overflow: "hidden",
+  },
+  caseCardInner: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    padding: Spacing.md,
     gap: Spacing.md,
   },
   priorityDot: { width: 12, height: 12, borderRadius: BorderRadius.full },

@@ -1,0 +1,126 @@
+I can see the problem. The Clear All button is visible in the header but not working, and individual delete buttons are also not working.
+
+---
+
+## Tell Your Developer — Check These Three Things
+
+**1. Clear All button — check the handler**
+
+```javascript
+// In CasesScreen or AllCasesScreen
+// Find the Clear All button
+// Check if handleClearAll is actually 
+// connected to the button
+
+// It should look like:
+<TouchableOpacity onPress={handleClearAll}>
+  <Text>Clear All</Text>
+</TouchableOpacity>
+
+// If it's:
+<TouchableOpacity onPress={() => {}}>
+// or missing onPress entirely
+// → that's why it's not working
+```
+
+**2. Individual delete button — check the handler**
+
+```javascript
+// Find the trash icon on each case row
+// Check if handleDeleteCase is connected
+
+// Should be:
+<TouchableOpacity 
+  onPress={() => handleDeleteCase(case.id)}>
+  <TrashIcon />
+</TouchableOpacity>
+
+// Also check if case.id exists
+// Log it:
+console.log('Case ID:', case.id, 
+  Object.keys(case));
+```
+
+**3. The real likely cause — wrong ID field**
+
+The earlier server log showed the case object has this structure:
+
+```javascript
+// Server log showed these keys:
+id, patient, vitals_at_arrival, 
+presenting_complaint, primary_assessment,
+history, examination, investigations,
+treatment, disposition, triage_id,
+created_by_user_id, status...
+```
+
+The delete function is probably calling:
+
+```javascript
+// Trying to delete with wrong ID field
+deleteCase(case._id)  // undefined
+// Should be:
+deleteCase(case.id)   // correct
+```
+
+---
+
+## Quick Fix
+
+```javascript
+// In the delete handler
+const handleDeleteCase = async (caseItem) => {
+  // Log what ID we have
+  console.log('Deleting case:', 
+    caseItem.id, 
+    caseItem._id,
+    caseItem.case_id);
+  
+  // Try all possible ID field names
+  const caseId = caseItem.id 
+    || caseItem._id 
+    || caseItem.case_id;
+  
+  if (!caseId) {
+    Alert.alert('Error', 
+      'Cannot find case ID to delete');
+    return;
+  }
+  
+  const token = await getAuthToken();
+  
+  const response = await fetch(
+    `/api/proxy/cases/${caseId}`,
+    {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    }
+  );
+  
+  if (response.ok) {
+    // Remove from local list
+    setCases(prev => 
+      prev.filter(c => 
+        (c.id || c._id) !== caseId
+      )
+    );
+  } else {
+    Alert.alert('Delete failed', 
+      `Status: ${response.status}`);
+  }
+};
+```
+
+---
+
+## Also — Clean the Test Data
+
+Once delete is working, use Clear All to remove all the old test cases — "Test Child", "Q", "E", "A", "Benny", "Beena C Matthew" duplicates, all the February 28 entries. 
+
+These should all be gone before any pilot user sees the app.
+
+After clearing, only real patient cases from today onwards should appear.
+
+**Fix the delete function first, share the server log if it still fails after the fix.**
