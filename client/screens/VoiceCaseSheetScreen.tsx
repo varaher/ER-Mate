@@ -189,6 +189,17 @@ export default function VoiceCaseSheetScreen() {
   const stopRecording = async () => {
     if (!isRecording) return;
     setIsRecording(false);
+
+    // Guard: reject recordings under 2 seconds
+    if (recDuration < 2) {
+      Alert.alert("Too short", "Please hold the button and speak for at least 2 seconds.");
+      if (Platform.OS !== "web" && nativeRec.current) {
+        try { await nativeRec.current.stopAndUnloadAsync(); } catch {}
+        nativeRec.current = null;
+      }
+      return;
+    }
+
     try {
       if (Platform.OS === "web") {
         const mr = webRec.current.mediaRecorder;
@@ -200,7 +211,20 @@ export default function VoiceCaseSheetScreen() {
         await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
         const uri = rec.getURI();
         nativeRec.current = null;
-        if (uri) handleTranscribe(null, uri);
+        if (uri) {
+          // Log file size for debugging audio capture issues
+          try {
+            const { getInfoAsync } = await import("expo-file-system");
+            const info = await getInfoAsync(uri);
+            const size = (info as any).size ?? 0;
+            console.log(`[VoiceRec] Audio file: ${uri.split("/").pop()} — ${size} bytes, ${recDuration}s`);
+            if (size < 5000) {
+              Alert.alert("Recording issue", "The audio file is too small. Please try recording again in a quieter spot.");
+              return;
+            }
+          } catch { /* file-system check failed — proceed anyway */ }
+          handleTranscribe(null, uri);
+        }
       }
     } catch (err) {
       nativeRec.current = null;
@@ -1120,7 +1144,7 @@ export default function VoiceCaseSheetScreen() {
           <View style={s.rowBtns}>
             <Pressable
               style={[s.outlineBtn, { borderColor: theme.border, backgroundColor: theme.card }]}
-              onPress={() => { setStep("record"); setRecDuration(0); }}
+              onPress={() => { setStep("record"); setRecDuration(0); setEditedTranscript(""); setEnglishTranscript(""); setDetectedLanguage(""); }}
             >
               <Feather name="mic" size={15} color={theme.text} />
               <Text style={[s.outlineBtnText, { color: theme.text }]}>Re-record</Text>

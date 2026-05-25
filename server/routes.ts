@@ -2261,8 +2261,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "No audio file provided" });
       }
 
-      if (file.size < 100) {
-        return res.status(400).json({ error: "Audio file is too small - recording may have failed" });
+      if (file.size < 5000) {
+        console.warn(`[Voice Transcribe] File too small: ${file.size} bytes — likely silent or failed recording`);
+        return res.status(400).json({ error: `Audio too small (${file.size} bytes) — recording may have failed or captured silence. Please try again closer to the microphone.` });
       }
 
       let patientContext;
@@ -2336,8 +2337,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "No audio file provided" });
       }
 
-      if (file.size < 100) {
-        return res.status(400).json({ error: "Audio file is too small - recording may have failed" });
+      if (file.size < 5000) {
+        console.warn(`[Smart Dictation] File too small: ${file.size} bytes — likely silent or failed recording`);
+        return res.status(400).json({ error: `Audio too small (${file.size} bytes) — recording may have failed. Please try again.` });
       }
 
       let patientContext;
