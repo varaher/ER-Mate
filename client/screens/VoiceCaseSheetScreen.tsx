@@ -22,7 +22,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { getApiUrl } from "@/lib/query-client";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { apiPost, invalidateCases } from "@/lib/api";
+import { apiPost, apiPut, invalidateCases } from "@/lib/api";
 import { Spacing, BorderRadius, Typography } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -750,18 +750,90 @@ export default function VoiceCaseSheetScreen() {
 
       if (caseId && user?.id) {
         const base = getApiUrl();
+
+        // Save clinical data to local DB for PDF export
         try {
-          const clinicalResp = await fetch(`${base}/api/clinical-data/${caseId}`, {
+          const clinicalResp = await fetch(`${base}/api/proxy/clinical-data/${caseId}`, {
             method: "POST",
             headers: authHeaders,
             body: JSON.stringify({ userId: user.id, clinicalData: buildClinical(rawExtracted, editedTranscript) }),
           });
           if (!clinicalResp.ok) {
-            console.warn("[VoiceCase] Clinical data save failed:", clinicalResp.status, await clinicalResp.text().catch(() => ""));
+            console.warn("[VoiceCase] Local clinical data save failed:", clinicalResp.status);
           }
         } catch (e) {
-          console.warn("[VoiceCase] Clinical data save error:", e);
+          console.warn("[VoiceCase] Local clinical data save error:", e);
         }
+
+        // Push clinical data to external backend (so case sheet shows HPI, exam, etc.)
+        try {
+          const ex = rawExtracted;
+          const transcript = editedTranscript;
+          const pastMedArr: string[] = ex?.pastMedicalHistory
+            ? ex.pastMedicalHistory.split(/[,;\/\n]+/).map((s: string) => s.trim()).filter((s: string) => s.length > 0)
+            : [];
+          const symptomsArr: string[] = [];
+          if (ex?.symptoms?.length > 0) symptomsArr.push(...ex.symptoms);
+          if (ex?.associatedSymptoms) symptomsArr.push(ex.associatedSymptoms);
+
+          const [bpSys, bpDia] = (ex?.vitalsSuggested?.bp || "").split("/");
+
+          const updateRes = await apiPut(`/cases/${caseId}`, {
+            history: {
+              hpi: ex?.historyOfPresentIllness || transcript,
+              events_hopi: ex?.historyOfPresentIllness || transcript,
+              signs_and_symptoms: symptomsArr.join(", "),
+              past_medical: pastMedArr,
+              past_surgical: ex?.pastSurgicalHistory || "",
+              allergies: ex?.allergies ? ex.allergies.split(/[,;]+/).map((s: string) => s.trim()).filter((s: string) => s) : [],
+              medications: ex?.currentMedications || "",
+              drug_history: ex?.currentMedications || "",
+              family_history: ex?.familyHistory || "",
+              social_history: ex?.socialHistory || "",
+              additional_notes: "",
+            },
+            primary_assessment: {
+              airway_status: ex?.primarySurvey?.airway?.status || "Patent",
+              airway_additional_notes: ex?.primarySurvey?.airway?.intervention || "",
+              breathing_rr: parseFloat(ex?.primarySurvey?.breathing?.rr || ex?.vitalsSuggested?.rr || "") || undefined,
+              breathing_spo2: parseFloat(ex?.primarySurvey?.breathing?.spo2 || ex?.vitalsSuggested?.spo2 || "") || undefined,
+              breathing_oxygen_device: ex?.primarySurvey?.breathing?.oxygenDevice || "Room air",
+              breathing_additional_notes: ex?.primarySurvey?.breathing?.auscultation || "",
+              circulation_hr: parseFloat(ex?.primarySurvey?.circulation?.hr || ex?.vitalsSuggested?.hr || "") || undefined,
+              circulation_bp_systolic: parseFloat(ex?.primarySurvey?.circulation?.bpSystolic || bpSys || "") || undefined,
+              circulation_bp_diastolic: parseFloat(ex?.primarySurvey?.circulation?.bpDiastolic || bpDia || "") || undefined,
+              circulation_additional_notes: ex?.primarySurvey?.circulation?.cvs || "",
+              disability_gcs_e: parseInt(ex?.primarySurvey?.disability?.gcsE || "") || undefined,
+              disability_gcs_v: parseInt(ex?.primarySurvey?.disability?.gcsV || "") || undefined,
+              disability_gcs_m: parseInt(ex?.primarySurvey?.disability?.gcsM || "") || undefined,
+              disability_grbs: parseFloat(ex?.primarySurvey?.disability?.grbs || ex?.vitalsSuggested?.grbs || "") || undefined,
+              exposure_temperature: parseFloat(ex?.primarySurvey?.exposure?.temperature || ex?.vitalsSuggested?.temperature || "") || undefined,
+              exposure_additional_notes: ex?.primarySurvey?.exposure?.findings || "",
+            },
+            examination: {
+              general_additional_notes: ex?.examFindings?.general || "",
+              cvs_additional_notes: ex?.examFindings?.cvs || "",
+              respiratory_additional_notes: ex?.examFindings?.respiratory || "",
+              abdomen_additional_notes: ex?.examFindings?.abdomen || "",
+              cns_additional_notes: ex?.examFindings?.cns || "",
+            },
+            treatment: {
+              primary_diagnosis: ex?.diagnosis?.[0] || "",
+              provisional_diagnoses: ex?.diagnosis || [],
+              differential_diagnoses: ex?.differentialDiagnosis || [],
+              medications: ex?.prescribedMedications || [],
+              infusions: ex?.prescribedInfusions || [],
+            },
+          });
+          if (!updateRes.success) {
+            console.warn("[VoiceCase] Clinical PUT failed:", updateRes.error);
+          } else {
+            console.log("[VoiceCase] Clinical data pushed to case successfully");
+          }
+        } catch (e) {
+          console.warn("[VoiceCase] Clinical PUT error:", e);
+        }
+
         try {
           await fetch(`${base}/api/subscription/increment-case`, {
             method: "POST",
