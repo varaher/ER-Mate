@@ -2524,12 +2524,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("[ExtractAndSave] Case created:", caseId);
 
       // Step 4 — Build and push clinical data
-      const pastMedArr: string[] = ex.pastMedicalHistory
-        ? ex.pastMedicalHistory.split(/[,;\/\n]+/).map((s: string) => s.trim()).filter((s: string) => s)
-        : [];
+      // pastMedicalHistory may be returned as array (rule 6) or string (schema) — handle both
+      const pastMedRaw = ex.pastMedicalHistory;
+      const pastMedArr: string[] = Array.isArray(pastMedRaw)
+        ? pastMedRaw.map((s: string) => s.trim()).filter((s: string) => s)
+        : typeof pastMedRaw === "string" && pastMedRaw
+          ? pastMedRaw.split(/[,;\/\n]+/).map((s: string) => s.trim()).filter((s: string) => s)
+          : [];
+
       const symptomsArr: string[] = [];
       if (ex.symptoms?.length > 0) symptomsArr.push(...ex.symptoms);
       if (ex.associatedSymptoms) symptomsArr.push(ex.associatedSymptoms);
+
+      // VBG → adjuncts.abg (keys must match export reader: pH, pCO2, Lactate, Na, K, Hb etc.)
+      const vbg = ex.vbgResults || {};
+      const adjunctsAbg: Record<string, string> = {};
+      if (vbg.ph)         adjunctsAbg.pH       = vbg.ph;
+      if (vbg.pco2)       adjunctsAbg.pCO2     = vbg.pco2;
+      if (vbg.po2)        adjunctsAbg.pO2      = vbg.po2;
+      if (vbg.hco3)       adjunctsAbg.HCO3     = vbg.hco3;
+      if (vbg.be)         adjunctsAbg.BE       = vbg.be;
+      if (vbg.lactate)    adjunctsAbg.Lactate  = vbg.lactate;
+      if (vbg.hemoglobin) adjunctsAbg.Hb       = vbg.hemoglobin;
+      if (vbg.sodium)     adjunctsAbg.Na       = vbg.sodium;
+      if (vbg.potassium)  adjunctsAbg.K        = vbg.potassium;
+      if (vbg.chloride)   adjunctsAbg.Cl       = vbg.chloride;
+      if (vbg.glucose)    adjunctsAbg.Glucose  = vbg.glucose;
+      if (vbg.creatinine) adjunctsAbg.Creatinine = vbg.creatinine;
+      if (vbg.bilirubin)  adjunctsAbg.Bilirubin  = vbg.bilirubin;
+
+      const adj = ex.adjuncts || {};
+      const vbgNotesParts: string[] = [];
+      if (vbg.sampleType) vbgNotesParts.push(vbg.sampleType);
+      Object.entries(adjunctsAbg).forEach(([k, v]) => vbgNotesParts.push(`${k}: ${v}`));
+
+      // Investigations: split investigationsOrdered into individual tests
+      const invOrdered = ex.investigationsOrdered || "";
+      const invTests: string[] = invOrdered
+        ? invOrdered.split(/[,;\/\n]+/).map((s: string) => s.trim()).filter((s: string) => s)
+        : [];
 
       const updateRes = await fetch(`${EXTERNAL_API}/cases/${caseId}`, {
         method: "PUT",
@@ -2565,6 +2598,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
             exposure_temperature: parseFloat(ps.exposure?.temperature || vs.temperature) || undefined,
             exposure_additional_notes: ps.exposure?.findings || "",
           },
+          adjuncts: {
+            ...(adj.ecgDone ? { ecg_status: "Done", ecg_findings: adj.ecgFindings || "" } : {}),
+            ...(adj.echoDone ? { bedside_echo: adj.echoFindings || "Done" } : {}),
+            ...(adj.efastDone ? { efast_status: "Done", efast_notes: adj.efastFindings || "" } : {}),
+            ...(Object.keys(adjunctsAbg).length > 0 ? { abg: adjunctsAbg } : {}),
+            ...(vbgNotesParts.length > 0 ? { additional_notes: vbgNotesParts.join(" | ") } : {}),
+          },
           examination: {
             general_additional_notes: ex.examFindings?.general || "",
             cvs_additional_notes: ex.examFindings?.cvs || "",
@@ -2572,12 +2612,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
             abdomen_additional_notes: ex.examFindings?.abdomen || "",
             cns_additional_notes: ex.examFindings?.cns || "",
           },
+          investigations: {
+            ...(invTests.length > 0 ? { individual_tests: invTests } : {}),
+            ...(ex.imagingOrdered ? { imaging: [ex.imagingOrdered] } : {}),
+            ...(invOrdered ? { results_notes: invOrdered } : {}),
+            ...(Object.keys(adjunctsAbg).length > 0 ? { vbg: adjunctsAbg } : {}),
+          },
           treatment: {
             primary_diagnosis: ex.diagnosis?.[0] || "",
             provisional_diagnoses: ex.diagnosis || [],
             differential_diagnoses: ex.differentialDiagnosis || [],
             medications: ex.prescribedMedications || [],
             infusions: ex.prescribedInfusions || [],
+            notes: ex.treatmentNotes || "",
+            intervention_notes: ex.treatmentNotes || "",
           },
         }),
       });

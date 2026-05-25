@@ -1434,7 +1434,7 @@ SCHEMA (fill every field, use "" for not mentioned):
   "associatedSymptoms": "Symptoms accompanying chief complaint",
   "negativeSymptoms": "Pertinent negatives explicitly mentioned",
   "symptoms": [],
-  "pastMedicalHistory": "Known conditions (T2DM, HTN, etc.)",
+  "pastMedicalHistory": ["Known conditions as separate items — e.g. T2DM, HTN, CAD, CKD"],
   "pastSurgicalHistory": "Previous surgeries",
   "allergies": "Drug/food allergies or NKDA",
   "currentMedications": "Current medications",
@@ -1456,8 +1456,18 @@ SCHEMA (fill every field, use "" for not mentioned):
     "exposure": { "temperature": "", "findings": "", "confidence": "" }
   },
   "vbgResults": {
-    "ph": "", "pco2": "", "po2": "", "hco3": "", "lactate": "",
-    "hemoglobin": "", "sodium": "", "potassium": "", "creatinine": "", "glucose": ""
+    "done": false,
+    "sampleType": "VBG or ABG",
+    "ph": "", "pco2": "", "po2": "", "hco3": "", "be": "", "lactate": "",
+    "hemoglobin": "", "sodium": "", "potassium": "", "chloride": "", "creatinine": "", "glucose": "", "bilirubin": ""
+  },
+  "adjuncts": {
+    "ecgDone": false,
+    "ecgFindings": "ECG rhythm, rate, ST changes, intervals — exactly as dictated",
+    "echoDone": false,
+    "echoFindings": "Echo/bedside echo findings — LV function, valves, effusion — exactly as dictated",
+    "efastDone": false,
+    "efastFindings": "EFAST findings if mentioned"
   },
   "examFindings": {
     "general": "", "cvs": "", "respiratory": "", "abdomen": "", "cns": "", "musculoskeletal": "", "skin": "", "heent": ""

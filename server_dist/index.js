@@ -1587,7 +1587,7 @@ SCHEMA (fill every field, use "" for not mentioned):
   "associatedSymptoms": "Symptoms accompanying chief complaint",
   "negativeSymptoms": "Pertinent negatives explicitly mentioned",
   "symptoms": [],
-  "pastMedicalHistory": "Known conditions (T2DM, HTN, etc.)",
+  "pastMedicalHistory": ["Known conditions as separate items \u2014 e.g. T2DM, HTN, CAD, CKD"],
   "pastSurgicalHistory": "Previous surgeries",
   "allergies": "Drug/food allergies or NKDA",
   "currentMedications": "Current medications",
@@ -1609,8 +1609,18 @@ SCHEMA (fill every field, use "" for not mentioned):
     "exposure": { "temperature": "", "findings": "", "confidence": "" }
   },
   "vbgResults": {
-    "ph": "", "pco2": "", "po2": "", "hco3": "", "lactate": "",
-    "hemoglobin": "", "sodium": "", "potassium": "", "creatinine": "", "glucose": ""
+    "done": false,
+    "sampleType": "VBG or ABG",
+    "ph": "", "pco2": "", "po2": "", "hco3": "", "be": "", "lactate": "",
+    "hemoglobin": "", "sodium": "", "potassium": "", "chloride": "", "creatinine": "", "glucose": "", "bilirubin": ""
+  },
+  "adjuncts": {
+    "ecgDone": false,
+    "ecgFindings": "ECG rhythm, rate, ST changes, intervals \u2014 exactly as dictated",
+    "echoDone": false,
+    "echoFindings": "Echo/bedside echo findings \u2014 LV function, valves, effusion \u2014 exactly as dictated",
+    "efastDone": false,
+    "efastFindings": "EFAST findings if mentioned"
   },
   "examFindings": {
     "general": "", "cvs": "", "respiratory": "", "abdomen": "", "cns": "", "musculoskeletal": "", "skin": "", "heent": ""
@@ -4194,10 +4204,32 @@ ${resultsSummary}`,
       const caseId = created.id || created._id || created.case_id;
       if (!caseId) return res.status(500).json({ error: "No case ID returned" });
       console.log("[ExtractAndSave] Case created:", caseId);
-      const pastMedArr = ex.pastMedicalHistory ? ex.pastMedicalHistory.split(/[,;\/\n]+/).map((s) => s.trim()).filter((s) => s) : [];
+      const pastMedRaw = ex.pastMedicalHistory;
+      const pastMedArr = Array.isArray(pastMedRaw) ? pastMedRaw.map((s) => s.trim()).filter((s) => s) : typeof pastMedRaw === "string" && pastMedRaw ? pastMedRaw.split(/[,;\/\n]+/).map((s) => s.trim()).filter((s) => s) : [];
       const symptomsArr = [];
       if (ex.symptoms?.length > 0) symptomsArr.push(...ex.symptoms);
       if (ex.associatedSymptoms) symptomsArr.push(ex.associatedSymptoms);
+      const vbg = ex.vbgResults || {};
+      const adjunctsAbg = {};
+      if (vbg.ph) adjunctsAbg.pH = vbg.ph;
+      if (vbg.pco2) adjunctsAbg.pCO2 = vbg.pco2;
+      if (vbg.po2) adjunctsAbg.pO2 = vbg.po2;
+      if (vbg.hco3) adjunctsAbg.HCO3 = vbg.hco3;
+      if (vbg.be) adjunctsAbg.BE = vbg.be;
+      if (vbg.lactate) adjunctsAbg.Lactate = vbg.lactate;
+      if (vbg.hemoglobin) adjunctsAbg.Hb = vbg.hemoglobin;
+      if (vbg.sodium) adjunctsAbg.Na = vbg.sodium;
+      if (vbg.potassium) adjunctsAbg.K = vbg.potassium;
+      if (vbg.chloride) adjunctsAbg.Cl = vbg.chloride;
+      if (vbg.glucose) adjunctsAbg.Glucose = vbg.glucose;
+      if (vbg.creatinine) adjunctsAbg.Creatinine = vbg.creatinine;
+      if (vbg.bilirubin) adjunctsAbg.Bilirubin = vbg.bilirubin;
+      const adj = ex.adjuncts || {};
+      const vbgNotesParts = [];
+      if (vbg.sampleType) vbgNotesParts.push(vbg.sampleType);
+      Object.entries(adjunctsAbg).forEach(([k, v]) => vbgNotesParts.push(`${k}: ${v}`));
+      const invOrdered = ex.investigationsOrdered || "";
+      const invTests = invOrdered ? invOrdered.split(/[,;\/\n]+/).map((s) => s.trim()).filter((s) => s) : [];
       const updateRes = await fetch(`${EXTERNAL_API}/cases/${caseId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: authHeader },
@@ -4232,6 +4264,13 @@ ${resultsSummary}`,
             exposure_temperature: parseFloat(ps.exposure?.temperature || vs.temperature) || void 0,
             exposure_additional_notes: ps.exposure?.findings || ""
           },
+          adjuncts: {
+            ...adj.ecgDone ? { ecg_status: "Done", ecg_findings: adj.ecgFindings || "" } : {},
+            ...adj.echoDone ? { bedside_echo: adj.echoFindings || "Done" } : {},
+            ...adj.efastDone ? { efast_status: "Done", efast_notes: adj.efastFindings || "" } : {},
+            ...Object.keys(adjunctsAbg).length > 0 ? { abg: adjunctsAbg } : {},
+            ...vbgNotesParts.length > 0 ? { additional_notes: vbgNotesParts.join(" | ") } : {}
+          },
           examination: {
             general_additional_notes: ex.examFindings?.general || "",
             cvs_additional_notes: ex.examFindings?.cvs || "",
@@ -4239,12 +4278,20 @@ ${resultsSummary}`,
             abdomen_additional_notes: ex.examFindings?.abdomen || "",
             cns_additional_notes: ex.examFindings?.cns || ""
           },
+          investigations: {
+            ...invTests.length > 0 ? { individual_tests: invTests } : {},
+            ...ex.imagingOrdered ? { imaging: [ex.imagingOrdered] } : {},
+            ...invOrdered ? { results_notes: invOrdered } : {},
+            ...Object.keys(adjunctsAbg).length > 0 ? { vbg: adjunctsAbg } : {}
+          },
           treatment: {
             primary_diagnosis: ex.diagnosis?.[0] || "",
             provisional_diagnoses: ex.diagnosis || [],
             differential_diagnoses: ex.differentialDiagnosis || [],
             medications: ex.prescribedMedications || [],
-            infusions: ex.prescribedInfusions || []
+            infusions: ex.prescribedInfusions || [],
+            notes: ex.treatmentNotes || "",
+            intervention_notes: ex.treatmentNotes || ""
           }
         })
       });
