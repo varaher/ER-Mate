@@ -1,0 +1,144 @@
+{
+  "id": "91dca432-4cf4-4f7f-96a4-7630f180f3cc",
+  "createdAt": "2026-05-25T06:22:40.369Z",
+  "runtimeVersion": "1.0.0",
+  "launchAsset": {
+    "key": "bundle-1779690160369-1535",
+    "contentType": "application/javascript",
+    "url": "https://cc70901c-5ae8-4394-a8d0-9961ae7b57dc-00-1obtc7pzxu7ls.picard.replit.dev/1779690160369-1535/_expo/static/js/android/bundle.js"
+  },
+  "assets": [],
+  "metadata": {},
+  "extra": {
+    "eas": {
+      "projectId": "7d70a8b1-9c3f-4c1b-9a1d-5a1849986df7"
+    },
+    "expoClient": {
+      "name": "ErMate",
+      "slug": "ermate",
+      "owner": "varah",
+      "version": "1.0.0",
+      "orientation": "portrait",
+      "icon": "./assets/images/icon.png",
+      "scheme": "ermate",
+      "userInterfaceStyle": "automatic",
+      "newArchEnabled": true,
+      "runtimeVersion": {
+        "policy": "appVersion"
+      },
+      "updates": {
+        "url": "https://u.expo.dev/7d70a8b1-9c3f-4c1b-9a1d-5a1849986df7",
+        "enabled": true,
+        "checkAutomatically": "ON_LOAD",
+        "fallbackToCacheTimeout": 0
+      },
+      "ios": {
+        "supportsTablet": true,
+        "bundleIdentifier": "com.ermate.app",
+        "usesAppleSignIn": true
+      },
+      "android": {
+        "adaptiveIcon": {
+          "backgroundColor": "#000000",
+          "foregroundImage": "./assets/images/android-icon-foreground.png",
+          "backgroundImage": "./assets/images/android-icon-background.png",
+          "monochromeImage": "./assets/images/android-icon-monochrome.png",
+          "foregroundImageUrl": "http://127.0.0.1:8081/assets/./assets/images/android-icon-foreground.png",
+          "monochromeImageUrl": "http://127.0.0.1:8081/assets/./assets/images/android-icon-monochrome.png",
+          "backgroundImageUrl": "http://127.0.0.1:8081/assets/./assets/images/android-icon-background.png"
+        },
+        "edgeToEdgeEnabled": true,
+        "predictiveBackGestureEnabled": false,
+        "package": "com.ermate.app",
+        "googleServicesFile": "{\n  \"project_info\": {\n    \"project_number\": \"1018674231904\",\n    \"project_id\": \"ermate-e8f01\",\n    \"storage_bucket\": \"ermate-e8f01.firebasestorage.app\"\n  },\n  \"client\": [\n    {\n      \"client_info\": {\n        \"mobilesdk_app_id\": \"1:1018674231904:android:20bcf8129087f3560b2105\",\n        \"android_client_info\": {\n          \"package_name\": \"com.ermate.app\"\n        }\n      },\n      \"oauth_client\": [\n        {\n          \"client_id\": \"1018674231904-qjp0qr7bvc3sh792mq74inbf02gdqtkb.apps.googleusercontent.com\",\n          \"client_type\": 3\n        }\n      ],\n      \"api_key\": [\n        {\n          \"current_key\": \"AIzaSyB1faL-tmbQuNXwxWv_C_Xu-UdEeEkbL2g\"\n        }\n      ],\n      \"services\": {\n        \"appinvite_service\": {\n          \"other_platform_oauth_client\": [\n            {\n              \"client_id\": \"1018674231904-qjp0qr7bvc3sh792mq74inbf02gdqtkb.apps.googleusercontent.com\",\n              \"client_type\": 3\n            }\n          ]\n        }\n      }\n    }\n  ],\n  \"configuration_version\": \"1\"\n}\n",
+        "permissions": [
+          "android.permission.RECORD_AUDIO",
+          "android.permission.MODIFY_AUDIO_SETTINGS"
+        ]
+      },
+      "web": {
+        "output": "single",
+        "favicon": "./assets/images/favicon.png"
+      },
+      "plugins": [
+        [
+          "expo-splash-screen",
+          {
+            "image": "./assets/images/splash-icon.png",
+            "imageWidth": 200,
+            "resizeMode": "contain",
+            "backgroundColor": "#000000",
+            "dark": {
+              "backgroundColor": "#000000"
+            }
+          }
+        ],
+        [
+          "expo-audio",
+          {
+            "microphonePermission": "ErMate uses the microphone to record voice notes for patient case documentation.",
+            "enableBackgroundAudio": false
+          }
+        ],
+        "expo-web-browser",
+        "expo-apple-authentication"
+      ],
+      "experiments": {
+        "reactCompiler": true
+      },
+      "extra": {
+        "eas": {
+          "projectId": "7d70a8b1-9c3f-4c1b-9a1d-5a1849986df7"
+        }
+      },
+      "_internal": {
+        "isDebug": false,
+        "projectRoot": "/home/runner/workspace",
+        "dynamicConfigPath": {},
+        "staticConfigPath": "/home/runner/workspace/app.json",
+        "packageJsonPath": "/home/runner/workspace/package.json",
+        "pluginHistory": {
+          "expo-splash-screen": {
+            "name": "expo-splash-screen",
+            "version": "31.0.11"
+          },
+          "expo-audio": {
+            "name": "expo-audio",
+            "version": "1.1.1"
+          },
+          "expo-web-browser": {
+            "name": "expo-web-browser",
+            "version": "15.0.9"
+          },
+          "expo-apple-authentication": {
+            "name": "expo-apple-authentication",
+            "version": "8.0.8"
+          }
+        }
+      },
+      "sdkVersion": "54.0.0",
+      "platforms": [
+        "ios",
+        "android",
+        "web"
+      ],
+      "androidStatusBar": {
+        "backgroundColor": "#000000"
+      },
+      "iconUrl": "http://127.0.0.1:8081/assets/./assets/images/icon.png",
+      "hostUri": "cc70901c-5ae8-4394-a8d0-9961ae7b57dc-00-1obtc7pzxu7ls.picard.replit.dev/android"
+    },
+    "expoGo": {
+      "debuggerHost": "cc70901c-5ae8-4394-a8d0-9961ae7b57dc-00-1obtc7pzxu7ls.picard.replit.dev/android",
+      "developer": {
+        "tool": "expo-cli",
+        "projectRoot": "/home/runner/workspace"
+      },
+      "packagerOpts": {
+        "dev": false
+      },
+      "mainModuleName": "client/index"
+    },
+    "scopeKey": "@anonymous/ermate-8543fff1-efb6-4543-a5d4-b953f9bb0cfb"
+  }
+}

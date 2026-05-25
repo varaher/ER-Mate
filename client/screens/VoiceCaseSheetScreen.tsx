@@ -22,7 +22,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { getApiUrl } from "@/lib/query-client";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { apiPost, apiPut, invalidateCases } from "@/lib/api";
+import { apiPost, invalidateCases } from "@/lib/api";
 import { Spacing, BorderRadius, Typography } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 

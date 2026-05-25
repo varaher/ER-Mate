@@ -2502,11 +2502,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const db = getDb();
         if (db && userId) {
           const { caseClinicalData } = await import("@shared/schema");
-          const { sql: drizzleSqlFn } = await import("drizzle-orm");
-          await db.insert(caseClinicalData).values({ caseId, userId, payload: req.body }).onConflictDoUpdate({
-            target: [caseClinicalData.caseId, caseClinicalData.userId],
-            set: { payload: req.body, updatedAt: drizzleSqlFn`CURRENT_TIMESTAMP` },
-          });
+          await db.insert(caseClinicalData).values({ caseId, userId, payload: req.body });
+          console.log("[VoiceSave] Local DB clinical data saved");
         }
       } catch (dbErr) {
         console.warn("[VoiceSave] Local DB save failed (non-fatal):", dbErr);

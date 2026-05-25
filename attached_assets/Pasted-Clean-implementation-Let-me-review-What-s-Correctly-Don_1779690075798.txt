@@ -1,0 +1,100 @@
+Clean implementation. Let me review.
+
+---
+
+## What's Correctly Done ✅
+
+**Single endpoint architecture**
+The fragmented 3-step save is gone. One call, sequential steps, clear success/failure. This is the right fix.
+
+**Sequence is correct**
+Create case → PUT clinical data → local DB → increment subscription. If the PUT fails, case still exists and doctor gets a warning rather than silent data loss.
+
+**Dashboard useFocusEffect**
+Every navigation back to dashboard triggers a refresh. New voice cases appear immediately. This was a missing piece that made the app feel broken even when saves were working.
+
+**Import path fix**
+Catching the wrong subscriptionService path before it caused a runtime error is good — that would have been an invisible failure.
+
+---
+
+## One Thing to Verify on Device
+
+The new endpoint does create → PUT in sequence. But verify the external backend accepts a PUT immediately after a POST on the same case. Some backends have a slight propagation delay — the case ID exists but the record isn't fully indexed yet when the PUT arrives.
+
+If you see cases created but clinical data missing, add a small guard:
+
+```javascript
+// After create, before PUT
+// Give backend 500ms to settle
+await new Promise(resolve => 
+  setTimeout(resolve, 500)
+);
+
+// Then PUT clinical data
+const updateResponse = await fetch(...)
+```
+
+Only add this if the problem appears. Don't add it preemptively.
+
+---
+
+## Device Test — What to Check
+
+```
+1. Record voice case
+   Speak for at least 10 seconds
+   
+2. Transcript appears correctly
+   Check console log shows 
+   blob size > 50,000 bytes
+
+3. Tap Extract Clinical Data
+   Review screen opens 
+   within 30 seconds
+
+4. Tap Save
+   "Case Saved" alert appears
+   — not a spinner that hangs
+
+5. Tap Dashboard
+   New case visible immediately
+   in Today's Patients list
+
+6. Open the case
+   Check these tabs specifically:
+   
+   History tab:
+   □ Chief complaint filled
+   □ HPI narrative filled
+   □ Past medical as list
+   
+   Primary tab:
+   □ BP, HR, SpO2 filled
+   □ GCS filled
+   □ Airway, breathing findings
+   
+   Treatment tab:
+   □ Medications listed
+   □ Working diagnosis filled
+```
+
+If all boxes pass — the voice pipeline is end-to-end complete and ErMate is ready for pilot.
+
+---
+
+## If Any Box Fails
+
+The new endpoint logs every step server-side. Check logs immediately after a failed test:
+
+```
+Look for these log lines:
+✅ "Voice save: case created, ID: xxxx"
+✅ "Voice save: clinical PUT succeeded"  
+❌ "Voice save: clinical PUT failed: ..."
+❌ "Voice save: create failed: ..."
+```
+
+The log will tell you exactly which step failed and why. No more silent failures.
+
+Run the device test and share the result.
