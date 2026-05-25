@@ -2287,7 +2287,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let detectedLanguage = 'en-IN';
       let englishTranscript = '';
 
-      if (isSarvamAvailable()) {
+      // Skip Sarvam for large files (>900KB ≈ >25 seconds) — Sarvam has a 30s hard limit
+      const fileTooLargeForSarvam = converted.buffer.length > 900_000;
+      if (fileTooLargeForSarvam) {
+        console.log("[Voice] File too large for Sarvam (", converted.buffer.length, "bytes), going straight to Whisper");
+      }
+
+      if (isSarvamAvailable() && !fileTooLargeForSarvam) {
         try {
           console.log("[Voice] Sarvam STT: transcribing in original language...");
           const sarvamResult = await sarvamSpeechToText(converted.buffer, converted.filename, "unknown");
@@ -2418,6 +2424,190 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("[Translate] Error:", error);
       res.json({ translated_text: req.body.text, skipped: true, reason: (error as Error).message });
+    }
+  });
+
+  app.post("/api/voice/extract-and-save", async (req: Request, res: Response) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader) return res.status(401).json({ error: "No auth token" });
+
+      const {
+        transcript, patientContext,
+        patient, case_type,
+        userId, userEmail,
+      } = req.body;
+
+      if (!transcript || !transcript.trim()) {
+        return res.status(400).json({ error: "No transcript provided" });
+      }
+
+      console.log("[ExtractAndSave] Transcript length:", transcript.length);
+
+      // Step 1 — AI extraction
+      const { extractSmartDictation } = await import("./services/aiDiagnosis");
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Extraction timed out after 45s")), 45000)
+      );
+      const extracted = await Promise.race([
+        extractSmartDictation(transcript, patientContext),
+        timeout,
+      ]);
+
+      console.log("[ExtractAndSave] Extraction done. Chief complaint:", (extracted as any).chiefComplaint || "(none)");
+
+      // Step 2 — Build vitals + triage from extracted data
+      const ex = extracted as any;
+      const vs = ex.vitalsSuggested || {};
+      const ps = ex.primarySurvey || {};
+
+      const [sys, dia] = (vs.bp || ps.circulation?.bpSystolic ? `${ps.circulation?.bpSystolic || 120}/${ps.circulation?.bpDiastolic || 80}` : "120/80").split("/");
+      const bpSys = parseInt(sys) || 120;
+      const bpDia = parseInt(dia) || 80;
+      const hr = parseInt(vs.hr || ps.circulation?.hr) || 80;
+      const spo2 = parseInt(vs.spo2 || ps.breathing?.spo2) || 98;
+      const rr = parseInt(vs.rr || ps.breathing?.rr) || 16;
+      const gcs = parseInt(vs.gcs || ps.disability?.gcsTotal) || 15;
+
+      let triage_color = "green", triage_priority = 4;
+      if (spo2 < 90 || gcs < 9 || bpSys < 80) { triage_color = "red"; triage_priority = 1; }
+      else if (spo2 < 94 || gcs < 13 || bpSys < 100 || hr > 120 || rr > 30) { triage_color = "orange"; triage_priority = 2; }
+      else if (spo2 < 96 || hr > 100 || rr > 24 || bpSys > 180) { triage_color = "yellow"; triage_priority = 3; }
+      else if (hr > 90 || rr > 20) { triage_color = "green"; triage_priority = 4; }
+      else { triage_color = "blue"; triage_priority = 5; }
+
+      const vitals_at_arrival = {
+        hr, bp_systolic: bpSys, bp_diastolic: bpDia, rr, spo2,
+        temperature: parseFloat(vs.temperature || ps.exposure?.temperature) || 36.8,
+        gcs_e: parseInt(ps.disability?.gcsE) || 4,
+        gcs_v: parseInt(ps.disability?.gcsV) || 5,
+        gcs_m: parseInt(ps.disability?.gcsM) || 6,
+        grbs: parseInt(vs.grbs || ps.disability?.grbs) || 100,
+        pain_score: 0,
+      };
+
+      const presenting_complaint = {
+        text: ex.chiefComplaint || "",
+        onset_type: ex.onset || "Sudden",
+        duration: ex.duration || "",
+        course: "",
+      };
+
+      const em_resident = ex.emResident || patient?.informant_name || "";
+      const em_consultant = ex.emConsultant || "";
+
+      // Step 3 — Create case on external backend
+      const createRes = await fetch(`${EXTERNAL_API}/cases`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: authHeader },
+        body: JSON.stringify({
+          patient, presenting_complaint, vitals_at_arrival,
+          triage_color, triage_priority, em_resident, em_consultant, case_type,
+        }),
+      });
+
+      if (!createRes.ok) {
+        const errText = await createRes.text();
+        console.error("[ExtractAndSave] Case create failed:", createRes.status, errText);
+        return res.status(createRes.status).json({ error: `Case creation failed: ${errText}` });
+      }
+
+      const created = await createRes.json();
+      const caseId = created.id || created._id || created.case_id;
+      if (!caseId) return res.status(500).json({ error: "No case ID returned" });
+      console.log("[ExtractAndSave] Case created:", caseId);
+
+      // Step 4 — Build and push clinical data
+      const pastMedArr: string[] = ex.pastMedicalHistory
+        ? ex.pastMedicalHistory.split(/[,;\/\n]+/).map((s: string) => s.trim()).filter((s: string) => s)
+        : [];
+      const symptomsArr: string[] = [];
+      if (ex.symptoms?.length > 0) symptomsArr.push(...ex.symptoms);
+      if (ex.associatedSymptoms) symptomsArr.push(ex.associatedSymptoms);
+
+      const updateRes = await fetch(`${EXTERNAL_API}/cases/${caseId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: authHeader },
+        body: JSON.stringify({
+          history: {
+            hpi: ex.historyOfPresentIllness || transcript,
+            events_hopi: ex.historyOfPresentIllness || transcript,
+            signs_and_symptoms: symptomsArr.join(", "),
+            past_medical: pastMedArr,
+            past_surgical: ex.pastSurgicalHistory || "",
+            allergies: ex.allergies ? ex.allergies.split(/[,;]+/).map((s: string) => s.trim()).filter((s: string) => s) : [],
+            medications: ex.currentMedications || "",
+            drug_history: ex.currentMedications || "",
+            family_history: ex.familyHistory || "",
+            social_history: ex.socialHistory || "",
+          },
+          primary_assessment: {
+            airway_status: ps.airway?.status || "Patent",
+            airway_additional_notes: ps.airway?.intervention || "",
+            breathing_rr: rr || undefined,
+            breathing_spo2: spo2 || undefined,
+            breathing_oxygen_device: ps.breathing?.oxygenDevice || "Room air",
+            breathing_additional_notes: ps.breathing?.auscultation || "",
+            circulation_hr: hr || undefined,
+            circulation_bp_systolic: bpSys || undefined,
+            circulation_bp_diastolic: bpDia || undefined,
+            circulation_additional_notes: ps.circulation?.cvs || "",
+            disability_gcs_e: parseInt(ps.disability?.gcsE) || undefined,
+            disability_gcs_v: parseInt(ps.disability?.gcsV) || undefined,
+            disability_gcs_m: parseInt(ps.disability?.gcsM) || undefined,
+            disability_grbs: parseFloat(ps.disability?.grbs || vs.grbs) || undefined,
+            exposure_temperature: parseFloat(ps.exposure?.temperature || vs.temperature) || undefined,
+            exposure_additional_notes: ps.exposure?.findings || "",
+          },
+          examination: {
+            general_additional_notes: ex.examFindings?.general || "",
+            cvs_additional_notes: ex.examFindings?.cvs || "",
+            respiratory_additional_notes: ex.examFindings?.respiratory || "",
+            abdomen_additional_notes: ex.examFindings?.abdomen || "",
+            cns_additional_notes: ex.examFindings?.cns || "",
+          },
+          treatment: {
+            primary_diagnosis: ex.diagnosis?.[0] || "",
+            provisional_diagnoses: ex.diagnosis || [],
+            differential_diagnoses: ex.differentialDiagnosis || [],
+            medications: ex.prescribedMedications || [],
+            infusions: ex.prescribedInfusions || [],
+          },
+        }),
+      });
+
+      if (!updateRes.ok) {
+        const errText = await updateRes.text();
+        console.warn("[ExtractAndSave] Clinical PUT failed (case still created):", updateRes.status, errText);
+        return res.json({ success: true, caseId, extracted, warning: "Case created — some clinical fields may need manual entry." });
+      }
+
+      console.log("[ExtractAndSave] Clinical data saved for case:", caseId);
+
+      // Step 5 — Local DB (best-effort)
+      try {
+        const db = getDb();
+        if (db && userId) {
+          const { caseClinicalData } = await import("@shared/schema");
+          await db.insert(caseClinicalData).values({ caseId, userId, payload: { extracted, transcript } });
+          console.log("[ExtractAndSave] Local DB saved");
+        }
+      } catch (dbErr) {
+        console.warn("[ExtractAndSave] Local DB failed (non-fatal):", dbErr);
+      }
+
+      // Step 6 — Subscription increment (best-effort)
+      if (userId) {
+        try {
+          const { incrementCaseCount } = await import("./services/subscription");
+          await incrementCaseCount(userId, userEmail || "");
+        } catch {}
+      }
+
+      return res.json({ success: true, caseId, extracted });
+    } catch (err: any) {
+      console.error("[ExtractAndSave] Error:", err);
+      return res.status(500).json({ success: false, error: err.message || "Extract and save failed" });
     }
   });
 

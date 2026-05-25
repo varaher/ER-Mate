@@ -81,6 +81,7 @@ export default function VoiceCaseSheetScreen() {
   const [extractedFields, setExtractedFields] = useState<ExtractedField[]>([]);
   const [rawExtracted, setRawExtracted] = useState<any>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [savedCaseId, setSavedCaseId] = useState<string | null>(null);
 
   // Animations
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -274,18 +275,18 @@ export default function VoiceCaseSheetScreen() {
   const handleExtract = async () => {
     const text = editedTranscript.trim();
 
-    // --- diagnostic check 1: transcript
-    console.log("[Extract] Transcript length:", text.length);
-    console.log("[Extract] First 120 chars:", text.substring(0, 120));
-
     if (text.length < 10) {
       Alert.alert("Nothing to extract", "Transcript is too short. Please re-record and speak for at least 5 seconds.");
       return;
     }
 
-    // --- diagnostic check 2: auth token
+    if (!patientName.trim()) {
+      Alert.alert("Required", "Please enter a patient name before saving.");
+      setStep("patient");
+      return;
+    }
+
     const token = await AsyncStorage.getItem("token");
-    console.log("[Extract] Token present:", !!token);
     if (!token) {
       Alert.alert("Session expired", "Please log in again.");
       return;
@@ -293,12 +294,11 @@ export default function VoiceCaseSheetScreen() {
 
     setIsExtracting(true);
 
-    // If the transcript is non-English, translate first
+    // Translate non-English transcript first
     let extractText = text;
     const isNonEnglish = detectedLanguage && !detectedLanguage.startsWith("en");
     try {
       if (isNonEnglish) {
-        console.log("[Extract] Non-English detected, translating:", detectedLanguage);
         const tResp = await fetch(new URL("/api/voice/translate", getApiUrl()).toString(), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -307,64 +307,73 @@ export default function VoiceCaseSheetScreen() {
         if (tResp.ok) {
           const tData = await tResp.json();
           const translated = (tData.englishText || "").trim();
-          if (translated) {
-            extractText = translated;
-            setEnglishTranscript(translated);
-            console.log("[Extract] Translated length:", translated.length);
-          }
+          if (translated) { extractText = translated; setEnglishTranscript(translated); }
         }
       } else if (englishTranscript && englishTranscript !== text) {
         extractText = englishTranscript;
       }
-    } catch (_) { /* translation best-effort, fall through to edited text */ }
+    } catch (_) {}
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 45000);
+    const timeoutId = setTimeout(() => controller.abort(), 55000);
     try {
-      console.log("[Extract] Sending to /api/voice/extract-clinical, length:", extractText.length);
-      const resp = await fetch(new URL("/api/voice/extract-clinical", getApiUrl()).toString(), {
+      console.log("[ExtractAndSave] Calling combined endpoint, length:", extractText.length);
+
+      const patientPayload = {
+        name: patientName.trim(),
+        age: patientAge.trim(),
+        sex: patientSex,
+        mode_of_arrival: "Walk-in",
+        address: "Not provided",
+        brought_by: "Self",
+        informant_name: patientName.trim(),
+        informant_reliability: "Reliable",
+        identification_mark: "None noted",
+        arrival_datetime: new Date().toISOString(),
+      };
+
+      const resp = await fetch(new URL("/api/voice/extract-and-save", getApiUrl()).toString(), {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         signal: controller.signal,
         body: JSON.stringify({
           transcript: extractText,
           patientContext: { age: parseFloat(patientAge) || 0, sex: patientSex, caseType },
+          patient: patientPayload,
+          case_type: caseType,
+          userId: user?.id,
+          userEmail: user?.email || "",
         }),
       });
       clearTimeout(timeoutId);
-      console.log("[Extract] Response status:", resp.status);
+
+      console.log("[ExtractAndSave] Response status:", resp.status);
 
       if (!resp.ok) {
         const errBody = await resp.text();
-        console.error("[Extract] Server error:", errBody);
+        console.error("[ExtractAndSave] Server error:", errBody);
         throw new Error(`Server returned ${resp.status}: ${errBody}`);
       }
 
       const data = await resp.json();
-      console.log("[Extract] Data keys:", Object.keys(data));
+      console.log("[ExtractAndSave] Success. Case ID:", data.caseId);
 
       const extracted = data.extracted || null;
-      if (!extracted) {
-        console.warn("[Extract] extracted field is null/empty in response:", JSON.stringify(data).substring(0, 200));
-        throw new Error("The AI returned an empty response. Please try again.");
-      }
 
+      setSavedCaseId(data.caseId ? String(data.caseId) : null);
       setRawExtracted(extracted);
-      setExtractedFields(buildFieldList(extracted, text));
-      console.log("[Extract] Success — moving to review step");
+      setExtractedFields(buildFieldList(extracted || {}, text));
+      await invalidateCases();
       setStep("review");
     } catch (err: any) {
       clearTimeout(timeoutId);
       const isTimeout = err?.name === "AbortError";
       console.error("[Extract] Error:", err?.name, err?.message);
       Alert.alert(
-        isTimeout ? "Taking too long" : "Extraction failed",
+        isTimeout ? "Taking too long" : "Extract & Save failed",
         isTimeout
-          ? "The AI is taking longer than 45 seconds. Check your connection and tap Extract again."
-          : err.message || "Could not extract clinical data. Please check your connection and try again.",
+          ? "The AI is taking longer than expected. Check your connection and try again."
+          : err.message || "Could not extract and save the case. Please check your connection and try again.",
         [{ text: "OK" }]
       );
     } finally {
@@ -1174,10 +1183,13 @@ export default function VoiceCaseSheetScreen() {
               disabled={isExtracting}
             >
               {isExtracting
-                ? <ActivityIndicator size="small" color="#fff" />
+                ? <>
+                    <ActivityIndicator size="small" color="#fff" />
+                    <Text style={s.primaryBtnText}>Extracting & Saving...</Text>
+                  </>
                 : <>
                     <Feather name="cpu" size={15} color="#fff" />
-                    <Text style={s.primaryBtnText}>Extract Clinical Data</Text>
+                    <Text style={s.primaryBtnText}>Extract & Save to Case Sheet</Text>
                   </>
               }
             </Pressable>
@@ -1185,7 +1197,7 @@ export default function VoiceCaseSheetScreen() {
         </View>
       )}
 
-      {/* ── STEP 4: REVIEW & SAVE ──────────────────────────────────────────────── */}
+      {/* ── STEP 4: REVIEW ─────────────────────────────────────────────────────── */}
       {step === "review" && (() => {
         const completeness = computeCompleteness(rawExtracted);
         const voiceCount = extractedFields.filter(f => f.source === 'voice').length;
@@ -1193,6 +1205,17 @@ export default function VoiceCaseSheetScreen() {
         return (
           <View style={[s.reviewRoot, { paddingBottom: botPad }]}>
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.reviewScroll}>
+
+              {/* Case Saved banner */}
+              <View style={[s.savedBanner, { backgroundColor: "#16a34a15", borderColor: "#16a34a" }]}>
+                <Feather name="check-circle" size={18} color="#16a34a" />
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.savedBannerTitle, { color: "#16a34a" }]}>Case Saved</Text>
+                  <Text style={[s.savedBannerSub, { color: "#16a34a" }]}>
+                    {savedCaseId ? `Tap "View Case Sheet" to open and edit` : "Tap below to view or go to dashboard"}
+                  </Text>
+                </View>
+              </View>
 
               {/* Completeness bar */}
               <View style={[s.completenessCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -1299,23 +1322,20 @@ export default function VoiceCaseSheetScreen() {
             <View style={s.reviewActions}>
               <Pressable
                 style={[s.outlineBtn, { borderColor: theme.border, backgroundColor: theme.card }]}
-                onPress={() => setStep("transcript")}
+                onPress={() => navigation.navigate("Main" as any)}
               >
-                <Feather name="edit-2" size={15} color={theme.text} />
-                <Text style={[s.outlineBtnText, { color: theme.text }]}>Edit</Text>
+                <Feather name="home" size={15} color={theme.text} />
+                <Text style={[s.outlineBtnText, { color: theme.text }]}>Dashboard</Text>
               </Pressable>
               <Pressable
                 style={[s.primaryBtn, { flex: 1, backgroundColor: ACCENT }]}
-                onPress={handleSave}
-                disabled={isSaving}
-              >
-                {isSaving
-                  ? <ActivityIndicator size="small" color="#fff" />
-                  : <>
-                      <Feather name="save" size={15} color="#fff" />
-                      <Text style={s.primaryBtnText}>Save Case</Text>
-                    </>
+                onPress={() => savedCaseId
+                  ? navigation.replace("ViewCase", { caseId: savedCaseId })
+                  : navigation.navigate("Main" as any)
                 }
+              >
+                <Feather name="external-link" size={15} color="#fff" />
+                <Text style={s.primaryBtnText}>View Case Sheet</Text>
               </Pressable>
             </View>
           </View>
@@ -1407,6 +1427,12 @@ const s = StyleSheet.create({
   transcriptInput: { flex: 1, borderRadius: BorderRadius.md, borderWidth: 1, padding: Spacing.md, fontSize: Typography.base, lineHeight: 22, marginBottom: Spacing.md },
 
   // Review
+  savedBanner: {
+    flexDirection: "row", alignItems: "center", gap: Spacing.sm,
+    padding: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1, marginBottom: Spacing.sm,
+  },
+  savedBannerTitle: { fontSize: Typography.sm, fontWeight: "700" },
+  savedBannerSub: { fontSize: Typography.xs, marginTop: 2 },
   reviewRoot: { flex: 1 },
   reviewScroll: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, paddingBottom: Spacing.xl },
   // Completeness
