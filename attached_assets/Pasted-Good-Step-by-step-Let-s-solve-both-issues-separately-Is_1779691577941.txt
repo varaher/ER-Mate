@@ -1,0 +1,110 @@
+Good. Step by step. Let's solve both issues separately.
+
+---
+
+## Issue 1 — Phone Lock Stops Recording
+
+This is a known iOS/Android background audio problem. When the screen locks, the browser tab is backgrounded and MediaRecorder pauses or stops.
+
+**Tell your developer:**
+
+```javascript
+// In VoiceCaseSheetScreen
+// Add wake lock to prevent screen sleeping
+// during recording
+
+const startRecording = async () => {
+  // Request wake lock
+  let wakeLock = null;
+  
+  try {
+    if ('wakeLock' in navigator) {
+      wakeLock = await navigator
+        .wakeLock.request('screen');
+    }
+  } catch (err) {
+    // Wake lock not supported — continue anyway
+    console.log('Wake lock not available');
+  }
+  
+  // Store so we can release later
+  wakeLockRef.current = wakeLock;
+  
+  // Start recording as normal...
+};
+
+const stopRecording = async () => {
+  // Release wake lock when done
+  if (wakeLockRef.current) {
+    await wakeLockRef.current.release();
+    wakeLockRef.current = null;
+  }
+  // Stop recording as normal...
+};
+```
+
+Also add a visible indicator while recording so the doctor knows it's active:
+
+```
+🔴 Recording... 00:42
+    Keep screen on while recording
+```
+
+---
+
+## Issue 2 — Transcript Not Reaching Case Sheet
+
+Let's go step by step. Answer each question:
+
+---
+
+**Step 1 — Does the Review screen show the extracted data?**
+
+After tapping "Extract Clinical Data" — does Step 4 Review screen open and show fields like Chief Complaint, HPI, Past Medical History, Vitals?
+
+```
+If YES → extraction works, 
+         save is the problem
+         
+If NO  → extraction is failing,
+         review screen is the problem
+```
+
+Tell me which one. That determines where we look next.
+
+---
+
+**Step 2 — What happens when you tap Save?**
+
+```
+Do you see:
+A) "Case Saved" success alert    → save worked
+B) An error message              → save failed, 
+                                   what does it say?
+C) Nothing / spinner hangs       → silent failure
+D) Goes to dashboard but 
+   case not in list              → dashboard not refreshing
+E) Case in list but empty 
+   when opened                   → save worked but 
+                                   clinical PUT failed
+```
+
+Tell me which letter. Each one points to a different fix.
+
+---
+
+**Step 3 — Check Replit console logs**
+
+When you tap Save, immediately check the server logs. Tell me exactly which of these lines appear:
+
+```
+✅ [VoiceSave] Case created: xxxx
+✅ [VoiceSave] Clinical data saved for case: xxxx
+✅ [VoiceSave] Local DB clinical data saved
+❌ [VoiceSave] Create failed: ...
+❌ [VoiceSave] Clinical update failed: ...
+```
+
+---
+
+Answer these three questions and I'll give you the exact fix for the exact problem. No guessing.

@@ -1,0 +1,163 @@
+Good. Scenario A — the network call never completes. The extraction API call is hanging or timing out before getting a response.
+
+---
+
+## Most Likely Causes
+
+```
+1. englishTranscript is empty/null
+   → body sent to API is blank
+   → server rejects or hangs
+
+2. Auth token is missing
+   → request rejected silently
+
+3. Hospital WiFi blocking 
+   the API call mid-request
+
+4. The 40s timeout firing 
+   but error not showing clearly
+```
+
+---
+
+## One Fix at a Time
+
+**Tell your developer to add this check first — before the fetch call:**
+
+```javascript
+const handleExtract = async () => {
+  
+  // Step 1 — Check what we're sending
+  const textToExtract = englishTranscript 
+    || editedTranscript;
+  
+  console.log('Text to extract:', 
+    textToExtract?.substring(0, 100));
+  console.log('Text length:', 
+    textToExtract?.length);
+  
+  // If empty — stop immediately
+  if (!textToExtract || 
+      textToExtract.trim().length < 10) {
+    Alert.alert(
+      'Nothing to extract',
+      'Transcript is empty. Please re-record.'
+    );
+    return;
+  }
+  
+  // Step 2 — Check auth token
+  const token = await getAuthToken();
+  console.log('Token exists:', !!token);
+  
+  if (!token) {
+    Alert.alert(
+      'Session expired',
+      'Please log in again.'
+    );
+    return;
+  }
+  
+  // Step 3 — Make the call with timeout
+  setIsExtracting(true);
+  
+  const controller = new AbortController();
+  const timeout = setTimeout(() => {
+    controller.abort();
+  }, 40000);
+  
+  try {
+    console.log('Sending to API...');
+    
+    const response = await fetch(
+      '/api/voice/smart-dictation',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ 
+          transcript: textToExtract 
+        }),
+        signal: controller.signal
+      }
+    );
+    
+    clearTimeout(timeout);
+    console.log('Response received:', 
+      response.status);
+    
+    const data = await response.json();
+    console.log('Data keys:', 
+      Object.keys(data));
+    
+    if (!response.ok) {
+      throw new Error(
+        data.error || `Server error ${response.status}`
+      );
+    }
+    
+    // Set data and move to review
+    setExtractedData(data);
+    setStep('review');
+    
+  } catch (error) {
+    clearTimeout(timeout);
+    
+    if (error.name === 'AbortError') {
+      Alert.alert(
+        'Taking too long',
+        'The extraction timed out. ' +
+        'Check your connection and try again.'
+      );
+    } else {
+      Alert.alert(
+        'Extraction failed',
+        error.message
+      );
+    }
+    
+  } finally {
+    setIsExtracting(false);
+  }
+};
+```
+
+---
+
+## After Adding This — Run the Flow
+
+Check the console for these specific lines:
+
+```
+Text to extract: [first 100 chars of transcript]
+Text length: [should be > 100]
+Token exists: true
+Sending to API...
+```
+
+**Tell me where the logs stop.**
+
+```
+Stops after "Text to extract: undefined"
+→ englishTranscript and editedTranscript 
+  are both empty
+→ translation step not storing the text
+
+Stops after "Token exists: false"
+→ auth token missing
+→ session expired
+
+Stops after "Sending to API..."
+→ network call hanging
+→ WiFi or server issue
+
+Reaches "Response received: 200"
+but review screen doesn't open
+→ setStep not working
+→ different problem
+```
+
+One answer, one fix. What do the logs show?

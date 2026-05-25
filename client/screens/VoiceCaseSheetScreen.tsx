@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   Animated,
 } from "react-native";
 import { Audio } from "expo-av";
+import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import * as FileSystem from "expo-file-system";
 import { Feather } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
@@ -174,9 +175,10 @@ export default function VoiceCaseSheetScreen() {
         await Audio.setAudioModeAsync({
           allowsRecordingIOS: true,
           playsInSilentModeIOS: true,
-          staysActiveInBackground: false,
+          staysActiveInBackground: true,
           shouldDuckAndroid: true,
         });
+        await activateKeepAwakeAsync("voice-recording");
         const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
         nativeRec.current = recording;
         setIsRecording(true);
@@ -209,6 +211,7 @@ export default function VoiceCaseSheetScreen() {
         if (!rec) return;
         await rec.stopAndUnloadAsync();
         await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+        deactivateKeepAwake("voice-recording");
         const uri = rec.getURI();
         nativeRec.current = null;
         if (uri) {
@@ -270,14 +273,32 @@ export default function VoiceCaseSheetScreen() {
 
   const handleExtract = async () => {
     const text = editedTranscript.trim();
-    if (!text) { Alert.alert("Empty", "Please record some audio or type a transcript first."); return; }
+
+    // --- diagnostic check 1: transcript
+    console.log("[Extract] Transcript length:", text.length);
+    console.log("[Extract] First 120 chars:", text.substring(0, 120));
+
+    if (text.length < 10) {
+      Alert.alert("Nothing to extract", "Transcript is too short. Please re-record and speak for at least 5 seconds.");
+      return;
+    }
+
+    // --- diagnostic check 2: auth token
+    const token = await AsyncStorage.getItem("token");
+    console.log("[Extract] Token present:", !!token);
+    if (!token) {
+      Alert.alert("Session expired", "Please log in again.");
+      return;
+    }
+
     setIsExtracting(true);
 
-    // If the doctor edited the transcript in a non-English language, re-translate before extraction
+    // If the transcript is non-English, translate first
     let extractText = text;
     const isNonEnglish = detectedLanguage && !detectedLanguage.startsWith("en");
     try {
       if (isNonEnglish) {
+        console.log("[Extract] Non-English detected, translating:", detectedLanguage);
         const tResp = await fetch(new URL("/api/voice/translate", getApiUrl()).toString(), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -289,20 +310,24 @@ export default function VoiceCaseSheetScreen() {
           if (translated) {
             extractText = translated;
             setEnglishTranscript(translated);
+            console.log("[Extract] Translated length:", translated.length);
           }
         }
       } else if (englishTranscript && englishTranscript !== text) {
-        // Original transcript was non-English but doctor switched to English editing
         extractText = englishTranscript;
       }
-    } catch (_) { /* translation best-effort, fall back to edited text */ }
+    } catch (_) { /* translation best-effort, fall through to edited text */ }
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 40000);
+    const timeoutId = setTimeout(() => controller.abort(), 45000);
     try {
+      console.log("[Extract] Sending to /api/voice/extract-clinical, length:", extractText.length);
       const resp = await fetch(new URL("/api/voice/extract-clinical", getApiUrl()).toString(), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
         signal: controller.signal,
         body: JSON.stringify({
           transcript: extractText,
@@ -310,20 +335,36 @@ export default function VoiceCaseSheetScreen() {
         }),
       });
       clearTimeout(timeoutId);
-      if (!resp.ok) throw new Error("Extraction failed");
+      console.log("[Extract] Response status:", resp.status);
+
+      if (!resp.ok) {
+        const errBody = await resp.text();
+        console.error("[Extract] Server error:", errBody);
+        throw new Error(`Server returned ${resp.status}: ${errBody}`);
+      }
+
       const data = await resp.json();
+      console.log("[Extract] Data keys:", Object.keys(data));
+
       const extracted = data.extracted || null;
+      if (!extracted) {
+        console.warn("[Extract] extracted field is null/empty in response:", JSON.stringify(data).substring(0, 200));
+        throw new Error("The AI returned an empty response. Please try again.");
+      }
+
       setRawExtracted(extracted);
       setExtractedFields(buildFieldList(extracted, text));
+      console.log("[Extract] Success — moving to review step");
       setStep("review");
     } catch (err: any) {
       clearTimeout(timeoutId);
       const isTimeout = err?.name === "AbortError";
+      console.error("[Extract] Error:", err?.name, err?.message);
       Alert.alert(
         isTimeout ? "Taking too long" : "Extraction failed",
         isTimeout
-          ? "The AI is taking longer than expected. Check your connection and tap Extract again."
-          : "Could not extract clinical data. Please check your connection and try again.",
+          ? "The AI is taking longer than 45 seconds. Check your connection and tap Extract again."
+          : err.message || "Could not extract clinical data. Please check your connection and try again.",
         [{ text: "OK" }]
       );
     } finally {
