@@ -219,6 +219,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/proxy/cases/:id", async (req: Request, res: Response) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader) return res.status(401).json({ error: "No auth token" });
+      const { id } = req.params;
+      const externalRes = await fetch(`${EXTERNAL_API}/cases/${id}`, {
+        headers: { Authorization: authHeader, "Content-Type": "application/json" },
+      });
+      const responseText = await externalRes.text();
+      try { return res.status(externalRes.status).json(JSON.parse(responseText)); }
+      catch { return res.status(externalRes.status).send(responseText); }
+    } catch (err: any) {
+      console.error("[PROXY] GET /cases/:id error:", err);
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
   app.delete("/api/proxy/cases/:id", async (req: Request, res: Response) => {
     try {
       const authHeader = req.headers.authorization;

@@ -15,7 +15,7 @@ import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
-import { apiGet, apiPut, getClinicalDataFromServer } from "@/lib/api";
+import { apiPut, getClinicalDataFromServer, fetchCaseByIdFromProxy } from "@/lib/api";
 import { getCachedCaseData, mergeCaseWithCache } from "@/lib/caseCache";
 import { isPediatric } from "@/lib/pediatricVitals";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
@@ -87,7 +87,7 @@ export default function ViewCaseScreen() {
       const [cached, serverClinical, res] = await Promise.all([
         getCachedCaseData(caseId),
         getClinicalDataFromServer(caseId),
-        apiGet<any>(`/cases/${caseId}`),
+        fetchCaseByIdFromProxy(caseId),
       ]);
       
       let mergedData: any = null;

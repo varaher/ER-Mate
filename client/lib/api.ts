@@ -299,6 +299,27 @@ export async function fetchCasesFromProxy<T = any[]>(): Promise<T> {
   return res.json();
 }
 
+export async function fetchCaseByIdFromProxy(caseId: string): Promise<{ success: boolean; data?: any; error?: string }> {
+  try {
+    const token = await getToken();
+    const proxyUrl = new URL(`/api/proxy/cases/${caseId}`, getApiUrl()).href;
+    const res = await fetch(proxyUrl, {
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      return { success: false, error: text || `HTTP ${res.status}` };
+    }
+    const data = await res.json();
+    return { success: true, data };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
 export async function deleteCaseFromProxy(caseId: string): Promise<void> {
   const token = await getToken();
   const proxyUrl = new URL(`/api/proxy/cases/${caseId}`, getApiUrl()).href;

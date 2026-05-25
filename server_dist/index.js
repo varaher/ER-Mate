@@ -2148,6 +2148,25 @@ async function registerRoutes(app2) {
       return res.status(500).json({ error: err.message });
     }
   });
+  app2.get("/api/proxy/cases/:id", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader) return res.status(401).json({ error: "No auth token" });
+      const { id } = req.params;
+      const externalRes = await fetch(`${EXTERNAL_API}/cases/${id}`, {
+        headers: { Authorization: authHeader, "Content-Type": "application/json" }
+      });
+      const responseText = await externalRes.text();
+      try {
+        return res.status(externalRes.status).json(JSON.parse(responseText));
+      } catch {
+        return res.status(externalRes.status).send(responseText);
+      }
+    } catch (err) {
+      console.error("[PROXY] GET /cases/:id error:", err);
+      return res.status(500).json({ error: err.message });
+    }
+  });
   app2.delete("/api/proxy/cases/:id", async (req, res) => {
     try {
       const authHeader = req.headers.authorization;

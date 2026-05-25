@@ -30,7 +30,7 @@ import { AIDiagnosisPanel } from "@/components/AIDiagnosisPanel";
 import SmartDictation, { SmartDictationExtracted } from "@/components/SmartDictation";
 import { useTheme } from "@/hooks/useTheme";
 import { useCase } from "@/context/CaseContext";
-import { apiGet, apiPatch, apiPut, apiUpload, invalidateCases, saveClinicalDataToServer } from "@/lib/api";
+import { apiGet, apiPatch, apiPut, apiUpload, invalidateCases, saveClinicalDataToServer, fetchCaseByIdFromProxy } from "@/lib/api";
 import { getApiUrl } from "@/lib/query-client";
 import { cacheCasePayload } from "@/lib/caseCache";
 import { recordCaseTime, getTimeSavedMinutes } from "@/hooks/useCaseTimer";
@@ -740,7 +740,7 @@ export default function CaseSheetScreen() {
       const draft = await loadDraft(draftId);
       const hasLocalDraft = !!draft?.caseSheetData;
       
-      const res = await apiGet<any>(`/cases/${caseId}`);
+      const res = await fetchCaseByIdFromProxy(caseId);
       if (res.success && res.data) {
         setCaseData(res.data);
         complaintDurationRef.current = res.data.presenting_complaint?.duration || "";
