@@ -325,7 +325,7 @@ export default function VoiceCaseSheetScreen() {
     } catch (_) {}
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    const timeoutId = setTimeout(() => controller.abort(), 75000);
     try {
       console.log("[Extract] Calling extract-clinical, length:", extractText.length);
 
@@ -418,7 +418,14 @@ export default function VoiceCaseSheetScreen() {
       await invalidateCases();
       navigation.replace("ViewCase", { caseId: String(result.caseId) });
     } catch (err: any) {
-      Alert.alert("Save Failed", err.message || "Could not save case. Please try again.");
+      Alert.alert(
+        "Save Failed",
+        err.message || "Could not save case. Please try again.",
+        [
+          { text: "Try Again", onPress: handleSave },
+          { text: "Cancel", style: "cancel" },
+        ]
+      );
     } finally {
       setIsSaving(false);
     }
@@ -1198,9 +1205,11 @@ export default function VoiceCaseSheetScreen() {
                   </View>
                 </View>
                 <TextInput
-                  style={[s.reviewEditInput, { color: theme.text, backgroundColor: theme.backgroundSecondary }]}
+                  style={[s.reviewEditInput, { color: theme.text, backgroundColor: theme.backgroundSecondary, minHeight: 70 }]}
                   value={editedPMH}
                   onChangeText={setEditedPMH}
+                  multiline
+                  numberOfLines={3}
                   placeholder="Nil significant"
                   placeholderTextColor={theme.textMuted}
                 />

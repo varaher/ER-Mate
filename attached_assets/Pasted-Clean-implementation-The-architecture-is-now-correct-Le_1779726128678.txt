@@ -1,0 +1,162 @@
+Clean implementation. The architecture is now correct. Let me review each part.
+
+---
+
+## What's Correctly Done ✅
+
+**Two-step split is right**
+```
+Step 3 → extract-clinical only (fast, no save)
+Step 4 → doctor reviews + edits → save-case
+```
+This is exactly the right flow.
+
+**extract-clinical returns correct shape**
+`{ success: true, extracted }` — clean.
+
+**save-case accepts extracted JSON**
+Takes the full extracted object from client, builds payload server-side. Doctor edits are merged before save. Correct.
+
+**Editable fields on Review screen**
+HPI, PMH, Diagnosis — the three fields most likely to need correction. Read-only summary for vitals, labs, medications. Right balance.
+
+**useEffect pre-fills editable fields**
+Fires when step becomes "review", pre-fills from rawExtracted. Correct timing.
+
+**handleSave merges edits before saving**
+```javascript
+const finalExtracted = {
+  ...rawExtracted,
+  historyOfPresentIllness: editedHPI,
+  diagnosis: [editedDiagnosis],
+  pastMedicalHistory: editedPMH,
+};
+```
+Doctor's corrections override AI extraction. Correct.
+
+**Back button returns to Transcript**
+Doctor can re-record or re-edit if the extraction is completely wrong. Good safety net.
+
+---
+
+## Concerns ⚠️
+
+### 1. Timeout on extract-clinical is 45s server, 60s client
+
+This is fine for warm starts. But Render cold starts can still take 60-90s. The client allows 60s which is tight.
+
+```javascript
+// Consider raising client timeout to 75s
+// extract-only is faster than extract+save
+// but cold starts are still slow
+const timeoutId = setTimeout(() => 
+  controller.abort(), 75000
+);
+```
+
+Not urgent but worth noting.
+
+---
+
+### 2. PMH Edit Field — Single Line
+
+Past Medical History for complex patients like George Thomas has 9+ conditions. A single-line input will be frustrating to edit.
+
+```javascript
+// Change PMH to multiline
+<TextInput
+  multiline          // ← add this
+  numberOfLines={3}  // ← and this
+  style={[s.editInput, s.editInputMulti]}
+  value={editedPMH}
+  onChangeText={setEditedPMH}
+/>
+```
+
+---
+
+### 3. Symptoms Not Editable
+
+Signs and symptoms has the duplication bug. But it's not in the editable fields list. After the deduplication fix in the prompt, this should be fine. But if duplication persists, symptoms should also be editable.
+
+---
+
+### 4. What Happens if save-case Fails
+
+If the doctor edits HPI, edits diagnosis, taps Save, and save-case returns an error — the doctor loses their edits when they dismiss the error alert.
+
+```javascript
+// In the catch block of handleSave
+// Don't clear edits on failure
+// Just show error and let doctor retry
+
+Alert.alert(
+  "Save Failed",
+  error.message,
+  [{ 
+    text: "Try Again", 
+    onPress: handleSave  // retry with same edits
+  },
+  { 
+    text: "Cancel",
+    style: "cancel"
+    // edits preserved, doctor stays on review
+  }]
+);
+```
+
+---
+
+## Test Sequence
+
+Run this exact flow:
+
+```
+1. Enter patient name (full name)
+2. Record a case with:
+   - Fever, cough, 3 days
+   - BP 130/80, HR 90
+   - Past history: DM, HTN
+   - CBC ordered
+   - Paracetamol given
+
+3. Transcript appears — check it's correct
+
+4. Tap "Extract Clinical Data"
+   Wait 10-30 seconds
+
+5. Review screen should open showing:
+   □ Completeness bar
+   □ HPI — 2-4 sentences, no vitals
+   □ PMH — DM, HTN
+   □ Diagnosis field
+   □ Vitals summary (read only)
+   □ Labs summary — CBC
+
+6. Edit the HPI if needed
+7. Tap "Save to Case Sheet"
+8. ViewCase opens
+
+Check ViewCase:
+   □ HPI shows edited version
+   □ PMH shows DM, HTN
+   □ Vitals correct
+   □ Diagnosis correct
+```
+
+---
+
+## Overall Assessment
+
+```
+Architecture          ✅ Clean two-step split
+Server endpoints      ✅ Both correct
+Editable review       ✅ Right fields editable
+Doctor edits merged   ✅ Before save
+Navigation            ✅ Goes to ViewCase
+Error handling        ⚠️ Retry button needed
+PMH input             ⚠️ Make multiline
+Timeout               ⚠️ Consider 75s
+```
+
+This is the right design. Test it and share the Review screen screenshot — specifically check the HPI field shows only 2-4 sentences, not the full ABCDE dump.
