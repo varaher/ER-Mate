@@ -1159,7 +1159,7 @@ Extract and categorize any mentioned clinical information into the following str
 Respond in JSON format:
 {
   "chiefComplaint": "Main presenting complaint if mentioned",
-  "historyOfPresentIllness": "A complete NARRATIVE clinical story in third person prose. Weave onset, duration, progression, character, location, severity, aggravating/relieving factors, associated symptoms, and pertinent negatives into flowing text. Do NOT use labels or bullet points. Example: 'Patient presented with severe epigastric pain of 6 hours duration, burning in character, aggravated by food intake and relieved by antacids. Associated with nausea and two episodes of non-bilious vomiting. No hematemesis or melena.'",
+  "historyOfPresentIllness": "2\u20134 sentences in third-person prose covering ONLY: the patient's chief complaint, onset, duration, and reported symptoms/background history. DO NOT include vital signs, ABCDE findings, GCS, ECG/ABG results, CRT, pupils, examination findings, or any clinical assessment data \u2014 those belong in their own fields. Example: 'The patient is a 45-year-old male who presented with crushing chest pain of sudden onset 2 hours ago, radiating to the left arm, associated with diaphoresis and breathlessness. He has a background history of hypertension and diabetes mellitus.'",
   "pastMedicalHistory": ["Array of known conditions, one per item \u2014 e.g. Diabetes, Hypertension"],
   "allergies": "Drug/food allergies if mentioned \u2014 use NKDA if doctor says no allergies",
   "medications": "Current medications if mentioned",
@@ -1195,10 +1195,12 @@ Respond in JSON format:
 IMPORTANT RULES:
 1. When the doctor mentions prescribing or administering medications (e.g., "give paracetamol 1g IV", "start on Tab Pantoprazole 40mg OD"), extract them into "prescribedMedications" array. When IV fluids or continuous infusions are mentioned (e.g., "start NS at 100ml/hr", "Dopamine drip"), extract them into "prescribedInfusions" array. "medications" field is ONLY for the patient's current/home medications (medication history).
 2. CRITICAL: Only include fields that have ACTUAL content mentioned in the transcript. Do NOT include fields with values like "Not mentioned", "None", "N/A", "Unknown", or empty strings. Simply OMIT the field entirely if no relevant information was mentioned.
-3. For "historyOfPresentIllness": Construct a complete NARRATIVE clinical story in flowing third-person prose. Weave ALL clinical details (onset, duration, progression, character, location, severity, aggravating/relieving factors, associated symptoms, pertinent negatives) into a cohesive paragraph. Do NOT use labels like "Onset:", "Duration:", etc. Example: "Patient presented with severe retrosternal chest pain of sudden onset 2 hours ago while climbing stairs. The pain is crushing in nature, radiating to the left arm, aggravated by exertion and partially relieved by rest. Associated with profuse sweating and breathlessness. No history of vomiting or syncope."
+3. For "historyOfPresentIllness": Write 2\u20134 sentences in third-person prose covering ONLY the patient's symptoms, chief complaint, onset, duration, and relevant background history as reported by the patient or bystander. DO NOT include vital signs, ABCDE examination findings, GCS scores, ECG/ABG results, CRT, pupils, power, or any clinical assessment data \u2014 those belong in their dedicated fields. Keep it concise. Example: "The patient presented with severe retrosternal chest pain of sudden onset 2 hours ago, radiating to the left arm. Associated with profuse sweating and breathlessness. He has a background history of hypertension."
 4. For "painDetails": Only include specific subfields (location, severity, character, etc.) where the doctor ACTUALLY describes pain characteristics. Do NOT include subfields with "Not mentioned" values. Omit the entire painDetails object if pain is not relevant to the presentation. Pain details should ALSO be woven into the historyOfPresentIllness narrative.
 5. For "chiefComplaint": Extract the main reason the patient came to the ER. This should be a brief phrase like "Vomiting and loose stools" or "Chest pain" or "Difficulty breathing".
-6. "REST ALL NORMAL" DETECTION: If the doctor says phrases like "rest all examination normal", "other systems normal", "rest all systems within normal limits", "systemic examination otherwise normal", "rest of examination unremarkable", or any similar wording indicating unmentioned exam systems should be considered normal \u2014 set "restAllNormal" to true. The examFindings should still contain any SPECIFIC findings mentioned, and restAllNormal covers everything else.`;
+6. "REST ALL NORMAL" DETECTION: If the doctor says phrases like "rest all examination normal", "other systems normal", "rest all systems within normal limits", "systemic examination otherwise normal", "rest of examination unremarkable", or any similar wording indicating unmentioned exam systems should be considered normal \u2014 set "restAllNormal" to true. The examFindings should still contain any SPECIFIC findings mentioned, and restAllNormal covers everything else.
+7. ECG DETECTION: If the doctor mentions ECG findings (e.g. "ECG tachycardia", "ECG normal", "ECG showed ST elevation", "ECG sinus rhythm", "ECG done"), extract adjuncts.ecgDone as true and adjuncts.ecgFindings as the finding described (e.g. "Sinus tachycardia", "Normal sinus rhythm", "ST elevation in leads II, III, aVF"). A phrase like "ECG tachycardia" means ecgDone=true, ecgFindings="Sinus tachycardia".
+8. SYMPTOMS: The "symptoms" array must contain only UNIQUE items. If the same symptom appears via multiple parts of the transcript, include it only once.`;
   try {
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
@@ -1583,7 +1585,7 @@ SCHEMA (fill every field, use "" for not mentioned):
   "onset": "When symptoms started",
   "duration": "Duration of symptoms",
   "progression": "How symptoms progressed",
-  "historyOfPresentIllness": "Complete narrative clinical story in third person \u2014 weave onset, duration, progression, character, location, severity, aggravating/relieving factors, associated symptoms, pertinent negatives into flowing prose",
+  "historyOfPresentIllness": "2\u20134 sentences in third-person prose covering ONLY: chief complaint, onset, duration, and reported symptoms/background history. NO vitals, NO ABCDE findings, NO GCS, NO ECG/ABG, NO examination findings. Example: 'The patient presented with fever since 2 days, associated with lower abdominal pain and history of recurrent UTI. Symptoms were of gradual onset.'",
   "associatedSymptoms": "Symptoms accompanying chief complaint",
   "negativeSymptoms": "Pertinent negatives explicitly mentioned",
   "symptoms": [],
@@ -1658,7 +1660,9 @@ SCHEMA (fill every field, use "" for not mentioned):
 }
 
 SPECIAL INSTRUCTION - "REST ALL NORMAL" DETECTION:
-8. If the doctor says phrases like "rest all examination normal", "other systems normal", "rest all systems within normal limits", "systemic examination otherwise normal", "rest of examination unremarkable", "per abdomen soft non-tender rest all normal", "o/e NAD rest normal", or any similar wording indicating that examination systems NOT specifically mentioned with abnormal findings should be considered normal \u2014 set "restAllNormal" to true. This tells the app to auto-fill normal findings for all exam sections that don't have specific abnormalities documented. The examFindings should still contain any SPECIFIC findings the doctor mentioned (both normal details and abnormalities), and restAllNormal covers everything else.`;
+8. If the doctor says phrases like "rest all examination normal", "other systems normal", "rest all systems within normal limits", "systemic examination otherwise normal", "rest of examination unremarkable", "per abdomen soft non-tender rest all normal", "o/e NAD rest normal", or any similar wording indicating that examination systems NOT specifically mentioned with abnormal findings should be considered normal \u2014 set "restAllNormal" to true. This tells the app to auto-fill normal findings for all exam sections that don't have specific abnormalities documented. The examFindings should still contain any SPECIFIC findings the doctor mentioned (both normal details and abnormalities), and restAllNormal covers everything else.
+9. ECG DETECTION: If the doctor mentions ECG findings (e.g. "ECG tachycardia", "ECG normal", "ECG showed ST elevation", "ECG sinus rhythm", "ECG done"), set adjuncts.ecgDone=true and adjuncts.ecgFindings to the finding (e.g. "Sinus tachycardia", "Normal sinus rhythm", "ST elevation"). "ECG tachycardia" \u2192 ecgDone=true, ecgFindings="Sinus tachycardia".
+10. SYMPTOMS DEDUPLICATION: The "symptoms" array must list each unique symptom only once. Do not repeat symptoms that appear in multiple parts of the transcript.`;
   try {
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
@@ -4253,6 +4257,13 @@ ${resultsSummary}`,
       const symptomsArr = [];
       if (ex.symptoms?.length > 0) symptomsArr.push(...ex.symptoms);
       if (ex.associatedSymptoms) symptomsArr.push(ex.associatedSymptoms);
+      const seenSymptoms = /* @__PURE__ */ new Set();
+      const uniqueSymptoms = symptomsArr.filter((s) => {
+        const key = s.trim().toLowerCase();
+        if (seenSymptoms.has(key)) return false;
+        seenSymptoms.add(key);
+        return true;
+      });
       const vbg = ex.vbgResults || {};
       const adjunctsAbg = {};
       if (vbg.ph) adjunctsAbg.pH = vbg.ph;
@@ -4282,7 +4293,7 @@ ${resultsSummary}`,
           history: {
             hpi: ex.historyOfPresentIllness || transcript,
             events_hopi: ex.historyOfPresentIllness || transcript,
-            signs_and_symptoms: symptomsArr.join(", "),
+            signs_and_symptoms: uniqueSymptoms.join(", "),
             past_medical: pastMedArr,
             past_surgical: ex.pastSurgicalHistory || "",
             allergies: ex.allergies ? ex.allergies.split(/[,;]+/).map((s) => s.trim()).filter((s) => s) : [],
@@ -4295,7 +4306,7 @@ ${resultsSummary}`,
           // Mirror the sample object (backend reads this directly for SAMPLE history display)
           sample: {
             eventsHopi: ex.historyOfPresentIllness || transcript,
-            signsSymptoms: symptomsArr.join(", "),
+            signsSymptoms: uniqueSymptoms.join(", "),
             pastMedicalHistory: pastMedArr,
             allergies: ex.allergies ? ex.allergies.split(/[,;]+/).map((s) => s.trim()).filter((s) => s) : [],
             medications: ex.currentMedications || "",

@@ -2585,6 +2585,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const symptomsArr: string[] = [];
       if (ex.symptoms?.length > 0) symptomsArr.push(...ex.symptoms);
       if (ex.associatedSymptoms) symptomsArr.push(ex.associatedSymptoms);
+      // Deduplicate case-insensitively
+      const seenSymptoms = new Set<string>();
+      const uniqueSymptoms = symptomsArr.filter(s => {
+        const key = s.trim().toLowerCase();
+        if (seenSymptoms.has(key)) return false;
+        seenSymptoms.add(key);
+        return true;
+      });
 
       // VBG → adjuncts.abg (keys must match export reader: pH, pCO2, Lactate, Na, K, Hb etc.)
       const vbg = ex.vbgResults || {};
@@ -2622,7 +2630,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           history: {
             hpi: ex.historyOfPresentIllness || transcript,
             events_hopi: ex.historyOfPresentIllness || transcript,
-            signs_and_symptoms: symptomsArr.join(", "),
+            signs_and_symptoms: uniqueSymptoms.join(", "),
             past_medical: pastMedArr,
             past_surgical: ex.pastSurgicalHistory || "",
             allergies: ex.allergies ? ex.allergies.split(/[,;]+/).map((s: string) => s.trim()).filter((s: string) => s) : [],
@@ -2635,7 +2643,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Mirror the sample object (backend reads this directly for SAMPLE history display)
           sample: {
             eventsHopi: ex.historyOfPresentIllness || transcript,
-            signsSymptoms: symptomsArr.join(", "),
+            signsSymptoms: uniqueSymptoms.join(", "),
             pastMedicalHistory: pastMedArr,
             allergies: ex.allergies ? ex.allergies.split(/[,;]+/).map((s: string) => s.trim()).filter((s: string) => s) : [],
             medications: ex.currentMedications || "",
