@@ -4110,6 +4110,24 @@ ${resultsSummary}`,
   });
   app2.post("/api/voice/extract-and-save", async (req, res) => {
     try {
+      let splitPMHString2 = function(str) {
+        const result = [];
+        for (const chunk of str.split(/[;\n]+/)) {
+          const parts = chunk.split(/,\s*/);
+          let current = parts[0];
+          for (let i = 1; i < parts.length; i++) {
+            if (PMH_CONTINUATION.test(parts[i])) {
+              current = current + ", " + parts[i];
+            } else {
+              if (current.trim()) result.push(current.trim());
+              current = parts[i];
+            }
+          }
+          if (current.trim()) result.push(current.trim());
+        }
+        return result.filter((s) => s.length > 0);
+      };
+      var splitPMHString = splitPMHString2;
       const authHeader = req.headers.authorization;
       if (!authHeader) return res.status(401).json({ error: "No auth token" });
       const {
@@ -4210,7 +4228,9 @@ ${resultsSummary}`,
       if (!caseId) return res.status(500).json({ error: "No case ID returned" });
       console.log("[ExtractAndSave] Case created:", caseId);
       const pastMedRaw = ex.pastMedicalHistory;
-      const pastMedArr = Array.isArray(pastMedRaw) ? pastMedRaw.map((s) => s.trim()).filter((s) => s) : typeof pastMedRaw === "string" && pastMedRaw ? pastMedRaw.split(/[,;\/\n]+/).map((s) => s.trim()).filter((s) => s) : [];
+      console.log(`[ExtractAndSave] PMH type: ${Array.isArray(pastMedRaw) ? "array" : typeof pastMedRaw}, value: ${JSON.stringify(pastMedRaw)?.slice(0, 120)}`);
+      const PMH_CONTINUATION = /^(baseline|with\s|grade\s|stage\s|class\s|on\s|per\s|approx|approximately|uncontrolled|controlled|bilateral|unilateral|and\s|or\s|at\s|from\s|since\s|till\s)/i;
+      const pastMedArr = Array.isArray(pastMedRaw) ? pastMedRaw.map((s) => s.trim()).filter((s) => s) : typeof pastMedRaw === "string" && pastMedRaw ? splitPMHString2(pastMedRaw) : [];
       const symptomsArr = [];
       if (ex.symptoms?.length > 0) symptomsArr.push(...ex.symptoms);
       if (ex.associatedSymptoms) symptomsArr.push(ex.associatedSymptoms);

@@ -2532,10 +2532,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Step 4 — Build and push clinical data
       // pastMedicalHistory may be returned as array (rule 6) or string (schema) — handle both
       const pastMedRaw = ex.pastMedicalHistory;
+      // Log the raw type so we can verify schema fix in production logs
+      console.log(`[ExtractAndSave] PMH type: ${Array.isArray(pastMedRaw) ? "array" : typeof pastMedRaw}, value: ${JSON.stringify(pastMedRaw)?.slice(0, 120)}`);
+
+      // Continuation words that indicate the comma is WITHIN a condition, not between two conditions
+      // e.g. "CKD, baseline GFR 2.9" → should NOT split; "CAD, ACS, STEMI" → should split
+      const PMH_CONTINUATION = /^(baseline|with\s|grade\s|stage\s|class\s|on\s|per\s|approx|approximately|uncontrolled|controlled|bilateral|unilateral|and\s|or\s|at\s|from\s|since\s|till\s)/i;
+
+      function splitPMHString(str: string): string[] {
+        const result: string[] = [];
+        // First split on unambiguous separators: semicolons and newlines
+        for (const chunk of str.split(/[;\n]+/)) {
+          const parts = chunk.split(/,\s*/);
+          let current = parts[0];
+          for (let i = 1; i < parts.length; i++) {
+            if (PMH_CONTINUATION.test(parts[i])) {
+              // Comma is within one condition — keep joined
+              current = current + ", " + parts[i];
+            } else {
+              if (current.trim()) result.push(current.trim());
+              current = parts[i];
+            }
+          }
+          if (current.trim()) result.push(current.trim());
+        }
+        return result.filter(s => s.length > 0);
+      }
+
       const pastMedArr: string[] = Array.isArray(pastMedRaw)
         ? pastMedRaw.map((s: string) => s.trim()).filter((s: string) => s)
         : typeof pastMedRaw === "string" && pastMedRaw
-          ? pastMedRaw.split(/[,;\/\n]+/).map((s: string) => s.trim()).filter((s: string) => s)
+          ? splitPMHString(pastMedRaw)
           : [];
 
       const symptomsArr: string[] = [];
