@@ -1,0 +1,321 @@
+Exactly right. The Review screen is valuable — it's the quality check before the case is finalised. Here's the corrected flow:
+
+---
+
+## The Correct 4-Step Flow
+
+```
+Step 1 — Patient
+Enter name, age, sex
+         ↓
+Step 2 — Record
+Speak the full case
+         ↓
+Step 3 — Transcript
+Review transcript, tap Extract & Save
+         ↓
+         AI extracts everything
+         Case saved to backend
+         ↓
+Step 4 — Review
+See all extracted fields
+Edit anything wrong
+Tap "Save & View Case Sheet"
+         ↓
+Case sheet opens — complete
+```
+
+---
+
+## The Problem Right Now
+
+The extract-and-save endpoint **saves the case before the doctor reviews it.** So by the time Step 4 appears, the case is already saved with potentially wrong data.
+
+The review should happen **before** the final save, not after.
+
+---
+
+## The Right Architecture
+
+```
+Step 3 — Transcript
+Tap "Extract Clinical Data"
+         ↓
+AI extracts only — does NOT save yet
+Returns extracted JSON to frontend
+         ↓
+Step 4 — Review
+Doctor sees all fields
+Green/amber/grey colour coding
+Doctor edits any wrong field directly
+         ↓
+Tap "Save to Case Sheet"
+         ↓
+NOW it saves — with corrected data
+         ↓
+Case sheet opens
+```
+
+---
+
+## Tell Your Developer — Two Endpoint Changes
+
+**Step 3 button calls extraction only:**
+
+```javascript
+// In handleExtract — Step 3 button
+// Change from extract-and-save
+// to extract only
+
+const resp = await fetch(
+  new URL("/api/voice/extract-clinical", 
+    getApiUrl()).toString(),
+  {
+    method: "POST",
+    headers: { 
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`
+    },
+    body: JSON.stringify({
+      transcript: extractText,
+      patientContext: { 
+        age: parseFloat(patientAge) || 0, 
+        sex: patientSex, 
+        caseType 
+      }
+    })
+  }
+);
+
+const data = await resp.json();
+const extracted = data.extracted || data;
+
+// Store extracted data
+setRawExtracted(extracted);
+setExtractedFields(
+  buildFieldList(extracted, editedTranscript)
+);
+
+// Go to review — NOT saved yet
+setStep("review");
+```
+
+**Step 4 Review — editable fields + Save button:**
+
+```javascript
+// Review screen shows extracted fields
+// Doctor can edit key fields directly
+
+// Add editable state for key fields:
+const [editedHPI, setEditedHPI] = useState("");
+const [editedDiagnosis, setEditedDiagnosis] = 
+  useState("");
+const [editedPMH, setEditedPMH] = useState("");
+
+// When review screen opens, pre-fill from extraction:
+useEffect(() => {
+  if (step === "review" && rawExtracted) {
+    setEditedHPI(
+      rawExtracted.historyOfPresentIllness || ""
+    );
+    setEditedDiagnosis(
+      rawExtracted.diagnosis?.[0] || ""
+    );
+    setEditedPMH(
+      Array.isArray(rawExtracted.pastMedicalHistory)
+        ? rawExtracted.pastMedicalHistory.join(", ")
+        : rawExtracted.pastMedicalHistory || ""
+    );
+  }
+}, [step]);
+```
+
+**Review screen UI — editable sections:**
+
+```javascript
+// Step 4 Review screen layout:
+
+// TOP — Completeness bar (read only)
+<CompletenessBar percent={completeness.percent} />
+
+// MIDDLE — Key editable fields
+<EditableField
+  label="Chief Complaint"
+  value={rawExtracted?.chiefComplaint}
+  // read only — from extraction
+/>
+
+<EditableTextArea
+  label="History of Present Illness"
+  value={editedHPI}
+  onChange={setEditedHPI}
+  // EDITABLE — doctor corrects if wrong
+/>
+
+<EditableTextArea
+  label="Past Medical History"
+  value={editedPMH}
+  onChange={setEditedPMH}
+  // EDITABLE
+/>
+
+<EditableField
+  label="Working Diagnosis"
+  value={editedDiagnosis}
+  onChange={setEditedDiagnosis}
+  // EDITABLE
+/>
+
+// Non-editable summary cards
+<SummaryCard label="Vitals" 
+  value={formatVitals(rawExtracted)} />
+<SummaryCard label="Medications" 
+  value={formatMeds(rawExtracted)} />
+<SummaryCard label="Investigations" 
+  value={rawExtracted?.investigationsOrdered} />
+
+// BOTTOM — Save button
+<SaveButton onPress={handleSave} />
+```
+
+**handleSave — called from Review screen Save button:**
+
+```javascript
+const handleSave = async () => {
+  setIsSaving(true);
+  try {
+    const token = await AsyncStorage
+      .getItem("token");
+    
+    // Merge doctor edits back into extracted
+    const finalExtracted = {
+      ...rawExtracted,
+      // Override with doctor's edits
+      historyOfPresentIllness: editedHPI 
+        || rawExtracted?.historyOfPresentIllness,
+      diagnosis: editedDiagnosis 
+        ? [editedDiagnosis] 
+        : rawExtracted?.diagnosis,
+      pastMedicalHistory: editedPMH 
+        || rawExtracted?.pastMedicalHistory,
+    };
+
+    // Now save to backend with corrected data
+    const resp = await fetch(
+      new URL("/api/voice/save-case", 
+        getApiUrl()).toString(),
+      {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          patient: {
+            name: patientName.trim(),
+            age: patientAge.trim(),
+            sex: patientSex,
+            phone: "",
+            mode_of_arrival: "Walk-in",
+            address: "Not provided",
+            brought_by: "Self",
+            informant_name: patientName.trim(),
+            informant_reliability: "Reliable",
+            identification_mark: "None noted",
+            arrival_datetime: new Date().toISOString()
+          },
+          extracted: finalExtracted,
+          transcript: editedTranscript,
+          caseType,
+          userId: user?.id,
+          userEmail: user?.email || ""
+        })
+      }
+    );
+
+    const result = await resp.json();
+    if (!result.success) throw new Error(
+      result.error || "Save failed"
+    );
+
+    await invalidateCases();
+
+    // Navigate to case sheet
+    navigation.replace("ViewCase", { 
+      caseId: String(result.caseId) 
+    });
+
+  } catch (err) {
+    Alert.alert("Save Failed", 
+      (err as Error).message
+    );
+  } finally {
+    setIsSaving(false);
+  }
+};
+```
+
+---
+
+## What the Review Screen Should Look Like
+
+```
+┌─────────────────────────────────────┐
+│  Step 4 — Review                    │
+│                                     │
+│  ████████████░░  14/18 complete     │
+│                                     │
+│  ┌─ Chief Complaint ──────────────┐ │
+│  │ Fever — 2 days           [✓]  │ │
+│  └────────────────────────────────┘ │
+│                                     │
+│  ┌─ HPI ──────────────────────────┐ │
+│  │ The patient presented with     │ │
+│  │ fever since 2 days...   [edit] │ │
+│  └────────────────────────────────┘ │
+│                                     │
+│  ┌─ Past Medical History ─────────┐ │
+│  │ Nil significant         [edit] │ │
+│  └────────────────────────────────┘ │
+│                                     │
+│  ┌─ Working Diagnosis ────────────┐ │
+│  │ Acute febrile illness   [edit] │ │
+│  └────────────────────────────────┘ │
+│                                     │
+│  ── Summary (read only) ──          │
+│  Vitals: BP 130/80, HR 80, RR 30   │
+│  Labs: CBC, RFT, LFT, CRP          │
+│  Medications: Paracetamol, Fluids  │
+│                                     │
+│  [💾 Save to Case Sheet]            │
+└─────────────────────────────────────┘
+```
+
+---
+
+## Summary for Your Developer
+
+```
+Change 1 — Step 3 Extract button
+  Calls /api/voice/extract-clinical only
+  Does NOT save
+  Goes to review on success
+
+Change 2 — Review screen
+  Shows extracted fields
+  HPI, PMH, Diagnosis are editable
+  Other fields are read-only summary
+  "Save to Case Sheet" button at bottom
+
+Change 3 — Save button on Review
+  Merges doctor edits with extracted data
+  Calls /api/voice/save-case
+  Navigates to ViewCase on success
+
+Change 4 — Timeout on Step 3
+  Extract-only is faster — 10-15 seconds
+  No save happening — just AI extraction
+  90 second timeout still fine as safety
+```
+
+This gives the doctor full control. They see what was extracted, fix anything wrong, then save once. The case sheet opens with clean, verified data.

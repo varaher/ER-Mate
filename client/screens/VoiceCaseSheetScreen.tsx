@@ -26,6 +26,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { apiPost, invalidateCases } from "@/lib/api";
 import { Spacing, BorderRadius, Typography } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type Step = "patient" | "record" | "transcript" | "review";
@@ -81,6 +82,12 @@ export default function VoiceCaseSheetScreen() {
   const [extractedFields, setExtractedFields] = useState<ExtractedField[]>([]);
   const [rawExtracted, setRawExtracted] = useState<any>(null);
   const [savedCaseId, setSavedCaseId] = useState<string | null>(null);
+
+  // Editable review fields
+  const [editedHPI, setEditedHPI] = useState("");
+  const [editedDiagnosis, setEditedDiagnosis] = useState("");
+  const [editedPMH, setEditedPMH] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
   // Animations
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -271,6 +278,16 @@ export default function VoiceCaseSheetScreen() {
     }
   };
 
+  // Pre-fill editable review fields when review step loads
+  useEffect(() => {
+    if (step === "review" && rawExtracted) {
+      setEditedHPI(rawExtracted.historyOfPresentIllness || "");
+      setEditedDiagnosis(rawExtracted.diagnosis?.[0] || "");
+      const pmh = rawExtracted.pastMedicalHistory;
+      setEditedPMH(Array.isArray(pmh) ? pmh.join(", ") : (typeof pmh === "string" ? pmh : ""));
+    }
+  }, [step]);
+
   const handleExtract = async () => {
     const text = editedTranscript.trim();
 
@@ -278,7 +295,6 @@ export default function VoiceCaseSheetScreen() {
       Alert.alert("Nothing to extract", "Transcript is too short. Please re-record and speak for at least 5 seconds.");
       return;
     }
-
     if (!patientName.trim()) {
       Alert.alert("Required", "Please enter a patient name before saving.");
       setStep("patient");
@@ -286,21 +302,16 @@ export default function VoiceCaseSheetScreen() {
     }
 
     const token = await AsyncStorage.getItem("token");
-    if (!token) {
-      Alert.alert("Session expired", "Please log in again.");
-      return;
-    }
+    if (!token) { Alert.alert("Session expired", "Please log in again."); return; }
 
     setIsExtracting(true);
 
     // Translate non-English transcript first
     let extractText = text;
-    const isNonEnglish = detectedLanguage && !detectedLanguage.startsWith("en");
     try {
-      if (isNonEnglish) {
+      if (detectedLanguage && !detectedLanguage.startsWith("en")) {
         const tResp = await fetch(new URL("/api/voice/translate", getApiUrl()).toString(), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+          method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text, sourceLanguage: detectedLanguage }),
         });
         if (tResp.ok) {
@@ -314,75 +325,102 @@ export default function VoiceCaseSheetScreen() {
     } catch (_) {}
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 90000);
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
     try {
-      console.log("[ExtractAndSave] Calling combined endpoint, length:", extractText.length);
+      console.log("[Extract] Calling extract-clinical, length:", extractText.length);
 
-      const patientPayload = {
-        name: patientName.trim(),
-        age: patientAge.trim(),
-        sex: patientSex,
-        phone: "",
-        mode_of_arrival: "Walk-in",
-        address: "Not provided",
-        brought_by: "Self",
-        informant_name: patientName.trim(),
-        informant_reliability: "Reliable",
-        identification_mark: "None noted",
-        arrival_datetime: new Date().toISOString(),
-      };
-
-      const resp = await fetch(new URL("/api/voice/extract-and-save", getApiUrl()).toString(), {
+      const resp = await fetch(new URL("/api/voice/extract-clinical", getApiUrl()).toString(), {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         signal: controller.signal,
         body: JSON.stringify({
           transcript: extractText,
           patientContext: { age: parseFloat(patientAge) || 0, sex: patientSex, caseType },
-          patient: patientPayload,
+        }),
+      });
+      clearTimeout(timeoutId);
+
+      if (!resp.ok) {
+        const errBody = await resp.text();
+        throw new Error(`Server returned ${resp.status}: ${errBody}`);
+      }
+
+      const data = await resp.json();
+      const extracted = data.extracted || null;
+      console.log("[Extract] Done. Chief complaint:", extracted?.chiefComplaint);
+
+      setRawExtracted(extracted);
+      setExtractedFields(buildFieldList(extracted || {}, text));
+      setStep("review");
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      const isTimeout = err?.name === "AbortError";
+      Alert.alert(
+        isTimeout ? "Taking too long" : "Extraction failed",
+        isTimeout
+          ? "The AI is taking longer than expected. Please check your connection and try again."
+          : err.message || "Could not extract clinical data. Please try again.",
+        [{ text: "OK" }]
+      );
+    } finally {
+      setIsExtracting(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!rawExtracted) { Alert.alert("Nothing to save", "Please extract clinical data first."); return; }
+    setIsSaving(true);
+    try {
+      const token = await AsyncStorage.getItem("token");
+      if (!token) { Alert.alert("Session expired", "Please log in again."); return; }
+
+      // Merge doctor's edits back into extracted data
+      const finalExtracted = {
+        ...rawExtracted,
+        historyOfPresentIllness: editedHPI.trim() || rawExtracted.historyOfPresentIllness,
+        diagnosis: editedDiagnosis.trim()
+          ? [editedDiagnosis.trim(), ...(rawExtracted.diagnosis || []).slice(1)]
+          : rawExtracted.diagnosis,
+        pastMedicalHistory: editedPMH.trim()
+          ? editedPMH.split(/[,;]+/).map((s: string) => s.trim()).filter((s: string) => s)
+          : rawExtracted.pastMedicalHistory,
+      };
+
+      const resp = await fetch(new URL("/api/voice/save-case", getApiUrl()).toString(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({
+          patient: {
+            name: patientName.trim(),
+            age: patientAge.trim(),
+            sex: patientSex,
+            phone: "",
+            mode_of_arrival: "Walk-in",
+            address: "Not provided",
+            brought_by: "Self",
+            informant_name: patientName.trim(),
+            informant_reliability: "Reliable",
+            identification_mark: "None noted",
+            arrival_datetime: new Date().toISOString(),
+          },
+          extracted: finalExtracted,
+          transcript: editedTranscript,
           case_type: caseType,
           userId: user?.id,
           userEmail: user?.email || "",
         }),
       });
-      clearTimeout(timeoutId);
 
-      console.log("[ExtractAndSave] Response status:", resp.status);
+      const result = await resp.json();
+      if (!result.success) throw new Error(result.error || "Save failed");
 
-      if (!resp.ok) {
-        const errBody = await resp.text();
-        console.error("[ExtractAndSave] Server error:", errBody);
-        throw new Error(`Server returned ${resp.status}: ${errBody}`);
-      }
-
-      const data = await resp.json();
-      console.log("[ExtractAndSave] Success. Case ID:", data.caseId);
-
-      const extracted = data.extracted || null;
-
-      setSavedCaseId(data.caseId ? String(data.caseId) : null);
-      setRawExtracted(extracted);
-      setExtractedFields(buildFieldList(extracted || {}, text));
+      setSavedCaseId(String(result.caseId));
       await invalidateCases();
-      setStep("review");
+      navigation.replace("ViewCase", { caseId: String(result.caseId) });
     } catch (err: any) {
-      clearTimeout(timeoutId);
-      const isTimeout = err?.name === "AbortError";
-      console.error("[Extract] Error:", err?.name, err?.message);
-      Alert.alert(
-        isTimeout ? "Still processing..." : "Extract & Save failed",
-        isTimeout
-          ? "The AI took longer than expected. Your case may already be saved — please check the Cases tab. If it is not there, tap Extract & Save again."
-          : err.message || "Could not extract and save the case. Please check your connection and try again.",
-        isTimeout
-          ? [
-              { text: "Check Cases", onPress: () => navigation.navigate("Main" as any) },
-              { text: "Try Again", style: "cancel" },
-            ]
-          : [{ text: "OK" }]
-      );
+      Alert.alert("Save Failed", err.message || "Could not save case. Please try again.");
     } finally {
-      setIsExtracting(false);
+      setIsSaving(false);
     }
   };
 
@@ -1050,11 +1088,11 @@ export default function VoiceCaseSheetScreen() {
               {isExtracting
                 ? <>
                     <ActivityIndicator size="small" color="#fff" />
-                    <Text style={s.primaryBtnText}>Extracting & Saving... (up to 90s)</Text>
+                    <Text style={s.primaryBtnText}>Extracting... (up to 60s)</Text>
                   </>
                 : <>
                     <Feather name="cpu" size={15} color="#fff" />
-                    <Text style={s.primaryBtnText}>Extract & Save to Case Sheet</Text>
+                    <Text style={s.primaryBtnText}>Extract Clinical Data</Text>
                   </>
               }
             </Pressable>
@@ -1065,19 +1103,34 @@ export default function VoiceCaseSheetScreen() {
       {/* ── STEP 4: REVIEW ─────────────────────────────────────────────────────── */}
       {step === "review" && (() => {
         const completeness = computeCompleteness(rawExtracted);
-        const voiceCount = extractedFields.filter(f => f.source === 'voice').length;
-        const missingCount = extractedFields.filter(f => f.source === 'missing').length;
-        return (
-          <View style={[s.reviewRoot, { paddingBottom: botPad }]}>
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.reviewScroll}>
+        const ex = rawExtracted || {};
+        const vs = ex.vitalsSuggested || {};
+        const ps = ex.primarySurvey || {};
 
-              {/* Case Saved banner */}
-              <View style={[s.savedBanner, { backgroundColor: "#16a34a15", borderColor: "#16a34a" }]}>
-                <Feather name="check-circle" size={18} color="#16a34a" />
+        const vitalsLine = [
+          vs.bp && `BP ${vs.bp}`,
+          vs.hr && `HR ${vs.hr}`,
+          vs.rr && `RR ${vs.rr}`,
+          vs.spo2 && `SpO2 ${vs.spo2}%`,
+          vs.temperature && `Temp ${vs.temperature}`,
+        ].filter(Boolean).join("  ·  ");
+
+        const medsLine = [
+          ...(ex.prescribedMedications || []).map((m: any) => `${m.name || ""}${m.dose ? ` ${m.dose}` : ""}${m.route ? ` ${m.route}` : ""}`),
+          ...(ex.prescribedInfusions || []).map((i: any) => `${i.name || ""}${i.rate ? ` @ ${i.rate}` : ""}`),
+        ].filter(Boolean).join(", ");
+
+        return (
+          <KeyboardAwareScrollViewCompat style={{ flex: 1 }}>
+            <View style={[s.reviewRoot, { paddingBottom: botPad }]}>
+
+              {/* Header banner */}
+              <View style={[s.savedBanner, { backgroundColor: "#7c3aed15", borderColor: ACCENT }]}>
+                <Feather name="edit-3" size={18} color={ACCENT} />
                 <View style={{ flex: 1 }}>
-                  <Text style={[s.savedBannerTitle, { color: "#16a34a" }]}>Case Saved</Text>
-                  <Text style={[s.savedBannerSub, { color: "#16a34a" }]}>
-                    {savedCaseId ? `Tap "View Case Sheet" to open and edit` : "Tap below to view or go to dashboard"}
+                  <Text style={[s.savedBannerTitle, { color: ACCENT }]}>Review Extracted Data</Text>
+                  <Text style={[s.savedBannerSub, { color: theme.textSecondary }]}>
+                    Edit any field below, then tap Save to Case Sheet
                   </Text>
                 </View>
               </View>
@@ -1091,41 +1144,9 @@ export default function VoiceCaseSheetScreen() {
                   </Text>
                 </View>
                 <View style={[s.progressTrack, { backgroundColor: theme.backgroundSecondary }]}>
-                  <View style={[s.progressFill, {
-                    width: `${completeness.percent}%` as any,
-                    backgroundColor: completeness.percent >= 70 ? "#16a34a" : completeness.percent >= 40 ? "#d97706" : "#dc2626",
-                  }]} />
-                </View>
-                <Text style={[s.completenessHint, { color: theme.textMuted }]}>
-                  {completeness.percent >= 80 ? "Excellent documentation" : completeness.percent >= 60 ? "Good — consider adding missing fields" : "Add more details for complete documentation"}
-                </Text>
-              </View>
-
-              {/* Legend */}
-              <View style={s.legendRow}>
-                <View style={s.legendItem}>
-                  <View style={[s.legendDot, { backgroundColor: "#16a34a" }]} />
-                  <Text style={[s.legendText, { color: theme.textMuted }]}>Voice captured</Text>
-                </View>
-                <View style={s.legendItem}>
-                  <View style={[s.legendDot, { backgroundColor: "#d97706" }]} />
-                  <Text style={[s.legendText, { color: theme.textMuted }]}>Not mentioned</Text>
-                </View>
-                <View style={s.legendItem}>
-                  <View style={[s.legendDot, { backgroundColor: "#94a3b8" }]} />
-                  <Text style={[s.legendText, { color: theme.textMuted }]}>Pre-filled normal</Text>
+                  <View style={[s.progressFill, { width: `${completeness.percent}%` as any, backgroundColor: completeness.percent >= 70 ? "#16a34a" : completeness.percent >= 40 ? "#d97706" : "#dc2626" }]} />
                 </View>
               </View>
-
-              {/* Language badge if non-English */}
-              {detectedLanguage && !detectedLanguage.startsWith('en') && (
-                <View style={[s.langBadge, { backgroundColor: "#06b6d415", borderColor: "#06b6d430" }]}>
-                  <Feather name="globe" size={13} color="#06b6d4" />
-                  <Text style={[s.langBadgeText, { color: "#06b6d4" }]}>
-                    Dictated in {detectedLanguage} — translated to English for extraction
-                  </Text>
-                </View>
-              )}
 
               {/* Patient chip */}
               <View style={[s.patientChip, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -1135,75 +1156,152 @@ export default function VoiceCaseSheetScreen() {
                 </Text>
               </View>
 
-              <Text style={[s.sectionLabel, { color: theme.textSecondary, marginTop: Spacing.md }]}>
-                {voiceCount} extracted  ·  {missingCount} missing
+              {/* ── EDITABLE FIELDS ─────────────────────────────────────────── */}
+              <Text style={[s.sectionLabel, { color: theme.textSecondary, marginTop: Spacing.md, marginBottom: 4 }]}>
+                Edit before saving
               </Text>
 
-              {extractedFields.map(f => {
-                const isVoice = f.source === 'voice';
-                const isMissing = f.source === 'missing';
-                const isPrefill = f.source === 'prefill';
-                const borderColor = isVoice
-                  ? (f.confidence === 'high' ? "#16a34a" : f.confidence === 'medium' ? "#22c55e" : "#d97706")
-                  : isMissing ? "#d97706" : "#94a3b8";
-                const iconBg = isVoice ? `${borderColor}18` : isPrefill ? "#94a3b818" : "#d9780618";
-                const iconColor = borderColor;
+              {/* Chief Complaint — read only */}
+              <View style={[s.reviewField, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                <Text style={[s.reviewFieldLabel, { color: theme.textSecondary }]}>Chief Complaint</Text>
+                <Text style={[s.reviewFieldValue, { color: theme.text }]}>
+                  {ex.chiefComplaint || "Not extracted"}
+                </Text>
+              </View>
 
-                return (
-                  <View key={f.key} style={[s.fieldCard, { backgroundColor: theme.card, borderColor: theme.border, borderLeftColor: borderColor, borderLeftWidth: 3 }]}>
-                    <View style={[s.fieldIcon, { backgroundColor: iconBg }]}>
-                      <Feather name={
-                        isVoice ? (f.icon as any) : isMissing ? "alert-circle" : "check-circle"
-                      } size={13} color={iconColor} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <View style={s.fieldLabelRow}>
-                        <Text style={[s.fieldLabel, { color: theme.textSecondary }]}>{f.label}</Text>
-                        {isPrefill && (
-                          <View style={[s.fieldBadge, { backgroundColor: "#94a3b820" }]}>
-                            <Text style={[s.fieldBadgeText, { color: "#94a3b8" }]}>pre-filled</Text>
-                          </View>
-                        )}
-                        {isMissing && (
-                          <View style={[s.fieldBadge, { backgroundColor: "#d9780618" }]}>
-                            <Text style={[s.fieldBadgeText, { color: "#d97706" }]}>missing</Text>
-                          </View>
-                        )}
-                      </View>
-                      <Text style={[s.fieldValue, { color: isMissing ? theme.textMuted : theme.text }]} numberOfLines={5}>{f.value}</Text>
-                    </View>
+              {/* HPI — editable */}
+              <View style={[s.reviewField, { backgroundColor: theme.card, borderColor: ACCENT + "40", borderLeftColor: ACCENT, borderLeftWidth: 3 }]}>
+                <View style={s.reviewFieldHeaderRow}>
+                  <Text style={[s.reviewFieldLabel, { color: theme.textSecondary }]}>History of Present Illness</Text>
+                  <View style={[s.editBadge, { backgroundColor: ACCENT + "18" }]}>
+                    <Feather name="edit-2" size={10} color={ACCENT} />
+                    <Text style={[s.editBadgeText, { color: ACCENT }]}>editable</Text>
                   </View>
-                );
-              })}
+                </View>
+                <TextInput
+                  style={[s.reviewEditInput, { color: theme.text, backgroundColor: theme.backgroundSecondary }]}
+                  value={editedHPI}
+                  onChangeText={setEditedHPI}
+                  multiline
+                  placeholder="HPI not extracted — type here"
+                  placeholderTextColor={theme.textMuted}
+                />
+              </View>
+
+              {/* Past Medical History — editable */}
+              <View style={[s.reviewField, { backgroundColor: theme.card, borderColor: ACCENT + "40", borderLeftColor: ACCENT, borderLeftWidth: 3 }]}>
+                <View style={s.reviewFieldHeaderRow}>
+                  <Text style={[s.reviewFieldLabel, { color: theme.textSecondary }]}>Past Medical History</Text>
+                  <View style={[s.editBadge, { backgroundColor: ACCENT + "18" }]}>
+                    <Feather name="edit-2" size={10} color={ACCENT} />
+                    <Text style={[s.editBadgeText, { color: ACCENT }]}>editable</Text>
+                  </View>
+                </View>
+                <TextInput
+                  style={[s.reviewEditInput, { color: theme.text, backgroundColor: theme.backgroundSecondary }]}
+                  value={editedPMH}
+                  onChangeText={setEditedPMH}
+                  placeholder="Nil significant"
+                  placeholderTextColor={theme.textMuted}
+                />
+              </View>
+
+              {/* Working Diagnosis — editable */}
+              <View style={[s.reviewField, { backgroundColor: theme.card, borderColor: ACCENT + "40", borderLeftColor: ACCENT, borderLeftWidth: 3 }]}>
+                <View style={s.reviewFieldHeaderRow}>
+                  <Text style={[s.reviewFieldLabel, { color: theme.textSecondary }]}>Working Diagnosis</Text>
+                  <View style={[s.editBadge, { backgroundColor: ACCENT + "18" }]}>
+                    <Feather name="edit-2" size={10} color={ACCENT} />
+                    <Text style={[s.editBadgeText, { color: ACCENT }]}>editable</Text>
+                  </View>
+                </View>
+                <TextInput
+                  style={[s.reviewEditInput, { color: theme.text, backgroundColor: theme.backgroundSecondary }]}
+                  value={editedDiagnosis}
+                  onChangeText={setEditedDiagnosis}
+                  placeholder="Primary diagnosis"
+                  placeholderTextColor={theme.textMuted}
+                />
+              </View>
+
+              {/* ── READ-ONLY SUMMARY CARDS ──────────────────────────────────── */}
+              <Text style={[s.sectionLabel, { color: theme.textSecondary, marginTop: Spacing.md, marginBottom: 4 }]}>
+                Summary (read-only)
+              </Text>
+
+              {vitalsLine ? (
+                <View style={[s.reviewField, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                  <Text style={[s.reviewFieldLabel, { color: theme.textSecondary }]}>Vitals</Text>
+                  <Text style={[s.reviewFieldValue, { color: theme.text }]}>{vitalsLine}</Text>
+                </View>
+              ) : null}
+
+              {ex.investigationsOrdered ? (
+                <View style={[s.reviewField, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                  <Text style={[s.reviewFieldLabel, { color: theme.textSecondary }]}>Investigations Ordered</Text>
+                  <Text style={[s.reviewFieldValue, { color: theme.text }]}>{ex.investigationsOrdered}</Text>
+                </View>
+              ) : null}
+
+              {medsLine ? (
+                <View style={[s.reviewField, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                  <Text style={[s.reviewFieldLabel, { color: theme.textSecondary }]}>Medications / Fluids</Text>
+                  <Text style={[s.reviewFieldValue, { color: theme.text }]}>{medsLine}</Text>
+                </View>
+              ) : null}
+
+              {ex.adjuncts?.ecgDone ? (
+                <View style={[s.reviewField, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                  <Text style={[s.reviewFieldLabel, { color: theme.textSecondary }]}>ECG</Text>
+                  <Text style={[s.reviewFieldValue, { color: theme.text }]}>{ex.adjuncts.ecgFindings || "Done"}</Text>
+                </View>
+              ) : null}
+
+              {detectedLanguage && !detectedLanguage.startsWith("en") ? (
+                <View style={[s.langBadge, { backgroundColor: "#06b6d415", borderColor: "#06b6d430" }]}>
+                  <Feather name="globe" size={13} color="#06b6d4" />
+                  <Text style={[s.langBadgeText, { color: "#06b6d4" }]}>
+                    Dictated in {detectedLanguage} — translated to English for extraction
+                  </Text>
+                </View>
+              ) : null}
 
               <View style={[s.noAiBanner, { backgroundColor: theme.card, borderColor: theme.border }]}>
                 <Feather name="shield" size={14} color={theme.textSecondary} />
                 <Text style={[s.noAiText, { color: theme.textSecondary }]}>
-                  Saved without AI diagnosis. You can add clinical decision support from the case sheet.
+                  Clinical decision support can be added from the case sheet after saving.
                 </Text>
               </View>
-            </ScrollView>
 
-            <View style={s.reviewActions}>
-              <Pressable
-                style={[s.outlineBtn, { borderColor: theme.border, backgroundColor: theme.card }]}
-                onPress={() => navigation.navigate("Main" as any)}
-              >
-                <Feather name="home" size={15} color={theme.text} />
-                <Text style={[s.outlineBtnText, { color: theme.text }]}>Dashboard</Text>
-              </Pressable>
-              <Pressable
-                style={[s.primaryBtn, { flex: 1, backgroundColor: ACCENT }]}
-                onPress={() => savedCaseId
-                  ? navigation.replace("ViewCase", { caseId: savedCaseId })
-                  : navigation.navigate("Main" as any)
-                }
-              >
-                <Feather name="external-link" size={15} color="#fff" />
-                <Text style={s.primaryBtnText}>View Case Sheet</Text>
-              </Pressable>
+              {/* ── BOTTOM ACTIONS ───────────────────────────────────────────── */}
+              <View style={[s.reviewActions, { marginTop: Spacing.lg }]}>
+                <Pressable
+                  style={[s.outlineBtn, { borderColor: theme.border, backgroundColor: theme.card }]}
+                  onPress={() => setStep("transcript")}
+                >
+                  <Feather name="chevron-left" size={15} color={theme.text} />
+                  <Text style={[s.outlineBtnText, { color: theme.text }]}>Back</Text>
+                </Pressable>
+                <Pressable
+                  style={[s.primaryBtn, { flex: 1, backgroundColor: isSaving ? "#6b7280" : ACCENT }]}
+                  onPress={handleSave}
+                  disabled={isSaving}
+                >
+                  {isSaving ? (
+                    <>
+                      <ActivityIndicator size="small" color="#fff" />
+                      <Text style={s.primaryBtnText}>Saving...</Text>
+                    </>
+                  ) : (
+                    <>
+                      <Feather name="save" size={15} color="#fff" />
+                      <Text style={s.primaryBtnText}>Save to Case Sheet</Text>
+                    </>
+                  )}
+                </Pressable>
+              </View>
             </View>
-          </View>
+          </KeyboardAwareScrollViewCompat>
         );
       })()}
     </View>
@@ -1340,6 +1438,20 @@ const s = StyleSheet.create({
   noAiText: { flex: 1, fontSize: Typography.xs, lineHeight: 17 },
   reviewActions: {
     flexDirection: "row", gap: Spacing.sm,
-    paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md, borderTopWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md,
+  },
+  // Editable review fields
+  reviewField: {
+    padding: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1,
+    marginBottom: Spacing.sm, overflow: "hidden",
+  },
+  reviewFieldHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: Spacing.xs },
+  reviewFieldLabel: { fontSize: Typography.xs, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5 },
+  reviewFieldValue: { fontSize: Typography.sm, lineHeight: 20 },
+  editBadge: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  editBadgeText: { fontSize: 9, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4 },
+  reviewEditInput: {
+    fontSize: Typography.sm, lineHeight: 20, borderRadius: BorderRadius.sm,
+    paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs, minHeight: 40,
   },
 });

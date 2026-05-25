@@ -4499,13 +4499,13 @@ ${resultsSummary}`,
       console.log("[ExtractClinical] Processing transcript, length:", transcript.length);
       const { extractSmartDictation: extractSmartDictation2 } = await Promise.resolve().then(() => (init_aiDiagnosis(), aiDiagnosis_exports));
       const timeout = new Promise(
-        (_, reject) => setTimeout(() => reject(new Error("Extraction timed out after 30s")), 3e4)
+        (_, reject) => setTimeout(() => reject(new Error("Extraction timed out after 45s")), 45e3)
       );
       const extracted = await Promise.race([
         extractSmartDictation2(transcript, patientContext),
         timeout
       ]);
-      res.json({ extracted });
+      res.json({ success: true, extracted });
     } catch (error) {
       console.error("Clinical extraction error:", error);
       res.status(500).json({ error: error.message || "Failed to extract clinical data" });
@@ -4515,84 +4515,282 @@ ${resultsSummary}`,
     try {
       const authHeader = req.headers.authorization;
       if (!authHeader) return res.status(401).json({ error: "No auth token" });
-      const {
-        patient,
-        presenting_complaint,
-        vitals_at_arrival,
-        triage_color,
-        triage_priority,
-        em_resident,
-        em_consultant,
-        case_type,
-        history,
-        primary_assessment,
-        examination,
-        treatment,
-        adjuncts,
-        investigations,
-        sample,
-        psychological,
-        mode_of_arrival,
-        mlc,
-        userId,
-        userEmail
-      } = req.body;
+      const { patient, extracted: extractedInput, transcript, case_type, userId, userEmail } = req.body;
+      if (!extractedInput) return res.status(400).json({ error: "No extracted data provided" });
+      const ex = extractedInput;
+      const vs = ex.vitalsSuggested || {};
+      const ps = ex.primarySurvey || {};
+      const [sys, dia] = (vs.bp || (ps.circulation?.bpSystolic ? `${ps.circulation.bpSystolic}/${ps.circulation.bpDiastolic}` : "120/80")).split("/");
+      const bpSys = parseInt(sys) || 120;
+      const bpDia = parseInt(dia) || 80;
+      const hr = parseInt(vs.hr || ps.circulation?.hr) || 80;
+      const spo2 = parseInt(vs.spo2 || ps.breathing?.spo2) || 98;
+      const rr = parseInt(vs.rr || ps.breathing?.rr) || 16;
+      const gcs = parseInt(vs.gcs || ps.disability?.gcsTotal) || 15;
+      const gcsE = parseInt(ps.disability?.gcsE) || 4;
+      const gcsV = parseInt(ps.disability?.gcsV) || 5;
+      const gcsM = parseInt(ps.disability?.gcsM) || 6;
+      const grbs = parseInt(vs.grbs || ps.disability?.grbs) || 100;
+      const temperature = parseFloat(vs.temperature || ps.exposure?.temperature) || 36.8;
+      let triage_color = "green", triage_priority = 4;
+      if (spo2 < 90 || gcs < 9 || bpSys < 80) {
+        triage_color = "red";
+        triage_priority = 1;
+      } else if (spo2 < 94 || gcs < 13 || bpSys < 100 || hr > 120 || rr > 30) {
+        triage_color = "orange";
+        triage_priority = 2;
+      } else if (spo2 < 96 || hr > 100 || rr > 24 || bpSys > 180) {
+        triage_color = "yellow";
+        triage_priority = 3;
+      } else if (hr > 90 || rr > 20) {
+        triage_color = "green";
+        triage_priority = 4;
+      } else {
+        triage_color = "blue";
+        triage_priority = 5;
+      }
+      const vitals_at_arrival = { hr, bp_systolic: bpSys, bp_diastolic: bpDia, rr, spo2, temperature, gcs_e: gcsE, gcs_v: gcsV, gcs_m: gcsM, grbs, pain_score: 0 };
+      const presenting_complaint = { text: ex.chiefComplaint || "", onset_type: ex.onset || "Sudden", duration: ex.duration || "", course: "" };
+      const em_resident = ex.emResident || patient?.informant_name || "";
+      const em_consultant = ex.emConsultant || "";
       const createRes = await fetch(`${EXTERNAL_API}/cases`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: authHeader },
-        body: JSON.stringify({
-          patient,
-          presenting_complaint,
-          vitals_at_arrival,
-          triage_color,
-          triage_priority,
-          em_resident,
-          em_consultant,
-          case_type
-        })
+        body: JSON.stringify({ patient, presenting_complaint, vitals_at_arrival, triage_color, triage_priority, em_resident, em_consultant, case_type })
       });
       if (!createRes.ok) {
         const errText = await createRes.text();
-        console.error("[VoiceSave] Create failed:", createRes.status, errText);
         return res.status(createRes.status).json({ error: `Failed to create case: ${errText}` });
       }
       const created = await createRes.json();
       const caseId = created.id || created._id || created.case_id;
-      if (!caseId) return res.status(500).json({ error: "No case ID returned from backend" });
+      if (!caseId) return res.status(500).json({ error: "No case ID returned" });
       console.log("[VoiceSave] Case created:", caseId);
+      const PMH_CONTINUATION = /^(baseline|with\s|grade\s|stage\s|class\s|on\s|per\s|approx|approximately|uncontrolled|controlled|bilateral|unilateral|and\s|or\s|at\s|from\s|since\s|till\s)/i;
+      const splitPMHStr = (str) => {
+        const result = [];
+        for (const chunk of str.split(/[;\n]+/)) {
+          const parts = chunk.split(/,\s*/);
+          let current = parts[0];
+          for (let i = 1; i < parts.length; i++) {
+            if (PMH_CONTINUATION.test(parts[i])) {
+              current = current + ", " + parts[i];
+            } else {
+              if (current.trim()) result.push(current.trim());
+              current = parts[i];
+            }
+          }
+          if (current.trim()) result.push(current.trim());
+        }
+        return result.filter((s) => s.length > 0);
+      };
+      const pastMedRaw = ex.pastMedicalHistory;
+      const pastMedArr = Array.isArray(pastMedRaw) ? pastMedRaw.map((s) => s.trim()).filter((s) => s) : typeof pastMedRaw === "string" && pastMedRaw ? splitPMHStr(pastMedRaw) : [];
+      const symptomsArr = [];
+      if (ex.symptoms?.length > 0) symptomsArr.push(...ex.symptoms);
+      if (ex.associatedSymptoms) symptomsArr.push(ex.associatedSymptoms);
+      const seenS = /* @__PURE__ */ new Set();
+      const uniqueSymptoms = symptomsArr.filter((s) => {
+        const k = s.trim().toLowerCase();
+        if (seenS.has(k)) return false;
+        seenS.add(k);
+        return true;
+      });
+      const vbg = ex.vbgResults || {};
+      const adjunctsAbg = {};
+      if (vbg.ph) adjunctsAbg.pH = vbg.ph;
+      if (vbg.pco2) adjunctsAbg.pCO2 = vbg.pco2;
+      if (vbg.po2) adjunctsAbg.pO2 = vbg.po2;
+      if (vbg.hco3) adjunctsAbg.HCO3 = vbg.hco3;
+      if (vbg.be) adjunctsAbg.BE = vbg.be;
+      if (vbg.lactate) adjunctsAbg.Lactate = vbg.lactate;
+      if (vbg.hemoglobin) adjunctsAbg.Hb = vbg.hemoglobin;
+      if (vbg.sodium) adjunctsAbg.Na = vbg.sodium;
+      if (vbg.potassium) adjunctsAbg.K = vbg.potassium;
+      if (vbg.chloride) adjunctsAbg.Cl = vbg.chloride;
+      if (vbg.glucose) adjunctsAbg.Glucose = vbg.glucose;
+      if (vbg.creatinine) adjunctsAbg.Creatinine = vbg.creatinine;
+      if (vbg.bilirubin) adjunctsAbg.Bilirubin = vbg.bilirubin;
+      const adj = ex.adjuncts || {};
+      const vbgNotesParts = [];
+      if (vbg.sampleType) vbgNotesParts.push(vbg.sampleType);
+      Object.entries(adjunctsAbg).forEach(([k, v]) => vbgNotesParts.push(`${k}: ${v}`));
+      const invOrdered = ex.investigationsOrdered || "";
+      const invTests = invOrdered ? invOrdered.split(/[,;\/\n]+/).map((s) => s.trim()).filter((s) => s) : [];
       const updateRes = await fetch(`${EXTERNAL_API}/cases/${caseId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: authHeader },
         body: JSON.stringify({
-          history,
-          primary_assessment,
-          examination,
-          treatment,
-          ...adjuncts ? { adjuncts } : {},
-          ...investigations ? { investigations } : {},
-          ...sample ? { sample } : {},
-          ...psychological ? { psychological } : {},
-          ...presenting_complaint ? { presenting_complaint } : {},
-          ...vitals_at_arrival ? { vitals_at_arrival } : {},
-          mode_of_arrival: mode_of_arrival || "Walk-in",
-          mlc: mlc ?? false
+          history: {
+            hpi: ex.historyOfPresentIllness || transcript || "",
+            events_hopi: ex.historyOfPresentIllness || transcript || "",
+            signs_and_symptoms: uniqueSymptoms.join(", "),
+            past_medical: pastMedArr,
+            past_surgical: ex.pastSurgicalHistory || "",
+            allergies: ex.allergies ? ex.allergies.split(/[,;]+/).map((s) => s.trim()).filter((s) => s) : [],
+            medications: ex.currentMedications || "",
+            drug_history: ex.currentMedications || "",
+            family_history: ex.familyHistory || "",
+            social_history: ex.socialHistory || "",
+            additional_notes: ex.menstrualHistory || ""
+          },
+          sample: {
+            eventsHopi: ex.historyOfPresentIllness || transcript || "",
+            signsSymptoms: uniqueSymptoms.join(", "),
+            pastMedicalHistory: pastMedArr,
+            allergies: ex.allergies ? ex.allergies.split(/[,;]+/).map((s) => s.trim()).filter((s) => s) : [],
+            medications: ex.currentMedications || "",
+            lastMeal: "",
+            lmp: ex.menstrualHistory || ""
+          },
+          primary_assessment: {
+            airway_status: ps.airway?.status || "Patent",
+            airway_interventions: [],
+            airway_additional_notes: ps.airway?.findings || "",
+            breathing_rr: rr,
+            breathing_spo2: spo2,
+            breathing_oxygen_device: ps.breathing?.oxygenDevice || "Room air",
+            breathing_oxygen_flow: 0,
+            breathing_work: ps.breathing?.workOfBreathing || "Normal",
+            breathing_air_entry: ["Equal"],
+            breathing_additional_notes: ps.breathing?.auscultation || "",
+            circulation_hr: hr,
+            circulation_bp_systolic: bpSys,
+            circulation_bp_diastolic: bpDia,
+            circulation_crt: 2,
+            circulation_adjuncts: ps.circulation?.ivAccess ? [ps.circulation.ivAccess] : [],
+            circulation_additional_notes: ps.circulation?.cvs || "",
+            disability_avpu: "Alert",
+            disability_gcs_e: gcsE,
+            disability_gcs_v: gcsV,
+            disability_gcs_m: gcsM,
+            disability_grbs: grbs,
+            disability_pupils_size: "Normal",
+            disability_pupils_reaction: "Reactive",
+            disability_additional_notes: ps.disability?.focalDeficit || "",
+            exposure_temperature: temperature,
+            exposure_additional_notes: ps.exposure?.findings || ""
+          },
+          abcde: {
+            airway: { status: ps.airway?.status || "Patent", notes: ps.airway?.findings || "", abcdeStatus: "stable" },
+            breathing: { rr, spo2, oxygenDevice: ps.breathing?.oxygenDevice || "Room air", effort: "Normal", notes: ps.breathing?.auscultation || "", abcdeStatus: "stable" },
+            circulation: { hr, bpSystolic: bpSys, bpDiastolic: bpDia, capillaryRefill: "Normal", notes: ps.circulation?.cvs || "", abcdeStatus: "stable" },
+            disability: { motorResponse: "Alert", gcsE: String(gcsE), gcsV: String(gcsV), gcsM: String(gcsM), glucose: String(grbs), pupils: "Equal", pupilReaction: "Reactive", notes: "", abcdeStatus: "stable" },
+            exposure: { temperature: String(temperature), findings: ps.exposure?.findings || "", notes: "", abcdeStatus: "stable" }
+          },
+          adjuncts: {
+            ecg_status: adj.ecgDone ? "Done" : "",
+            ecg_findings: adj.ecgFindings || "",
+            bedside_echo: adj.echoDone ? adj.echoFindings || "Done" : "",
+            efast_status: adj.efastDone ? "Done" : "",
+            efast_notes: adj.efastFindings || "",
+            additional_notes: vbgNotesParts.join(" | "),
+            abg: {
+              sample_type: vbg.sampleType || (vbg.ph ? "VBG" : ""),
+              ph: vbg.ph || "",
+              pco2: vbg.pco2 || "",
+              po2: vbg.po2 || "",
+              hco3: vbg.hco3 || "",
+              be: vbg.be || "",
+              lactate: vbg.lactate || "",
+              sao2: "",
+              fio2: "",
+              na: vbg.sodium || "",
+              k: vbg.potassium || "",
+              cl: vbg.chloride || "",
+              anion_gap: "",
+              glucose: vbg.glucose || "",
+              hb: vbg.hemoglobin || "",
+              aa_gradient: "",
+              status: vbg.ph ? "done" : "",
+              interpretation: "",
+              final_diagnosis: ""
+            }
+          },
+          examination: {
+            general_pallor: false,
+            general_icterus: false,
+            general_cyanosis: false,
+            general_clubbing: false,
+            general_lymphadenopathy: false,
+            general_edema: false,
+            general_additional_notes: ex.examFindings?.general || "",
+            cvs_status: "Normal",
+            cvs_s1_s2: "Normal",
+            cvs_pulse: "Regular",
+            cvs_pulse_rate: hr,
+            cvs_apex_beat: "Normal",
+            cvs_added_sounds: "",
+            cvs_murmurs: "",
+            cvs_additional_notes: ex.examFindings?.cvs || "",
+            respiratory_status: "Normal",
+            respiratory_expansion: "Equal",
+            respiratory_percussion: "Resonant",
+            respiratory_breath_sounds: "Vesicular",
+            respiratory_vocal_resonance: "Normal",
+            respiratory_added_sounds: "",
+            respiratory_additional_notes: ex.examFindings?.respiratory || "",
+            abdomen_status: "Normal",
+            abdomen_umbilical: "Normal",
+            abdomen_organomegaly: "",
+            abdomen_percussion: "Tympanic",
+            abdomen_bowel_sounds: "Present",
+            abdomen_additional_notes: ex.examFindings?.abdomen || "",
+            cns_status: "Normal",
+            cns_higher_mental: "Intact",
+            cns_cranial_nerves: "Intact",
+            cns_sensory_system: "Intact",
+            cns_motor_system: "Normal",
+            cns_reflexes: "Normal",
+            cns_additional_notes: ex.examFindings?.cns || "",
+            extremities_status: "Normal",
+            extremities_findings: ex.examFindings?.musculoskeletal || ""
+          },
+          investigations: {
+            panels_selected: invTests,
+            imaging: ex.imagingOrdered ? [ex.imagingOrdered] : [],
+            results_notes: invOrdered || "",
+            ...Object.keys(adjunctsAbg).length > 0 ? { vbg: adjunctsAbg } : {}
+          },
+          treatment: {
+            primary_diagnosis: ex.diagnosis?.[0] || "",
+            provisional_diagnoses: ex.diagnosis?.length ? ex.diagnosis : [],
+            differential_diagnoses: ex.differentialDiagnosis?.length ? ex.differentialDiagnosis : [],
+            medications: ex.prescribedMedications || [],
+            infusions: ex.prescribedInfusions || [],
+            fluids: ex.prescribedInfusions?.map((inf) => `${inf.name || ""}${inf.rate ? ` @ ${inf.rate}` : ""}`).join(", ") || "",
+            other_medications: ex.treatmentNotes || "",
+            intervention_notes: ex.treatmentNotes || ""
+          },
+          presenting_complaint,
+          mode_of_arrival: patient?.mode_of_arrival || "Walk-in",
+          mlc: false,
+          psychological: {
+            assessed: false,
+            suicidalIdeation: false,
+            selfHarm: false,
+            intentToHarmOthers: false,
+            substanceAbuse: false,
+            psychiatricHistory: false,
+            currentlyOnPsychiatricTreatment: false,
+            hasSupportSystem: true,
+            notes: ""
+          }
         })
       });
       if (!updateRes.ok) {
         const errText = await updateRes.text();
-        console.warn("[VoiceSave] Clinical update failed (case still created):", updateRes.status, errText);
-        return res.json({ success: true, caseId, warning: "Case created but some clinical data may need to be re-entered manually." });
+        console.warn("[VoiceSave] Clinical PUT failed:", updateRes.status, errText);
+        return res.json({ success: true, caseId, warning: "Case created \u2014 some clinical fields may need manual entry." });
       }
       console.log("[VoiceSave] Clinical data saved for case:", caseId);
       try {
         const db2 = getDb();
         if (db2 && userId) {
           const { caseClinicalData: caseClinicalData2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-          await db2.insert(caseClinicalData2).values({ caseId, userId, payload: req.body });
-          console.log("[VoiceSave] Local DB clinical data saved");
+          await db2.insert(caseClinicalData2).values({ caseId, userId, payload: { extracted: extractedInput, transcript } });
         }
-      } catch (dbErr) {
-        console.warn("[VoiceSave] Local DB save failed (non-fatal):", dbErr);
+      } catch {
       }
       if (userId) {
         try {
