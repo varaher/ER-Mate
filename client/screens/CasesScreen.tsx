@@ -62,6 +62,7 @@ export default function CasesScreen() {
   const [filter, setFilter] = useState<"all" | "active" | "discharged">("all");
   const [viewMode, setViewMode] = useState<"list" | "grouped">("list");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [clearingAll, setClearingAll] = useState(false);
 
   const { data: rawCases = [], isLoading: loading, refetch, isRefetching } = useQuery<CaseItem[]>({
     queryKey: ["cases", user?.id],
@@ -69,6 +70,36 @@ export default function CasesScreen() {
     refetchOnMount: true,
     enabled: !!user?.id,
   });
+
+  const handleClearAll = () => {
+    const count = rawCases.length;
+    if (count === 0) {
+      Alert.alert("No Cases", "There are no cases to delete.");
+      return;
+    }
+    Alert.alert(
+      "Clear All Cases",
+      `This will permanently delete all ${count} cases. This cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: `Delete All ${count}`,
+          style: "destructive",
+          onPress: async () => {
+            setClearingAll(true);
+            const ids = rawCases.map((c) => c.id).filter(Boolean);
+            let deleted = 0;
+            for (const id of ids) {
+              try { await deleteCaseFromProxy(id); deleted++; } catch {}
+            }
+            queryClient.setQueryData(["cases", user?.id], []);
+            setClearingAll(false);
+            Alert.alert("Done", `${deleted} of ${count} cases deleted.`);
+          },
+        },
+      ]
+    );
+  };
 
   const handleDeleteCase = (item: CaseItem) => {
     Alert.alert(
@@ -219,19 +250,31 @@ export default function CasesScreen() {
       <View style={[styles.header, { backgroundColor: theme.card, paddingTop: insets.top + Spacing.md }]}>
         <View style={styles.titleRow}>
           <Text style={[styles.title, { color: theme.text }]}>All Cases</Text>
-          <View style={[styles.viewToggle, { backgroundColor: theme.backgroundSecondary }]}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm }}>
             <Pressable
-              style={[styles.toggleBtn, viewMode === "list" && { backgroundColor: theme.card }]}
-              onPress={() => setViewMode("list")}
+              onPress={handleClearAll}
+              disabled={clearingAll || rawCases.length === 0}
+              style={[styles.clearAllBtn, { backgroundColor: theme.backgroundSecondary }]}
             >
-              <Feather name="list" size={16} color={viewMode === "list" ? theme.primary : theme.textMuted} />
+              <Feather name="trash-2" size={15} color={rawCases.length === 0 ? theme.textMuted : "#ef4444"} />
+              <Text style={[styles.clearAllText, { color: rawCases.length === 0 ? theme.textMuted : "#ef4444" }]}>
+                {clearingAll ? "Deleting..." : "Clear All"}
+              </Text>
             </Pressable>
-            <Pressable
-              style={[styles.toggleBtn, viewMode === "grouped" && { backgroundColor: theme.card }]}
-              onPress={() => setViewMode("grouped")}
-            >
-              <Feather name="tag" size={16} color={viewMode === "grouped" ? theme.primary : theme.textMuted} />
-            </Pressable>
+            <View style={[styles.viewToggle, { backgroundColor: theme.backgroundSecondary }]}>
+              <Pressable
+                style={[styles.toggleBtn, viewMode === "list" && { backgroundColor: theme.card }]}
+                onPress={() => setViewMode("list")}
+              >
+                <Feather name="list" size={16} color={viewMode === "list" ? theme.primary : theme.textMuted} />
+              </Pressable>
+              <Pressable
+                style={[styles.toggleBtn, viewMode === "grouped" && { backgroundColor: theme.card }]}
+                onPress={() => setViewMode("grouped")}
+              >
+                <Feather name="tag" size={16} color={viewMode === "grouped" ? theme.primary : theme.textMuted} />
+              </Pressable>
+            </View>
           </View>
         </View>
         <View style={[styles.searchContainer, { backgroundColor: theme.backgroundSecondary }]}>
@@ -330,6 +373,18 @@ const styles = StyleSheet.create({
   toggleBtn: {
     padding: 6,
     borderRadius: BorderRadius.sm,
+  },
+  clearAllBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.md,
+  },
+  clearAllText: {
+    fontSize: Typography.xs,
+    fontWeight: "600",
   },
   searchContainer: {
     flexDirection: "row",
