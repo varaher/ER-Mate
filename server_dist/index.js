@@ -4517,6 +4517,12 @@ ${resultsSummary}`,
         primary_assessment,
         examination,
         treatment,
+        adjuncts,
+        investigations,
+        sample,
+        psychological,
+        mode_of_arrival,
+        mlc,
         userId,
         userEmail
       } = req.body;
@@ -4546,7 +4552,20 @@ ${resultsSummary}`,
       const updateRes = await fetch(`${EXTERNAL_API}/cases/${caseId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: authHeader },
-        body: JSON.stringify({ history, primary_assessment, examination, treatment })
+        body: JSON.stringify({
+          history,
+          primary_assessment,
+          examination,
+          treatment,
+          ...adjuncts ? { adjuncts } : {},
+          ...investigations ? { investigations } : {},
+          ...sample ? { sample } : {},
+          ...psychological ? { psychological } : {},
+          ...presenting_complaint ? { presenting_complaint } : {},
+          ...vitals_at_arrival ? { vitals_at_arrival } : {},
+          mode_of_arrival: mode_of_arrival || "Walk-in",
+          mlc: mlc ?? false
+        })
       });
       if (!updateRes.ok) {
         const errText = await updateRes.text();

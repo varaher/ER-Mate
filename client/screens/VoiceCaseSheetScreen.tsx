@@ -793,13 +793,31 @@ export default function VoiceCaseSheetScreen() {
       const emResident = ex?.emResident || user?.name || "";
       const emConsultant = ex?.emConsultant || "";
 
-      const pastMedArr: string[] = ex?.pastMedicalHistory
-        ? ex.pastMedicalHistory.split(/[,;\/\n]+/).map((s: string) => s.trim()).filter((s: string) => s.length > 0)
-        : [];
+      // Smart PMH split — don't break "CKD, baseline Cr 2.1" into two entries
+      const PMH_CONTINUATION = /^(baseline|with\s|grade\s|stage\s|class\s|on\s|per\s|approx|approximately|uncontrolled|controlled|bilateral|unilateral|and\s|or\s|at\s|from\s|since\s|till\s)/i;
+      const splitPMH = (str: string): string[] => {
+        const result: string[] = [];
+        for (const chunk of str.split(/[;\n]+/)) {
+          const parts = chunk.split(/,\s*/);
+          let current = parts[0];
+          for (let i = 1; i < parts.length; i++) {
+            if (PMH_CONTINUATION.test(parts[i])) { current = current + ", " + parts[i]; }
+            else { if (current.trim()) result.push(current.trim()); current = parts[i]; }
+          }
+          if (current.trim()) result.push(current.trim());
+        }
+        return result.filter(s => s.length > 0);
+      };
+      const pastMedRaw = ex?.pastMedicalHistory;
+      const pastMedArr: string[] = Array.isArray(pastMedRaw)
+        ? pastMedRaw.map((s: string) => s.trim()).filter((s: string) => s)
+        : typeof pastMedRaw === "string" && pastMedRaw ? splitPMH(pastMedRaw) : [];
+
       const symptomsArr: string[] = [];
       if (ex?.symptoms?.length > 0) symptomsArr.push(...ex.symptoms);
       if (ex?.associatedSymptoms) symptomsArr.push(ex.associatedSymptoms);
       const [bpSys, bpDia] = (ex?.vitalsSuggested?.bp || "").split("/");
+      const vbg = ex?.vbgResults || {};
 
       const payload = {
         // Patient and case basics
@@ -873,7 +891,59 @@ export default function VoiceCaseSheetScreen() {
           differential_diagnoses: ex?.differentialDiagnosis || [],
           medications: ex?.prescribedMedications || [],
           infusions: ex?.prescribedInfusions || [],
+          fluids: (ex?.prescribedInfusions || []).map((inf: any) => `${inf.name || ""}${inf.rate ? ` @ ${inf.rate}` : ""}`).join(", ") || "",
+          other_medications: ex?.treatmentNotes || "",
+          intervention_notes: ex?.treatmentNotes || "",
         },
+
+        // VBG / ABG adjuncts
+        adjuncts: {
+          ecg_status: ex?.adjuncts?.ecgDone ? "Done" : "",
+          ecg_findings: ex?.adjuncts?.ecgFindings || ex?.ecgFindings || "",
+          bedside_echo: ex?.adjuncts?.echoDone ? (ex?.adjuncts?.echoFindings || "Done") : "",
+          additional_notes: "",
+          abg: {
+            sample_type: vbg.sampleType || (vbg.ph ? "VBG" : ""),
+            ph: vbg.ph || "", pco2: vbg.pco2 || "", po2: vbg.po2 || "",
+            hco3: vbg.hco3 || "", be: vbg.be || "", lactate: vbg.lactate || "",
+            sao2: "", fio2: "", anion_gap: "",
+            na: vbg.sodium || "", k: vbg.potassium || "", cl: vbg.chloride || "",
+            glucose: vbg.glucose || "", hb: vbg.hemoglobin || "",
+            status: vbg.ph ? "done" : "",
+          },
+        },
+
+        // Investigations
+        investigations: {
+          panels_selected: ex?.investigationsOrdered
+            ? ex.investigationsOrdered.split(/[,;]+/).map((s: string) => s.trim()).filter((s: string) => s)
+            : [],
+          imaging: ex?.imagingOrdered
+            ? ex.imagingOrdered.split(/[,;]+/).map((s: string) => s.trim()).filter((s: string) => s)
+            : [],
+          results_notes: "",
+        },
+
+        // SAMPLE mirror (backend reads from both history and sample)
+        sample: {
+          eventsHopi: ex?.historyOfPresentIllness || editedTranscript,
+          signsSymptoms: symptomsArr.join(", "),
+          pastMedicalHistory: pastMedArr,
+          allergies: ex?.allergies ? ex.allergies.split(/[,;]+/).map((s: string) => s.trim()).filter((s: string) => s) : [],
+          medications: ex?.currentMedications || "",
+          lastMeal: "",
+          lmp: "",
+        },
+
+        // Psych defaults
+        psychological: {
+          assessed: false, suicidalIdeation: false, selfHarm: false,
+          intentToHarmOthers: false, substanceAbuse: false, psychiatricHistory: false,
+          currentlyOnPsychiatricTreatment: false, hasSupportSystem: true, notes: "",
+        },
+
+        mode_of_arrival: "Walk-in",
+        mlc: false,
 
         // For subscription and local DB
         userId: user?.id,

@@ -1,0 +1,143 @@
+I've read the full VoiceCaseSheetScreen.tsx. Now I can see exactly what's happening with both issues.
+
+---
+
+## Issue 1 — Delete Not Working
+
+This file is VoiceCaseSheetScreen — it has nothing to do with delete. The delete bug is in a different file — **CasesScreen.tsx** or **AllCasesScreen.tsx**.
+
+The Clear All button and individual delete are in the Cases list screen, not here.
+
+**Tell your developer to check CasesScreen.tsx and find:**
+
+```javascript
+// 1. What function is called when 
+//    trash icon is tapped?
+
+// 2. What URL does it call?
+// Should be:
+await fetch(`/api/proxy/cases/${caseId}`, {
+  method: 'DELETE',
+  headers: { 'Authorization': `Bearer ${token}` }
+});
+
+// 3. After delete — does it refetch cases?
+// Must call fetchCases() after deletion
+```
+
+---
+
+## Issue 2 — Voice Data Not Reaching Case Sheet
+
+Reading the handleSave function carefully, I can see the exact problem:
+
+```javascript
+// Line ~820 in handleSave:
+const clinicalResp = await fetch(
+  `${base}/api/clinical-data/${caseId}`,  
+  // ❌ WRONG URL — this endpoint 
+  // does not exist on the server
+```
+
+The handleSave function is still using the **old broken URL** `/api/clinical-data/${caseId}` — the same bug that was fixed in the server's extract-and-save endpoint but **never fixed in this screen**.
+
+This is why the review screen shows correct data but the case sheet is empty. The case gets created correctly, but the clinical PUT fails silently on the wrong URL.
+
+---
+
+## The Fix — Two Changes
+
+**Fix 1 — Clinical data URL in handleSave**
+
+```javascript
+// Find this in handleSave (~line 820):
+const clinicalResp = await fetch(
+  `${base}/api/clinical-data/${caseId}`,
+
+// Replace with:
+const clinicalResp = await fetch(
+  `${base}/api/proxy/cases/${caseId}`,
+  {
+    method: "PUT",  // ← also change POST to PUT
+    headers: authHeaders,
+    body: JSON.stringify(
+      buildClinical(rawExtracted, editedTranscript)
+    ),
+  }
+);
+```
+
+**Fix 2 — Add error logging**
+
+```javascript
+if (!clinicalResp.ok) {
+  const errText = await clinicalResp.text();
+  console.error("[VoiceCase] Clinical PUT failed:", 
+    clinicalResp.status, errText);
+  // Still proceed — case was created
+  // Doctor can manually complete
+}
+```
+
+---
+
+## Also — The Extract Button Issue
+
+Looking at handleExtract in this file:
+
+```javascript
+// Line ~340:
+const resp = await fetch(
+  new URL("/api/voice/extract-clinical", 
+    getApiUrl()).toString(),
+```
+
+This is still calling `/api/voice/extract-clinical` — the **old endpoint**. The new combined endpoint `/api/voice/extract-and-save` was built but this screen is not calling it.
+
+This means the review screen works correctly but the save is still fragmented — extract separately, then save separately with the wrong URL.
+
+**Two options for your developer:**
+
+**Option A — Use the combined endpoint (cleaner)**
+```javascript
+// Replace handleExtract + handleSave 
+// with one combined call to:
+POST /api/voice/extract-and-save
+
+// Sends transcript + patient info
+// Gets back caseId
+// Navigates directly to ViewCase
+// No separate save step needed
+```
+
+**Option B — Fix the existing two-step flow**
+```javascript
+// Keep extract-clinical for the review
+// Fix handleSave to use correct PUT URL
+// /api/proxy/cases/${caseId}
+// with method PUT not POST
+```
+
+Option A is cleaner and removes the fragmented save entirely. Option B is a smaller change.
+
+---
+
+## Summary — Three Fixes
+
+```
+Fix 1 — Cases screen delete button
+         Check CasesScreen.tsx
+         Verify URL and refresh after delete
+
+Fix 2 — handleSave wrong URL
+         /api/clinical-data/ → 
+         /api/proxy/cases/
+         POST → PUT
+
+Fix 3 — Either use combined endpoint
+         or fix the two-step flow
+         Extract is working
+         Save URL is wrong
+```
+
+Fix 2 is the most important. One line change. That alone will make the voice data appear in the case sheet.
