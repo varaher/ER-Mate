@@ -314,7 +314,7 @@ export default function VoiceCaseSheetScreen() {
     } catch (_) {}
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 55000);
+    const timeoutId = setTimeout(() => controller.abort(), 90000);
     try {
       console.log("[ExtractAndSave] Calling combined endpoint, length:", extractText.length);
 
@@ -370,11 +370,16 @@ export default function VoiceCaseSheetScreen() {
       const isTimeout = err?.name === "AbortError";
       console.error("[Extract] Error:", err?.name, err?.message);
       Alert.alert(
-        isTimeout ? "Taking too long" : "Extract & Save failed",
+        isTimeout ? "Still processing..." : "Extract & Save failed",
         isTimeout
-          ? "The AI is taking longer than expected. Check your connection and try again."
+          ? "The AI took longer than expected. Your case may already be saved — please check the Cases tab. If it is not there, tap Extract & Save again."
           : err.message || "Could not extract and save the case. Please check your connection and try again.",
-        [{ text: "OK" }]
+        isTimeout
+          ? [
+              { text: "Check Cases", onPress: () => navigation.navigate("Main" as any) },
+              { text: "Try Again", style: "cancel" },
+            ]
+          : [{ text: "OK" }]
       );
     } finally {
       setIsExtracting(false);
@@ -1045,7 +1050,7 @@ export default function VoiceCaseSheetScreen() {
               {isExtracting
                 ? <>
                     <ActivityIndicator size="small" color="#fff" />
-                    <Text style={s.primaryBtnText}>Extracting & Saving...</Text>
+                    <Text style={s.primaryBtnText}>Extracting & Saving... (up to 90s)</Text>
                   </>
                 : <>
                     <Feather name="cpu" size={15} color="#fff" />

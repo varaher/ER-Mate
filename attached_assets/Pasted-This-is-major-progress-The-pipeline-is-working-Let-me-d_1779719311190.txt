@@ -1,0 +1,180 @@
+This is major progress. The pipeline is working. Let me do a precise screen-by-screen analysis.
+
+---
+
+## What's Working ✅
+
+**Image 2 — Transcript**
+Clean, accurate transcription in English. All clinical content captured correctly.
+
+**Image 3 — Patient Info & Triage**
+```
+✅ Age/Sex: 50/Female
+✅ Triage: Priority 3 YELLOW — correct
+   (RR 30 triggers YELLOW)
+✅ Vitals: BP 130/80, RR 30, SpO2 98%
+✅ Temp: 100F
+✅ Presenting Complaint: Fever
+✅ Duration: Two days
+```
+
+**Image 7 — Primary Assessment ABCDE**
+```
+✅ A — Airway: Patent
+✅ B — RR: 30, SpO2: 98%
+✅ C — HR: 80, BP: 130/80, CRT: 2 sec
+✅ D — GCS: E4V5M6, Pupils: Normal Reactive
+✅ E — Temperature: 100F
+```
+
+**Image 8 — HPI**
+```
+✅ Full clinical narrative — excellent quality
+   "50-year-old female with fever 2 days,
+   lower abdominal pain, recurrent UTI..."
+✅ Signs and Symptoms populated
+✅ Surgical History: No history
+```
+
+**Image 6 — Investigations & Treatment**
+```
+✅ Investigations: CBC, RFT, LFT, CRP
+✅ Treatment: Injection paracetamol 
+   and fluids administered
+✅ Primary Diagnosis: Acute febrile illness
+✅ Psychological Assessment: Normal
+```
+
+**Image 1 — Systemic Examination**
+```
+✅ CNS: E4V5M6, no focal deficits
+✅ CVS: Tachycardia
+✅ Chest: Normal vesicular breath sounds
+✅ Abdomen: Lower abdominal pain present
+```
+
+---
+
+## What Needs Refinement ⚠️
+
+**1. Patient Name Truncated**
+```
+Shows: "Ne"
+Should be: Full name entered at triage
+```
+The name is being cut to 2 characters. The same issue seen with "Sep" earlier. Check how patientName is passed — likely `patientName.trim().substring(0,2)` somewhere accidentally or a field length limit.
+
+**2. Past Medical History Empty**
+```
+Image 8 shows: Past Medical History — [empty]
+```
+
+This patient had no past medical history mentioned — so empty is actually correct here. But verify the label isn't just blank — should show "Nil significant" as the default.
+
+**3. ECG Showing "Not done"**
+```
+Image 8: ECG — Not done
+Transcript says: "ECG tachycardia"
+```
+The ECG finding was mentioned but not extracted into the ECG field. The extraction prompt needs to catch "ECG tachycardia" as ECG done with finding "Tachycardia."
+
+**4. ABG/VBG "Not done"**
+```
+Transcript says: "ABG seems to be normal"
+```
+This is actually correct — doctor said ABG is normal but didn't give values, so "Not done" with no values is acceptable. However ideally it should show "ABG — Normal" rather than "Not done."
+
+**5. Signs and Symptoms Duplication**
+```
+Image 8: "Fever, Lower abdominal pain, 
+Lower abdominal pain"
+```
+
+Lower abdominal pain appears twice. The extraction is capturing it from both the symptoms list and the examination findings. Add a deduplication step.
+
+**6. Dashboard — Name shows "Ne" and "Ad"**
+```
+Image 4: "Ne" and "Ad" — truncated names
+```
+Same name truncation issue affecting dashboard display.
+
+---
+
+## Priority Fixes — Tell Your Developer
+
+**Fix 1 — Name truncation (highest priority)**
+```javascript
+// Find where patient name is stored
+// Check if there's a .substring() or 
+// character limit being applied
+
+// In the patient payload:
+name: patientName.trim()
+// Should send full name — no truncation
+
+// Also check the external backend
+// Does it have a name field length limit?
+// Check the patient schema on the backend
+```
+
+**Fix 2 — ECG extraction**
+```javascript
+// In the extraction prompt
+// Add explicit ECG detection:
+
+"If doctor mentions ECG findings 
+(tachycardia, ST elevation, normal, etc.)
+extract as:
+adjuncts.ecgDone: true
+adjuncts.ecgFindings: '[finding]'"
+
+// 'ECG tachycardia' should extract to:
+// ecgDone: true
+// ecgFindings: 'Sinus tachycardia'
+```
+
+**Fix 3 — Symptoms deduplication**
+```javascript
+// After building symptomsArr
+// deduplicate before joining:
+
+const uniqueSymptoms = [...new Set(
+  symptomsArr.map(s => s.toLowerCase().trim())
+)].map(s => s.charAt(0).toUpperCase() + s.slice(1));
+```
+
+**Fix 4 — Past Medical History default**
+```javascript
+// When past_medical array is empty
+// show "Nil significant" not blank
+// This is a ViewCase display fix
+// not an extraction fix
+```
+
+---
+
+## Overall Assessment
+
+```
+Voice pipeline end to end    ✅ WORKING
+Transcription                ✅ Accurate
+Extraction                   ✅ Most fields correct
+Save to backend              ✅ Working
+Dashboard display            ✅ Cases appear
+Triage auto-assignment       ✅ YELLOW correct
+ABCDE primary assessment     ✅ All fields populated
+HPI narrative                ✅ Excellent quality
+Investigations               ✅ CBC, RFT, LFT, CRP
+Treatment                    ✅ Medications noted
+Diagnosis                    ✅ Acute febrile illness
+
+Remaining refinements:
+Name truncation              ❌ Fix urgently
+ECG extraction               ⚠️ Minor prompt fix
+Symptoms duplication         ⚠️ Minor dedup fix
+PMH empty default            ⚠️ Display fix
+```
+
+The core is working. These are refinements, not architectural problems. The voice pipeline has gone from completely broken to 90% accurate in one day of focused debugging.
+
+**Fix the name truncation first** — that's the most visible issue for any pilot user. Then the ECG and deduplication are quick fixes.

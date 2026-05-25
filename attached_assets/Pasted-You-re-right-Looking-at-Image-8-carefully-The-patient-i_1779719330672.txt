@@ -1,0 +1,122 @@
+You're right. Looking at Image 8 carefully:
+
+```
+"The patient is a 50-year-old female who 
+presented with complaints of fever for the 
+past two days. She also reported lower 
+abdominal pain and a history of recurrent 
+urinary tract infections. On examination, 
+lower abdominal pain was noted. ABCD 
+assessment revealed a patent airway, 
+respiratory rate of 30 breaths per minute, 
+SPO2 of 98%, blood pressure of 130/80 mmHg, 
+capillary refill time less than two seconds, 
+and all peripheral pulses palpable. Disability 
+assessment showed a GCS score of E4V5M6, 
+pupils reacting to light, and exposure 
+revealed a temperature of 100°F. ABG findings 
+were normal, and ECG showed tachycardia."
+```
+
+The HPI contains **everything** — ABCDE findings, vitals, ECG, ABG. That belongs in the Primary Assessment, not the HPI.
+
+---
+
+## What HPI Should Contain
+
+```
+CORRECT HPI:
+"A 50-year-old female presented with fever 
+since 2 days, associated with lower abdominal 
+pain and recurrent urinary tract infections."
+
+That's it. Short. Clinical. Just the history.
+```
+
+---
+
+## What's Currently Happening
+
+The AI extraction prompt's HPI rule is not strict enough. It's treating the entire transcript as HPI narrative rather than separating:
+
+```
+HPI           → Symptoms, duration, onset, 
+                associated complaints
+Primary Survey → ABCDE findings, vitals
+Investigations → ECG, ABG
+```
+
+---
+
+## The Fix — Strengthen the HPI Rule in the Extraction Prompt
+
+Tell your developer to find the extraction prompt in `server/routes.ts` or `server/services/aiDiagnosis.ts` and update the HPI instruction:
+
+```
+CURRENT (too loose):
+"Write HPI as a clinical narrative 
+in third-person prose"
+
+REPLACE WITH:
+"HPI (historyOfPresentIllness) must contain 
+ONLY the patient's symptoms, complaints, 
+duration, onset, and relevant background 
+history as reported by the patient or 
+bystander.
+
+DO NOT include in HPI:
+- Vital signs (BP, HR, RR, SpO2, Temp)
+- ABCDE examination findings
+- GCS scores
+- ECG or ABG results
+- Physical examination findings
+- CRT, pupils, power
+- Any clinical assessment findings
+
+These belong in their dedicated fields:
+- Vitals → vitalsSuggested
+- ABCDE → primarySurvey
+- ECG → adjuncts.ecgFindings
+- ABG → vbgResults
+- Examination → examFindings
+
+A good HPI is 2-4 sentences maximum.
+Example:
+'The patient presented with fever since 
+2 days, associated with lower abdominal 
+pain and recurrent urinary tract 
+infections. She sought care after 
+symptoms persisted.'"
+```
+
+---
+
+## Also Fix the Symptoms Duplication at the Same Time
+
+In the same prompt update, add:
+
+```
+"signsAndSymptoms must list only 
+unique symptoms — no duplicates.
+If the same symptom appears multiple 
+times in the transcript, list it once."
+```
+
+---
+
+## After This Fix — HPI Should Look Like
+
+```
+History of Present Illness:
+The patient is a 50-year-old female who 
+presented with fever since 2 days, 
+associated with lower abdominal pain 
+and history of recurrent UTI. Symptoms 
+were of gradual onset. She presented 
+to the emergency department for further 
+evaluation.
+```
+
+Clean. Concise. No vitals, no ABCDE, no examination findings.
+
+**One prompt change fixes both HPI and duplication. Rebuild both bundles after.**
