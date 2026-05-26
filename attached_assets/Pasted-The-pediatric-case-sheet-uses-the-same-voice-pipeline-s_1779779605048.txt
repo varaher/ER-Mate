@@ -1,0 +1,134 @@
+The pediatric case sheet uses the same voice pipeline — same Sarvam transcription, same extraction endpoint, same save path. So yes, structurally it will work.
+
+But there are pediatric-specific fields that need to be verified.
+
+---
+
+## What's the Same ✅
+
+```
+Voice recording          ✅ identical
+Sarvam transcription     ✅ identical  
+Extract Clinical Data    ✅ same endpoint
+Review screen            ✅ same screen
+Save to case sheet       ✅ same save path
+Triage auto-assign       ✅ same logic
+HPI, PMH, Diagnosis      ✅ same fields
+Investigations           ✅ same fields
+Treatment                ✅ same fields
+```
+
+---
+
+## What's Different for Pediatrics ⚠️
+
+**1. Age-adjusted vitals**
+A HR of 140 in an adult = ORANGE triage. In a 2-year-old = completely normal. The triage auto-assign uses adult thresholds. For pediatric cases it needs age-adjusted values.
+
+**2. Pediatric-specific history fields**
+The extraction prompt doesn't currently ask for:
+```
+Immunization history
+Birth history (term/preterm, NICU)
+Feeding history
+Developmental milestones
+Weight in kg (for drug dosing)
+```
+
+**3. Weight-based medication dosing**
+When the doctor says "Paracetamol 15mg/kg" — the extraction needs to capture weight and calculate the dose. Currently it just captures the dose as stated.
+
+**4. PALS vs ATLS framework**
+Pediatric primary survey follows PALS parameters, not ATLS. The extraction prompt uses ATLS language.
+
+---
+
+## Quick Test to Do Now
+
+Record this pediatric dictation and check what populates:
+
+```
+"Patient is a 4-year-old male child,
+brought by mother with complaints of 
+fever since 3 days and cough.
+Child is fully immunized for age.
+Birth history normal, term delivery.
+On examination, child is conscious,
+crying, airway patent,
+respiratory rate 40 per minute,
+SpO2 96% on room air,
+heart rate 130 per minute,
+BP 90/60, CRT less than 2 seconds.
+Temperature 102 degrees Fahrenheit.
+Weight 16 kg.
+CBC and CRP sent.
+Syrup paracetamol 15mg/kg given.
+Plan — pediatrician consultation."
+```
+
+Check these specific fields:
+
+```
+□ Age captured as 4 years
+□ Case auto-routed as Pediatric
+□ RR 40 — is triage correct for 4yr old?
+□ Weight 16kg captured
+□ Immunization history captured
+□ Paracetamol dose captured
+□ Pediatrician consultation captured
+```
+
+---
+
+## What to Tell Your Developer
+
+**Three pediatric-specific fixes needed:**
+
+**Fix 1 — Pediatric triage thresholds**
+```javascript
+// Current computeTriageFromVitals uses 
+// adult thresholds only
+
+// Add age-based adjustment:
+const getPediatricThresholds = (ageYears) => {
+  if (ageYears < 1) return {
+    hrHigh: 160, rrHigh: 60, 
+    spo2Low: 94, bpLow: 60
+  };
+  if (ageYears < 5) return {
+    hrHigh: 140, rrHigh: 40,
+    spo2Low: 94, bpLow: 70
+  };
+  if (ageYears < 12) return {
+    hrHigh: 120, rrHigh: 30,
+    spo2Low: 95, bpLow: 80
+  };
+  // 12-16 — close to adult
+  return {
+    hrHigh: 100, rrHigh: 20,
+    spo2Low: 95, bpLow: 90
+  };
+};
+```
+
+**Fix 2 — Add pediatric fields to extraction prompt**
+```
+Add to the AI extraction schema:
+"weight": "",
+"immunizationHistory": "",
+"birthHistory": "",
+"feedingHistory": "",
+"developmentalMilestones": "",
+"weightBasedDosing": true/false
+```
+
+**Fix 3 — Pass caseType to extraction**
+The extraction call already sends `caseType` in the body. Verify the server uses it to apply pediatric-specific extraction rules.
+
+---
+
+## Bottom Line
+
+The voice pipeline will work for pediatrics as-is for basic cases. But triage will be inaccurate for young children, and pediatric-specific history fields won't be captured until those three fixes are made.
+
+Run the test dictation above first. Share the View Case screenshot. That will show exactly what gaps exist before the pilot.

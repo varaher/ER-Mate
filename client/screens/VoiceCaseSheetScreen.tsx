@@ -406,6 +406,7 @@ export default function VoiceCaseSheetScreen() {
             age: patientAge.trim(),
             sex: patientSex,
             phone: "",
+            weight: finalExtracted.patientWeight || finalExtracted.weight || "",
             mode_of_arrival: "Walk-in",
             address: "Not provided",
             brought_by: "Self",
@@ -558,6 +559,21 @@ export default function VoiceCaseSheetScreen() {
     const medsStr = toStr(ex.currentMedications);
     if (medsStr) addVoice("currentMeds", "Current Medications", "package", medsStr, "pastHistory");
 
+    // Pediatric-specific history fields
+    if (caseType === "pediatric") {
+      const immStr = toStr(ex.immunizationHistory);
+      if (immStr) addVoice("immunization", "Immunization History", "shield", immStr, "pastHistory");
+      else addPrefill("immunization", "Immunization History", "shield", "Not mentioned");
+      const birthStr = toStr(ex.birthHistory);
+      if (birthStr) addVoice("birthHistory", "Birth History", "star", birthStr, "pastHistory");
+      const feedStr = toStr(ex.feedingHistory);
+      if (feedStr) addVoice("feedingHistory", "Feeding History", "coffee", feedStr, "pastHistory");
+      const devStr = toStr(ex.developmentalHistory);
+      if (devStr) addVoice("developmental", "Developmental History", "trending-up", devStr, "pastHistory");
+      const wtStr = toStr(ex.patientWeight || ex.weight);
+      if (wtStr) addVoice("pedWeight", "Weight (kg)", "activity", wtStr, "primarySurvey");
+    }
+
     // Primary Survey / Vitals
     const vs = ex.vitalsSuggested || {};
     const ps = ex.primarySurvey || {};
@@ -696,13 +712,23 @@ export default function VoiceCaseSheetScreen() {
     const spo2 = parseInt(vs.spo2) || 98;
     const gcs = parseInt(vs.gcs) || 15;
     const rr = parseInt(vs.rr) || 16;
-    if (spo2 < 90 || gcs < 9 || bpSys < 80)
+    const age = parseFloat(patientAge) || 99;
+
+    // Age-adjusted normal upper limits for HR and RR, and lower BP thresholds
+    let hrHigh: number, rrHigh: number, bpCrit: number, bpWarn: number;
+    if (age < 1)       { hrHigh = 160; rrHigh = 60; bpCrit = 60; bpWarn = 70; }
+    else if (age < 5)  { hrHigh = 140; rrHigh = 40; bpCrit = 60; bpWarn = 70; }
+    else if (age < 12) { hrHigh = 120; rrHigh = 30; bpCrit = 70; bpWarn = 80; }
+    else if (age < 16) { hrHigh = 100; rrHigh = 24; bpCrit = 75; bpWarn = 90; }
+    else               { hrHigh = 100; rrHigh = 20; bpCrit = 80; bpWarn = 100; }
+
+    if (spo2 < 90 || gcs < 9 || bpSys < bpCrit)
       return { triage_color: "red", triage_priority: 1 };
-    if (spo2 < 94 || gcs < 13 || bpSys < 100 || hr > 120 || rr > 30)
+    if (spo2 < 94 || gcs < 13 || bpSys < bpWarn || hr > hrHigh || rr > rrHigh)
       return { triage_color: "orange", triage_priority: 2 };
-    if (spo2 < 96 || hr > 100 || rr > 24 || bpSys > 180)
+    if (spo2 < 96 || hr > Math.round(hrHigh * 0.85) || rr > Math.round(rrHigh * 1.2) || bpSys > 180)
       return { triage_color: "yellow", triage_priority: 3 };
-    if (hr > 90 || rr > 20)
+    if (hr > Math.round(hrHigh * 0.75) || rr > rrHigh)
       return { triage_color: "green", triage_priority: 4 };
     return { triage_color: "blue", triage_priority: 5 };
   };

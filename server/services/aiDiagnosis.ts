@@ -1398,7 +1398,8 @@ export async function extractSmartDictation(
     : "No patient context provided";
 
   const pediatricExtra = isPediatric ? `,
-    "immunizationHistory": "Vaccination history if mentioned",
+    "patientWeight": "Patient weight in kg if mentioned (e.g. 16 kg)",
+    "immunizationHistory": "Vaccination/immunization history if mentioned",
     "birthHistory": "Birth history - term/preterm, birth weight, NICU stay if mentioned",
     "feedingHistory": "Breastfeeding/formula/weaning if mentioned",
     "developmentalHistory": "Developmental milestones if mentioned"` : "";

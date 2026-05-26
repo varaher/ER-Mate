@@ -2866,11 +2866,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const grbs = parseInt(vs.grbs || ps.disability?.grbs) || 100;
       const temperature = parseFloat(vs.temperature || ps.exposure?.temperature) || 36.8;
 
+      // Age-adjusted triage thresholds (pediatric-aware)
+      const ptAge = parseFloat(patient?.age) || 99;
+      let hrHigh: number, rrHigh: number, bpCrit: number, bpWarn: number;
+      if (ptAge < 1)       { hrHigh = 160; rrHigh = 60; bpCrit = 60; bpWarn = 70; }
+      else if (ptAge < 5)  { hrHigh = 140; rrHigh = 40; bpCrit = 60; bpWarn = 70; }
+      else if (ptAge < 12) { hrHigh = 120; rrHigh = 30; bpCrit = 70; bpWarn = 80; }
+      else if (ptAge < 16) { hrHigh = 100; rrHigh = 24; bpCrit = 75; bpWarn = 90; }
+      else                 { hrHigh = 100; rrHigh = 20; bpCrit = 80; bpWarn = 100; }
+
       let triage_color = "green", triage_priority = 4;
-      if (spo2 < 90 || gcs < 9 || bpSys < 80) { triage_color = "red"; triage_priority = 1; }
-      else if (spo2 < 94 || gcs < 13 || bpSys < 100 || hr > 120 || rr > 30) { triage_color = "orange"; triage_priority = 2; }
-      else if (spo2 < 96 || hr > 100 || rr > 24 || bpSys > 180) { triage_color = "yellow"; triage_priority = 3; }
-      else if (hr > 90 || rr > 20) { triage_color = "green"; triage_priority = 4; }
+      if (spo2 < 90 || gcs < 9 || bpSys < bpCrit) { triage_color = "red"; triage_priority = 1; }
+      else if (spo2 < 94 || gcs < 13 || bpSys < bpWarn || hr > hrHigh || rr > rrHigh) { triage_color = "orange"; triage_priority = 2; }
+      else if (spo2 < 96 || hr > Math.round(hrHigh * 0.85) || rr > Math.round(rrHigh * 1.2) || bpSys > 180) { triage_color = "yellow"; triage_priority = 3; }
+      else if (hr > Math.round(hrHigh * 0.75) || rr > rrHigh) { triage_color = "green"; triage_priority = 4; }
       else { triage_color = "blue"; triage_priority = 5; }
 
       const vitals_at_arrival = { hr, bp_systolic: bpSys, bp_diastolic: bpDia, rr, spo2, temperature, gcs_e: gcsE, gcs_v: gcsV, gcs_m: gcsM, grbs, pain_score: 0 };
