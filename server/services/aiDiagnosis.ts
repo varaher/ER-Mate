@@ -1402,7 +1402,11 @@ export async function extractSmartDictation(
     "immunizationHistory": "Vaccination/immunization history if mentioned",
     "birthHistory": "Birth history - term/preterm, birth weight, NICU stay if mentioned",
     "feedingHistory": "Breastfeeding/formula/weaning if mentioned",
-    "developmentalHistory": "Developmental milestones if mentioned"` : "";
+    "developmentalHistory": "Developmental milestones if mentioned",
+    "patAssessment": {
+      "appearance": "PAT Appearance — tone, interactivity, consolability, look/gaze, speech/cry as dictated (e.g. 'crying vigorously, interactive, consolable')",
+      "circulationToSkin": "PAT Circulation to Skin — pallor, mottling, cyanosis, skin colour as dictated"
+    }` : "";
 
   const prompt = `You are a clinical documentation AI for an Indian emergency department.
 The transcript below is a doctor dictating a patient case (may have been translated to English).
@@ -1443,6 +1447,7 @@ SCHEMA (fill every field, use "" for not mentioned):
   "currentMedications": "Current medications",
   "familyHistory": "Family history",
   "socialHistory": "Smoking, alcohol, occupation"${pediatricExtra},
+  "lastMeal": "Last oral intake — time and what was eaten/drunk (important for procedural sedation)",
   "menstrualHistory": "Menstrual/obstetric history if mentioned",
   "painDetails": {
     "location": "", "severity": "", "character": "", "onset": "",
@@ -1498,6 +1503,7 @@ SCHEMA (fill every field, use "" for not mentioned):
   "treatmentNotes": "",
   "investigationsOrdered": "",
   "imagingOrdered": "",
+  "resultsSummary": "Key investigation results mentioned by the doctor — lab values, imaging reports, any results",
   "sectionConfidence": {
     "patient": "", "chiefComplaint": "", "hpi": "", "pastHistory": "",
     "primarySurvey": "", "examination": "", "investigations": "",

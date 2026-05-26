@@ -559,6 +559,10 @@ export default function VoiceCaseSheetScreen() {
     const medsStr = toStr(ex.currentMedications);
     if (medsStr) addVoice("currentMeds", "Current Medications", "package", medsStr, "pastHistory");
 
+    // Last Meal (SAMPLE — L) — critical for sedation/anaesthesia
+    const lastMealStr = toStr(ex.lastMeal);
+    if (lastMealStr) addVoice("lastMeal", "Last Meal", "coffee", lastMealStr, "pastHistory");
+
     // Pediatric-specific history fields
     if (caseType === "pediatric") {
       const immStr = toStr(ex.immunizationHistory);
@@ -567,11 +571,16 @@ export default function VoiceCaseSheetScreen() {
       const birthStr = toStr(ex.birthHistory);
       if (birthStr) addVoice("birthHistory", "Birth History", "star", birthStr, "pastHistory");
       const feedStr = toStr(ex.feedingHistory);
-      if (feedStr) addVoice("feedingHistory", "Feeding History", "coffee", feedStr, "pastHistory");
+      if (feedStr) addVoice("feedingHistory", "Feeding History", "droplet", feedStr, "pastHistory");
       const devStr = toStr(ex.developmentalHistory);
       if (devStr) addVoice("developmental", "Developmental History", "trending-up", devStr, "pastHistory");
       const wtStr = toStr(ex.patientWeight || ex.weight);
       if (wtStr) addVoice("pedWeight", "Weight (kg)", "activity", wtStr, "primarySurvey");
+      // PAT — Pediatric Assessment Triangle
+      const patAppStr = toStr(ex.patAssessment?.appearance);
+      if (patAppStr) addVoice("patAppearance", "PAT — Appearance", "eye", patAppStr, "primarySurvey");
+      const patCircStr = toStr(ex.patAssessment?.circulationToSkin);
+      if (patCircStr) addVoice("patCirculation", "PAT — Circulation to Skin", "heart", patCircStr, "primarySurvey");
     }
 
     // Primary Survey / Vitals
@@ -648,6 +657,12 @@ export default function VoiceCaseSheetScreen() {
       if (parts.length > 0) addVoice("vbg", "VBG / ABG", "droplet", parts.join("  |  "), "investigations");
     }
 
+    // EFAST
+    const adj = ex.adjuncts || {};
+    if (adj.efastDone || adj.efastFindings) {
+      addVoice("efast", "EFAST", "search", adj.efastFindings || "Done", "investigations");
+    }
+
     // Exam
     const ef = ex.examFindings || {};
     const examParts: string[] = [];
@@ -666,6 +681,8 @@ export default function VoiceCaseSheetScreen() {
     if (labsStr) addVoice("labs", "Labs Ordered", "clipboard", labsStr, "investigations");
     const imagingStr = toStr(ex.imagingOrdered);
     if (imagingStr) addVoice("imaging", "Imaging Ordered", "camera", imagingStr, "investigations");
+    const resultsStr = toStr(ex.resultsSummary);
+    if (resultsStr) addVoice("resultsSummary", "Results Summary", "bar-chart-2", resultsStr, "investigations");
 
     // Treatment
     if (ex.prescribedMedications?.length > 0) {

@@ -2976,7 +2976,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             pastMedicalHistory: pastMedArr,
             allergies: ex.allergies ? ex.allergies.split(/[,;]+/).map((s: string) => s.trim()).filter((s: string) => s) : [],
             medications: ex.currentMedications || "",
-            lastMeal: "", lmp: ex.menstrualHistory || "",
+            lastMeal: ex.lastMeal || "", lmp: ex.menstrualHistory || "",
           },
           primary_assessment: {
             airway_status: ps.airway?.status || "Patent", airway_interventions: [], airway_additional_notes: ps.airway?.findings || "",
