@@ -1,11 +1,11 @@
 {
-  "id": "30f1fb73-9045-430b-b69a-cd6ea11a3e35",
-  "createdAt": "2026-05-26T07:33:23.094Z",
+  "id": "4852d01d-f4d4-436b-9f06-af5f6f605db5",
+  "createdAt": "2026-05-26T07:50:38.487Z",
   "runtimeVersion": "1.0.0",
   "launchAsset": {
-    "key": "bundle-1779780803094-2902",
+    "key": "bundle-1779781838487-4175",
     "contentType": "application/javascript",
-    "url": "https://cc70901c-5ae8-4394-a8d0-9961ae7b57dc-00-1obtc7pzxu7ls.picard.replit.dev/1779780803094-2902/_expo/static/js/android/bundle.js"
+    "url": "https://cc70901c-5ae8-4394-a8d0-9961ae7b57dc-00-1obtc7pzxu7ls.picard.replit.dev/1779781838487-4175/_expo/static/js/android/bundle.js"
   },
   "assets": [],
   "metadata": {},

@@ -58,6 +58,23 @@ export async function getCachedCaseData(caseId: string): Promise<CaseCacheEntry 
   return cache[caseId] || null;
 }
 
+export async function cacheDischargeSummary(caseId: string, summary: any): Promise<void> {
+  const cache = await loadCache();
+  const existing = cache[caseId] || {};
+  cache[caseId] = {
+    treatment: existing.treatment || {},
+    investigations: existing.investigations || {},
+    procedures: existing.procedures || {},
+    addendum_notes: existing.addendum_notes || [],
+    primary_assessment: existing.primary_assessment || {},
+    history: existing.history || {},
+    examination: existing.examination || {},
+    discharge_summary: summary || {},
+    updatedAt: new Date().toISOString(),
+  };
+  await saveCache(cache);
+}
+
 function hasData(val: any): boolean {
   if (!val) return false;
   if (typeof val === "string") return val.trim().length > 0;
