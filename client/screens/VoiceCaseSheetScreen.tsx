@@ -50,6 +50,19 @@ interface WebRecState {
   stream: MediaStream | null;
 }
 
+// Converts any age string to decimal years — handles "8m", "8 months", "4", "4y", "1.5"
+const parseAgeToYears = (ageStr: string | number): number => {
+  if (!ageStr) return 0;
+  const str = String(ageStr).toLowerCase().trim();
+  // Months: "8m", "8mo", "8 months", "8 month" — but NOT "18yr" or "18 years"
+  if ((str.endsWith('m') || str.includes('mo') || str.includes('month')) &&
+      !str.includes('yr') && !str.includes('year')) {
+    const months = parseFloat(str) || 0;
+    return months / 12;
+  }
+  return parseFloat(str) || 0;
+};
+
 export default function VoiceCaseSheetScreen() {
   const { theme } = useTheme();
   const { user } = useAuth();
@@ -100,10 +113,10 @@ export default function VoiceCaseSheetScreen() {
   const nativeRec = useRef<Audio.Recording | null>(null);
   const webRec = useRef<WebRecState>({ mediaRecorder: null, audioChunks: [], stream: null });
 
-  // Auto-detect pediatric from age
+  // Auto-detect pediatric from age — handles "8m", "4y", "4", etc.
   useEffect(() => {
-    const age = parseFloat(patientAge);
-    if (!isNaN(age) && age > 0) setCaseType(age <= 16 ? "pediatric" : "adult");
+    const age = parseAgeToYears(patientAge);
+    if (age > 0) setCaseType(age <= 16 ? "pediatric" : "adult");
   }, [patientAge]);
 
   // Recording animations
@@ -474,6 +487,12 @@ export default function VoiceCaseSheetScreen() {
       // Diagnosis + Disposition
       { label: "Working Diagnosis", filled: !!(ex?.diagnosis?.length > 0) },
       { label: "Disposition Plan", filled: !!(ex?.disposition?.plan) },
+      // Pediatric-specific completeness checks
+      ...(caseType === 'pediatric' ? [
+        { label: "Weight", filled: !!(ex?.patientWeight || ex?.weight) },
+        { label: "Immunization History", filled: !!(ex?.immunizationHistory) },
+        { label: "PAT Assessment", filled: !!(ex?.patAssessment?.appearance) },
+      ] : []),
       // Conditional: VBG completeness only if VBG was mentioned
       ...(hasVBGMentioned ? [
         { label: "VBG — pH", filled: !!(ex?.vbgResults?.ph) },
@@ -579,6 +598,8 @@ export default function VoiceCaseSheetScreen() {
       // PAT — Pediatric Assessment Triangle
       const patAppStr = toStr(ex.patAssessment?.appearance);
       if (patAppStr) addVoice("patAppearance", "PAT — Appearance", "eye", patAppStr, "primarySurvey");
+      const patWobStr = toStr(ex.patAssessment?.workOfBreathing);
+      if (patWobStr) addVoice("patWOB", "PAT — Work of Breathing", "wind", patWobStr, "primarySurvey");
       const patCircStr = toStr(ex.patAssessment?.circulationToSkin);
       if (patCircStr) addVoice("patCirculation", "PAT — Circulation to Skin", "heart", patCircStr, "primarySurvey");
     }
@@ -729,7 +750,7 @@ export default function VoiceCaseSheetScreen() {
     const spo2 = parseInt(vs.spo2) || 98;
     const gcs = parseInt(vs.gcs) || 15;
     const rr = parseInt(vs.rr) || 16;
-    const age = parseFloat(patientAge) || 99;
+    const age = parseAgeToYears(patientAge) || 99;
 
     // Age-adjusted normal upper limits for HR and RR, and lower BP thresholds
     let hrHigh: number, rrHigh: number, bpCrit: number, bpWarn: number;

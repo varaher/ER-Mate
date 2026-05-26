@@ -1,0 +1,175 @@
+Good comprehensive implementation. Let me review it.
+
+---
+
+## What's Correctly Done ✅
+
+**Pediatric triage thresholds — both client and server**
+The age-adjusted table is clinically correct:
+```
+< 1 yr:   HR 160, RR 60, BP 70
+1-4 yrs:  HR 140, RR 40, BP 70
+5-11 yrs: HR 120, RR 30, BP 80
+12-15 yrs: HR 100, RR 24, BP 90
+```
+A 4-year-old with HR 130 and RR 40 now correctly scores Green/Blue instead of Orange. This is the most important clinical fix.
+
+**PAT Triangle added**
+Appearance, Circulation to Skin, Work of Breathing — this is genuinely PALS-specific and was missing. Good catch.
+
+**Last Meal captured**
+The L in SAMPLE was hardcoded as empty. Now extracted from dictation. Important for ER documentation.
+
+**EFAST now shown when dictated**
+Was being silently dropped before.
+
+**Results Summary field added**
+Completes the investigations section.
+
+**Weight passed to case on save**
+Essential for pediatric drug dosing.
+
+---
+
+## Concerns ⚠️
+
+### 1. PAT Triangle Extraction Accuracy
+
+The PAT (Pediatric Assessment Triangle) uses specific clinical terms:
+- Appearance: tone, interactivity, consolability, look/gaze, speech/cry
+- Work of Breathing: retractions, grunting, nasal flaring, head bobbing
+- Circulation to Skin: pallor, mottling, cyanosis
+
+When a doctor says naturally in Malayalam/English:
+```
+"കുട്ടി കരയുന്നുണ്ട്, active ആണ്, 
+ consolable, mild retractions present"
+```
+
+The AI needs to map "കരയുന്നുണ്ട്" (crying) → tone normal, interactive. Verify the extraction prompt specifically lists PAT terminology so the AI knows what to look for.
+
+### 2. Age Input Validation for Triage
+
+The triage threshold function receives `patientAge` as a string from the patient form. If the doctor enters "4" for a 4-year-old, the comparison works. But if they enter "4 years" or "4y" the `parseInt` will still return 4. Confirm the age parsing is robust:
+
+```javascript
+// Verify this handles edge cases
+const ageYears = parseInt(patientAge) || 0;
+// "4" → 4 ✅
+// "4y" → 4 ✅  
+// "4 years" → 4 ✅
+// "4.5" → 4 ✅ (months edge case)
+// "18m" → 18 ❌ (would be 18 years not months)
+```
+
+For infants under 1 year, doctors often say "8 months" or "8m". Add a months handler:
+
+```javascript
+const parseAgeToYears = (ageStr) => {
+  if (!ageStr) return 0;
+  const str = String(ageStr).toLowerCase().trim();
+  
+  // Months format: "8m", "8 months", "8mo"
+  if (str.includes('m') && 
+      !str.includes('yr') && 
+      !str.includes('year')) {
+    return parseInt(str) / 12;
+  }
+  return parseInt(str) || 0;
+};
+```
+
+### 3. Completeness Score Not Updated for Pediatric Fields
+
+The `computeCompleteness` function checks 17 fields — all adult-oriented. For pediatric cases the score should additionally check:
+
+```javascript
+// Add to computeCompleteness when pediatric:
+...(caseType === 'pediatric' ? [
+  { label: "Weight", 
+    filled: !!(ex?.patientWeight) },
+  { label: "Immunization History", 
+    filled: !!(ex?.immunizationHistory) },
+  { label: "PAT Assessment", 
+    filled: !!(ex?.patAssessment?.appearance) },
+] : [])
+```
+
+Otherwise a pediatric case with weight, immunization, PAT all captured will still show 13/17 instead of reflecting those additional fields.
+
+### 4. Birth History Edge Case
+
+Birth history for Indian ER context often includes:
+- Term/preterm
+- Birth weight
+- NICU admission
+- Delivery type (normal/LSCS)
+
+The extraction prompt should explicitly list these sub-fields or the AI will return a vague string like "normal delivery" without the structured data needed.
+
+---
+
+## Field Coverage Assessment
+
+| Section | Coverage |
+|---|---|
+| ABCDE Primary Survey | ✅ Complete |
+| PAT Triangle | ✅ Added |
+| Vitals | ✅ Complete |
+| Weight | ✅ Added |
+| SAMPLE History | ✅ Complete including Last Meal |
+| Immunization | ✅ Added |
+| Birth/Feeding/Developmental | ✅ Added |
+| Investigations + Results | ✅ Complete |
+| Treatment | ✅ Complete |
+| Diagnosis | ✅ Complete |
+| Disposition | ✅ Complete |
+| Completeness scoring | ⚠️ Not updated for pediatric fields |
+| Infant age in months | ⚠️ Not handled |
+| PAT extraction accuracy | ⚠️ Needs verification |
+
+---
+
+## Test to Run Now
+
+Use this pediatric dictation:
+
+```
+"Patient is an 8-month-old male infant,
+brought by mother.
+Child is crying but consolable,
+interactive, good tone.
+No retractions, no grunting.
+CRT less than 2 seconds, no pallor.
+Complaint of fever since 2 days 
+and loose stools 5 episodes today.
+Fully immunized for age.
+Born at term, birth weight 3.2 kg,
+no NICU admission.
+Breastfed exclusively.
+Developmental milestones normal.
+Last meal 2 hours ago — breastfeed.
+On examination, airway patent,
+RR 44, SpO2 98%, HR 138, BP 80/50,
+temperature 101 Fahrenheit.
+Weight 7.5 kg.
+CBC and CRP ordered.
+Syrup paracetamol 15mg/kg given.
+Pediatrician informed."
+```
+
+**Check specifically:**
+```
+□ Age "8 months" → infant triage thresholds
+□ PAT — crying, consolable, interactive
+□ Weight 7.5 kg captured
+□ Immunization: fully immunized
+□ Birth history: term, 3.2kg, no NICU
+□ Last meal: 2 hours ago, breastfeed
+□ HR 138 in 8-month-old → correct triage
+   (normal for age, should be Green/Blue)
+□ Paracetamol 15mg/kg noted
+□ Pediatrician consultation captured
+```
+
+That test will confirm whether all the pediatric fixes are working correctly before pilot.

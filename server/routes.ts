@@ -2867,7 +2867,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const temperature = parseFloat(vs.temperature || ps.exposure?.temperature) || 36.8;
 
       // Age-adjusted triage thresholds (pediatric-aware)
-      const ptAge = parseFloat(patient?.age) || 99;
+      // parseAgeToYears handles "8m"/"8 months" → 0.667, "4" → 4, "4y" → 4
+      const _ageStr = String(patient?.age || "").toLowerCase().trim();
+      const ptAge = (() => {
+        if ((_ageStr.endsWith('m') || _ageStr.includes('mo') || _ageStr.includes('month')) &&
+            !_ageStr.includes('yr') && !_ageStr.includes('year')) {
+          return (parseFloat(_ageStr) || 0) / 12;
+        }
+        return parseFloat(_ageStr) || 99;
+      })();
       let hrHigh: number, rrHigh: number, bpCrit: number, bpWarn: number;
       if (ptAge < 1)       { hrHigh = 160; rrHigh = 60; bpCrit = 60; bpWarn = 70; }
       else if (ptAge < 5)  { hrHigh = 140; rrHigh = 40; bpCrit = 60; bpWarn = 70; }

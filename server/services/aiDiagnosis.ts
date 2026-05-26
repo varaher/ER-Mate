@@ -1400,12 +1400,13 @@ export async function extractSmartDictation(
   const pediatricExtra = isPediatric ? `,
     "patientWeight": "Patient weight in kg if mentioned (e.g. 16 kg)",
     "immunizationHistory": "Vaccination/immunization history if mentioned",
-    "birthHistory": "Birth history - term/preterm, birth weight, NICU stay if mentioned",
-    "feedingHistory": "Breastfeeding/formula/weaning if mentioned",
-    "developmentalHistory": "Developmental milestones if mentioned",
+    "birthHistory": "Birth history structured as: term/preterm (gestational age if stated), birth weight in kg/grams, delivery type (normal/LSCS/forceps/vacuum), NICU admission (yes/no + duration), any birth complications — exactly as stated",
+    "feedingHistory": "Breastfeeding/formula/mixed/weaning — as stated",
+    "developmentalHistory": "Developmental milestones — gross motor, fine motor, speech, social — whether normal or delayed as stated",
     "patAssessment": {
-      "appearance": "PAT Appearance — tone, interactivity, consolability, look/gaze, speech/cry as dictated (e.g. 'crying vigorously, interactive, consolable')",
-      "circulationToSkin": "PAT Circulation to Skin — pallor, mottling, cyanosis, skin colour as dictated"
+      "appearance": "PAT Appearance (TICLS): tone (normal/decreased/limp), interactivity (interactive/lethargic/unresponsive), consolability (consolable/inconsolable), look/gaze (normal/glassy/vacant), speech/cry (strong cry/weak cry/no cry/irritable/normal speech). Map natural speech: 'crying' → strong cry + interactive; 'consolable' → consolable; 'lethargic' → decreased interactivity. Capture exactly as dictated.",
+      "workOfBreathing": "PAT Work of Breathing: retractions (subcostal/intercostal/suprasternal), grunting, nasal flaring, head bobbing, stridor, wheezing — as stated. Map 'no retractions, no grunting' → 'No retractions, no grunting, no nasal flaring'.",
+      "circulationToSkin": "PAT Circulation to Skin: skin colour (normal/pale/mottled/cyanotic/ashen/flushed), CRT normal or prolonged — as stated"
     }` : "";
 
   const prompt = `You are a clinical documentation AI for an Indian emergency department.
