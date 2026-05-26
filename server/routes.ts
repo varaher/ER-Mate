@@ -197,11 +197,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const sample = casesData[0];
         const hasUserField =
           "doctor_id" in sample || "user_id" in sample ||
-          "created_by" in sample || "doctor_email" in sample;
+          "created_by" in sample || "created_by_user_id" in sample ||
+          "doctor_email" in sample;
 
         if (hasUserField) {
           const filtered = casesData.filter((c: any) => {
-            if (userId && (c.doctor_id === userId || c.user_id === userId || c.created_by === userId)) return true;
+            if (userId && (
+              c.doctor_id === userId || c.user_id === userId ||
+              c.created_by === userId || c.created_by_user_id === userId
+            )) return true;
             if (userEmail && c.doctor_email === userEmail) return true;
             return false;
           });

@@ -771,6 +771,36 @@ export default function CaseSheetScreen() {
           Object.assign(newFormData.disability, res.data.abcde.disability || {});
           Object.assign(newFormData.exposure, res.data.abcde.exposure || {});
         }
+        // Fallback: external backend stores ABCDE as flat primary_assessment when abcde is absent
+        if (!res.data.abcde && res.data.primary_assessment) {
+          const pa = res.data.primary_assessment;
+          if (pa.airway_status) newFormData.airway.status = pa.airway_status;
+          if (pa.airway_additional_notes) newFormData.airway.notes = pa.airway_additional_notes;
+          if (pa.breathing_rr) newFormData.breathing.rr = String(pa.breathing_rr);
+          if (pa.breathing_spo2) newFormData.breathing.spo2 = String(pa.breathing_spo2);
+          if (pa.breathing_oxygen_device) newFormData.breathing.o2Device = pa.breathing_oxygen_device;
+          if (pa.breathing_work) newFormData.breathing.effort = pa.breathing_work;
+          if (pa.breathing_additional_notes) newFormData.breathing.notes = pa.breathing_additional_notes;
+          if (pa.circulation_hr) newFormData.circulation.hr = String(pa.circulation_hr);
+          if (pa.circulation_bp_systolic) newFormData.circulation.bpSystolic = String(pa.circulation_bp_systolic);
+          if (pa.circulation_bp_diastolic) newFormData.circulation.bpDiastolic = String(pa.circulation_bp_diastolic);
+          if (pa.circulation_crt != null) newFormData.circulation.capillaryRefill = String(pa.circulation_crt);
+          if (pa.circulation_additional_notes) newFormData.circulation.notes = pa.circulation_additional_notes;
+          if (Array.isArray(pa.circulation_adjuncts) && pa.circulation_adjuncts.length > 0) newFormData.circulation.ivAccess = pa.circulation_adjuncts[0];
+          if (pa.disability_gcs_e != null) newFormData.disability.gcsE = String(pa.disability_gcs_e);
+          if (pa.disability_gcs_v != null) newFormData.disability.gcsV = String(pa.disability_gcs_v);
+          if (pa.disability_gcs_m != null) newFormData.disability.gcsM = String(pa.disability_gcs_m);
+          if (pa.disability_grbs != null) newFormData.disability.glucose = String(pa.disability_grbs);
+          if (pa.disability_avpu) newFormData.disability.motorResponse = pa.disability_avpu;
+          if (pa.disability_pupils_size) newFormData.disability.pupilSize = pa.disability_pupils_size;
+          if (pa.disability_pupils_reaction) newFormData.disability.pupilReaction = pa.disability_pupils_reaction;
+          if (pa.disability_additional_notes) newFormData.disability.notes = pa.disability_additional_notes;
+          if (pa.exposure_temperature != null) newFormData.exposure.temperature = String(pa.exposure_temperature);
+          if (pa.exposure_additional_notes) newFormData.exposure.findings = [pa.exposure_additional_notes];
+          // Adjuncts from primary_assessment
+          if (pa.ecg_findings) newFormData.adjuncts.ecgNotes = pa.ecg_findings;
+          if (pa.efast_findings) newFormData.adjuncts.efastNotes = pa.efast_findings;
+        }
         if (res.data.adjuncts) {
           Object.assign(newFormData.adjuncts, res.data.adjuncts);
           if (res.data.adjuncts.abg) {
@@ -807,8 +837,12 @@ export default function CaseSheetScreen() {
           newFormData.sample.pastMedicalHistory = res.data.history.past_medical || "";
           newFormData.sample.lastMeal = res.data.history.last_meal || "";
           newFormData.sample.lmp = res.data.history.lmp || "";
+          if (res.data.history.signs_and_symptoms) newFormData.sample.signsSymptoms = res.data.history.signs_and_symptoms;
           setPastSurgicalHistory(res.data.history.past_surgical || "");
-          setOtherHistory(res.data.history.other || "");
+          const extraParts: string[] = [res.data.history.other || ""];
+          if (res.data.history.family_history) extraParts.push(`Family History: ${res.data.history.family_history}`);
+          if (res.data.history.social_history) extraParts.push(`Social History: ${res.data.history.social_history}`);
+          setOtherHistory(extraParts.filter(Boolean).join("\n").trim());
         }
         if (res.data.psychological) {
           setPsychData({ ...getDefaultPsychFormData(), ...res.data.psychological });
@@ -870,6 +904,31 @@ export default function CaseSheetScreen() {
             }
             return updated;
           });
+        } else if (Array.isArray(res.data.procedures_performed)) {
+          // Fallback: external backend stores procedures at top level
+          setProceduresData((prev) => {
+            const updated = { ...prev };
+            res.data.procedures_performed.forEach((proc: any) => {
+              const cat = proc.category as ProcedureCategory;
+              if (cat && cat !== "generalNotes" as any && Array.isArray(updated[cat])) {
+                if (!updated[cat].includes(proc.name || proc)) {
+                  updated[cat] = [...updated[cat], proc.name || String(proc)];
+                }
+              }
+            });
+            return updated;
+          });
+        }
+        // Fallback: top-level drugs_administered when treatment.medications is empty
+        if ((!res.data.treatment?.medications || res.data.treatment.medications.length === 0) && Array.isArray(res.data.drugs_administered) && res.data.drugs_administered.length > 0) {
+          const fallbackMeds: MedicationEntry[] = res.data.drugs_administered.map((m: any, idx: number) => ({
+            id: `drg-${idx}`,
+            name: m.name || m.drug || String(m) || "",
+            dose: m.dose || "",
+            route: m.route || "",
+            frequency: m.frequency || "",
+          }));
+          setTreatmentData((prev) => ({ ...prev, medications: fallbackMeds }));
         }
         if (res.data.disposition) {
           setDispositionData((prev) => ({
@@ -964,6 +1023,14 @@ export default function CaseSheetScreen() {
           else if ((e.findings?.length > 0) || (e.interventions?.length > 0)) {
             newABCDEStatus.exposure = "Abnormal";
           }
+        } else if (!res.data.abcde && res.data.primary_assessment) {
+          const pa = res.data.primary_assessment;
+          if (pa.airway_status && pa.airway_status !== "patent") newABCDEStatus.airway = "Abnormal";
+          if (pa.breathing_work && pa.breathing_work !== "normal") newABCDEStatus.breathing = "Abnormal";
+          if (pa.circulation_crt != null && pa.circulation_crt > 2) newABCDEStatus.circulation = "Abnormal";
+          const gcsTotal = (parseInt(pa.disability_gcs_e) || 4) + (parseInt(pa.disability_gcs_v) || 5) + (parseInt(pa.disability_gcs_m) || 6);
+          if (gcsTotal < 15 || (pa.disability_avpu && pa.disability_avpu !== "A" && pa.disability_avpu !== "obeys")) newABCDEStatus.disability = "Abnormal";
+          if (pa.exposure_additional_notes) newABCDEStatus.exposure = "Abnormal";
         }
         setABCDEStatus(newABCDEStatus);
         }

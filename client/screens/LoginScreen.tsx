@@ -22,6 +22,7 @@ import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollV
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { warmUpBackend } from "@/lib/api";
+import { getApiUrl } from "@/lib/query-client";
 import { Colors, Spacing, BorderRadius, Typography } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -33,7 +34,7 @@ const GOOGLE_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || "101867
 
 export default function LoginScreen() {
   const navigation = useNavigation<NavigationProp>();
-  const { login, googleSignIn } = useAuth();
+  const { login, googleSignIn, loginWithToken } = useAuth();
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -56,6 +57,59 @@ export default function LoginScreen() {
   const [linkLoading, setLinkLoading] = useState(false);
   const [linkError, setLinkError] = useState<string | null>(null);
   const [pendingGoogleParams, setPendingGoogleParams] = useState<{ name: string; email: string; accessToken?: string } | null>(null);
+
+  // QR device linking (web only)
+  const [showQrLogin, setShowQrLogin] = useState(false);
+  const [qrToken, setQrToken] = useState<string | null>(null);
+  const [qrUrl, setQrUrl] = useState<string | null>(null);
+  const [qrStatus, setQrStatus] = useState<"idle" | "loading" | "waiting" | "expired">("idle");
+  const qrPollRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopQrPoll = () => {
+    if (qrPollRef.current) {
+      clearInterval(qrPollRef.current);
+      qrPollRef.current = null;
+    }
+  };
+
+  const startQrLogin = async () => {
+    setShowQrLogin(true);
+    setQrStatus("loading");
+    setQrToken(null);
+    setQrUrl(null);
+    stopQrPoll();
+    try {
+      const baseUrl = getApiUrl();
+      const res = await fetch(`${baseUrl}/api/device-link/generate`, { method: "POST", headers: { "Content-Type": "application/json" } });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || "Failed to generate QR");
+      setQrToken(data.token);
+      setQrUrl(data.qr_url);
+      setQrStatus("waiting");
+      qrPollRef.current = setInterval(async () => {
+        try {
+          const pollRes = await fetch(`${baseUrl}/api/device-link/status?token=${data.token}`);
+          const pollData = await pollRes.json();
+          if (pollData.status === "approved" && pollData.authToken && pollData.user) {
+            stopQrPoll();
+            setShowQrLogin(false);
+            const userData = { id: pollData.user.id || "", name: pollData.user.name || "", email: pollData.user.email || "" };
+            await loginWithToken(pollData.authToken, userData);
+          } else if (pollData.status === "expired") {
+            stopQrPoll();
+            setQrStatus("expired");
+          }
+        } catch {}
+      }, 2000);
+    } catch (err: any) {
+      setQrStatus("idle");
+      Alert.alert("Error", err.message || "Could not generate QR code");
+    }
+  };
+
+  useEffect(() => {
+    return () => stopQrPoll();
+  }, []);
 
   useEffect(() => {
     warmUpBackend();
@@ -492,6 +546,52 @@ export default function LoginScreen() {
               <Text style={{ color: theme.primary, fontWeight: "600" }}>Sign Up</Text>
             </Text>
           </Pressable>
+
+          {Platform.OS === "web" ? (
+            <View style={styles.qrSection}>
+              <View style={styles.qrDividerRow}>
+                <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
+                <Text style={[styles.dividerText, { color: theme.textMuted }]}>or</Text>
+                <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
+              </View>
+              {!showQrLogin ? (
+                <Pressable
+                  style={({ pressed }) => [styles.qrButton, { borderColor: theme.primary, opacity: pressed ? 0.7 : 1 }]}
+                  onPress={startQrLogin}
+                >
+                  <Feather name="smartphone" size={18} color={theme.primary} />
+                  <Text style={[styles.qrButtonText, { color: theme.primary }]}>Sign in with Phone QR</Text>
+                </Pressable>
+              ) : (
+                <View style={[styles.qrBox, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                  <Text style={[styles.qrTitle, { color: theme.text }]}>Scan with ErMate on your phone</Text>
+                  {qrStatus === "loading" ? (
+                    <ActivityIndicator color={theme.primary} style={{ marginVertical: Spacing.xl }} />
+                  ) : qrStatus === "expired" ? (
+                    <View style={styles.qrExpiredBox}>
+                      <Text style={[styles.qrExpiredText, { color: theme.error || "#ef4444" }]}>QR code expired</Text>
+                      <Pressable style={[styles.qrRetryBtn, { backgroundColor: theme.primary }]} onPress={startQrLogin}>
+                        <Text style={styles.qrRetryText}>Generate New QR</Text>
+                      </Pressable>
+                    </View>
+                  ) : qrUrl ? (
+                    <View style={styles.qrImageBox}>
+                      {/* eslint-disable-next-line @typescript-eslint/no-var-requires */}
+                      {React.createElement(require("react-native").Image, {
+                        source: { uri: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrUrl)}` },
+                        style: styles.qrImage,
+                        resizeMode: "contain",
+                      })}
+                      <Text style={[styles.qrHint, { color: theme.textMuted }]}>Open ErMate app → Profile → Link to Web → Approve this session</Text>
+                    </View>
+                  ) : null}
+                  <Pressable onPress={() => { stopQrPoll(); setShowQrLogin(false); setQrStatus("idle"); }}>
+                    <Text style={[styles.qrCancel, { color: theme.textMuted }]}>Cancel</Text>
+                  </Pressable>
+                </View>
+              )}
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.footer}>
@@ -863,5 +963,76 @@ const styles = StyleSheet.create({
     alignItems: "center",
     alignSelf: "center",
     marginBottom: Spacing.lg,
+  },
+  qrSection: {
+    marginTop: Spacing.lg,
+  },
+  qrDividerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: Spacing.lg,
+    gap: Spacing.md,
+  },
+  qrButton: {
+    height: Spacing.buttonHeight,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1.5,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  qrButtonText: {
+    ...Typography.bodyMedium,
+    fontWeight: "600",
+  },
+  qrBox: {
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    padding: Spacing.lg,
+    alignItems: "center",
+    gap: Spacing.md,
+  },
+  qrTitle: {
+    ...Typography.bodyMedium,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  qrImageBox: {
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  qrImage: {
+    width: 200,
+    height: 200,
+    borderRadius: BorderRadius.md,
+  },
+  qrHint: {
+    ...Typography.small,
+    textAlign: "center",
+    maxWidth: 280,
+  },
+  qrExpiredBox: {
+    alignItems: "center",
+    gap: Spacing.md,
+    paddingVertical: Spacing.md,
+  },
+  qrExpiredText: {
+    ...Typography.body,
+    fontWeight: "600",
+  },
+  qrRetryBtn: {
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+  },
+  qrRetryText: {
+    color: "#FFFFFF",
+    ...Typography.bodyMedium,
+    fontWeight: "600",
+  },
+  qrCancel: {
+    ...Typography.small,
+    textDecorationLine: "underline",
   },
 });

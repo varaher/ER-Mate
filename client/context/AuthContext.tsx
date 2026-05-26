@@ -20,6 +20,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (data: RegisterData) => Promise<{ success: boolean; error?: string }>;
   googleSignIn: (params: { name: string; email: string; idToken?: string; accessToken?: string; password?: string }) => Promise<{ success: boolean; error?: string; accountExists?: boolean }>;
+  loginWithToken: (authToken: string, userData: User) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -174,6 +175,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const loginWithToken = async (authToken: string, userData: User) => {
+    queryClient.clear();
+    await AsyncStorage.setItem("token", authToken);
+    await AsyncStorage.setItem("user", JSON.stringify(userData));
+    setToken(authToken);
+    setUser(userData);
+  };
+
   const logout = async () => {
     try {
       await AsyncStorage.removeItem("token");
@@ -213,6 +222,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         register,
         googleSignIn,
+        loginWithToken,
         logout,
         refreshUser,
       }}
