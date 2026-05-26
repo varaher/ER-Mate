@@ -565,7 +565,18 @@ export default function DischargeSummaryScreen() {
         parts.push("Tests: " + investigations.individual_tests.join(", "));
       }
       if (investigations.results_notes && investigations.results_notes.trim()) {
-        parts.push("Results: " + investigations.results_notes);
+        const resultsStr = investigations.results_notes.trim();
+        // If results_notes is just a copy of the panels list (results not back yet),
+        // show "Pending" instead of duplicating the test names
+        const panelsStr = Array.isArray(investigations.panels_selected)
+          ? investigations.panels_selected.join(', ')
+          : (Array.isArray(investigations.individual_tests) ? investigations.individual_tests.join(', ') : '');
+        const norm = (s: string) => s.toLowerCase().replace(/\s+/g, '').replace(/,+/g, ',').replace(/,$/, '');
+        const isDuplicate = panelsStr.length > 0 && (
+          norm(resultsStr) === norm(panelsStr) ||
+          norm(panelsStr).startsWith(norm(resultsStr).substring(0, Math.min(15, norm(resultsStr).length)))
+        );
+        parts.push("Results: " + (isDuplicate ? "Pending" : resultsStr));
       }
       if (investigations.labs_ordered) {
         parts.push("Labs: " + investigations.labs_ordered);

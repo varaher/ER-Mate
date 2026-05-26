@@ -2145,7 +2145,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // ── treatment ──────────────────────────────────────────────────────────
       const trt = fc.treatment || {};
-      const medications: any[]  = Array.isArray(trt.medications)  ? trt.medications  : [];
+      // medications may be in treatment.medications (CaseSheet/Voice) OR top-level
+      // drugs_administered (external backend response shape)
+      const rawMeds = trt.medications || fc.drugs_administered || trt.drugs_administered || [];
+      const medications: any[]  = Array.isArray(rawMeds) ? rawMeds : (rawMeds ? [rawMeds] : []);
       const infusions: any[]    = Array.isArray(trt.infusions)     ? trt.infusions    : [];
       const fluids: any         = trt.fluids || "";
       // ER treatment meds — what was GIVEN in the emergency (not discharge prescription)
@@ -2161,7 +2164,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // ── procedures ─────────────────────────────────────────────────────────
       const procData = fc.procedures || {};
-      const procList: any[] = Array.isArray(procData.procedures_performed) ? procData.procedures_performed : [];
+      // procedures_performed may be in fc.procedures.procedures_performed (CaseSheet) OR
+      // top-level fc.procedures_performed (external backend response shape)
+      const rawProcs = procData.procedures_performed || fc.procedures_performed || [];
+      const procList: any[] = Array.isArray(rawProcs) ? rawProcs : (rawProcs ? [rawProcs] : []);
       const proceduresText = procList.map((p: any) => p.name || p).join(", ") || procData.general_notes || "Nil";
 
       // ── consultations ──────────────────────────────────────────────────────

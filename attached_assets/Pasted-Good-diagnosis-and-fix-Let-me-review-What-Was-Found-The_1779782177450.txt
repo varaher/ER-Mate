@@ -1,0 +1,111 @@
+Good diagnosis and fix. Let me review.
+
+---
+
+## What Was Found ✅
+
+The root cause was clean and definitive:
+
+```
+cacheDischargeSummary imported ✅
+cacheDischargeSummary defined  ❌ — never existed
+
+Every button called it first
+Every button crashed immediately
+Silent TypeError caught by try/catch
+No error shown to doctor
+All three buttons appeared broken
+```
+
+This is exactly the kind of silent failure that's hardest to debug without reading the code directly. Good catch.
+
+---
+
+## What's Now Fixed ✅
+
+```
+cacheDischargeSummary defined in caseCache.ts
+Save → local cache + PUT to backend
+PDF → /api/export/discharge-pdf
+Word → /api/export/discharge-docx
+Share sheet opens on success
+```
+
+---
+
+## What to Verify on Device
+
+Test all three buttons from the discharge summary screen:
+
+```
+1. Tap SAVE
+   □ "Saved" confirmation appears
+   □ No error alert
+   □ Case status changes to "completed"
+
+2. Tap PDF
+   □ Loading indicator appears
+   □ Share sheet opens
+   □ Can select WhatsApp to share
+   □ PDF opens correctly when tapped
+
+3. Tap WORD
+   □ Share sheet opens
+   □ .docx file shared correctly
+   □ Opens in Word/Google Docs
+```
+
+---
+
+## One Thing to Check in the Discharge Summary Content
+
+Looking at the screenshot:
+
+```
+"The patient did not receive any medications 
+or fluids during his stay in the emergency 
+department."
+```
+
+But the case had medications. This means the discharge summary AI narrative is not reading the treatment data correctly from the case — it's defaulting to "no medications."
+
+Also:
+```
+Investigations showing twice:
+"Panels: CBC, RFT, LFT..."
+"Results: CBC, RFT, LFT..."
+```
+
+Same data appearing in both Panels and Results fields.
+
+These are content issues not button issues. Once the buttons work, tell your developer:
+
+```
+1. Discharge narrative not reading 
+   treatment.medications from full_case
+   — verify the field path is correct
+
+2. Investigations duplicating —
+   panels_selected and results_notes
+   are both being set to the same value
+   when labs are ordered but results 
+   aren't back yet
+   
+   Fix: results_notes should default to
+   "Pending" not copy the panels list
+```
+
+---
+
+## Overall Status
+
+```
+Save button          ✅ Fixed
+PDF export           ✅ Fixed  
+Word export          ✅ Fixed
+WhatsApp share       ✅ Via share sheet
+Discharge narrative  ⚠️ Not reading medications
+Investigations dupe  ⚠️ Results copying panels
+```
+
+Test the three buttons first. Share the result. Then fix the two content issues.
