@@ -1,0 +1,133 @@
+Now I can read the logs clearly. Here's exactly what's happening.
+
+---
+
+## What the Logs Show
+
+**Image 2 — The complete sequence:**
+
+```
+11:17:02 [Voice Transcribe] Request received, 
+         file: voice.webm (1738459 bytes)
+         
+11:17:02 [AudioConvert] ffmpeg conversion failed: 
+         spawn ffmpeg ENOENT
+         
+11:17:06 [Sarvam STT Translate] Error: 400 
+         Audio duration exceeds 30 seconds
+         
+11:17:06 [Voice] Sarvam STT failed, 
+         falling back to OpenAI Whisper
+         
+11:17:09 POST /api/voice/transcribe 200 
+         in 7378ms — transcript received ✅
+         
+11:17:16 [ExtractClinical] Processing 
+         transcript, length: 1099
+         
+11:17:27 POST /api/voice/extract-clinical 200 
+         in 11008ms ✅
+         {"success":true,"extracted":...}
+         
+11:17:47 [PROXY] No user field found on cases
+         GET /api/proxy/cases 304
+```
+
+---
+
+## The Two Problems Identified
+
+### Problem 1 — Review Screen Not Appearing
+
+**Extract-clinical returned 200 with data at 11:17:27.** That's confirmed working. But the Review screen didn't open.
+
+The issue is in the client. The response shape is:
+```javascript
+{"success":true,"extracted":{...}}
+```
+
+But the client code is likely reading:
+```javascript
+const extracted = data.extracted || data;
+```
+
+Check if `data.extracted` is actually being set correctly after the response. The log confirms the server returned it — so this is a frontend state issue.
+
+### Problem 2 — Dashboard Cases Not Showing
+
+```
+[PROXY] No user field found on cases
+```
+
+This log appears repeatedly. The proxy is fetching cases from the external backend but the cases have no `user` field — so the proxy filter is removing them all.
+
+This was working before. The rewrite of `save-case` likely changed how cases are created — they're being saved without the user ID attached, so the proxy can't match them to the logged-in doctor.
+
+---
+
+## Tell Your Developer — Two Fixes
+
+**Fix 1 — Frontend: Review screen not opening**
+
+```javascript
+// In handleExtract, after fetch:
+const data = await resp.json();
+
+console.log('[Extract] Full response:', 
+  JSON.stringify(data).substring(0, 300));
+
+// The server returns { success: true, extracted: {...} }
+// Make sure this line reads it correctly:
+const extracted = data.extracted;
+
+if (!extracted) {
+  console.error('[Extract] No extracted data:', data);
+  throw new Error('No extracted data returned');
+}
+
+setRawExtracted(extracted);
+setExtractedFields(buildFieldList(extracted, text));
+setStep("review");
+// Add this log to confirm step change:
+console.log('[Extract] Moving to review step');
+```
+
+**Fix 2 — Dashboard: User field missing on cases**
+
+```
+[PROXY] No user field found on cases
+```
+
+The proxy filters cases by user. When save-case creates a case on the external backend, it must include the user identifier that the proxy uses to filter.
+
+Check the save-case endpoint — when it POSTs to the external backend to create the case, is it sending the auth token in the Authorization header?
+
+```javascript
+// In save-case endpoint on server
+// The case creation POST must include:
+headers: {
+  'Content-Type': 'application/json',
+  'Authorization': `Bearer ${userToken}` 
+  // ← this must be the user's token
+  // NOT a service token
+}
+```
+
+The proxy log shows it finds cases but they have no user field — meaning cases exist on the external backend but aren't linked to the logged-in doctor's account.
+
+---
+
+## Priority Order
+
+```
+Fix 2 first — Dashboard cases
+This is a data integrity issue
+Cases being created without user link
+means data is being lost
+
+Fix 1 second — Review screen
+Frontend state issue
+Easier to fix
+```
+
+**Share the server logs specifically for when `save-case` is called** — what does the case creation POST return? That will confirm whether the user token is being passed correctly.

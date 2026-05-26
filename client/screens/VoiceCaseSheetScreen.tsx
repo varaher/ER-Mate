@@ -346,11 +346,22 @@ export default function VoiceCaseSheetScreen() {
       }
 
       const data = await resp.json();
-      const extracted = data.extracted || null;
-      console.log("[Extract] Done. Chief complaint:", extracted?.chiefComplaint);
+      console.log("[Extract] Response keys:", Object.keys(data || {}));
+
+      const extracted = data.extracted;
+      if (!extracted || typeof extracted !== "object") {
+        throw new Error("No extracted data returned from server. Please try again.");
+      }
+      console.log("[Extract] Done. Chief complaint:", extracted.chiefComplaint, "| PMH type:", Array.isArray(extracted.pastMedicalHistory) ? "array" : typeof extracted.pastMedicalHistory);
 
       setRawExtracted(extracted);
-      setExtractedFields(buildFieldList(extracted || {}, text));
+      try {
+        setExtractedFields(buildFieldList(extracted, text));
+      } catch (bfErr: any) {
+        console.error("[Extract] buildFieldList error:", bfErr?.message);
+        setExtractedFields([]);
+      }
+      console.log("[Extract] Moving to review step");
       setStep("review");
     } catch (err: any) {
       clearTimeout(timeoutId);
@@ -478,6 +489,13 @@ export default function VoiceCaseSheetScreen() {
   };
 
   const buildFieldList = (ex: any, transcript: string): ExtractedField[] => {
+    // Safely convert any field to a string — AI may return arrays or strings
+    const toStr = (val: any): string => {
+      if (!val) return "";
+      if (Array.isArray(val)) return val.filter(Boolean).join(", ");
+      return String(val);
+    };
+
     const conf = ex?.sectionConfidence || {};
     const getConf = (section: string): 'high' | 'medium' | 'low' => {
       const c = conf[section] || '';
@@ -516,22 +534,29 @@ export default function VoiceCaseSheetScreen() {
     }
 
     // Chief Complaint
-    if (ex.chiefComplaint) addVoice("chiefComplaint", "Chief Complaint", "alert-circle", ex.chiefComplaint, "chiefComplaint");
+    const ccStr = toStr(ex.chiefComplaint);
+    if (ccStr) addVoice("chiefComplaint", "Chief Complaint", "alert-circle", ccStr, "chiefComplaint");
     else addMissing("chiefComplaint", "Chief Complaint", "alert-circle");
 
     // HPI
-    if (ex.historyOfPresentIllness) addVoice("hpi", "History of Present Illness", "file-text", ex.historyOfPresentIllness, "hpi");
+    const hpiStr = toStr(ex.historyOfPresentIllness);
+    if (hpiStr) addVoice("hpi", "History of Present Illness", "file-text", hpiStr, "hpi");
     else addMissing("hpi", "History of Present Illness", "file-text");
 
-    if (ex.negativeSymptoms) addVoice("negativeSymptoms", "Pertinent Negatives", "minus-circle", ex.negativeSymptoms, "hpi");
+    const negStr = toStr(ex.negativeSymptoms);
+    if (negStr) addVoice("negativeSymptoms", "Pertinent Negatives", "minus-circle", negStr, "hpi");
 
     // Past History
-    if (ex.pastMedicalHistory) addVoice("pastMedical", "Past Medical History", "archive", ex.pastMedicalHistory, "pastHistory");
+    const pmhStr = toStr(ex.pastMedicalHistory);
+    if (pmhStr) addVoice("pastMedical", "Past Medical History", "archive", pmhStr, "pastHistory");
     else addPrefill("pastMedical", "Past Medical History", "archive", "None significant (pre-filled normal)");
-    if (ex.pastSurgicalHistory) addVoice("pastSurgical", "Past Surgical History", "scissors", ex.pastSurgicalHistory, "pastHistory");
-    if (ex.allergies) addVoice("allergies", "Allergies", "alert-triangle", ex.allergies, "pastHistory");
+    const pshStr = toStr(ex.pastSurgicalHistory);
+    if (pshStr) addVoice("pastSurgical", "Past Surgical History", "scissors", pshStr, "pastHistory");
+    const allergStr = toStr(ex.allergies);
+    if (allergStr) addVoice("allergies", "Allergies", "alert-triangle", allergStr, "pastHistory");
     else addPrefill("allergies", "Allergies", "alert-triangle", "NKDA (pre-filled normal)");
-    if (ex.currentMedications) addVoice("currentMeds", "Current Medications", "package", ex.currentMedications, "pastHistory");
+    const medsStr = toStr(ex.currentMedications);
+    if (medsStr) addVoice("currentMeds", "Current Medications", "package", medsStr, "pastHistory");
 
     // Primary Survey / Vitals
     const vs = ex.vitalsSuggested || {};
@@ -621,8 +646,10 @@ export default function VoiceCaseSheetScreen() {
     else addPrefill("exam", "Examination Findings", "search", "Within normal limits (pre-filled)");
 
     // Investigations
-    if (ex.investigationsOrdered) addVoice("labs", "Labs Ordered", "clipboard", ex.investigationsOrdered, "investigations");
-    if (ex.imagingOrdered) addVoice("imaging", "Imaging Ordered", "camera", ex.imagingOrdered, "investigations");
+    const labsStr = toStr(ex.investigationsOrdered);
+    if (labsStr) addVoice("labs", "Labs Ordered", "clipboard", labsStr, "investigations");
+    const imagingStr = toStr(ex.imagingOrdered);
+    if (imagingStr) addVoice("imaging", "Imaging Ordered", "camera", imagingStr, "investigations");
 
     // Treatment
     if (ex.prescribedMedications?.length > 0) {
