@@ -1,5 +1,6 @@
 import express from "express";
 import type { Request, Response, NextFunction } from "express";
+import compression from "compression";
 import { registerRoutes } from "./routes";
 import * as fs from "fs";
 import * as path from "path";
@@ -330,9 +331,39 @@ self.addEventListener('fetch', function(event) {
     next();
   });
 
-  app.use("/assets", express.static(path.resolve(process.cwd(), "assets")));
-  app.use(express.static(path.resolve(process.cwd(), "static-build")));
-  app.use(express.static(path.resolve(process.cwd(), "static-build/web")));
+  app.use("/assets", express.static(path.resolve(process.cwd(), "assets"), {
+    maxAge: "365d",
+    immutable: true,
+  }));
+  // Bundles have hash-based filenames — safe to cache for 1 year
+  app.use("/bundles", express.static(path.resolve(process.cwd(), "static-build/web/bundles"), {
+    maxAge: "365d",
+    immutable: true,
+  }));
+  app.use(express.static(path.resolve(process.cwd(), "static-build"), {
+    maxAge: "1h",
+    setHeaders(res, filePath) {
+      // HTML and manifests must revalidate so updates reach users
+      if (filePath.endsWith(".html") || filePath.endsWith(".json") || filePath.endsWith(".webmanifest")) {
+        res.setHeader("Cache-Control", "no-cache");
+      }
+      // JS/CSS bundles have content hashes — safe to cache long-term
+      if (filePath.endsWith(".js") || filePath.endsWith(".css")) {
+        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      }
+    },
+  }));
+  app.use(express.static(path.resolve(process.cwd(), "static-build/web"), {
+    maxAge: "1h",
+    setHeaders(res, filePath) {
+      if (filePath.endsWith(".html") || filePath.endsWith(".json")) {
+        res.setHeader("Cache-Control", "no-cache");
+      }
+      if (filePath.endsWith(".js") || filePath.endsWith(".css")) {
+        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      }
+    },
+  }));
 
   log("Expo routing: Checking expo-platform header on / and /manifest");
 }
@@ -356,6 +387,8 @@ function setupErrorHandler(app: express.Application) {
 
 (async () => {
   setupCors(app);
+  // Gzip all responses — reduces the 3.6 MB JS bundle to ~800 KB on the wire
+  app.use(compression({ level: 6, threshold: 1024 }));
   setupBodyParsing(app);
   setupRequestLogging(app);
 
