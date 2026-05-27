@@ -1,7 +1,7 @@
 # ErMate - Emergency Room EMR Application
 
 ## Overview
-ErMate is a mobile-first Emergency Room Electronic Medical Records (EMR) application developed by Varah Group, designed to optimize the workflow for emergency medicine professionals. It supports patient triage, case management, physical examinations, investigations, treatment planning, and discharge documentation. Key features include voice dictation, AI-powered clinical decision support, comprehensive documentation export, and an integrated "Learn" section for medical education. The application operates on a subscription-based model, aiming to enhance efficiency and accuracy in emergency care.
+ErMate is a mobile-first Emergency Room Electronic Medical Records (EMR) application developed by Varah Group, designed to optimize the workflow for emergency medicine professionals. It supports patient triage, case management, physical examinations, investigations, treatment planning, and discharge documentation. Key features include voice dictation, document scanning, AI-powered clinical decision support, comprehensive documentation export, and an integrated "Learn" section for medical education. The application operates on a subscription-based model, aiming to enhance efficiency and accuracy in emergency care.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
@@ -14,7 +14,7 @@ The application is built with React Native (Expo SDK 54, React 19.1.0 with React
 React Query keys are scoped to the authenticated user (e.g. `["cases", user?.id]`) to prevent cross-user data leaks. All queries are gated with `enabled: !!user?.id`.
 
 ### Backend Architecture
-An Express.js server in TypeScript acts as a proxy, directing all core API calls to an external backend at `https://er-emr-backend.onrender.com/api`.
+An Express.js server in TypeScript acts as a proxy, directing all core API calls to an external backend at `https://er-emr-backend.onrender.com/api`. Gzip compression (`compression` npm package, level 6) is enabled on all responses. JS/CSS static assets are served with `Cache-Control: public, max-age=31536000, immutable`; HTML and manifests use `no-cache`.
 
 ### Data Storage
 Drizzle ORM with PostgreSQL is used for `users` and `ai_feedback` tables, with Zod validation. Local storage uses AsyncStorage for user tokens, session data, case timing records, trivia streak counts, and night shift preferences.
@@ -22,16 +22,30 @@ Drizzle ORM with PostgreSQL is used for `users` and `ai_feedback` tables, with Z
 ### Authentication
 Supports email/password, Google Sign-In, and Apple Sign-In. A `warmUpBackend()` function prevents cold start issues on the external backend. API calls are wrapped with `fetchWithTimeout`, and login/register attempts include a retry mechanism.
 
+`AuthContext` exports a `loginWithToken(authToken, userData)` helper that sets AsyncStorage + React state in one call — used by the web QR login flow.
+
 ### Key Features
-- **Voice Input System**: Uses `expo-audio` for recording, Sarvam AI for speech-to-text (with OpenAI Whisper as fallback), and OpenAI for clinical data extraction to auto-populate case sheet fields. This includes "Smart Dictation" for comprehensive history capture and field-specific dictation.
-- **Document Scanning System**: Captures documents via camera or image picker, uses Sarvam Vision API for OCR, and OpenAI for clinical data structuring.
+- **Voice Input System**: Uses `expo-audio` for recording, Sarvam AI for speech-to-text (Saaras v3 model, with OpenAI Whisper as fallback), and OpenAI for clinical data extraction to auto-populate case sheet fields. This includes "Smart Dictation" for comprehensive history capture and field-specific dictation.
+- **Document Scanning System**: Captures documents via camera or image picker, uses Sarvam Vision API for OCR, and OpenAI for clinical data structuring to populate case sheet fields.
 - **Clinical Decision Support** (formerly "AI Diagnosis"): Generates differential diagnoses labelled CONSISTENT / POSSIBLE / LESS LIKELY, with medical guideline citations and a self-learning feedback system. Integrates medical literature search (PubMed, WikEM) for evidence-based suggestions. Includes an inline disclaimer banner. Actions are labelled "Add to Case" / "Exclude".
 - **Document Export System**: Exports Case Sheets and Discharge Summaries in PDF and DOCX formats.
-- **Device Linking**: Secure WhatsApp-style web linking for web application access via expiring link codes.
+- **Device Linking (Mobile → Web)**:
+  - *6-digit code*: Profile → Link to Web → enter code on the web app.
+  - *QR code login (web)*: On the web login screen, tap "Sign in with Phone QR" to generate a QR. Scan with the ErMate phone app (Profile → Link to Web → approve). Web session logs in automatically. Backend endpoints: `POST /api/device-link/generate`, `POST /api/device-link/approve`, `GET /api/device-link/status?token=xxx`.
 - **Quick Case Sheet**: Allows direct entry into a case sheet, bypassing triage, with minimal patient information.
 - **Editable Vitals**: Displayed on the Patient tab of case sheets, with age-based normal ranges and color-coding for pediatric patients.
 - **Psychological Assessment**: Integrated into case sheets, flagging relevant conditions.
 - **Learn Section**: Includes "Simulation-Based Teaching" (interactive clinical case simulations), "EM Reference Library" (AI-powered chat for guidelines), and "Trivia Time" (case-based MCQ quizzes with detailed explanations).
+
+### Case Sheet Field Mapping (External Backend)
+When loading cases saved by the external backend directly (not via the app's own voice commit), the field structure differs:
+- **Primary Assessment**: External backend stores ABCDE as flat-prefixed fields under `primary_assessment` (e.g. `airway_status`, `breathing_rr`, `circulation_hr`, `disability_gcs_e/v/m`, `disability_grbs`, `disability_avpu`, `exposure_temperature`). `loadCase` in `CaseSheetScreen` maps these when `abcde` is absent.
+- **Procedures**: Top-level `procedures_performed` array is read as fallback when `procedures.procedures_performed` is absent.
+- **Medications**: Top-level `drugs_administered` array is used as fallback when `treatment.medications` is empty.
+- **History**: `history.signs_and_symptoms` → `sample.signsSymptoms`; `history.family_history` and `history.social_history` are appended to `otherHistory`.
+
+### Privacy & Case Filtering
+Cases are filtered server-side by checking `created_by_user_id` (primary), `created_by`, `doctor_id`, `user_id`, and `doctor_email` against the authenticated user. This prevents any cross-user data leaks regardless of which field name the external backend uses.
 
 ### Retention Features
 - **Night Shift / Display Mode**: Auto dark mode between 9 pm–6 am, with manual override (Always Light / Always Dark). Controlled via `useNightShift` hook (AsyncStorage-persisted). Toggle is in Profile → Display Mode. `useTheme` exposes `nightShift: { pref, setPref, isNightTime }`.
@@ -40,11 +54,17 @@ Supports email/password, Google Sign-In, and Apple Sign-In. A `warmUpBackend()` 
 - **Trivia Weekly Streak**: `useTriviaStreak` hook tracks how many quizzes the user completes per calendar week. `TriviaHomeScreen` shows the streak badge on focus. `TriviaResultScreen` increments the count once on mount (guarded by `useRef`) and shows the updated count on the score card.
 - **Cases Grouped by Complaint**: `CasesScreen` has a list/tag view toggle. The "By Complaint" mode uses `SectionList`, grouping cases by `presenting_complaint.text`, sorted by frequency.
 
+### Performance
+- **Gzip compression**: `compression` middleware (level 6) on the Express server reduces the 3.6 MB JS bundle to ~878 KB on the wire (~75% reduction).
+- **Browser caching**: JS/CSS assets served with `Cache-Control: public, max-age=31536000, immutable` — returning users load from local cache instantly. HTML/manifests use `no-cache` to ensure app updates always reach users.
+- **Static build skipping**: `scripts/build.js` skips the Metro bundle step if `static-build/` already exists, making server restarts near-instant.
+- **Service Worker**: PWA service worker pre-caches key assets and serves cached content when offline.
+
 ### Privacy & Data Protection
 A comprehensive Privacy Policy (Version 1.0) covers data collection, storage, security, AI processing, retention, user responsibility, compliance with Indian law, data deletion, and contact information. It includes data sharing preferences and biometric lock settings.
 
 ### Subscription & AI Credits Model
-Offers a Free Plan (10 cases), a Base Plan (unlimited EMR, 20 AI credits/month), and purchasable AI Credit Packs. AI credits are consumed for specific AI actions and roll over indefinitely.
+Offers a Free Plan (10 cases), a Base Plan (unlimited EMR, 20 AI credits/month), and purchasable AI Credit Packs. AI credits are consumed for specific AI actions (Smart Dictation, Clinical Decision Support, document scanning, EM Reference queries, AI discharge summaries) and roll over indefinitely.
 
 ## External Dependencies
 
@@ -61,6 +81,7 @@ Offers a Free Plan (10 cases), a Base Plan (unlimited EMR, 20 AI credits/month),
 - `react-native-reanimated`: Animations.
 - `drizzle-orm`, `drizzle-zod`: Database ORM and validation.
 - `@tanstack/react-query`: Server state management.
+- `compression`: Gzip middleware for Express (type declaration in `server/compression.d.ts`).
 
 ### AI Integration
 - **OpenAI**: Used for clinical decision support, interpretation, clinical data extraction, and as a fallback for speech-to-text.
@@ -81,5 +102,5 @@ Offers a Free Plan (10 cases), a Base Plan (unlimited EMR, 20 AI credits/month),
 - **Never modify the `scripts/` directory** — critical for static deployment.
 - **Never downgrade React Native or Expo versions**.
 - **Never hardcode domain URLs** — always use `process.env.EXPO_PUBLIC_DOMAIN` or `getApiUrl()`.
-- Static build system: `npm run expo:static:build && npm run server:dev`. Delete `static-build/` to force a rebuild after code changes.
+- Static build system: `npm run expo:static:build && npm run server:dev`. Delete `static-build/` to force a rebuild after code changes. Server-only changes (no client edits) take effect on restart without rebuilding.
 - Expo account: `varah`, EAS project ID: `7d70a8b1-9c3f-4c1b-9a1d-5a1849986df7`.
