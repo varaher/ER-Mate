@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import {
   View,
   Text,
@@ -62,7 +62,10 @@ export default function CasesScreen() {
   const [filter, setFilter] = useState<"all" | "active" | "discharged">("all");
   const [viewMode, setViewMode] = useState<"list" | "grouped">("list");
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [clearingAll, setClearingAll] = useState(false);
+
+  const [editMode, setEditMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const { data: rawCases = [], isLoading: loading, refetch, isRefetching } = useQuery<CaseItem[]>({
     queryKey: ["cases", user?.id],
@@ -71,30 +74,52 @@ export default function CasesScreen() {
     enabled: !!user?.id,
   });
 
-  const handleClearAll = () => {
-    const count = rawCases.length;
-    if (count === 0) {
-      Alert.alert("No Cases", "There are no cases to delete.");
-      return;
-    }
+  const enterEditMode = useCallback((preselectId?: string) => {
+    setEditMode(true);
+    setSelectedIds(preselectId ? new Set([preselectId]) : new Set());
+  }, []);
+
+  const exitEditMode = useCallback(() => {
+    setEditMode(false);
+    setSelectedIds(new Set());
+  }, []);
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const selectAll = useCallback((cases: CaseItem[]) => {
+    setSelectedIds(new Set(cases.map((c) => c.id)));
+  }, []);
+
+  const handleDeleteSelected = () => {
+    const count = selectedIds.size;
+    if (count === 0) return;
     Alert.alert(
-      "Clear All Cases",
-      `This will permanently delete all ${count} cases. This cannot be undone.`,
+      "Delete Cases",
+      `Permanently delete ${count} selected case${count > 1 ? "s" : ""}? This cannot be undone.`,
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: `Delete All ${count}`,
+          text: `Delete ${count}`,
           style: "destructive",
           onPress: async () => {
-            setClearingAll(true);
-            const ids = rawCases.map((c) => c.id).filter(Boolean);
-            let deleted = 0;
+            setBulkDeleting(true);
+            const ids = Array.from(selectedIds);
             for (const id of ids) {
-              try { await deleteCaseFromProxy(id); deleted++; } catch {}
+              try { await deleteCaseFromProxy(id); } catch {}
             }
-            queryClient.setQueryData(["cases", user?.id], []);
-            setClearingAll(false);
-            Alert.alert("Done", `${deleted} of ${count} cases deleted.`);
+            queryClient.setQueryData<CaseItem[]>(
+              ["cases", user?.id],
+              (old) => (old ? old.filter((c) => !selectedIds.has(c.id)) : [])
+            );
+            setBulkDeleting(false);
+            exitEditMode();
           },
         },
       ]
@@ -178,14 +203,48 @@ export default function CasesScreen() {
     navigation.navigate(screenName, { caseId: item.id });
   };
 
-  const renderCase = ({ item }: { item: CaseItem }) => (
-    <View style={[styles.caseCard, { backgroundColor: theme.card }]}>
-      {/* Tappable row area — navigates to case */}
+  const renderCase = ({ item }: { item: CaseItem }) => {
+    const isSelected = selectedIds.has(item.id);
+
+    return (
       <Pressable
-        style={({ pressed }) => [styles.caseCardInner, { opacity: pressed ? 0.75 : 1 }]}
-        onPress={() => navigateToCase(item)}
+        style={({ pressed }) => [
+          styles.caseCard,
+          {
+            backgroundColor: isSelected
+              ? theme.primaryLight
+              : theme.card,
+            opacity: pressed ? 0.85 : 1,
+          },
+        ]}
+        onPress={() => {
+          if (editMode) {
+            toggleSelect(item.id);
+          } else {
+            navigateToCase(item);
+          }
+        }}
+        onLongPress={() => {
+          if (!editMode) enterEditMode(item.id);
+        }}
+        delayLongPress={350}
       >
-        <View style={[styles.priorityDot, { backgroundColor: getPriorityColor(item.triage_priority) }]} />
+        {editMode ? (
+          <View style={[
+            styles.checkbox,
+            {
+              borderColor: isSelected ? theme.primary : theme.textMuted,
+              backgroundColor: isSelected ? theme.primary : "transparent",
+            },
+          ]}>
+            {isSelected ? (
+              <Feather name="check" size={13} color="#FFFFFF" />
+            ) : null}
+          </View>
+        ) : (
+          <View style={[styles.priorityDot, { backgroundColor: getPriorityColor(item.triage_priority) }]} />
+        )}
+
         <View style={styles.caseInfo}>
           <Text style={[styles.patientName, { color: theme.text }]}>{item.patient?.name || "Unknown"}</Text>
           <Text style={[styles.patientDetails, { color: theme.textSecondary }]}>
@@ -197,46 +256,50 @@ export default function CasesScreen() {
             </Text>
           ) : null}
         </View>
-        <View
-          style={[
-            styles.statusBadge,
-            {
-              backgroundColor:
-                item.status === "completed" || item.status === "discharged"
-                  ? theme.successLight
-                  : theme.primaryLight,
-            },
-          ]}
-        >
-          <Text
-            style={[
-              styles.statusText,
-              {
-                color:
-                  item.status === "completed" || item.status === "discharged"
-                    ? theme.success
-                    : theme.primary,
-              },
-            ]}
-          >
-            {item.status === "completed" || item.status === "discharged" ? "Done" : "Active"}
-          </Text>
-        </View>
-      </Pressable>
-      {/* Delete button — sibling of row, NOT nested inside it */}
-      <Pressable
-        style={styles.deleteBtn}
-        onPress={() => handleDeleteCase(item)}
-        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-      >
-        {deletingId === item.id ? (
-          <ActivityIndicator size="small" color={theme.error || "#EF4444"} />
-        ) : (
-          <Feather name="trash-2" size={16} color={theme.error || "#EF4444"} />
+
+        {editMode ? null : (
+          <>
+            <View
+              style={[
+                styles.statusBadge,
+                {
+                  backgroundColor:
+                    item.status === "completed" || item.status === "discharged"
+                      ? theme.successLight
+                      : theme.primaryLight,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.statusText,
+                  {
+                    color:
+                      item.status === "completed" || item.status === "discharged"
+                        ? theme.success
+                        : theme.primary,
+                  },
+                ]}
+              >
+                {item.status === "completed" || item.status === "discharged" ? "Done" : "Active"}
+              </Text>
+            </View>
+            <Pressable
+              style={styles.deleteBtn}
+              onPress={() => handleDeleteCase(item)}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              {deletingId === item.id ? (
+                <ActivityIndicator size="small" color={theme.error || "#EF4444"} />
+              ) : (
+                <Feather name="trash-2" size={16} color={theme.error || "#EF4444"} />
+              )}
+            </Pressable>
+          </>
         )}
       </Pressable>
-    </View>
-  );
+    );
+  };
 
   if (loading) {
     return (
@@ -246,64 +309,94 @@ export default function CasesScreen() {
     );
   }
 
+  const allSelected = filteredCases.length > 0 && filteredCases.every((c) => selectedIds.has(c.id));
+
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundDefault }]}>
       <View style={[styles.header, { backgroundColor: theme.card, paddingTop: insets.top + Spacing.md }]}>
-        <View style={styles.titleRow}>
-          <Text style={[styles.title, { color: theme.text }]}>All Cases</Text>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm }}>
+
+        {editMode ? (
+          <View style={styles.editModeBar}>
+            <Pressable onPress={exitEditMode} style={styles.editAction}>
+              <Text style={[styles.editActionText, { color: theme.primary }]}>Cancel</Text>
+            </Pressable>
+
+            <Text style={[styles.selectionCount, { color: theme.text }]}>
+              {selectedIds.size === 0
+                ? "Select items"
+                : `${selectedIds.size} selected`}
+            </Text>
+
             <Pressable
-              onPress={handleClearAll}
-              disabled={clearingAll || rawCases.length === 0}
-              style={[styles.clearAllBtn, { backgroundColor: theme.backgroundSecondary }]}
+              onPress={() => (allSelected ? setSelectedIds(new Set()) : selectAll(filteredCases))}
+              style={styles.editAction}
             >
-              <Feather name="trash-2" size={15} color={rawCases.length === 0 ? theme.textMuted : "#ef4444"} />
-              <Text style={[styles.clearAllText, { color: rawCases.length === 0 ? theme.textMuted : "#ef4444" }]}>
-                {clearingAll ? "Deleting..." : "Clear All"}
+              <Text style={[styles.editActionText, { color: theme.primary }]}>
+                {allSelected ? "Deselect All" : "Select All"}
               </Text>
             </Pressable>
-            <View style={[styles.viewToggle, { backgroundColor: theme.backgroundSecondary }]}>
+          </View>
+        ) : (
+          <View style={styles.titleRow}>
+            <Text style={[styles.title, { color: theme.text }]}>All Cases</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm }}>
               <Pressable
-                style={[styles.toggleBtn, viewMode === "list" && { backgroundColor: theme.card }]}
-                onPress={() => setViewMode("list")}
+                onPress={() => enterEditMode()}
+                disabled={rawCases.length === 0}
+                style={[styles.editBtn, { backgroundColor: theme.backgroundSecondary }]}
               >
-                <Feather name="list" size={16} color={viewMode === "list" ? theme.primary : theme.textMuted} />
+                <Text style={[styles.editBtnText, { color: rawCases.length === 0 ? theme.textMuted : theme.primary }]}>
+                  Edit
+                </Text>
               </Pressable>
-              <Pressable
-                style={[styles.toggleBtn, viewMode === "grouped" && { backgroundColor: theme.card }]}
-                onPress={() => setViewMode("grouped")}
-              >
-                <Feather name="tag" size={16} color={viewMode === "grouped" ? theme.primary : theme.textMuted} />
-              </Pressable>
+              <View style={[styles.viewToggle, { backgroundColor: theme.backgroundSecondary }]}>
+                <Pressable
+                  style={[styles.toggleBtn, viewMode === "list" && { backgroundColor: theme.card }]}
+                  onPress={() => setViewMode("list")}
+                >
+                  <Feather name="list" size={16} color={viewMode === "list" ? theme.primary : theme.textMuted} />
+                </Pressable>
+                <Pressable
+                  style={[styles.toggleBtn, viewMode === "grouped" && { backgroundColor: theme.card }]}
+                  onPress={() => setViewMode("grouped")}
+                >
+                  <Feather name="tag" size={16} color={viewMode === "grouped" ? theme.primary : theme.textMuted} />
+                </Pressable>
+              </View>
             </View>
           </View>
-        </View>
-        <View style={[styles.searchContainer, { backgroundColor: theme.backgroundSecondary }]}>
-          <Feather name="search" size={18} color={theme.textMuted} />
-          <TextInput
-            style={[styles.searchInput, { color: theme.text }]}
-            placeholder="Search patients..."
-            placeholderTextColor={theme.textMuted}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-        </View>
-        <View style={styles.filterRow}>
-          {(["all", "active", "discharged"] as const).map((f) => (
-            <Pressable
-              key={f}
-              style={[
-                styles.filterBtn,
-                { backgroundColor: filter === f ? theme.primary : theme.backgroundSecondary },
-              ]}
-              onPress={() => setFilter(f)}
-            >
-              <Text style={[styles.filterText, { color: filter === f ? "#FFFFFF" : theme.textSecondary }]}>
-                {f.charAt(0).toUpperCase() + f.slice(1)}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+        )}
+
+        {!editMode && (
+          <>
+            <View style={[styles.searchContainer, { backgroundColor: theme.backgroundSecondary }]}>
+              <Feather name="search" size={18} color={theme.textMuted} />
+              <TextInput
+                style={[styles.searchInput, { color: theme.text }]}
+                placeholder="Search patients..."
+                placeholderTextColor={theme.textMuted}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+            </View>
+            <View style={styles.filterRow}>
+              {(["all", "active", "discharged"] as const).map((f) => (
+                <Pressable
+                  key={f}
+                  style={[
+                    styles.filterBtn,
+                    { backgroundColor: filter === f ? theme.primary : theme.backgroundSecondary },
+                  ]}
+                  onPress={() => setFilter(f)}
+                >
+                  <Text style={[styles.filterText, { color: filter === f ? "#FFFFFF" : theme.textSecondary }]}>
+                    {f.charAt(0).toUpperCase() + f.slice(1)}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </>
+        )}
       </View>
 
       {viewMode === "grouped" ? (
@@ -320,7 +413,7 @@ export default function CasesScreen() {
               </Text>
             </View>
           )}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, editMode && styles.listEditMode]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           ListEmptyComponent={
             <View style={styles.emptyState}>
@@ -335,7 +428,7 @@ export default function CasesScreen() {
           data={filteredCases}
           renderItem={renderCase}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, editMode && styles.listEditMode]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           ListEmptyComponent={
             <View style={styles.emptyState}>
@@ -345,6 +438,44 @@ export default function CasesScreen() {
           }
         />
       )}
+
+      {editMode ? (
+        <View style={[styles.deleteBar, { backgroundColor: theme.card, paddingBottom: insets.bottom + Spacing.md }]}>
+          <Pressable
+            onPress={handleDeleteSelected}
+            disabled={selectedIds.size === 0 || bulkDeleting}
+            style={[
+              styles.deleteSelectedBtn,
+              {
+                backgroundColor: selectedIds.size > 0 ? "#EF4444" : theme.backgroundSecondary,
+                opacity: selectedIds.size === 0 || bulkDeleting ? 0.5 : 1,
+              },
+            ]}
+          >
+            {bulkDeleting ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <>
+                <Feather
+                  name="trash-2"
+                  size={17}
+                  color={selectedIds.size > 0 ? "#FFFFFF" : theme.textMuted}
+                />
+                <Text
+                  style={[
+                    styles.deleteSelectedText,
+                    { color: selectedIds.size > 0 ? "#FFFFFF" : theme.textMuted },
+                  ]}
+                >
+                  {selectedIds.size > 0
+                    ? `Delete ${selectedIds.size} Case${selectedIds.size > 1 ? "s" : ""}`
+                    : "Select cases to delete"}
+                </Text>
+              </>
+            )}
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -365,6 +496,15 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   title: { ...Typography.h2 },
+  editBtn: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.md,
+  },
+  editBtnText: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
   viewToggle: {
     flexDirection: "row",
     borderRadius: BorderRadius.md,
@@ -375,17 +515,22 @@ const styles = StyleSheet.create({
     padding: 6,
     borderRadius: BorderRadius.sm,
   },
-  clearAllBtn: {
+  editModeBar: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 6,
-    borderRadius: BorderRadius.md,
+    justifyContent: "space-between",
+    paddingVertical: 2,
   },
-  clearAllText: {
-    fontSize: Typography.xs,
+  editAction: {
+    paddingVertical: 4,
+  },
+  editActionText: {
+    fontSize: 14,
     fontWeight: "600",
+  },
+  selectionCount: {
+    ...Typography.bodyMedium,
+    textAlign: "center",
   },
   searchContainer: {
     flexDirection: "row",
@@ -400,6 +545,7 @@ const styles = StyleSheet.create({
   filterBtn: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.full },
   filterText: { ...Typography.label },
   list: { padding: Spacing.lg, paddingBottom: 120 },
+  listEditMode: { paddingBottom: 140 },
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -420,23 +566,48 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderRadius: BorderRadius.md,
     marginBottom: Spacing.sm,
-    overflow: "hidden",
-  },
-  caseCardInner: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
     padding: Spacing.md,
     gap: Spacing.md,
   },
-  priorityDot: { width: 12, height: 12, borderRadius: BorderRadius.full },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  priorityDot: { width: 12, height: 12, borderRadius: BorderRadius.full, flexShrink: 0 },
   caseInfo: { flex: 1 },
   patientName: { ...Typography.bodyMedium },
   patientDetails: { ...Typography.caption, marginTop: 2 },
   complaint: { ...Typography.caption, marginTop: 4, fontStyle: "italic" },
   statusBadge: { paddingHorizontal: Spacing.sm, paddingVertical: 4, borderRadius: BorderRadius.full },
   statusText: { ...Typography.caption, fontWeight: "600" },
-  deleteBtn: { padding: 6, marginLeft: 4 },
+  deleteBtn: { padding: 6 },
   emptyState: { alignItems: "center", paddingVertical: Spacing["4xl"] },
   emptyText: { ...Typography.body, marginTop: Spacing.md },
+  deleteBar: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(0,0,0,0.07)",
+  },
+  deleteSelectedBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.md,
+  },
+  deleteSelectedText: {
+    fontSize: 15,
+    fontWeight: "600",
+  },
 });
