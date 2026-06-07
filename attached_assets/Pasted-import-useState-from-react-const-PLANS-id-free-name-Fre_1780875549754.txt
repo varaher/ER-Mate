@@ -1,0 +1,583 @@
+import { useState } from "react";
+
+const PLANS = [
+  {
+    id: "free",
+    name: "Free",
+    price: "₹0",
+    tag: null,
+    description: "Try ErMate with your first 10 cases.",
+    accent: "#9CA3AF",
+    accentBg: "rgba(156,163,175,0.08)",
+    isPro: false,
+    cta: "Current Plan",
+    ctaDisabled: true,
+    icon: "📋",
+    sections: [
+      {
+        label: null,
+        items: [
+          { text: "10 cases total", ok: true },
+          { text: "Smart Dictation", ok: true },
+          { text: "AI Discharge Summary", ok: true },
+          { text: "PDF / WhatsApp export", ok: true },
+          { text: "Trivia & EM Reference", ok: true },
+          { text: "Unlimited cases", ok: false },
+          { text: "Clinical Decision Support", ok: false },
+          { text: "Rounds & Case Debrief", ok: false },
+        ],
+      },
+    ],
+  },
+  {
+    id: "base",
+    name: "Base",
+    price: "₹799",
+    tag: "MOST POPULAR",
+    tagColor: "#1DB870",
+    description: "Unlimited documentation. No credit walls on core features.",
+    accent: "#1DB870",
+    accentBg: "rgba(30,184,112,0.08)",
+    isPro: false,
+    cta: "Start Free Trial",
+    ctaDisabled: false,
+    icon: "⚡",
+    sections: [
+      {
+        label: "Always included — no credits needed",
+        labelColor: "#1DB870",
+        items: [
+          { text: "Unlimited case documentation", ok: true },
+          { text: "Smart Dictation", ok: true, bold: true },
+          { text: "AI Discharge Summary", ok: true, bold: true },
+          { text: "PDF / WhatsApp export", ok: true },
+          { text: "Trivia & EM Reference", ok: true },
+          { text: "Paediatric drug calculator", ok: true },
+          { text: "Priority support", ok: true },
+        ],
+      },
+      {
+        label: "Clinical Intelligence — uses AI credits",
+        labelColor: "#888",
+        items: [
+          { text: "Clinical Decision Support (15/month)", ok: true, credit: true },
+          { text: "Document OCR Scanning (10/month)", ok: true, credit: true },
+          { text: "ABG / VBG Interpretation", ok: true, credit: true },
+        ],
+      },
+      {
+        label: "Not included",
+        labelColor: "#D1D5DB",
+        items: [
+          { text: "Rounds & Case Debrief", ok: false },
+          { text: "All 7 Thinking Lenses", ok: false },
+          { text: "Clinical Memory", ok: false },
+        ],
+      },
+    ],
+  },
+  {
+    id: "pro",
+    name: "Pro",
+    price: "₹1,499",
+    tag: "FOR GROWTH",
+    tagColor: "#818CF8",
+    description: "Everything in Base, plus clinical growth built into every shift.",
+    accent: "#818CF8",
+    accentBg: "rgba(129,140,248,0.1)",
+    isPro: true,
+    cta: "Start Free Trial",
+    ctaDisabled: false,
+    icon: "🧠",
+    sections: [
+      {
+        label: "Everything in Base, plus:",
+        labelColor: "#818CF8",
+        items: [
+          { text: "Rounds — debrief after every case", ok: true, bold: true },
+          { text: "Post-save Learning Nudge", ok: true, bold: true },
+          { text: "Clinical Memory — full career history", ok: true, bold: true },
+          { text: "All 7 thinking lenses", ok: true },
+          { text: "Disease Snapshot for any diagnosis", ok: true },
+          { text: "Unlimited Clinical Decision Support", ok: true },
+          { text: "Unlimited Document Scanning", ok: true },
+          { text: "Unlimited EM Reference queries", ok: true },
+        ],
+      },
+    ],
+  },
+];
+
+const CREDIT_PACKS = [
+  { label: "50 Credits", price: "₹499", per: "₹10 / credit", tag: null },
+  { label: "100 Credits", price: "₹899", per: "₹9 / credit", tag: "BEST VALUE" },
+  { label: "300 Credits", price: "₹2,499", per: "₹8.3 / credit", tag: null },
+];
+
+const COMPARISON_ROWS = [
+  { feature: "Cases", free: "10 total", base: "Unlimited", pro: "Unlimited" },
+  { feature: "Smart Dictation", free: "✓", base: "✓ Always", pro: "✓ Always" },
+  { feature: "Discharge Summary", free: "✓", base: "✓ Always", pro: "✓ Always" },
+  { feature: "PDF / WhatsApp", free: "✓", base: "✓", pro: "✓" },
+  { feature: "Trivia & Learn", free: "✓", base: "✓", pro: "✓" },
+  { feature: "Decision Support", free: "—", base: "15/mo", pro: "Unlimited" },
+  { feature: "Document Scan", free: "—", base: "10/mo", pro: "Unlimited" },
+  { feature: "Rounds", free: "—", base: "—", pro: "✓" },
+  { feature: "Clinical Memory", free: "—", base: "—", pro: "✓" },
+  { feature: "All 7 Lenses", free: "—", base: "—", pro: "✓" },
+];
+
+// Icons
+const CheckIcon = ({ color }) => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+    <circle cx="8" cy="8" r="7.5" fill={color} fillOpacity="0.12" />
+    <path d="M4.5 8.5L6.5 10.5L11.5 5.5" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+const CrossIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+    <circle cx="8" cy="8" r="7.5" fill="rgba(0,0,0,0.04)" />
+    <path d="M5.5 5.5L10.5 10.5M10.5 5.5L5.5 10.5" stroke="#D1D5DB" strokeWidth="1.5" strokeLinecap="round" />
+  </svg>
+);
+const BoltIcon = ({ color }) => (
+  <svg width="13" height="13" viewBox="0 0 13 13" fill="none" style={{ flexShrink: 0, marginTop: 1 }}>
+    <path d="M7.5 1L2 7.5H6.5L5.5 12L11 5.5H6.5L7.5 1Z" fill={color} />
+  </svg>
+);
+const GiftIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <rect x="2" y="7" width="12" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
+    <path d="M2 10h12M8 7v7" stroke="currentColor" strokeWidth="1.3" />
+    <path d="M8 7C8 7 5.5 7 5.5 4.5C5.5 3.1 6.5 2 7.7 2C9 2 8 5 8 7Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+    <path d="M8 7C8 7 10.5 7 10.5 4.5C10.5 3.1 9.5 2 8.3 2C7 2 8 5 8 7Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+  </svg>
+);
+const ArrowLeftIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+    <path d="M13 4L7 10L13 16" stroke="#1a1a1a" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+export default function UpgradeScreenV2() {
+  const [selectedPlan, setSelectedPlan] = useState("base");
+  const [selectedPack, setSelectedPack] = useState(1);
+  const [showComparison, setShowComparison] = useState(false);
+
+  const activePlan = PLANS.find(p => p.id === selectedPlan);
+
+  return (
+    <div style={{
+      fontFamily: "'DM Sans', 'Helvetica Neue', sans-serif",
+      background: "#F5F6F8",
+      minHeight: "100vh",
+      maxWidth: 430,
+      margin: "0 auto",
+      paddingBottom: 120,
+    }}>
+
+      {/* Header */}
+      <div style={{
+        position: "sticky", top: 0, zIndex: 20,
+        background: "rgba(245,246,248,0.94)",
+        backdropFilter: "blur(12px)",
+        padding: "16px 20px 14px",
+        borderBottom: "1px solid rgba(0,0,0,0.05)",
+        display: "flex", alignItems: "center", gap: 12,
+      }}>
+        <button style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex" }}>
+          <ArrowLeftIcon />
+        </button>
+        <span style={{ fontSize: 17, fontWeight: 700, color: "#0D1117", letterSpacing: -0.3 }}>Upgrade Plan</span>
+        <span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 600, color: "#9CA3AF" }}>IN · INR</span>
+      </div>
+
+      <div style={{ padding: "16px 16px 0", display: "flex", flexDirection: "column", gap: 14 }}>
+
+        {/* Usage bar */}
+        <div style={{
+          background: "white", borderRadius: 16, padding: "14px 18px",
+          border: "1.5px solid #F0F0F0",
+          boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "#6B7280" }}>Your usage</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: "#EF4444" }}>Limit reached</span>
+          </div>
+          <div style={{ height: 7, background: "#F3F4F6", borderRadius: 99, overflow: "hidden", marginBottom: 6 }}>
+            <div style={{ height: "100%", width: "100%", background: "linear-gradient(90deg,#EF4444,#F87171)", borderRadius: 99 }} />
+          </div>
+          <span style={{ fontSize: 12, color: "#9CA3AF" }}>11 of 10 free cases used</span>
+        </div>
+
+        {/* Section label */}
+        <div style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF", letterSpacing: 1.2, textTransform: "uppercase", marginTop: 2 }}>
+          Choose your plan
+        </div>
+
+        {/* Plan cards */}
+        {PLANS.map((plan, pi) => (
+          <button
+            key={plan.id}
+            onClick={() => setSelectedPlan(plan.id)}
+            style={{
+              width: "100%", textAlign: "left", cursor: "pointer",
+              background: plan.isPro
+                ? "linear-gradient(145deg,#0D1117 0%,#151c2c 100%)"
+                : "white",
+              border: selectedPlan === plan.id
+                ? `2px solid ${plan.accent}`
+                : plan.isPro
+                ? "2px solid rgba(129,140,248,0.2)"
+                : "2px solid #F0F0F0",
+              borderRadius: 20, padding: 0, overflow: "hidden",
+              boxShadow: selectedPlan === plan.id
+                ? `0 8px 28px ${plan.accent}20`
+                : "0 1px 4px rgba(0,0,0,0.04)",
+              transition: "all 0.2s",
+              animation: `fadeUp 0.45s ${pi * 0.08}s ease both`,
+            }}
+          >
+            {/* Tag */}
+            {plan.tag && (
+              <div style={{
+                background: plan.isPro ? "rgba(129,140,248,0.1)" : "rgba(30,184,112,0.08)",
+                padding: "7px 18px",
+                borderBottom: plan.isPro ? "1px solid rgba(129,140,248,0.1)" : "1px solid rgba(30,184,112,0.08)",
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+              }}>
+                <span style={{
+                  fontSize: 10, fontWeight: 800, letterSpacing: 1.5,
+                  color: plan.tagColor, textTransform: "uppercase",
+                }}>{plan.tag}</span>
+                {selectedPlan === plan.id && (
+                  <div style={{
+                    width: 18, height: 18, borderRadius: "50%",
+                    background: plan.accent,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                      <path d="M2 5L4 7L8 3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div style={{ padding: "18px 18px 0" }}>
+              {/* Price row */}
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 8 }}>
+                <div>
+                  <div style={{
+                    fontSize: 11, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase",
+                    color: plan.isPro ? "rgba(255,255,255,0.35)" : "#9CA3AF", marginBottom: 5,
+                  }}>{plan.name}</div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap" }}>
+                    {plan.id === "base" ? (
+                      <>
+                        <span style={{ fontSize: 13, color: "#C4C9D4", textDecoration: "line-through" }}>₹799</span>
+                        <span style={{ fontSize: 30, fontWeight: 900, color: "#1DB870", letterSpacing: -1, lineHeight: 1 }}>FREE</span>
+                        <span style={{ fontSize: 13, color: "#9CA3AF" }}>1st month</span>
+                      </>
+                    ) : plan.id === "pro" ? (
+                      <>
+                        <span style={{ fontSize: 13, color: "rgba(255,255,255,0.25)", textDecoration: "line-through" }}>₹1,499</span>
+                        <span style={{ fontSize: 30, fontWeight: 900, color: "#818CF8", letterSpacing: -1, lineHeight: 1 }}>FREE</span>
+                        <span style={{ fontSize: 13, color: "rgba(255,255,255,0.35)" }}>1st month</span>
+                      </>
+                    ) : (
+                      <span style={{ fontSize: 30, fontWeight: 900, color: "#1a1a1a", letterSpacing: -1, lineHeight: 1 }}>₹0</span>
+                    )}
+                  </div>
+                  {(plan.id === "base" || plan.id === "pro") && (
+                    <div style={{ fontSize: 12, color: plan.isPro ? "rgba(255,255,255,0.3)" : "#9CA3AF", marginTop: 3 }}>
+                      Then {plan.price}/month · Cancel anytime
+                    </div>
+                  )}
+                </div>
+                <div style={{
+                  width: 42, height: 42, borderRadius: 13,
+                  background: plan.accentBg,
+                  border: `1.5px solid ${plan.accent}30`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 21, flexShrink: 0,
+                }}>{plan.icon}</div>
+              </div>
+
+              {/* Description */}
+              <div style={{
+                fontSize: 13, lineHeight: 1.6, marginBottom: 14,
+                color: plan.isPro ? "rgba(255,255,255,0.4)" : "#6B7280",
+              }}>{plan.description}</div>
+
+              <div style={{ height: 1, background: plan.isPro ? "rgba(255,255,255,0.06)" : "#F3F4F6", marginBottom: 14 }} />
+
+              {/* Features */}
+              {plan.sections.map((sec, si) => (
+                <div key={si} style={{ marginBottom: 14 }}>
+                  {sec.label && (
+                    <div style={{
+                      fontSize: 10, fontWeight: 700, letterSpacing: 0.8,
+                      textTransform: "uppercase", color: sec.labelColor || "#9CA3AF",
+                      marginBottom: 10,
+                    }}>{sec.label}</div>
+                  )}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {sec.items.map((item, ii) => (
+                      <div key={ii} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        {item.ok
+                          ? item.credit
+                            ? <BoltIcon color={plan.accent} />
+                            : <CheckIcon color={plan.accent} />
+                          : <CrossIcon />}
+                        <span style={{
+                          fontSize: 13,
+                          fontWeight: item.bold ? 600 : 400,
+                          color: !item.ok
+                            ? "#C4C9D4"
+                            : plan.isPro
+                            ? item.bold ? "white" : "rgba(255,255,255,0.6)"
+                            : item.bold ? "#0D1117" : "#3A4050",
+                        }}>{item.text}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Card CTA */}
+            <div style={{ padding: "12px 18px 18px" }}>
+              <div style={{
+                width: "100%",
+                background: plan.ctaDisabled
+                  ? "#F3F4F6"
+                  : plan.isPro
+                  ? "linear-gradient(135deg,#6366F1,#818CF8)"
+                  : "linear-gradient(135deg,#1DB870,#15924F)",
+                color: plan.ctaDisabled ? "#9CA3AF" : "white",
+                borderRadius: 12, padding: "13px",
+                fontSize: 14, fontWeight: 700, textAlign: "center",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                boxShadow: plan.ctaDisabled ? "none"
+                  : plan.isPro ? "0 4px 14px rgba(99,102,241,0.3)"
+                  : "0 4px 14px rgba(30,184,112,0.3)",
+              }}>
+                {!plan.ctaDisabled && <GiftIcon />}
+                {plan.cta}
+              </div>
+            </div>
+          </button>
+        ))}
+
+        {/* Compare toggle */}
+        <button
+          onClick={() => setShowComparison(v => !v)}
+          style={{
+            background: "none", border: "none", cursor: "pointer",
+            fontSize: 13, fontWeight: 600, color: "#1DB870",
+            padding: "2px 0", fontFamily: "inherit", textAlign: "center",
+          }}
+        >
+          {showComparison ? "Hide comparison ▲" : "Compare all plans ▼"}
+        </button>
+
+        {/* Comparison table */}
+        {showComparison && (
+          <div style={{
+            background: "white", borderRadius: 20, overflow: "hidden",
+            border: "1.5px solid #F0F0F0",
+            animation: "fadeUp 0.3s ease both",
+          }}>
+            {/* Header */}
+            <div style={{
+              display: "grid", gridTemplateColumns: "1.6fr 1fr 1fr 1fr",
+              background: "#F9FAFB", borderBottom: "1px solid #F0F0F0",
+              padding: "12px 14px",
+            }}>
+              {["Feature", "Free", "Base", "Pro"].map((h, i) => (
+                <div key={i} style={{
+                  fontSize: 10, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase",
+                  textAlign: i === 0 ? "left" : "center",
+                  color: i === 3 ? "#818CF8" : i === 2 ? "#1DB870" : "#9CA3AF",
+                }}>{h}</div>
+              ))}
+            </div>
+            {COMPARISON_ROWS.map((row, i) => (
+              <div key={i} style={{
+                display: "grid", gridTemplateColumns: "1.6fr 1fr 1fr 1fr",
+                padding: "10px 14px",
+                background: i % 2 === 0 ? "white" : "#FAFAFA",
+                borderBottom: i < COMPARISON_ROWS.length - 1 ? "1px solid #F5F5F5" : "none",
+                alignItems: "center",
+              }}>
+                <div style={{ fontSize: 12, color: "#3A4050", fontWeight: 500 }}>{row.feature}</div>
+                <div style={{ fontSize: 11, color: "#C4C9D4", textAlign: "center" }}>{row.free}</div>
+                <div style={{ fontSize: 11, color: "#1DB870", textAlign: "center", fontWeight: row.base === "✓ Always" ? 700 : 400 }}>{row.base}</div>
+                <div style={{ fontSize: 11, color: "#818CF8", textAlign: "center", fontWeight: row.pro === "✓" || row.pro === "Unlimited" ? 700 : 400 }}>{row.pro}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Pro callout card */}
+        <div style={{
+          background: "linear-gradient(135deg,#0D1117,#1a1f2e)",
+          borderRadius: 20, padding: "20px",
+          border: "1px solid rgba(129,140,248,0.2)",
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#818CF8", marginBottom: 12 }}>
+            🧠 What Rounds gives you
+          </div>
+          {[
+            "Every case becomes a learning session",
+            "7 thinking lenses — First Principles to Full Debrief",
+            "Clinical memory across your entire career",
+            "Post-save nudge — learn in 2 min after every shift",
+            "10 free debriefs to try before you pay",
+          ].map((pt, i) => (
+            <div key={i} style={{ display: "flex", gap: 8, marginBottom: i < 4 ? 8 : 0 }}>
+              <span style={{ color: "#818CF8", flexShrink: 0 }}>→</span>
+              <span style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", lineHeight: 1.6 }}>{pt}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Credit packs */}
+        <div style={{
+          background: "white", borderRadius: 20, padding: "18px",
+          border: "1.5px solid #F0F0F0",
+        }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: "#0D1117", marginBottom: 3, letterSpacing: -0.3 }}>
+            AI Credit Packs
+          </div>
+          <div style={{ fontSize: 13, color: "#9CA3AF", marginBottom: 14 }}>
+            Base plan only · Top up Clinical Intelligence · Never expire
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+            {CREDIT_PACKS.map((pack, i) => (
+              <button
+                key={i}
+                onClick={() => setSelectedPack(i)}
+                style={{
+                  width: "100%",
+                  background: selectedPack === i ? "#F0FDF6" : "white",
+                  border: selectedPack === i ? "2px solid #1DB870" : "2px solid #F0F0F0",
+                  borderRadius: 13, padding: "12px 14px",
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  cursor: "pointer", textAlign: "left", transition: "all 0.15s",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{
+                    width: 18, height: 18, borderRadius: "50%",
+                    border: selectedPack === i ? "none" : "2px solid #D1D5DB",
+                    background: selectedPack === i ? "#1DB870" : "transparent",
+                    display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                  }}>
+                    {selectedPack === i && <div style={{ width: 7, height: 7, borderRadius: "50%", background: "white" }} />}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "#0D1117" }}>{pack.label}</div>
+                    <div style={{ fontSize: 11, color: "#9CA3AF" }}>{pack.per}</div>
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {pack.tag && (
+                    <span style={{
+                      fontSize: 9, fontWeight: 800, color: "#1DB870",
+                      background: "rgba(30,184,112,0.1)", borderRadius: 5,
+                      padding: "3px 7px", letterSpacing: 0.5, textTransform: "uppercase",
+                    }}>{pack.tag}</span>
+                  )}
+                  <span style={{ fontSize: 15, fontWeight: 800, color: "#0D1117" }}>{pack.price}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+          <div style={{
+            marginTop: 12, padding: "10px 12px",
+            background: "#F9FAFB", borderRadius: 10,
+            fontSize: 12, color: "#9CA3AF", lineHeight: 1.6,
+          }}>
+            Credits power Clinical Decision Support, Document Scanning, ABG Interpretation, and EM Reference. Smart Dictation and Discharge Summary are always free on any paid plan.
+          </div>
+        </div>
+
+        {/* Always free */}
+        <div style={{
+          background: "white", borderRadius: 20, padding: "18px",
+          border: "1.5px solid #F0F0F0",
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF", letterSpacing: 1, textTransform: "uppercase", marginBottom: 12 }}>
+            Always free · No plan needed
+          </div>
+          {[
+            "Manual typing & editing",
+            "Case save & storage",
+            "View cases & dashboard",
+            "Export to PDF / DOCX",
+            "Browse EM Reference library",
+            "Simulation cases & Trivia",
+          ].map((f, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: i < 5 ? 9 : 0 }}>
+              <svg width="15" height="15" viewBox="0 0 15 15" fill="none" style={{ flexShrink: 0 }}>
+                <rect x="3.5" y="6.5" width="8" height="6" rx="1.2" stroke="#C4C9D4" strokeWidth="1.2" />
+                <path d="M5.5 6.5V5a2 2 0 014 0v1.5" stroke="#C4C9D4" strokeWidth="1.2" strokeLinecap="round" />
+              </svg>
+              <span style={{ fontSize: 13, color: "#6B7280" }}>{f}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Sticky bottom CTA */}
+      <div style={{
+        position: "fixed", bottom: 0,
+        left: "50%", transform: "translateX(-50%)",
+        width: "100%", maxWidth: 430,
+        background: "rgba(245,246,248,0.96)",
+        backdropFilter: "blur(14px)",
+        borderTop: "1px solid rgba(0,0,0,0.06)",
+        padding: "12px 16px 32px",
+      }}>
+        <button style={{
+          width: "100%",
+          background: activePlan?.ctaDisabled
+            ? "#E5E7EB"
+            : activePlan?.isPro
+            ? "linear-gradient(135deg,#6366F1,#818CF8)"
+            : "linear-gradient(135deg,#1DB870,#15924F)",
+          color: activePlan?.ctaDisabled ? "#9CA3AF" : "white",
+          border: "none", borderRadius: 14, padding: "15px",
+          fontSize: 15, fontWeight: 700, cursor: "pointer",
+          fontFamily: "inherit",
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+          boxShadow: activePlan?.ctaDisabled ? "none"
+            : activePlan?.isPro ? "0 6px 22px rgba(99,102,241,0.35)"
+            : "0 6px 22px rgba(30,184,112,0.35)",
+          transition: "all 0.2s",
+        }}>
+          {!activePlan?.ctaDisabled && <GiftIcon />}
+          {activePlan?.id === "free"
+            ? "Current Plan"
+            : activePlan?.id === "base"
+            ? "Start Base — Free for 1st Month"
+            : "Start Pro — Free for 1st Month"}
+        </button>
+        {!activePlan?.ctaDisabled && (
+          <div style={{ textAlign: "center", fontSize: 11, color: "#9CA3AF", marginTop: 8 }}>
+            Free for 30 days · Then {activePlan?.price}/month · Cancel anytime
+          </div>
+        )}
+      </div>
+
+      <style>{`
+        @keyframes fadeUp {
+          from { opacity: 0; transform: translateY(18px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+    </div>
+  );
+}
