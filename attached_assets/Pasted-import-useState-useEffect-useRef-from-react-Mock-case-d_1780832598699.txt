@@ -1,0 +1,690 @@
+import { useState, useEffect, useRef } from "react";
+
+// ─── Mock case data ────────────────────────────────────────────────────────
+const DEMO_CASES = [
+  {
+    id: "c1",
+    age: 67, gender: "M",
+    complaint: "Chest pain",
+    diagnosis: "STEMI ruled out — ACS workup negative",
+    category: "cardiology_em",
+    timeSaved: 14,
+    triage: 2,
+    triageColor: "#EF4444",
+  },
+  {
+    id: "c2",
+    age: 4, gender: "F",
+    complaint: "Febrile seizure",
+    diagnosis: "Simple febrile seizure — viral URTI",
+    category: "pediatric_em",
+    timeSaved: 11,
+    triage: 2,
+    triageColor: "#EF4444",
+  },
+  {
+    id: "c3",
+    age: 34, gender: "M",
+    complaint: "RTA — polytrauma",
+    diagnosis: "Polytrauma: Rib fractures + splenic laceration",
+    category: "trauma",
+    timeSaved: 17,
+    triage: 1,
+    triageColor: "#7C3AED",
+  },
+];
+
+const QUICK_LENSES = [
+  { id: "disease_snapshot", emoji: "🩺", label: "Disease Snapshot" },
+  { id: "first_principles", emoji: "🔬", label: "First Principles" },
+  { id: "rare_but_real",   emoji: "⚡", label: "Rare but Real" },
+];
+
+// ─── Typewriter hook ───────────────────────────────────────────────────────
+function useTypewriter(text, speed = 18, active = false) {
+  const [displayed, setDisplayed] = useState("");
+  const [done, setDone] = useState(false);
+  useEffect(() => {
+    if (!active || !text) return;
+    setDisplayed(""); setDone(false);
+    let i = 0;
+    const iv = setInterval(() => {
+      i += 2;
+      setDisplayed(text.slice(0, i));
+      if (i >= text.length) { clearInterval(iv); setDone(true); }
+    }, speed);
+    return () => clearInterval(iv);
+  }, [text, active]);
+  return { displayed, done };
+}
+
+// ─── Simulated AI response ─────────────────────────────────────────────────
+function getSnapshotText(c) {
+  if (c.category === "cardiology_em") return `**ACS / NSTEMI — Disease Snapshot**
+
+**What is it?**
+Acute Coronary Syndrome covers a spectrum from unstable angina to NSTEMI to STEMI — all caused by reduced coronary perfusion. NSTEMI involves myocyte death without full-thickness infarction. Troponin rises; ECG lacks ST elevation.
+
+**Pathophysiology**
+Atherosclerotic plaque ruptures → platelet aggregation → thrombus formation → partial coronary occlusion → subendocardial ischaemia → myocyte necrosis → troponin leak.
+
+**Classic ER Presentation**
+Central chest pain, crushing or pressure-like, radiation to jaw/left arm. Diaphoresis, nausea. ECG: ST depression or T-wave inversion. Troponin positive at 3–6h.
+
+**ER Protocol**
+→ Dual antiplatelet: Aspirin 300mg + Ticagrelor 180mg
+→ Anticoagulation: LMWH or UFH
+→ Serial ECGs every 30 min
+→ Cardiology consult immediately
+→ Admit: CCU if high-risk, monitored bed if low-risk
+
+**Must Not Miss**
+Aortic dissection — check bilateral arm BPs, CXR mediastinum. Troponin can be mildly positive. Never give anticoagulation until dissection excluded.`;
+
+  if (c.category === "pediatric_em") return `**Febrile Seizure — Disease Snapshot**
+
+**What is it?**
+A seizure triggered by fever in a neurologically normal child aged 6 months to 5 years. Simple febrile seizure: generalised, <15 min, single episode in 24h. Complex: focal, >15 min, or recurs within 24h.
+
+**Pathophysiology**
+The immature brain has a lower seizure threshold — higher ratio of excitatory (glutamate) to inhibitory (GABA) neurotransmission. Rapid temperature rise lowers the depolarisation threshold. Susceptibility is genetic; 25–40% have a positive family history.
+
+**Classic ER Presentation**
+Sudden generalised tonic-clonic seizure during fever spike. Child fully recovers within minutes. Post-ictal drowsiness is normal. Temp typically >38.5°C. No focal neurology.
+
+**ER Protocol**
+→ Airway, positioning, O₂ if needed
+→ IV/IO midazolam 0.15mg/kg if actively seizing
+→ Check glucose immediately
+→ Paracetamol / ibuprofen for fever
+→ LP only if meningism, age <12m, or complex features
+
+**Must Not Miss**
+Bacterial meningitis — fever + seizure = meningitis until proven otherwise. Check for neck stiffness, bulging fontanelle, petechiae. A well child with clear viral URTI and simple febrile seizure does not need LP.`;
+
+  return `**Polytrauma — Disease Snapshot**
+
+**What is it?**
+Polytrauma is injury to multiple body regions with at least one life-threatening injury. Defined by ISS >15. The leading cause of death in adults under 45. Management follows ATLS primary survey: ABCDE.
+
+**Pathophysiology**
+Tissue disruption releases DAMPs → massive inflammatory cascade → simultaneous coagulation activation → "lethal triad": hypothermia + acidosis + coagulopathy. Each worsens the others. DIC and multi-organ failure follow if uncorrected.
+
+**Classic ER Presentation**
+Mechanism of injury (RTA, fall from height). Haemodynamic instability, altered GCS, visible deformities. FAST positive for free fluid. Hb dropping. Coagulation studies abnormal.
+
+**ER Protocol**
+→ Massive transfusion protocol: 1:1:1 PRBC:FFP:Platelets
+→ TXA within 3 hours of injury (1g IV over 10 min)
+→ Permissive hypotension: target SBP 80–90 until haemostasis
+→ Trauma surgery + ortho + neurosurg activation
+→ Warm the patient — hypothermia kills
+
+**Must Not Miss**
+Tension pneumothorax — rib fractures + haemodynamic instability. Needle decompression before CXR. And C-spine injury in any significant mechanism — immobilise until cleared.`;
+}
+
+// ─── Render markdown ───────────────────────────────────────────────────────
+function RenderMD({ text }) {
+  if (!text) return null;
+  return (
+    <div>
+      {text.split('\n').map((line, i) => {
+        if (!line.trim()) return <div key={i} style={{ height: 5 }} />;
+        if (line.startsWith('**') && line.endsWith('**') && line.slice(2,-2).indexOf('**') === -1)
+          return <div key={i} style={{ fontWeight: 800, color: "#0D1117", fontSize: 13, marginTop: 12, marginBottom: 3, letterSpacing: -0.2 }}>{line.slice(2,-2)}</div>;
+        if (line.startsWith('→'))
+          return <div key={i} style={{ display:"flex", gap:8, marginBottom:4 }}>
+            <span style={{ color:"#1DB870", fontWeight:700, flexShrink:0, fontSize:13 }}>→</span>
+            <span style={{ fontSize:13, color:"#3A4050", lineHeight:1.6 }}>{line.slice(1).trim()}</span>
+          </div>;
+        const parts = line.split(/(\*\*[^*]+\*\*)/g);
+        return <div key={i} style={{ fontSize:13, color:"#3A4050", lineHeight:1.7, marginBottom:1 }}>
+          {parts.map((p,j) => p.startsWith('**')
+            ? <strong key={j} style={{ color:"#0D1117" }}>{p.slice(2,-2)}</strong>
+            : p)}
+        </div>;
+      })}
+    </div>
+  );
+}
+
+// ─── Nudge toast component ─────────────────────────────────────────────────
+function NudgeToast({ case: c, onDebrief, onDismiss, visible }) {
+  const [pressed, setPressed] = useState(null);
+
+  if (!visible) return null;
+
+  return (
+    <div style={{
+      position: "absolute",
+      bottom: 80, left: 12, right: 12,
+      animation: "slideUp 0.4s cubic-bezier(0.34,1.56,0.64,1) both",
+      zIndex: 50,
+    }}>
+      <div style={{
+        background: "#0D1117",
+        borderRadius: 20,
+        overflow: "hidden",
+        boxShadow: "0 16px 48px rgba(0,0,0,0.28), 0 0 0 1px rgba(255,255,255,0.06)",
+      }}>
+        {/* Top row */}
+        <div style={{
+          padding: "14px 16px 10px",
+          display: "flex", alignItems: "flex-start", gap: 10,
+        }}>
+          {/* Time saved pill */}
+          <div style={{
+            background: "rgba(30,184,112,0.15)",
+            border: "1px solid rgba(30,184,112,0.25)",
+            borderRadius: 10, padding: "6px 10px",
+            display: "flex", flexDirection: "column", alignItems: "center",
+            flexShrink: 0,
+          }}>
+            <span style={{ fontSize: 16, fontWeight: 800, color: "#1DB870", lineHeight: 1 }}>{c.timeSaved}</span>
+            <span style={{ fontSize: 9, color: "rgba(30,184,112,0.6)", fontWeight: 600, letterSpacing: 0.5 }}>MIN<br/>SAVED</span>
+          </div>
+
+          {/* Case info */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", fontWeight: 600, letterSpacing: 0.6, textTransform: "uppercase", marginBottom: 3 }}>
+              Case saved
+            </div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "white", marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {c.age}{c.gender} · {c.complaint}
+            </div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {c.diagnosis}
+            </div>
+          </div>
+
+          {/* Dismiss */}
+          <button
+            onClick={onDismiss}
+            style={{
+              background: "rgba(255,255,255,0.06)", border: "none",
+              borderRadius: 8, width: 28, height: 28,
+              color: "rgba(255,255,255,0.3)", fontSize: 14,
+              cursor: "pointer", flexShrink: 0, display: "flex",
+              alignItems: "center", justifyContent: "center",
+            }}
+          >✕</button>
+        </div>
+
+        {/* Divider */}
+        <div style={{ height: 1, background: "rgba(255,255,255,0.06)", margin: "0 16px" }} />
+
+        {/* Nudge question */}
+        <div style={{ padding: "10px 16px 6px" }}>
+          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", lineHeight: 1.5 }}>
+            Want a quick debrief on this <span style={{ color: "#1DB870", fontWeight: 600 }}>{c.complaint.toLowerCase()}</span> presentation?
+          </div>
+        </div>
+
+        {/* Quick lens buttons */}
+        <div style={{ padding: "8px 12px 14px", display: "flex", gap: 8 }}>
+          {QUICK_LENSES.map(lens => (
+            <button
+              key={lens.id}
+              onClick={() => { setPressed(lens.id); setTimeout(() => onDebrief(lens), 200); }}
+              style={{
+                flex: 1,
+                background: pressed === lens.id
+                  ? "rgba(30,184,112,0.2)"
+                  : "rgba(255,255,255,0.06)",
+                border: pressed === lens.id
+                  ? "1px solid rgba(30,184,112,0.4)"
+                  : "1px solid rgba(255,255,255,0.08)",
+                borderRadius: 12, padding: "9px 6px",
+                cursor: "pointer", transition: "all 0.15s",
+                display: "flex", flexDirection: "column",
+                alignItems: "center", gap: 4,
+              }}
+            >
+              <span style={{ fontSize: 18 }}>{lens.emoji}</span>
+              <span style={{ fontSize: 10, fontWeight: 600, color: "rgba(255,255,255,0.5)", lineHeight: 1.2, textAlign: "center" }}>
+                {lens.label}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {/* Maybe later */}
+        <button
+          onClick={onDismiss}
+          style={{
+            width: "100%", background: "none", border: "none",
+            borderTop: "1px solid rgba(255,255,255,0.05)",
+            padding: "10px", fontSize: 12,
+            color: "rgba(255,255,255,0.2)", cursor: "pointer",
+            fontFamily: "inherit",
+          }}
+        >
+          Maybe later — open Rounds anytime
+        </button>
+      </div>
+
+      <style>{`
+        @keyframes slideUp {
+          from { opacity: 0; transform: translateY(24px) scale(0.97); }
+          to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+// ─── Debrief panel ─────────────────────────────────────────────────────────
+function DebriefPanel({ case: c, lens, onClose }) {
+  const text = getSnapshotText(c);
+  const { displayed, done } = useTypewriter(text, 14, true);
+
+  return (
+    <div style={{
+      position: "absolute", inset: 0,
+      background: "#F7F9F7",
+      display: "flex", flexDirection: "column",
+      animation: "panelIn 0.35s cubic-bezier(0.22,1,0.36,1) both",
+      zIndex: 60,
+    }}>
+      {/* Header */}
+      <div style={{
+        background: "#0D1117",
+        padding: "20px 20px 18px",
+        flexShrink: 0,
+      }}>
+        <button
+          onClick={onClose}
+          style={{
+            background: "rgba(255,255,255,0.06)", border: "none",
+            borderRadius: 10, padding: "6px 12px", color: "rgba(255,255,255,0.5)",
+            fontSize: 13, cursor: "pointer", fontFamily: "inherit",
+            display: "flex", alignItems: "center", gap: 6, marginBottom: 14,
+          }}
+        >
+          ← Back to case
+        </button>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{
+            width: 46, height: 46, borderRadius: 13,
+            background: "rgba(30,184,112,0.12)",
+            border: "1.5px solid rgba(30,184,112,0.25)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 22,
+          }}>
+            {lens.emoji}
+          </div>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: "white", letterSpacing: -0.3 }}>{lens.label}</div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>
+              {c.age}{c.gender} · {c.complaint}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div style={{ flex: 1, overflowY: "auto", padding: "20px 20px 32px" }}>
+        <RenderMD text={displayed} />
+
+        {/* Loading dots */}
+        {!done && (
+          <div style={{ display: "flex", gap: 5, marginTop: 8 }}>
+            {[0,1,2].map(i => (
+              <div key={i} style={{
+                width: 7, height: 7, borderRadius: "50%",
+                background: "#1DB870", opacity: 0.7,
+                animation: `dot 1.2s ${i*0.2}s infinite ease-in-out`,
+              }}/>
+            ))}
+          </div>
+        )}
+
+        {/* Done state */}
+        {done && (
+          <div style={{ marginTop: 24, animation: "fadeUp 0.4s ease" }}>
+            <div style={{
+              background: "rgba(30,184,112,0.08)",
+              border: "1px solid rgba(30,184,112,0.2)",
+              borderRadius: 14, padding: "12px 16px",
+              display: "flex", alignItems: "center", gap: 8, marginBottom: 12,
+            }}>
+              <span style={{ fontSize: 16 }}>✨</span>
+              <span style={{ fontSize: 13, color: "#15924F", fontWeight: 600 }}>Saved to your clinical memory</span>
+            </div>
+            <button
+              onClick={onClose}
+              style={{
+                width: "100%", background: "#0D1117", color: "white",
+                border: "none", borderRadius: 14, padding: "14px",
+                fontSize: 15, fontWeight: 700, cursor: "pointer",
+                fontFamily: "inherit",
+              }}
+            >
+              Try another lens →
+            </button>
+          </div>
+        )}
+      </div>
+
+      <style>{`
+        @keyframes panelIn {
+          from { opacity: 0; transform: translateY(40px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes dot {
+          0%,80%,100% { transform: scale(0.6); opacity: 0.3; }
+          40%          { transform: scale(1);   opacity: 1; }
+        }
+        @keyframes fadeUp {
+          from { opacity: 0; transform: translateY(12px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+// ─── Simulated case sheet save screen ─────────────────────────────────────
+function CaseSheetScreen({ case: c, onSave }) {
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const handleSave = () => {
+    setSaving(true);
+    setTimeout(() => {
+      setSaving(false);
+      setSaved(true);
+      setTimeout(() => onSave(), 600);
+    }, 1200);
+  };
+
+  return (
+    <div style={{
+      height: "100%", display: "flex", flexDirection: "column",
+      background: "#F7F9F7",
+    }}>
+      {/* Nav */}
+      <div style={{
+        background: "white", borderBottom: "1px solid #EFEFEF",
+        padding: "16px 20px",
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+      }}>
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: "#0D1117", letterSpacing: -0.3 }}>
+            Case Sheet
+          </div>
+          <div style={{ fontSize: 12, color: "#9CA3AF", marginTop: 1 }}>
+            {c.age}{c.gender} · P{c.triage} · {c.complaint}
+          </div>
+        </div>
+        <div style={{
+          width: 10, height: 10, borderRadius: "50%",
+          background: "#F59E0B",
+          boxShadow: "0 0 0 3px rgba(245,158,11,0.2)",
+        }}/>
+      </div>
+
+      {/* Fake filled form */}
+      <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
+        {[
+          { label: "Airway", value: "Patent, self-maintained", done: true },
+          { label: "Breathing", value: "SpO₂ 96% · RR 22/min", done: true },
+          { label: "Circulation", value: "HR 108 · BP 94/60 mmHg", done: true },
+          { label: "Disability", value: "GCS 13/15 · GRBS 186", done: true },
+          { label: "Diagnosis", value: c.diagnosis, done: true },
+          { label: "Management", value: "IV access · Aspirin · Serial ECGs", done: true },
+        ].map((field, i) => (
+          <div key={i} style={{
+            background: "white", borderRadius: 14,
+            border: "1.5px solid #EFEFEF",
+            padding: "12px 16px", marginBottom: 10,
+          }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "#9CA3AF", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 4 }}>
+              {field.label}
+            </div>
+            <div style={{ fontSize: 14, color: field.done ? "#1DB870" : "#C4C9D4", fontWeight: field.done ? 600 : 400 }}>
+              {field.value}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Save button */}
+      <div style={{ padding: "12px 20px 32px", background: "white", borderTop: "1px solid #EFEFEF" }}>
+        <button
+          onClick={handleSave}
+          disabled={saving || saved}
+          style={{
+            width: "100%",
+            background: saved
+              ? "#1DB870"
+              : saving
+              ? "rgba(30,184,112,0.6)"
+              : "#0D1117",
+            color: "white", border: "none", borderRadius: 14,
+            padding: "15px", fontSize: 16, fontWeight: 700,
+            cursor: saving || saved ? "default" : "pointer",
+            fontFamily: "inherit",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+            transition: "background 0.3s",
+          }}
+        >
+          {saved ? "✓ Case Saved" : saving ? "Saving…" : "Save Case"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main demo shell ───────────────────────────────────────────────────────
+export default function PostSaveNudgeDemo() {
+  const [demoCase, setDemoCase] = useState(0);
+  const [phase, setPhase] = useState("sheet"); // sheet | nudge | debrief | done
+  const [activeLens, setActiveLens] = useState(null);
+  const [nudgeVisible, setNudgeVisible] = useState(false);
+
+  const c = DEMO_CASES[demoCase];
+
+  const handleSaved = () => {
+    setNudgeVisible(true);
+    setPhase("nudge");
+  };
+
+  const handleDebrief = (lens) => {
+    setNudgeVisible(false);
+    setActiveLens(lens);
+    setTimeout(() => setPhase("debrief"), 150);
+  };
+
+  const handleDismiss = () => {
+    setNudgeVisible(false);
+    setPhase("done");
+  };
+
+  const handleReset = (i) => {
+    setDemoCase(i);
+    setPhase("sheet");
+    setActiveLens(null);
+    setNudgeVisible(false);
+  };
+
+  return (
+    <div style={{
+      fontFamily: "'DM Sans', 'Helvetica Neue', sans-serif",
+      background: "#E8EBE8",
+      minHeight: "100vh",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      padding: "32px 20px 48px",
+      gap: 24,
+    }}>
+      {/* Title */}
+      <div style={{ textAlign: "center", maxWidth: 480 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 2, color: "#1DB870", textTransform: "uppercase", marginBottom: 8 }}>
+          Post-Save Nudge
+        </div>
+        <div style={{ fontSize: 24, fontWeight: 800, color: "#0D1117", letterSpacing: -0.5, marginBottom: 6 }}>
+          One tap to learn from every case
+        </div>
+        <div style={{ fontSize: 14, color: "#6B7280", lineHeight: 1.6 }}>
+          Appears after saving. Optional. Disappears in 8 seconds if ignored. Tap a lens to see the full debrief.
+        </div>
+      </div>
+
+      {/* Case switcher */}
+      <div style={{ display: "flex", gap: 8 }}>
+        {DEMO_CASES.map((dc, i) => (
+          <button
+            key={i}
+            onClick={() => handleReset(i)}
+            style={{
+              background: demoCase === i ? "#0D1117" : "white",
+              color: demoCase === i ? "white" : "#6B7280",
+              border: "1.5px solid " + (demoCase === i ? "#0D1117" : "#E5E7EB"),
+              borderRadius: 10, padding: "7px 14px",
+              fontSize: 12, fontWeight: 600, cursor: "pointer",
+              fontFamily: "inherit", transition: "all 0.15s",
+            }}
+          >
+            {dc.age}{dc.gender} · {dc.complaint.split(' ')[0]}
+          </button>
+        ))}
+      </div>
+
+      {/* Phone frame */}
+      <div style={{
+        width: 340,
+        height: 640,
+        background: "#0D1117",
+        borderRadius: 48,
+        padding: 12,
+        boxShadow: "0 40px 80px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.06)",
+        position: "relative",
+        flexShrink: 0,
+      }}>
+        {/* Notch */}
+        <div style={{
+          position: "absolute", top: 0, left: "50%", transform: "translateX(-50%)",
+          width: 100, height: 28,
+          background: "#0D1117", borderRadius: "0 0 18px 18px",
+          zIndex: 10,
+        }}/>
+
+        {/* Screen */}
+        <div style={{
+          width: "100%", height: "100%",
+          background: "#F7F9F7",
+          borderRadius: 38,
+          overflow: "hidden",
+          position: "relative",
+        }}>
+          {/* Case sheet */}
+          {(phase === "sheet" || phase === "nudge" || phase === "done") && (
+            <CaseSheetScreen case={c} onSave={handleSaved} />
+          )}
+
+          {/* Nudge toast */}
+          {phase === "nudge" && (
+            <NudgeToast
+              case={c}
+              visible={nudgeVisible}
+              onDebrief={handleDebrief}
+              onDismiss={handleDismiss}
+            />
+          )}
+
+          {/* Dismissed state */}
+          {phase === "done" && (
+            <div style={{
+              position: "absolute", bottom: 80, left: 12, right: 12,
+              background: "rgba(0,0,0,0.65)", backdropFilter: "blur(8px)",
+              borderRadius: 16, padding: "12px 16px",
+              display: "flex", alignItems: "center", gap: 10,
+              animation: "slideUp 0.3s ease both",
+            }}>
+              <span style={{ fontSize: 16 }}>🧠</span>
+              <span style={{ fontSize: 13, color: "rgba(255,255,255,0.7)" }}>
+                Open <strong style={{ color: "white" }}>Rounds</strong> anytime to debrief
+              </span>
+            </div>
+          )}
+
+          {/* Debrief panel */}
+          {phase === "debrief" && activeLens && (
+            <DebriefPanel
+              case={c}
+              lens={activeLens}
+              onClose={() => { setPhase("nudge"); setNudgeVisible(true); }}
+            />
+          )}
+        </div>
+      </div>
+
+      {/* Flow explanation */}
+      <div style={{
+        maxWidth: 380,
+        background: "white",
+        borderRadius: 20,
+        padding: "20px 24px",
+        border: "1.5px solid #E5E7EB",
+      }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "#9CA3AF", letterSpacing: 1, textTransform: "uppercase", marginBottom: 14 }}>
+          How it works
+        </div>
+        {[
+          { step: "1", text: "Doctor taps Save Case", color: "#0D1117" },
+          { step: "2", text: "Nudge appears from bottom — shows time saved + 3 quick lenses", color: "#1DB870" },
+          { step: "3", text: "Tap a lens → instant AI debrief of that specific case", color: "#3B82F6" },
+          { step: "4", text: "Dismiss → nudge gone, case logged to Rounds for later", color: "#F59E0B" },
+          { step: "5", text: "No action → auto-dismisses after 8 seconds", color: "#9CA3AF" },
+        ].map((s, i) => (
+          <div key={i} style={{ display: "flex", gap: 12, marginBottom: i < 4 ? 12 : 0, alignItems: "flex-start" }}>
+            <div style={{
+              width: 24, height: 24, borderRadius: 8,
+              background: s.color + "18",
+              border: `1.5px solid ${s.color}30`,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 11, fontWeight: 800, color: s.color,
+              flexShrink: 0,
+            }}>{s.step}</div>
+            <div style={{ fontSize: 13, color: "#3A4050", lineHeight: 1.6, paddingTop: 3 }}>{s.text}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Developer note */}
+      <div style={{
+        maxWidth: 380,
+        background: "#0D1117",
+        borderRadius: 20,
+        padding: "20px 24px",
+      }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.3)", letterSpacing: 1, textTransform: "uppercase", marginBottom: 12 }}>
+          Developer wiring
+        </div>
+        {[
+          "After saveCase() resolves → call showNudge(caseId)",
+          "NudgeToast receives case object as prop",
+          "Lens tap → navigate('Rounds', { caseId, lensId }) directly",
+          "Dismiss → AsyncStorage flag 'nudge_dismissed_{caseId}'",
+          "Auto-dismiss: setTimeout(dismiss, 8000) on mount",
+        ].map((note, i) => (
+          <div key={i} style={{ display: "flex", gap: 8, marginBottom: i < 4 ? 8 : 0 }}>
+            <span style={{ color: "#1DB870", fontSize: 12, flexShrink: 0, marginTop: 1 }}>→</span>
+            <span style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", lineHeight: 1.6, fontFamily: "monospace" }}>{note}</span>
+          </div>
+        ))}
+      </div>
+
+      <style>{`
+        @keyframes slideUp {
+          from { opacity: 0; transform: translateY(20px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+    </div>
+  );
+}

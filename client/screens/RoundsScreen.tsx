@@ -8,7 +8,8 @@ import {
   ActivityIndicator,
   Platform,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
+import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -316,6 +317,7 @@ function renderInlineBold(text: string, theme: any): React.ReactNode {
 
 export default function RoundsScreen() {
   const navigation = useNavigation();
+  const route = useRoute<RouteProp<RootStackParamList, "Rounds">>();
   const { theme, isDark } = useTheme();
   const { user, token } = useAuth();
   const insets = useSafeAreaInsets();
@@ -331,6 +333,7 @@ export default function RoundsScreen() {
   const [debriefDone, setDebriefDone] = useState(false);
   const typewriterRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const indexRef = useRef(0);
+  const autoJumpedRef = useRef(false);
 
   const { data: rawCases = [], isLoading: casesLoading } = useQuery<any[]>({
     queryKey: ["cases", user?.id],
@@ -376,9 +379,23 @@ export default function RoundsScreen() {
     };
   }, []);
 
+  useEffect(() => {
+    const paramCaseId = route.params?.caseId;
+    const paramLensId = route.params?.lensId;
+    if (!paramCaseId || !paramLensId || autoJumpedRef.current || cases.length === 0) return;
+    const targetCase = cases.find((c) => c.id === paramCaseId);
+    if (!targetCase) return;
+    const targetMode = THINKING_MODES.find((m) => m.id === paramLensId);
+    if (!targetMode) return;
+    autoJumpedRef.current = true;
+    setSelectedCase(targetCase);
+    startDebrief(targetMode, targetCase);
+  }, [cases, route.params]);
+
   const startDebrief = useCallback(
-    async (mode: ThinkingMode) => {
-      if (!selectedCase) return;
+    async (mode: ThinkingMode, caseOverride?: CaseItem) => {
+      const activeCase = caseOverride ?? selectedCase;
+      if (!activeCase) return;
       setSelectedMode(mode);
       setView("debrief");
       setDebriefLoading(true);
@@ -394,13 +411,13 @@ export default function RoundsScreen() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             caseData: {
-              complaint: selectedCase.complaint,
-              diagnosis: selectedCase.diagnosis,
-              keyFindings: selectedCase.keyFindings,
-              management: selectedCase.management,
-              triage: selectedCase.triage,
-              age: selectedCase.age,
-              gender: selectedCase.gender,
+              complaint: activeCase.complaint,
+              diagnosis: activeCase.diagnosis,
+              keyFindings: activeCase.keyFindings,
+              management: activeCase.management,
+              triage: activeCase.triage,
+              age: activeCase.age,
+              gender: activeCase.gender,
             },
             mode: mode.id,
           }),

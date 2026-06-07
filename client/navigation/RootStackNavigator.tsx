@@ -90,7 +90,7 @@ export type RootStackParamList = {
     hasCrashed: boolean;
   };
   Stats: undefined;
-  Rounds: undefined;
+  Rounds: { caseId?: string; lensId?: string } | undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();

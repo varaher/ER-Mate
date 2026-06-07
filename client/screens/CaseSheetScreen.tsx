@@ -20,6 +20,7 @@ import { Feather } from "@expo/vector-icons";
 import { Audio } from "expo-av";
 import * as ImagePicker from "expo-image-picker";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
+import { RoundsNudge } from "@/components/RoundsNudge";
 import VoiceRecorder, { ExtractedClinicalData } from "@/components/VoiceRecorder";
 import { DocumentScanner } from "@/components/DocumentScanner";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
@@ -541,7 +542,14 @@ export default function CaseSheetScreen() {
   const recordingRef = useRef<Audio.Recording | null>(null);
   const localDraftIdRef = useRef<string | null>(null);
   const caseStartRef = useRef<number>(Date.now());
-  const [timeSavedBanner, setTimeSavedBanner] = useState<{ durationMins: number; savedMins: number } | null>(null);
+  const [roundsNudge, setRoundsNudge] = useState<{
+    savedMins: number;
+    complaint: string;
+    diagnosis: string;
+    age: number;
+    gender: string;
+  } | null>(null);
+  const nudgeDismissRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const complaintDurationRef = useRef<string>("");
   const complaintOnsetRef = useRef<string>("");
   const [modeOfArrival, setModeOfArrival] = useState("Walk-in");
@@ -1311,8 +1319,18 @@ export default function CaseSheetScreen() {
         const savedMins = getTimeSavedMinutes(durationMins);
         const complaint = formData?.chiefComplaint || "";
         recordCaseTime(caseId, durationMins, complaint).catch(() => {});
-        setTimeSavedBanner({ durationMins, savedMins });
-        setTimeout(() => setTimeSavedBanner(null), 5000);
+        const patientAge = parseInt(String(caseData?.patient?.age ?? ""), 10) || 0;
+        const patientGender = String(caseData?.patient?.sex ?? caseData?.patient?.gender ?? "");
+        const diagnosisText = treatmentData?.primaryDiagnosis || "";
+        if (nudgeDismissRef.current) clearTimeout(nudgeDismissRef.current);
+        setRoundsNudge({
+          savedMins,
+          complaint,
+          diagnosis: diagnosisText,
+          age: patientAge,
+          gender: patientGender,
+        });
+        nudgeDismissRef.current = setTimeout(() => setRoundsNudge(null), 8000);
         return true;
       } else {
         console.error("Commit failed:", res.error);
@@ -3479,14 +3497,23 @@ export default function CaseSheetScreen() {
           </>
         )}
       </KeyboardAwareScrollViewCompat>
-      {timeSavedBanner ? (
-        <View style={[styles.timeSavedBanner, { backgroundColor: "#059669" }]}>
-          <Feather name="clock" size={14} color="#FFFFFF" />
-          <Text style={styles.timeSavedText}>
-            Case saved — approx. {timeSavedBanner.savedMins} min saved vs paper
-          </Text>
-        </View>
-      ) : null}
+      <RoundsNudge
+        visible={roundsNudge !== null}
+        savedMins={roundsNudge?.savedMins ?? 0}
+        complaint={roundsNudge?.complaint ?? ""}
+        diagnosis={roundsNudge?.diagnosis ?? ""}
+        age={roundsNudge?.age ?? 0}
+        gender={roundsNudge?.gender ?? ""}
+        onDismiss={() => {
+          if (nudgeDismissRef.current) clearTimeout(nudgeDismissRef.current);
+          setRoundsNudge(null);
+        }}
+        onLensPress={(lensId) => {
+          if (nudgeDismissRef.current) clearTimeout(nudgeDismissRef.current);
+          setRoundsNudge(null);
+          navigation.navigate("Rounds", { caseId, lensId });
+        }}
+      />
       <View style={[styles.bottomNav, { backgroundColor: theme.card, borderTopColor: theme.border, paddingBottom: insets.bottom + Spacing.sm }]}>
         <Pressable style={[styles.navBtn, styles.prevBtn]} onPress={handlePrevious} disabled={activeTab === "patient"}>
           <Feather name="arrow-left" size={18} color={activeTab === "patient" ? theme.textMuted : theme.text} />
