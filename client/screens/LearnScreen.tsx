@@ -18,6 +18,14 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 const learnSections = [
   {
+    id: "rounds",
+    title: "Rounds",
+    subtitle: "Debrief your real cases with AI across 6 clinical thinking lenses",
+    icon: "rotate-cw" as const,
+    color: "#1DB870",
+    route: "Rounds" as const,
+  },
+  {
     id: "trivia",
     title: "Trivia Time",
     subtitle: "Case-based MCQs across all EM specialties with detailed explanations",

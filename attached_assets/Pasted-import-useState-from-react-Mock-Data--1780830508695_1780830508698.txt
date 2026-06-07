@@ -1,0 +1,634 @@
+import { useState } from "react";
+
+// ── Mock Data ──────────────────────────────────────────────────────────────
+const RECENT_CASES = [
+  {
+    id: "c1",
+    age: 67, gender: "M",
+    complaint: "Chest pain",
+    diagnosis: "STEMI ruled out — ACS workup negative",
+    triage: 2, triageColor: "#EF4444",
+    timeAgo: "2 hours ago",
+    category: "cardiology_em",
+    keyFindings: "HR 94, BP 138/86, Trop negative x2, ECG: No ST changes",
+    management: "IV access, aspirin 300mg, serial ECGs, cardiology review",
+    disposition: "Admitted for observation",
+  },
+  {
+    id: "c2",
+    age: 4, gender: "F",
+    complaint: "Febrile seizure",
+    diagnosis: "Simple febrile seizure — viral URTI",
+    triage: 2, triageColor: "#EF4444",
+    timeAgo: "Yesterday",
+    category: "pediatric_em",
+    keyFindings: "Temp 39.4°C, SpO₂ 98%, GCS 15, seizure duration <2 min",
+    management: "IV midazolam, paracetamol, monitoring",
+    disposition: "Discharged — parent counselling given",
+  },
+  {
+    id: "c3",
+    age: 34, gender: "M",
+    complaint: "RTA — polytrauma",
+    diagnosis: "Polytrauma: Rib fractures + splenic laceration",
+    triage: 1, triageColor: "#7C3AED",
+    timeAgo: "2 days ago",
+    category: "trauma",
+    keyFindings: "GCS 13, HR 118, BP 96/62, FAST +ve RUQ, Hb 8.4",
+    management: "Massive transfusion protocol, trauma surgery activated",
+    disposition: "Emergency OT",
+  },
+  {
+    id: "c4",
+    age: 52, gender: "F",
+    complaint: "Sudden onset headache",
+    diagnosis: "Subarachnoid haemorrhage",
+    triage: 1, triageColor: "#7C3AED",
+    timeAgo: "3 days ago",
+    category: "neuro_em",
+    keyFindings: "Thunderclap headache, neck stiffness, CT: hyperdense basal cisterns",
+    management: "Neurosurgery emergency consult, nimodipine, ICU",
+    disposition: "ICU admission",
+  },
+  {
+    id: "c5",
+    age: 28, gender: "M",
+    complaint: "Snake bite — right hand",
+    diagnosis: "Haemotoxic envenomation",
+    triage: 2, triageColor: "#EF4444",
+    timeAgo: "4 days ago",
+    category: "toxicology",
+    keyFindings: "Local necrosis, coagulopathy, 20WBCT positive",
+    management: "ASV 10 vials, fresh FFP, surgical review for necrosis",
+    disposition: "Admitted — surgery ward",
+  },
+];
+
+const THINKING_MODES = [
+  {
+    id: "first_principles",
+    emoji: "🔬",
+    label: "First Principles",
+    tagline: "Why does this actually happen?",
+    color: "#3B82F6",
+    colorBg: "rgba(59,130,246,0.08)",
+    prompt: (c) => `Break down the pathophysiology of "${c.diagnosis}" from first principles. Start from the cellular level. Why does this condition behave the way it does? What fundamental biological mechanisms explain every finding in this case?`,
+  },
+  {
+    id: "devils_advocate",
+    emoji: "😈",
+    label: "Devil's Advocate",
+    tagline: "What if the diagnosis was wrong?",
+    color: "#A855F7",
+    colorBg: "rgba(168,85,247,0.08)",
+    prompt: (c) => `Challenge the diagnosis of "${c.diagnosis}". What alternative diagnoses could explain these findings: ${c.keyFindings}? What's the most dangerous missed diagnosis? What would you do differently?`,
+  },
+  {
+    id: "pathophysiology",
+    emoji: "🧠",
+    label: "Pathophysiology",
+    tagline: "Walk through what happened in the body",
+    color: "#F59E0B",
+    colorBg: "rgba(245,158,11,0.08)",
+    prompt: (c) => `Walk me through the complete pathophysiology of this case: ${c.diagnosis}. Use the findings (${c.keyFindings}) to explain the disease progression step by step, as if teaching a medical student.`,
+  },
+  {
+    id: "rare_but_real",
+    emoji: "⚡",
+    label: "Rare but Real",
+    tagline: "What dangerous diagnosis could this have been?",
+    color: "#EF4444",
+    colorBg: "rgba(239,68,68,0.08)",
+    prompt: (c) => `This presented as "${c.complaint}" and was diagnosed as "${c.diagnosis}". What are the dangerous, rare diagnoses this could have been? What red flags should every ER doctor know? What's the one diagnosis you cannot miss?`,
+  },
+  {
+    id: "guidelines",
+    emoji: "📚",
+    label: "Guidelines",
+    tagline: "What does evidence say about this?",
+    color: "#10B981",
+    colorBg: "rgba(16,185,129,0.08)",
+    prompt: (c) => `Review the current evidence-based guidelines for managing "${c.diagnosis}". Was the management (${c.management}) in line with ATLS/current guidelines? What does the latest evidence recommend?`,
+  },
+  {
+    id: "full_debrief",
+    emoji: "🔗",
+    label: "Full Debrief",
+    tagline: "Complete case analysis — all lenses",
+    color: "#1DB870",
+    colorBg: "rgba(30,184,112,0.08)",
+    prompt: (c) => `Run a complete clinical debrief of this case: ${c.diagnosis}. Cover: 1) First principles pathophysiology, 2) Was the diagnosis correct — what else could it be?, 3) Evidence-based management review, 4) Key learning points, 5) What to remember for the next similar case.`,
+  },
+];
+
+const MEMORY_STATS = {
+  totalCases: 147,
+  thisMonth: 34,
+  streak: 4,
+  topCategory: "Trauma",
+  topCategoryPct: 34,
+  debriefed: 23,
+  categories: [
+    { label: "Trauma", count: 50, color: "#EF4444" },
+    { label: "Cardiology EM", count: 38, color: "#F59E0B" },
+    { label: "Medical EM", count: 28, color: "#3B82F6" },
+    { label: "Paediatric EM", count: 18, color: "#10B981" },
+    { label: "Neuro EM", count: 13, color: "#A855F7" },
+  ],
+};
+
+// ── Icons ──────────────────────────────────────────────────────────────────
+const IconBack = () => (
+  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+    <path d="M13 4L7 10L13 16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+const IconBrain = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <path d="M8 2C6.5 2 5.5 3 5.5 4C4 4 3 5 3 6.5C3 7.5 3.5 8.3 4.3 8.7C4 9 3.8 9.5 3.8 10C3.8 11.3 4.8 12.3 6 12.5V14H10V12.5C11.2 12.3 12.2 11.3 12.2 10C12.2 9.5 12 9 11.7 8.7C12.5 8.3 13 7.5 13 6.5C13 5 12 4 10.5 4C10.5 3 9.5 2 8 2Z" stroke="#1DB870" strokeWidth="1.3" strokeLinejoin="round"/>
+  </svg>
+);
+const IconFire = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+    <path d="M7 1C7 1 9 4 9 6C9 7.1 8.1 8 7 8C5.9 8 5 7.1 5 6C5 5.3 5.3 4.7 5.3 4.7C5.3 4.7 4 6 4 8C4 10.2 5.8 12 8 12C10.2 12 12 10.2 12 8C12 5 7 1 7 1Z" fill="#F59E0B"/>
+  </svg>
+);
+const IconChevron = ({ right }) => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <path d={right ? "M6 4L10 8L6 12" : "M10 4L6 8L10 12"} stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+const IconSparkle = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+    <path d="M7 1L8.2 5.8L13 7L8.2 8.2L7 13L5.8 8.2L1 7L5.8 5.8L7 1Z" fill="#1DB870"/>
+  </svg>
+);
+
+// ── Triage badge ───────────────────────────────────────────────────────────
+const TriageBadge = ({ level, color }) => (
+  <div style={{
+    width: 28, height: 28, borderRadius: 8,
+    background: color + "22",
+    border: `1.5px solid ${color}44`,
+    display: "flex", alignItems: "center", justifyContent: "center",
+    fontSize: 11, fontWeight: 800, color,
+    flexShrink: 0,
+  }}>P{level}</div>
+);
+
+// ── Loading dots ───────────────────────────────────────────────────────────
+const LoadingDots = () => (
+  <div style={{ display: "flex", gap: 6, padding: "8px 0" }}>
+    {[0,1,2].map(i => (
+      <div key={i} style={{
+        width: 8, height: 8, borderRadius: "50%",
+        background: "#1DB870",
+        animation: `bounce 1.2s ${i*0.2}s infinite ease-in-out`,
+      }}/>
+    ))}
+    <style>{`@keyframes bounce{0%,80%,100%{transform:scale(0.6);opacity:0.4}40%{transform:scale(1);opacity:1}}`}</style>
+  </div>
+);
+
+// ── Main Component ─────────────────────────────────────────────────────────
+export default function RoundsScreen() {
+  const [view, setView] = useState("home"); // home | case | debrief | memory
+  const [selectedCase, setSelectedCase] = useState(null);
+  const [selectedMode, setSelectedMode] = useState(null);
+  const [debriefText, setDebriefText] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState("rounds"); // for bottom nav
+
+  // Simulate AI debrief
+  const startDebrief = async (mode) => {
+    setSelectedMode(mode);
+    setView("debrief");
+    setLoading(true);
+    setDebriefText("");
+
+    // Simulate streaming response
+    const responses = {
+      first_principles: `**First Principles Analysis: ${selectedCase.diagnosis}**\n\n**What is actually happening at the cellular level?**\n\nLet's strip away the clinical labels and start from biology.\n\n${selectedCase.category === "cardiology_em"
+        ? "Myocardial ischaemia begins when oxygen demand exceeds supply. The subendocardium — furthest from coronary perfusion — suffers first. Without ATP, the Na/K pump fails. Sodium floods in, calcium follows. Cells swell. The electrochemical gradient collapses.\n\nThis is why troponin rises — it's not a test for heart attack, it's a test for myocyte membrane integrity failure. Even demand ischaemia (Type 2 MI) causes the same leak.\n\n**In your case:**\nTrop negative x2 at appropriate intervals. The membrane stayed intact. But the symptom — chest pain — came from somewhere. The myocardium was likely ischaemic transiently, then reperfused. Or the pain was visceral, referred from a non-cardiac source the ECG can't show.\n\n**What to remember:**\nNegative troponin rules out myocyte death. It does not rule out ischaemia."
+        : selectedCase.category === "pediatric_em"
+        ? "Febrile seizures are a window into developing neurology. The immature brain has a lower seizure threshold — a higher ratio of excitatory (glutamate) to inhibitory (GABA) signalling.\n\nFever accelerates neuronal firing rates. When temperature rises rapidly, the depolarisation threshold drops. A susceptible child — often with a family history — crosses the threshold and seizes.\n\n**In your case:**\nTemperature 39.4°C, seizure <2 minutes, full recovery. This is the classic simple febrile seizure phenotype. The brain responded to thermal stress, then self-corrected.\n\n**What this is NOT:**\nEpilepsy. An underlying focus. A sign of CNS infection — unless there are meningeal signs or prolonged/focal seizure.\n\n**What to remember:**\nThe seizure itself rarely causes harm. The danger is the parent's next response — and whether they know when to come back."
+        : "The fundamental mechanism begins with tissue disruption at the injury site. Cellular membranes rupture. Intracellular contents — including damage-associated molecular patterns (DAMPs) — enter the bloodstream.\n\nThe inflammatory cascade activates: IL-1, IL-6, TNF-α flood the system. Coagulation activates simultaneously. In polytrauma, these two systems — inflammation and coagulation — can spiral into DIC, ARDS, and multi-organ failure.\n\n**In your case:**\nHb 8.4 indicates significant haemorrhage already. The FAST-positive RUQ points to intraperitoneal haemorrhage from the spleen — a highly vascular organ that does not tamponade itself.\n\n**The physiology driving your decision:**\nMassive transfusion protocol wasn't optional. At Hb 8.4 with ongoing haemorrhage, crystalloid alone would dilute clotting factors and worsen coagulopathy. 1:1:1 PRBC:FFP:platelets maintains the haemostatic environment while restoring volume."
+      }`,
+
+      devils_advocate: `**Devil's Advocate: ${selectedCase.complaint}**\n\n*What if we're wrong?*\n\n**The diagnosis was:** ${selectedCase.diagnosis}\n\n**Challenge accepted. Here's what else this could be:**\n\n${selectedCase.category === "cardiology_em"
+        ? "**1. Aortic dissection** — chest pain, hypertension history, the troponin can be mildly positive from right coronary involvement. Did you check bilateral arm BPs? Was there a mediastinal silhouette on CXR?\n\n**2. Pulmonary embolism** — pleuritic chest pain often gets labelled cardiac. Was a Wells score calculated? Was D-dimer checked? PE can present with a normal ECG.\n\n**3. Oesophageal spasm** — responds to nitrates just like angina. Exertional, post-meal, or stress-related. Often misdiagnosed as ACS.\n\n**The one you cannot miss:**\nAortic dissection. It kills in hours. The CXR and bilateral arm BPs cost nothing.\n\n**What I'd verify:**\nWas a CXR done? Were both arm BPs checked? Was a PE risk score calculated?"
+        : selectedCase.category === "pediatric_em"
+        ? "**1. Meningitis/Encephalitis** — fever + seizure = meningitis until proven otherwise in a child. Was there neck stiffness? Photophobia? Bulging fontanelle?\n\n**2. Focal seizure misread as generalised** — a focal onset seizure with secondary generalisation looks like a simple febrile seizure but means something very different.\n\n**3. Metabolic cause** — hyponatraemia, hypoglycaemia. Was the glucose checked? Was sodium checked?\n\n**The one you cannot miss:**\nBacterial meningitis. A child who seizes, recovers, but has early meningism can deteriorate in hours.\n\n**What I'd verify:**\nWas CSF considered? What was the glucose? Was there any focal neurology post-ictally?"
+        : "**1. Tension pneumothorax** — RTA with rib fractures. Before the FAST scan found the splenic injury, was tension PTX excluded? Tracheal deviation, absent breath sounds.\n\n**2. Cardiac tamponade** — FAST positive doesn't specify where fluid is. Pericardial window?\n\n**3. Spinal injury** — GCS 13. Could be head injury, could be spinal cord with neurogenic shock masquerading as haemorrhagic shock.\n\n**The one you cannot miss:**\nTension pneumothorax. It kills in minutes and is treated with a needle, not a scan.\n\n**What I'd verify:**\nWas tension PTX actively excluded before focusing on the abdomen? Was C-spine cleared?"
+      }`,
+
+      full_debrief: `**Complete Clinical Debrief**\n*${selectedCase.diagnosis}*\n\n───────────────────────\n**1. PATHOPHYSIOLOGY**\n\nThe fundamental mechanism in this case begins with the presenting complaint — ${selectedCase.complaint}. At the cellular level, the disease process triggers a cascade that manifests as the findings you documented: ${selectedCase.keyFindings}.\n\n───────────────────────\n**2. WAS THE DIAGNOSIS RIGHT?**\n\nThe diagnosis of ${selectedCase.diagnosis} fits the clinical picture. The management — ${selectedCase.management} — was appropriate for this presentation.\n\nHowever, the differential diagnosis must include dangerous alternatives that share this presentation. Before anchoring, these should be actively excluded.\n\n───────────────────────\n**3. EVIDENCE-BASED MANAGEMENT**\n\nCurrent guidelines support the approach taken. The key decision points were:\n• Appropriate triage priority (P${selectedCase.triage})\n• Correct investigation pathway\n• Timely definitive management\n\n───────────────────────\n**4. KEY LEARNING POINTS**\n\n→ The most important takeaway from this case is pattern recognition — knowing what this diagnosis looks like before it declares itself fully.\n\n→ The management decision that mattered most was the early escalation and definitive care pathway.\n\n→ The one thing to remember for the next similar case: act on the clinical gestalt, not just the numbers.\n\n───────────────────────\n**5. NEXT SIMILAR CASE**\n\nWhen you see this presentation again:\n1. Stabilise first, diagnose second\n2. Exclude the dangerous mimics actively\n3. Escalate early — good outcomes depend on early involvement of the right team\n\n*Saved to your clinical memory.*`,
+    };
+
+    const text = responses[mode.id] || responses.full_debrief;
+    
+    // Simulate typing effect
+    let i = 0;
+    const interval = setInterval(() => {
+      i += 3;
+      setDebriefText(text.slice(0, i));
+      if (i >= text.length) {
+        clearInterval(interval);
+        setLoading(false);
+      }
+    }, 12);
+  };
+
+  // ── Render helpers ─────────────────────────────────────────────────────
+  const renderMarkdown = (text) => {
+    if (!text) return null;
+    return text.split('\n').map((line, i) => {
+      if (line.startsWith('**') && line.endsWith('**') && !line.slice(2,-2).includes('**')) {
+        return <div key={i} style={{ fontWeight: 700, color: "#1a1a1a", marginTop: 14, marginBottom: 4, fontSize: 14 }}>{line.slice(2,-2)}</div>;
+      }
+      if (line.startsWith('*') && line.endsWith('*') && !line.slice(1,-1).includes('*')) {
+        return <div key={i} style={{ color: "#888", fontSize: 12, marginBottom: 8, fontStyle: "italic" }}>{line.slice(1,-1)}</div>;
+      }
+      if (line.startsWith('→')) {
+        return <div key={i} style={{ display: "flex", gap: 8, marginBottom: 6 }}>
+          <span style={{ color: "#1DB870", fontWeight: 700, flexShrink: 0 }}>→</span>
+          <span style={{ fontSize: 14, color: "#3A3F4A", lineHeight: 1.6 }}>{line.slice(1).trim()}</span>
+        </div>;
+      }
+      if (line.startsWith('•')) {
+        return <div key={i} style={{ display: "flex", gap: 8, marginBottom: 4 }}>
+          <span style={{ color: "#1DB870", flexShrink: 0, fontSize: 12 }}>•</span>
+          <span style={{ fontSize: 14, color: "#3A3F4A", lineHeight: 1.6 }}>{line.slice(1).trim()}</span>
+        </div>;
+      }
+      if (line.startsWith('───')) {
+        return <div key={i} style={{ height: 1, background: "#F0F0F0", margin: "16px 0" }}/>;
+      }
+      if (!line.trim()) return <div key={i} style={{ height: 6 }}/>;
+      
+      // Bold inline
+      const parts = line.split(/(\*\*[^*]+\*\*)/g);
+      return (
+        <div key={i} style={{ fontSize: 14, color: "#3A3F4A", lineHeight: 1.7, marginBottom: 2 }}>
+          {parts.map((p, j) => p.startsWith('**') ? <strong key={j} style={{ color: "#1a1a1a" }}>{p.slice(2,-2)}</strong> : p)}
+        </div>
+      );
+    });
+  };
+
+  // ── HOME VIEW ──────────────────────────────────────────────────────────
+  const HomeView = () => (
+    <div style={{ paddingBottom: 80 }}>
+      {/* Header */}
+      <div style={{ padding: "20px 20px 0" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+          <div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: "#0D1117", letterSpacing: -0.6 }}>Rounds</div>
+            <div style={{ fontSize: 13, color: "#9CA3AF", marginTop: 2 }}>Debrief. Learn. Remember.</div>
+          </div>
+          <button
+            onClick={() => setView("memory")}
+            style={{
+              background: "rgba(30,184,112,0.08)", border: "1.5px solid rgba(30,184,112,0.2)",
+              borderRadius: 12, padding: "8px 14px", cursor: "pointer",
+              display: "flex", alignItems: "center", gap: 6,
+            }}
+          >
+            <IconBrain />
+            <span style={{ fontSize: 13, fontWeight: 600, color: "#1DB870" }}>Memory</span>
+          </button>
+        </div>
+
+        {/* Streak bar */}
+        <div style={{
+          background: "linear-gradient(135deg, #0D1117 0%, #1a2030 100%)",
+          borderRadius: 16, padding: "14px 18px", marginTop: 16,
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+        }}>
+          <div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", fontWeight: 600, letterSpacing: 0.8, textTransform: "uppercase" }}>This week</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: "white", marginTop: 4 }}>
+              {MEMORY_STATS.debriefed} cases debriefed · {MEMORY_STATS.thisMonth} documented
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(245,158,11,0.15)", borderRadius: 10, padding: "8px 12px" }}>
+            <IconFire />
+            <span style={{ fontSize: 16, fontWeight: 800, color: "#F59E0B" }}>{MEMORY_STATS.streak}</span>
+            <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>day streak</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Recent Cases */}
+      <div style={{ padding: "24px 20px 0" }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 12 }}>
+          Recent Cases — tap to debrief
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {RECENT_CASES.map((c, i) => (
+            <button
+              key={c.id}
+              onClick={() => { setSelectedCase(c); setView("case"); }}
+              style={{
+                background: "white", border: "1.5px solid #F0F0F0",
+                borderRadius: 16, padding: "14px 16px",
+                display: "flex", alignItems: "center", gap: 12,
+                cursor: "pointer", textAlign: "left",
+                transition: "transform 0.15s, box-shadow 0.15s",
+                animation: `fadeUp 0.4s ${i*0.06}s ease both`,
+              }}
+              onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.08)"; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "none"; }}
+            >
+              <TriageBadge level={c.triage} color={c.triageColor} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#0D1117", marginBottom: 2 }}>
+                  {c.age}{c.gender} · {c.complaint}
+                </div>
+                <div style={{ fontSize: 12, color: "#9CA3AF", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {c.diagnosis}
+                </div>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
+                <span style={{ fontSize: 10, color: "#C4C9D4" }}>{c.timeAgo}</span>
+                <IconChevron right />
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+      <style>{`@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}`}</style>
+    </div>
+  );
+
+  // ── CASE VIEW ──────────────────────────────────────────────────────────
+  const CaseView = () => (
+    <div style={{ paddingBottom: 80 }}>
+      {/* Header */}
+      <div style={{ background: "#0D1117", padding: "20px 20px 24px" }}>
+        <button onClick={() => setView("home")} style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.5)", display: "flex", alignItems: "center", gap: 6, marginBottom: 16, padding: 0, fontSize: 13 }}>
+          <IconBack /> Back to Rounds
+        </button>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+          <TriageBadge level={selectedCase.triage} color={selectedCase.triageColor} />
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: "white", letterSpacing: -0.4 }}>
+              {selectedCase.age}{selectedCase.gender} · {selectedCase.complaint}
+            </div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", marginTop: 4 }}>{selectedCase.timeAgo}</div>
+          </div>
+        </div>
+
+        {/* Case snapshot */}
+        <div style={{ background: "rgba(255,255,255,0.05)", borderRadius: 14, padding: "14px 16px", marginTop: 16 }}>
+          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>Diagnosis</div>
+          <div style={{ fontSize: 14, color: "#1DB870", fontWeight: 600, marginBottom: 12 }}>{selectedCase.diagnosis}</div>
+          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>Key Findings</div>
+          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", lineHeight: 1.6 }}>{selectedCase.keyFindings}</div>
+          <div style={{ height: 1, background: "rgba(255,255,255,0.07)", margin: "12px 0" }}/>
+          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>Management</div>
+          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", lineHeight: 1.6 }}>{selectedCase.management}</div>
+        </div>
+      </div>
+
+      {/* Mode selector */}
+      <div style={{ padding: "20px 20px 0" }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 6 }}>
+          Choose a thinking lens
+        </div>
+        <div style={{ fontSize: 13, color: "#C4C9D4", marginBottom: 16 }}>
+          ErMate will analyse this case through the lens you choose.
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {THINKING_MODES.map((mode, i) => (
+            <button
+              key={mode.id}
+              onClick={() => startDebrief(mode)}
+              style={{
+                background: mode.id === "full_debrief" ? "linear-gradient(135deg, #0D2E1A, #0a2216)" : "white",
+                border: mode.id === "full_debrief" ? "1.5px solid rgba(30,184,112,0.3)" : "1.5px solid #F0F0F0",
+                borderRadius: 16, padding: "14px 16px",
+                display: "flex", alignItems: "center", gap: 14,
+                cursor: "pointer", textAlign: "left",
+                animation: `fadeUp 0.4s ${i*0.05}s ease both`,
+                transition: "transform 0.15s",
+              }}
+              onMouseEnter={e => e.currentTarget.style.transform = "translateX(4px)"}
+              onMouseLeave={e => e.currentTarget.style.transform = "none"}
+            >
+              <div style={{
+                width: 44, height: 44, borderRadius: 13,
+                background: mode.colorBg,
+                border: `1.5px solid ${mode.color}33`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 22, flexShrink: 0,
+              }}>
+                {mode.emoji}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{
+                  fontSize: 15, fontWeight: 700,
+                  color: mode.id === "full_debrief" ? "white" : "#0D1117",
+                  marginBottom: 3,
+                }}>{mode.label}</div>
+                <div style={{
+                  fontSize: 12,
+                  color: mode.id === "full_debrief" ? "rgba(255,255,255,0.45)" : "#9CA3AF",
+                }}>{mode.tagline}</div>
+              </div>
+              <div style={{ color: mode.id === "full_debrief" ? "rgba(255,255,255,0.3)" : "#C4C9D4" }}>
+                <IconChevron right />
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  // ── DEBRIEF VIEW ───────────────────────────────────────────────────────
+  const DebriefView = () => (
+    <div style={{ paddingBottom: 80 }}>
+      {/* Header */}
+      <div style={{
+        background: selectedMode?.colorBg || "rgba(30,184,112,0.08)",
+        borderBottom: `2px solid ${selectedMode?.color || "#1DB870"}22`,
+        padding: "20px 20px 18px",
+      }}>
+        <button onClick={() => setView("case")} style={{ background: "none", border: "none", cursor: "pointer", color: "#6B7280", display: "flex", alignItems: "center", gap: 6, marginBottom: 14, padding: 0, fontSize: 13 }}>
+          <IconBack /> Back
+        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: 14,
+            background: selectedMode?.colorBg,
+            border: `2px solid ${selectedMode?.color}33`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 24,
+          }}>
+            {selectedMode?.emoji}
+          </div>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: "#0D1117" }}>{selectedMode?.label}</div>
+            <div style={{ fontSize: 12, color: "#9CA3AF", marginTop: 2 }}>
+              {selectedCase?.age}{selectedCase?.gender} · {selectedCase?.complaint}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Debrief content */}
+      <div style={{ padding: "20px 20px 0" }}>
+        {loading && !debriefText && <LoadingDots />}
+        {debriefText && (
+          <div style={{ animation: "fadeUp 0.3s ease" }}>
+            {renderMarkdown(debriefText)}
+            {loading && <LoadingDots />}
+          </div>
+        )}
+        {!loading && debriefText && (
+          <div style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{
+              background: "rgba(30,184,112,0.06)", border: "1px solid rgba(30,184,112,0.15)",
+              borderRadius: 14, padding: "12px 16px",
+              display: "flex", alignItems: "center", gap: 8,
+            }}>
+              <IconSparkle />
+              <span style={{ fontSize: 13, color: "#15924F", fontWeight: 500 }}>
+                Saved to your clinical memory
+              </span>
+            </div>
+            <button
+              onClick={() => setView("case")}
+              style={{
+                background: "#0D1117", color: "white", border: "none",
+                borderRadius: 14, padding: "14px", fontSize: 15, fontWeight: 700,
+                cursor: "pointer", fontFamily: "inherit",
+              }}
+            >
+              Try another lens →
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // ── MEMORY VIEW ────────────────────────────────────────────────────────
+  const MemoryView = () => (
+    <div style={{ paddingBottom: 80 }}>
+      <div style={{ background: "#0D1117", padding: "20px 20px 28px" }}>
+        <button onClick={() => setView("home")} style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.5)", display: "flex", alignItems: "center", gap: 6, marginBottom: 16, padding: 0, fontSize: 13 }}>
+          <IconBack /> Back
+        </button>
+        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 8 }}>Clinical Memory</div>
+        <div style={{ fontSize: 28, fontWeight: 800, color: "white", letterSpacing: -0.6 }}>{MEMORY_STATS.totalCases} cases</div>
+        <div style={{ fontSize: 14, color: "rgba(255,255,255,0.4)", marginTop: 4 }}>documented across your career with ErMate</div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: 20 }}>
+          {[
+            { label: "This month", value: MEMORY_STATS.thisMonth },
+            { label: "Debriefed", value: MEMORY_STATS.debriefed },
+            { label: "Day streak", value: `${MEMORY_STATS.streak}🔥` },
+          ].map((s, i) => (
+            <div key={i} style={{ background: "rgba(255,255,255,0.05)", borderRadius: 12, padding: "12px 14px" }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: "white" }}>{s.value}</div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 3 }}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ padding: "20px 20px 0" }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 14 }}>
+          Cases by category
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {MEMORY_STATS.categories.map((cat, i) => (
+            <div key={i}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                <span style={{ fontSize: 14, fontWeight: 500, color: "#0D1117" }}>{cat.label}</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: "#0D1117" }}>{cat.count}</span>
+              </div>
+              <div style={{ height: 8, background: "#F0F0F0", borderRadius: 99, overflow: "hidden" }}>
+                <div style={{
+                  height: "100%", borderRadius: 99,
+                  background: cat.color,
+                  width: `${(cat.count / MEMORY_STATS.totalCases) * 100}%`,
+                  transition: "width 1s ease",
+                }}/>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{
+          background: "#F7F9F7", border: "1.5px solid #E5E7EB",
+          borderRadius: 16, padding: "16px 18px", marginTop: 24,
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#0D1117", marginBottom: 4 }}>Your strongest area</div>
+          <div style={{ fontSize: 13, color: "#6B7280" }}>
+            <span style={{ color: "#1DB870", fontWeight: 700 }}>Trauma</span> — {MEMORY_STATS.topCategoryPct}% of your cases. You've managed {MEMORY_STATS.categories[0].count} trauma patients with ErMate.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // ── Shell ──────────────────────────────────────────────────────────────
+  return (
+    <div style={{
+      fontFamily: "'DM Sans', 'Helvetica Neue', sans-serif",
+      background: "#F7F9F7",
+      minHeight: "100vh",
+      maxWidth: 430,
+      margin: "0 auto",
+      position: "relative",
+      overflowX: "hidden",
+    }}>
+      {/* Screen content */}
+      <div style={{ minHeight: "calc(100vh - 64px)", overflowY: "auto" }}>
+        {view === "home" && <HomeView />}
+        {view === "case" && selectedCase && <CaseView />}
+        {view === "debrief" && selectedCase && selectedMode && <DebriefView />}
+        {view === "memory" && <MemoryView />}
+      </div>
+
+      {/* Bottom nav */}
+      <div style={{
+        position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)",
+        width: "100%", maxWidth: 430,
+        background: "white", borderTop: "1px solid #EFEFEF",
+        display: "grid", gridTemplateColumns: "repeat(4, 1fr)",
+        padding: "8px 0 20px",
+      }}>
+        {[
+          { id: "home", emoji: "🏠", label: "Home" },
+          { id: "cases", emoji: "📋", label: "Cases" },
+          { id: "rounds", emoji: "🧠", label: "Rounds" },
+          { id: "profile", emoji: "👤", label: "Profile" },
+        ].map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            style={{
+              background: "none", border: "none", cursor: "pointer",
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
+              padding: "4px 0",
+            }}
+          >
+            <span style={{ fontSize: 20 }}>{tab.emoji}</span>
+            <span style={{
+              fontSize: 10, fontWeight: 600,
+              color: activeTab === tab.id ? "#1DB870" : "#C4C9D4",
+              letterSpacing: 0.3,
+            }}>{tab.label}</span>
+            {activeTab === tab.id && (
+              <div style={{ width: 4, height: 4, borderRadius: "50%", background: "#1DB870" }}/>
+            )}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}

@@ -1588,3 +1588,59 @@ async function fallbackWhisperTranscribe(audioBuffer: Buffer, filename: string):
     throw new Error("Failed to transcribe audio");
   }
 }
+
+export interface RoundsDebriefCase {
+  complaint: string;
+  diagnosis?: string;
+  keyFindings?: string;
+  management?: string;
+  triage: number;
+  age: number;
+  gender: string;
+}
+
+export async function generateRoundsDebrief(
+  caseData: RoundsDebriefCase,
+  mode: string
+): Promise<string> {
+  const client = getOpenAIClient();
+  if (!client) throw new Error("AI service not configured");
+
+  const age = caseData.age;
+  const sex = caseData.gender === "M" ? "male" : caseData.gender === "F" ? "female" : "patient";
+  const dx = caseData.diagnosis || caseData.complaint;
+
+  const modePrompts: Record<string, string> = {
+    first_principles: `Break down the pathophysiology of "${dx}" from first principles in a ${age}-year-old ${sex}. Start from the cellular and molecular level — ion channels, membrane integrity, receptor pathways. Why does this condition behave the way it does? What fundamental mechanisms explain every clinical finding?${caseData.keyFindings ? ` Clinical findings: ${caseData.keyFindings}.` : ""}`,
+    devils_advocate: `Challenge the working diagnosis of "${dx}" in a ${age}-year-old ${sex}. What are the top 3 alternative diagnoses that could explain this presentation? What is the single most dangerous missed diagnosis? What clinical or investigation finding would have changed your management?${caseData.keyFindings ? ` Findings to challenge: ${caseData.keyFindings}.` : ""}`,
+    pathophysiology: `Walk through the complete pathophysiology of this case — ${dx} in a ${age}-year-old ${sex} — step by step, as if teaching a registrar at the bedside. Start from the trigger event, follow the disease cascade, explain each sign and symptom mechanistically.${caseData.keyFindings ? ` Connect your explanation to these findings: ${caseData.keyFindings}.` : ""}`,
+    rare_but_real: `This ${age}-year-old ${sex} presented with "${caseData.complaint}". Beyond the working diagnosis of "${dx}", what are the rare but dangerous diagnoses this could have been? List the 3 conditions you cannot miss in this presentation. What red flags — if present — would have pointed you there?`,
+    guidelines: `Review current evidence-based guidelines for managing "${dx}" in a ${age}-year-old ${sex} in the emergency department.${caseData.management ? ` Management given: ${caseData.management}. Critique this against current guidelines.` : " What does the latest evidence recommend?"} Cite the relevant guidelines (ATLS, AHA, NICE, ACEP, WHO) and highlight any practice-changing evidence from the last 5 years.`,
+    full_debrief: `Run a complete structured clinical debrief of this case: "${dx}" in a ${age}-year-old ${sex} (Triage P${caseData.triage}).${caseData.keyFindings ? ` Key findings: ${caseData.keyFindings}.` : ""}${caseData.management ? ` Management: ${caseData.management}.` : ""} Structure your response across 5 sections: 1) First principles pathophysiology, 2) Was the diagnosis correct — what else could it be?, 3) Evidence-based management critique, 4) Key learning points, 5) What to do differently next time.`,
+  };
+
+  const userPrompt = modePrompts[mode] || modePrompts.full_debrief;
+
+  const systemPrompt = `You are an expert emergency medicine educator conducting a structured case debrief. Your goal is to help the treating doctor extract maximum learning from their real case.
+
+Format your response using exactly this style:
+- **Bold text** for section headers and key terms (use on its own line for headers)
+- *Italic text* for caveats, notes, or clinical pearls (on its own line)
+- → for key learning points (one per line, start with →)
+- • for supporting detail bullets (one per line, start with •)
+- ─── for section dividers (exactly 3 em dashes on their own line)
+
+Be specific, clinically rigorous, and grounded in evidence. Maximum 550 words. End with a single key takeaway line starting with →.`;
+
+  const response = await client.chat.completions.create({
+    model: "gpt-4o",
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+    max_tokens: 750,
+    temperature: 0.7,
+  });
+
+  return response.choices[0]?.message?.content || "Unable to generate debrief. Please try again.";
+}

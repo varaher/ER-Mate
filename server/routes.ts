@@ -3,7 +3,7 @@ import { createServer, type Server } from "node:http";
 import PDFDocument from "pdfkit";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, BorderStyle } from "docx";
 import multer from "multer";
-import { generateDiagnosisSuggestions, recordFeedback, getFeedbackStats, getLearningInsights, generateCourseInHospital, extractClinicalDataFromVoice, transcribeAndExtractVoice, type AIFeedback, type FeedbackResult, type ExtractedClinicalData } from "./services/aiDiagnosis";
+import { generateDiagnosisSuggestions, recordFeedback, getFeedbackStats, getLearningInsights, generateCourseInHospital, extractClinicalDataFromVoice, transcribeAndExtractVoice, generateRoundsDebrief, type AIFeedback, type FeedbackResult, type ExtractedClinicalData } from "./services/aiDiagnosis";
 import { getOrCreateSubscription, canCreateCase, incrementCaseCount, activatePremium, cancelSubscription, FREE_CASE_LIMIT, PREMIUM_PRICE_INR } from "./services/subscription";
 import { getEMReferenceResponse, EM_TOPICS, type EMReferenceMessage } from "./services/emReference";
 import { getDb } from "./db";
@@ -3570,6 +3570,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("[Feedback] Error fetching feedback:", error);
       res.status(500).json({ error: "Failed to fetch feedback" });
+    }
+  });
+
+  app.post("/api/rounds/debrief", async (req: Request, res: Response) => {
+    try {
+      const { caseData, mode } = req.body;
+      if (!caseData || !mode) {
+        return res.status(400).json({ error: "caseData and mode are required" });
+      }
+      const text = await generateRoundsDebrief(caseData, mode);
+      res.json({ text });
+    } catch (error) {
+      console.error("[Rounds] Debrief error:", error);
+      res.status(500).json({ error: "Failed to generate debrief" });
     }
   });
 

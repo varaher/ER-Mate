@@ -39,6 +39,7 @@ import type { TriviaCategory, TriviaDifficulty } from "@/data/triviaQuestions";
 import QuickCaseSheetScreen from "@/screens/QuickCaseSheetScreen";
 import StatsScreen from "@/screens/StatsScreen";
 import VoiceCaseSheetScreen from "@/screens/VoiceCaseSheetScreen";
+import RoundsScreen from "@/screens/RoundsScreen";
 
 export type RootStackParamList = {
   Login: undefined;
@@ -89,6 +90,7 @@ export type RootStackParamList = {
     hasCrashed: boolean;
   };
   Stats: undefined;
+  Rounds: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -352,6 +354,14 @@ export default function RootStackNavigator() {
             component={StatsScreen}
             options={{
               headerTitle: "My Stats",
+            }}
+          />
+          <Stack.Screen
+            name="Rounds"
+            component={RoundsScreen}
+            options={{
+              presentation: "modal",
+              headerTitle: "Rounds",
             }}
           />
         </>
