@@ -1616,6 +1616,13 @@ export async function generateRoundsDebrief(
     pathophysiology: `Walk through the complete pathophysiology of this case — ${dx} in a ${age}-year-old ${sex} — step by step, as if teaching a registrar at the bedside. Start from the trigger event, follow the disease cascade, explain each sign and symptom mechanistically.${caseData.keyFindings ? ` Connect your explanation to these findings: ${caseData.keyFindings}.` : ""}`,
     rare_but_real: `This ${age}-year-old ${sex} presented with "${caseData.complaint}". Beyond the working diagnosis of "${dx}", what are the rare but dangerous diagnoses this could have been? List the 3 conditions you cannot miss in this presentation. What red flags — if present — would have pointed you there?`,
     guidelines: `Review current evidence-based guidelines for managing "${dx}" in a ${age}-year-old ${sex} in the emergency department.${caseData.management ? ` Management given: ${caseData.management}. Critique this against current guidelines.` : " What does the latest evidence recommend?"} Cite the relevant guidelines (ATLS, AHA, NICE, ACEP, WHO) and highlight any practice-changing evidence from the last 5 years.`,
+    disease_snapshot: `Give me a clear, structured snapshot of "${dx}" written for an emergency medicine doctor — simple enough to read in 2 minutes. Cover exactly these 5 sections:
+1) WHAT IS IT — one paragraph plain-language definition, who gets it, why it matters in the ER.
+2) PATHOPHYSIOLOGY — what goes wrong in the body, step by step, from the trigger to the clinical signs. Keep it clear and mechanistic, not jargon-heavy.
+3) CLASSIC PRESENTATION — the typical patient, key symptoms, signs, and what the vitals/ECG/investigations usually show.
+4) ER MANAGEMENT — the step-by-step protocol: immediate actions, investigations to order, treatments to start, thresholds to escalate, disposition decision.
+5) MUST NOT MISS — the one or two things that kill patients with this diagnosis if you get them wrong.
+Make it feel like a clinical reference card, not a textbook.`,
     full_debrief: `Run a complete structured clinical debrief of this case: "${dx}" in a ${age}-year-old ${sex} (Triage P${caseData.triage}).${caseData.keyFindings ? ` Key findings: ${caseData.keyFindings}.` : ""}${caseData.management ? ` Management: ${caseData.management}.` : ""} Structure your response across 5 sections: 1) First principles pathophysiology, 2) Was the diagnosis correct — what else could it be?, 3) Evidence-based management critique, 4) Key learning points, 5) What to do differently next time.`,
   };
 

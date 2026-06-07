@@ -86,6 +86,14 @@ const THINKING_MODES: ThinkingMode[] = [
     colorBg: "rgba(16,185,129,0.10)",
   },
   {
+    id: "disease_snapshot",
+    icon: "info",
+    label: "Disease Snapshot",
+    tagline: "What is this condition? ER management at a glance",
+    color: "#0EA5E9",
+    colorBg: "rgba(14,165,233,0.10)",
+  },
+  {
     id: "full_debrief",
     icon: "layers",
     label: "Full Debrief",
