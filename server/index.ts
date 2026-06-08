@@ -189,6 +189,10 @@ function configureExpoAndLanding(app: express.Application) {
     }
   });
 
+  app.get("/landing", (req: Request, res: Response) => {
+    serveLandingPage({ req, res, landingPageTemplate, appName });
+  });
+
   log("Serving static Expo files with dynamic manifest routing");
 
   app.use((req: Request, res: Response, next: NextFunction) => {

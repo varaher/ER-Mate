@@ -5,9 +5,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
-      * {
-        box-sizing: border-box;
-      }
+      * { box-sizing: border-box; }
       body {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         margin: 0;
@@ -18,313 +16,340 @@
         line-height: 1.5;
         min-height: 100vh;
       }
-      .wrapper {
-        max-width: 480px;
-        margin: 0 auto;
-      }
-      h1 {
-        font-size: 26px;
-        font-weight: 600;
-        margin: 0;
-        color: #111;
-      }
-      .subtitle {
-        font-size: 15px;
-        color: #666;
-        margin-top: 8px;
-        margin-bottom: 32px;
-      }
-      .loading {
-        display: none;
-        margin: 60px 0;
-      }
+      .wrapper { max-width: 480px; margin: 0 auto; }
+      h1 { font-size: 26px; font-weight: 600; margin: 0; color: #111; }
+      .subtitle { font-size: 15px; color: #666; margin-top: 8px; margin-bottom: 24px; }
+      .loading { display: none; margin: 60px 0; }
       .spinner {
-        border: 2px solid #ddd;
-        border-top-color: #333;
-        border-radius: 50%;
-        width: 32px;
-        height: 32px;
-        animation: spin 0.8s linear infinite;
-        margin: 20px auto;
+        border: 2px solid #ddd; border-top-color: #333; border-radius: 50%;
+        width: 32px; height: 32px; animation: spin 0.8s linear infinite; margin: 20px auto;
       }
-      @keyframes spin {
-        to {
-          transform: rotate(360deg);
-        }
-      }
-      .loading-text {
-        font-size: 16px;
-        color: #444;
-      }
-      .content {
-        display: block;
-      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .loading-text { font-size: 16px; color: #444; }
+      .content { display: block; }
 
-      .steps-container {
-        display: flex;
-        flex-direction: column;
-        gap: 20px;
+      /* Tour button */
+      .tour-btn {
+        display: inline-flex; align-items: center; gap: 8px;
+        padding: 10px 20px; margin-bottom: 28px;
+        font-size: 14px; font-weight: 500; cursor: pointer;
+        border: 1.5px solid #2ecc71; border-radius: 24px;
+        color: #1a8a4a; background: #f0fdf5;
+        transition: all 0.2s;
       }
+      .tour-btn:hover { background: #dcfce7; border-color: #1a8a4a; }
+      .tour-btn svg { width: 16px; height: 16px; }
 
+      .steps-container { display: flex; flex-direction: column; gap: 20px; }
       .step {
-        padding: 24px;
-        border: 1px solid #ddd;
-        border-radius: 12px;
-        text-align: center;
-        background: #fafafa;
+        padding: 24px; border: 1px solid #ddd; border-radius: 12px;
+        text-align: center; background: #fafafa;
       }
       .step-header {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 10px;
-        margin-bottom: 12px;
+        display: flex; align-items: center; justify-content: center;
+        gap: 10px; margin-bottom: 12px;
       }
       .step-number {
-        width: 28px;
-        height: 28px;
-        border: 1px solid #999;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 600;
-        font-size: 14px;
-        flex-shrink: 0;
-        color: #555;
+        width: 28px; height: 28px; border: 1px solid #999; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        font-weight: 600; font-size: 14px; flex-shrink: 0; color: #555;
       }
-      .step-title {
-        font-size: 18px;
-        font-weight: 600;
-        margin: 0;
-        color: #222;
-      }
-      .step-description {
-        font-size: 14px;
-        margin-bottom: 16px;
-        color: #666;
-      }
-
-      .store-buttons {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-        justify-content: center;
-        flex-wrap: wrap;
-      }
+      .step-title { font-size: 18px; font-weight: 600; margin: 0; color: #222; }
+      .step-description { font-size: 14px; margin-bottom: 16px; color: #666; }
+      .store-buttons { display: flex; flex-direction: column; gap: 6px; justify-content: center; flex-wrap: wrap; }
       .store-button {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        padding: 12px 20px;
-        font-size: 14px;
-        font-weight: 500;
-        border: 1px solid #ccc;
-        border-radius: 8px;
-        text-decoration: none;
-        color: #333;
-        background: #fff;
-        transition: all 0.15s;
+        display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+        padding: 12px 20px; font-size: 14px; font-weight: 500;
+        border: 1px solid #ccc; border-radius: 8px; text-decoration: none;
+        color: #333; background: #fff; transition: all 0.15s;
       }
-      .store-button:hover {
-        background: #f5f5f5;
-        border-color: #999;
-      }
+      .store-button:hover { background: #f5f5f5; border-color: #999; }
       .store-link {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 6px;
-        padding: 8px 0;
-        font-size: 13px;
-        font-weight: 400;
-        text-decoration: underline;
-        text-underline-offset: 2px;
-        color: #666;
-        background: none;
-        border: none;
-        transition: color 0.15s;
+        display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+        padding: 8px 0; font-size: 13px; font-weight: 400;
+        text-decoration: underline; text-underline-offset: 2px;
+        color: #666; background: none; border: none; transition: color 0.15s;
       }
-      .store-link:hover {
-        color: #333;
-      }
-      .store-link .store-icon {
-        width: 14px;
-        height: 14px;
-      }
-      .store-icon {
-        width: 18px;
-        height: 18px;
-      }
-
-      .qr-section {
-        background: #333;
-        color: #fff;
-        border-color: #333;
-      }
-      .qr-section .step-number {
-        border-color: rgba(255, 255, 255, 0.5);
-        color: #fff;
-      }
-      .qr-section .step-title {
-        color: #fff;
-      }
-      .qr-section .step-description {
-        color: rgba(255, 255, 255, 0.7);
-      }
-      .qr-code {
-        width: 180px;
-        height: 180px;
-        margin: 0 auto 16px;
-        background: #fff;
-        border-radius: 8px;
-        padding: 12px;
-      }
-      .qr-code canvas {
-        width: 100%;
-        height: 100%;
-      }
+      .store-link:hover { color: #333; }
+      .store-link .store-icon { width: 14px; height: 14px; }
+      .store-icon { width: 18px; height: 18px; }
+      .qr-section { background: #333; color: #fff; border-color: #333; }
+      .qr-section .step-number { border-color: rgba(255,255,255,0.5); color: #fff; }
+      .qr-section .step-title { color: #fff; }
+      .qr-section .step-description { color: rgba(255,255,255,0.7); }
+      .qr-code { width: 180px; height: 180px; margin: 0 auto 16px; background: #fff; border-radius: 8px; padding: 12px; }
+      .qr-code canvas { width: 100%; height: 100%; }
       .open-button {
-        display: inline-block;
-        padding: 12px 24px;
-        font-size: 14px;
-        font-weight: 500;
-        border: 1px solid rgba(255, 255, 255, 0.3);
-        border-radius: 8px;
-        text-decoration: none;
-        color: #333;
-        background: #fff;
-        transition: opacity 0.15s;
+        display: inline-block; padding: 12px 24px; font-size: 14px; font-weight: 500;
+        border: 1px solid rgba(255,255,255,0.3); border-radius: 8px; text-decoration: none;
+        color: #333; background: #fff; transition: opacity 0.15s;
       }
-      .open-button:hover {
-        opacity: 0.9;
+      .open-button:hover { opacity: 0.9; }
+
+      /* ── TOUR OVERLAY ── */
+      .tour-overlay {
+        display: none; position: fixed; inset: 0; z-index: 1000;
+        background: rgba(0,0,0,0.75); backdrop-filter: blur(4px);
+        align-items: center; justify-content: center; padding: 16px;
+      }
+      .tour-overlay.open { display: flex; }
+      .tour-modal {
+        background: #0f1117; color: #fff; border-radius: 20px;
+        width: 100%; max-width: 480px; max-height: 92vh;
+        overflow: hidden; position: relative;
+        box-shadow: 0 32px 80px rgba(0,0,0,0.6);
+        display: flex; flex-direction: column;
+      }
+      .tour-close {
+        position: absolute; top: 16px; right: 16px; z-index: 10;
+        width: 32px; height: 32px; border-radius: 50%;
+        background: rgba(255,255,255,0.12); border: none; color: #fff;
+        font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+        transition: background 0.15s;
+      }
+      .tour-close:hover { background: rgba(255,255,255,0.22); }
+      .tour-slides { flex: 1; overflow: hidden; position: relative; }
+      .tour-slide {
+        position: absolute; inset: 0; padding: 48px 28px 28px;
+        display: flex; flex-direction: column; align-items: center;
+        opacity: 0; transform: translateX(40px); transition: all 0.35s cubic-bezier(0.4,0,0.2,1);
+        pointer-events: none; overflow-y: auto;
+      }
+      .tour-slide.active {
+        opacity: 1; transform: translateX(0); pointer-events: all;
+      }
+      .tour-slide.exit-left {
+        opacity: 0; transform: translateX(-40px);
       }
 
-      /* Desktop styles */
+      /* Slide 1 — Welcome */
+      .slide-icon {
+        width: 72px; height: 72px; border-radius: 20px;
+        background: linear-gradient(135deg, #2ecc71, #1a8a4a);
+        display: flex; align-items: center; justify-content: center;
+        margin-bottom: 20px; box-shadow: 0 8px 24px rgba(46,204,113,0.35);
+      }
+      .slide-icon svg { width: 38px; height: 38px; }
+      .slide-heading {
+        font-size: 24px; font-weight: 700; text-align: center;
+        margin: 0 0 10px; line-height: 1.2;
+      }
+      .slide-sub {
+        font-size: 15px; color: rgba(255,255,255,0.6); text-align: center;
+        max-width: 320px; margin: 0 auto 24px; line-height: 1.6;
+      }
+      .feature-pills {
+        display: flex; flex-direction: column; gap: 10px; width: 100%;
+      }
+      .pill {
+        display: flex; align-items: center; gap: 12px;
+        background: rgba(255,255,255,0.07); border-radius: 12px;
+        padding: 12px 16px; text-align: left;
+      }
+      .pill-icon {
+        width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
+        display: flex; align-items: center; justify-content: center; font-size: 18px;
+      }
+      .pill-text { font-size: 14px; font-weight: 500; color: #fff; }
+      .pill-sub { font-size: 12px; color: rgba(255,255,255,0.5); margin-top: 1px; }
+
+      /* Slide 2 — Time Savings */
+      .time-heading {
+        font-size: 28px; font-weight: 800; text-align: center; margin: 0 0 6px;
+        line-height: 1.1;
+      }
+      .time-heading span { color: #2ecc71; }
+      .time-sub { font-size: 14px; color: rgba(255,255,255,0.5); margin: 0 0 22px; text-align: center; }
+      .compare-table { width: 100%; border-radius: 14px; overflow: hidden; }
+      .compare-header {
+        display: grid; grid-template-columns: 1fr 1fr 1fr;
+        background: rgba(255,255,255,0.05); padding: 10px 12px;
+      }
+      .compare-header-cell {
+        font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
+        color: rgba(255,255,255,0.4);
+      }
+      .compare-header-cell:last-child { text-align: right; }
+      .compare-header-cell.green { color: #2ecc71; }
+      .compare-row {
+        display: grid; grid-template-columns: 1fr 1fr 1fr;
+        padding: 12px 12px; border-top: 1px solid rgba(255,255,255,0.06);
+        align-items: center; opacity: 0; transform: translateY(8px);
+        transition: all 0.4s ease;
+      }
+      .compare-row.visible { opacity: 1; transform: translateY(0); }
+      .compare-row-label { font-size: 13px; color: rgba(255,255,255,0.7); }
+      .compare-before {
+        font-size: 16px; font-weight: 600; color: rgba(255,255,255,0.45);
+        text-decoration: line-through; text-decoration-color: rgba(255,100,100,0.5);
+      }
+      .compare-after {
+        font-size: 18px; font-weight: 700; color: #2ecc71; text-align: right;
+      }
+      .compare-divider {
+        height: 1px; background: rgba(255,255,255,0.15); margin: 4px 0;
+      }
+      .compare-total-row {
+        display: grid; grid-template-columns: 1fr 1fr 1fr;
+        padding: 12px 12px; background: rgba(255,255,255,0.06);
+        border-top: 1px solid rgba(255,255,255,0.12);
+        align-items: center; opacity: 0; transform: translateY(8px);
+        transition: all 0.4s ease 0.4s;
+      }
+      .compare-total-row.visible { opacity: 1; transform: translateY(0); }
+      .compare-total-label { font-size: 13px; font-weight: 600; color: #fff; }
+      .compare-total-before { font-size: 17px; font-weight: 700; color: rgba(255,255,255,0.4); text-decoration: line-through; text-decoration-color: rgba(255,100,100,0.5); }
+      .compare-total-after { font-size: 20px; font-weight: 800; color: #2ecc71; text-align: right; }
+
+      .multiplier {
+        width: 100%; text-align: center; padding: 14px 0 4px;
+        font-size: 13px; color: rgba(255,255,255,0.5);
+        opacity: 0; transition: opacity 0.4s ease 0.6s;
+      }
+      .multiplier.visible { opacity: 1; }
+      .multiplier strong { color: rgba(255,255,255,0.85); }
+
+      .shift-compare {
+        width: 100%; display: grid; grid-template-columns: 1fr 1fr;
+        gap: 10px; margin-top: 8px;
+        opacity: 0; transform: translateY(10px);
+        transition: all 0.45s ease 0.75s;
+      }
+      .shift-compare.visible { opacity: 1; transform: translateY(0); }
+      .shift-box {
+        border-radius: 12px; padding: 14px;
+        display: flex; flex-direction: column; align-items: center;
+      }
+      .shift-box.bad { background: rgba(255,80,80,0.1); border: 1px solid rgba(255,80,80,0.2); }
+      .shift-box.good { background: rgba(46,204,113,0.1); border: 1px solid rgba(46,204,113,0.25); }
+      .shift-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+      .shift-box.bad .shift-label { color: rgba(255,120,120,0.8); }
+      .shift-box.good .shift-label { color: #2ecc71; }
+      .shift-hours { font-size: 28px; font-weight: 800; line-height: 1; }
+      .shift-box.bad .shift-hours { color: rgba(255,140,140,0.9); }
+      .shift-box.good .shift-hours { color: #2ecc71; }
+      .shift-desc { font-size: 11px; color: rgba(255,255,255,0.45); margin-top: 4px; text-align: center; }
+
+      .time-kicker {
+        width: 100%; text-align: center; margin-top: 14px; padding: 14px 16px;
+        background: linear-gradient(135deg, rgba(46,204,113,0.15), rgba(46,204,113,0.07));
+        border: 1px solid rgba(46,204,113,0.25); border-radius: 12px;
+        opacity: 0; transform: translateY(8px);
+        transition: all 0.4s ease 1.0s;
+      }
+      .time-kicker.visible { opacity: 1; transform: translateY(0); }
+      .time-kicker-number { font-size: 32px; font-weight: 900; color: #2ecc71; line-height: 1; }
+      .time-kicker-text { font-size: 14px; color: rgba(255,255,255,0.7); margin-top: 4px; }
+      .time-kicker-sub { font-size: 12px; color: rgba(255,255,255,0.4); margin-top: 2px; }
+
+      /* Slide 3 — How it works */
+      .how-step {
+        width: 100%; display: flex; gap: 14px; align-items: flex-start;
+        text-align: left; padding: 14px 0;
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+      }
+      .how-step:last-child { border-bottom: none; }
+      .how-num {
+        width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+        background: rgba(46,204,113,0.15); border: 1px solid rgba(46,204,113,0.3);
+        color: #2ecc71; font-weight: 700; font-size: 14px;
+        display: flex; align-items: center; justify-content: center;
+      }
+      .how-content {}
+      .how-title { font-size: 15px; font-weight: 600; color: #fff; margin: 0 0 3px; }
+      .how-desc { font-size: 13px; color: rgba(255,255,255,0.5); margin: 0; line-height: 1.5; }
+
+      /* Slide 4 — CTA */
+      .cta-badge {
+        background: rgba(46,204,113,0.12); border: 1px solid rgba(46,204,113,0.25);
+        border-radius: 20px; padding: 4px 14px; font-size: 12px;
+        font-weight: 600; color: #2ecc71; text-transform: uppercase;
+        letter-spacing: 0.06em; margin-bottom: 20px;
+      }
+      .cta-big { font-size: 30px; font-weight: 800; text-align: center; margin: 0 0 10px; line-height: 1.2; }
+      .cta-big span { color: #2ecc71; }
+      .cta-desc { font-size: 15px; color: rgba(255,255,255,0.55); text-align: center; margin: 0 0 28px; line-height: 1.6; }
+      .cta-stats {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; margin-bottom: 24px;
+      }
+      .cta-stat {
+        background: rgba(255,255,255,0.06); border-radius: 12px; padding: 16px;
+      }
+      .cta-stat-num { font-size: 26px; font-weight: 800; color: #2ecc71; }
+      .cta-stat-label { font-size: 12px; color: rgba(255,255,255,0.45); margin-top: 2px; }
+      .cta-get-btn {
+        display: block; width: 100%; padding: 16px; text-align: center;
+        background: #2ecc71; color: #fff; font-size: 16px; font-weight: 700;
+        border-radius: 14px; text-decoration: none; border: none; cursor: pointer;
+        transition: opacity 0.15s; margin-bottom: 12px;
+      }
+      .cta-get-btn:hover { opacity: 0.9; }
+
+      /* Tour footer */
+      .tour-footer {
+        padding: 16px 28px 20px;
+        display: flex; align-items: center; justify-content: space-between;
+        border-top: 1px solid rgba(255,255,255,0.07); flex-shrink: 0;
+      }
+      .tour-dots { display: flex; gap: 7px; align-items: center; }
+      .dot {
+        width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,0.2);
+        transition: all 0.25s; cursor: pointer;
+      }
+      .dot.active { background: #2ecc71; width: 20px; border-radius: 4px; }
+      .tour-nav { display: flex; gap: 8px; }
+      .nav-btn {
+        padding: 8px 18px; border-radius: 10px; font-size: 14px; font-weight: 600;
+        cursor: pointer; border: none; transition: all 0.15s;
+      }
+      .nav-prev { background: rgba(255,255,255,0.1); color: #fff; }
+      .nav-prev:hover { background: rgba(255,255,255,0.18); }
+      .nav-next { background: #2ecc71; color: #fff; }
+      .nav-next:hover { background: #27ae60; }
+      .nav-btn:disabled { opacity: 0.35; cursor: default; }
+
+      /* Desktop */
       @media (min-width: 768px) {
-        body {
-          padding: 48px 32px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .wrapper {
-          max-width: 720px;
-        }
-        h1 {
-          font-size: 32px;
-          margin-bottom: 10px;
-        }
-        .subtitle {
-          font-size: 16px;
-          margin-bottom: 40px;
-        }
-        .steps-container {
-          flex-direction: row;
-          gap: 20px;
-          align-items: stretch;
-        }
-        .step {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          padding: 28px;
-        }
-        .step-description {
-          flex-grow: 1;
-        }
-        .store-buttons {
-          flex-direction: column;
-          gap: 10px;
-        }
-        .qr-code {
-          width: 200px;
-          height: 200px;
-        }
+        body { padding: 48px 32px; display: flex; align-items: center; justify-content: center; }
+        .wrapper { max-width: 720px; }
+        h1 { font-size: 32px; margin-bottom: 10px; }
+        .subtitle { font-size: 16px; margin-bottom: 32px; }
+        .steps-container { flex-direction: row; gap: 20px; align-items: stretch; }
+        .step { flex: 1; display: flex; flex-direction: column; padding: 28px; }
+        .step-description { flex-grow: 1; }
+        .store-buttons { flex-direction: column; gap: 10px; }
+        .qr-code { width: 200px; height: 200px; }
+        .tour-modal { max-width: 500px; }
       }
-
-      /* Large desktop */
       @media (min-width: 1024px) {
-        .wrapper {
-          max-width: 800px;
-        }
-        h1 {
-          font-size: 36px;
-        }
-        .steps-container {
-          gap: 28px;
-        }
-        .step {
-          padding: 32px;
-        }
+        .wrapper { max-width: 800px; }
+        h1 { font-size: 36px; }
+        .steps-container { gap: 28px; }
+        .step { padding: 32px; }
       }
 
       /* Dark mode */
       @media (prefers-color-scheme: dark) {
-        body {
-          background: #0d0d0d;
-          color: #e0e0e0;
-        }
-        h1 {
-          color: #f5f5f5;
-        }
-        .subtitle {
-          color: #999;
-        }
-        .spinner {
-          border-color: #444;
-          border-top-color: #ccc;
-        }
-        .loading-text {
-          color: #aaa;
-        }
-        .step {
-          border-color: #333;
-          background: #1a1a1a;
-        }
-        .step-number {
-          border-color: #666;
-          color: #bbb;
-        }
-        .step-title {
-          color: #f0f0f0;
-        }
-        .step-description {
-          color: #888;
-        }
-        .store-button {
-          border-color: #444;
-          color: #e0e0e0;
-          background: #222;
-        }
-        .store-button:hover {
-          background: #2a2a2a;
-          border-color: #666;
-        }
-        .store-link {
-          color: #888;
-        }
-        .store-link:hover {
-          color: #ccc;
-        }
-        .qr-section {
-          background: #111;
-          border-color: #333;
-        }
-        .qr-section .step-number {
-          border-color: rgba(255, 255, 255, 0.4);
-        }
-        .qr-section .step-description {
-          color: rgba(255, 255, 255, 0.6);
-        }
-        .open-button {
-          background: #f0f0f0;
-          color: #111;
-        }
-        .open-button:hover {
-          background: #e0e0e0;
-        }
+        body { background: #0d0d0d; color: #e0e0e0; }
+        h1 { color: #f5f5f5; }
+        .subtitle { color: #999; }
+        .spinner { border-color: #444; border-top-color: #ccc; }
+        .loading-text { color: #aaa; }
+        .step { border-color: #333; background: #1a1a1a; }
+        .step-number { border-color: #666; color: #bbb; }
+        .step-title { color: #f0f0f0; }
+        .step-description { color: #888; }
+        .store-button { border-color: #444; color: #e0e0e0; background: #222; }
+        .store-button:hover { background: #2a2a2a; border-color: #666; }
+        .store-link { color: #888; }
+        .store-link:hover { color: #ccc; }
+        .qr-section { background: #111; border-color: #333; }
+        .qr-section .step-number { border-color: rgba(255,255,255,0.4); }
+        .qr-section .step-description { color: rgba(255,255,255,0.6); }
+        .open-button { background: #f0f0f0; color: #111; }
+        .open-button:hover { background: #e0e0e0; }
+        .tour-btn { background: #0f2a1a; color: #2ecc71; border-color: #2ecc71; }
+        .tour-btn:hover { background: #163d25; }
       }
     </style>
   </head>
@@ -337,7 +362,14 @@
 
       <div class="content" id="content">
         <h1>APP_NAME_PLACEHOLDER</h1>
-        <p class="subtitle">Preview this app on your phone</p>
+        <p class="subtitle">Emergency Room EMR — built for speed</p>
+
+        <button class="tour-btn" onclick="openTour()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/>
+          </svg>
+          Take a Tour
+        </button>
 
         <div class="steps-container">
           <div class="step">
@@ -345,33 +377,17 @@
               <div class="step-number">1</div>
               <h2 class="step-title">Download Expo Go</h2>
             </div>
-            <p class="step-description">
-              Expo Go is a free app to test mobile apps
-            </p>
+            <p class="step-description">Expo Go is a free app to test mobile apps</p>
             <div class="store-buttons" id="store-buttons">
-              <a
-                id="app-store-btn"
-                href="https://apps.apple.com/app/id982107779"
-                class="store-button"
-                target="_blank"
-              >
+              <a id="app-store-btn" href="https://apps.apple.com/app/id982107779" class="store-button" target="_blank">
                 <svg class="store-icon" viewBox="0 0 24 24" fill="currentColor">
-                  <path
-                    d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"
-                  />
+                  <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
                 </svg>
                 App Store
               </a>
-              <a
-                id="play-store-btn"
-                href="https://play.google.com/store/apps/details?id=host.exp.exponent"
-                class="store-button"
-                target="_blank"
-              >
+              <a id="play-store-btn" href="https://play.google.com/store/apps/details?id=host.exp.exponent" class="store-button" target="_blank">
                 <svg class="store-icon" viewBox="0 0 24 24" fill="currentColor">
-                  <path
-                    d="M3,20.5V3.5C3,2.91 3.34,2.39 3.84,2.15L13.69,12L3.84,21.85C3.34,21.6 3,21.09 3,20.5M16.81,15.12L6.05,21.34L14.54,12.85L16.81,15.12M20.16,10.81C20.5,11.08 20.75,11.5 20.75,12C20.75,12.5 20.53,12.9 20.18,13.18L17.89,14.5L15.39,12L17.89,9.5L20.16,10.81M6.05,2.66L16.81,8.88L14.54,11.15L6.05,2.66Z"
-                  />
+                  <path d="M3,20.5V3.5C3,2.91 3.34,2.39 3.84,2.15L13.69,12L3.84,21.85C3.34,21.6 3,21.09 3,20.5M16.81,15.12L6.05,21.34L14.54,12.85L16.81,15.12M20.16,10.81C20.5,11.08 20.75,11.5 20.75,12C20.75,12.5 20.53,12.9 20.18,13.18L17.89,14.5L15.39,12L17.89,9.5L20.16,10.81M6.05,2.66L16.81,8.88L14.54,11.15L6.05,2.66Z"/>
                 </svg>
                 Google Play
               </a>
@@ -385,9 +401,173 @@
             </div>
             <p class="step-description">Use your phone's camera or Expo Go</p>
             <div class="qr-code" id="qr-code"></div>
-            <a href="exps://EXPS_URL_PLACEHOLDER" class="open-button"
-              >Open in Expo Go</a
-            >
+            <a href="exps://EXPS_URL_PLACEHOLDER" class="open-button">Open in Expo Go</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── TOUR OVERLAY ── -->
+    <div class="tour-overlay" id="tourOverlay" onclick="handleOverlayClick(event)">
+      <div class="tour-modal" id="tourModal">
+        <button class="tour-close" onclick="closeTour()">&#x2715;</button>
+
+        <div class="tour-slides" id="tourSlides">
+
+          <!-- Slide 0: Welcome -->
+          <div class="tour-slide active" id="slide-0">
+            <div class="slide-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+              </svg>
+            </div>
+            <h2 class="slide-heading">ER documentation,<br>finally fast.</h2>
+            <p class="slide-sub">ErMate is built for emergency medicine — voice-first, AI-powered, and designed to get out of your way so you can focus on the patient.</p>
+            <div class="feature-pills">
+              <div class="pill">
+                <div class="pill-icon" style="background:rgba(46,204,113,0.15);">🎙️</div>
+                <div>
+                  <div class="pill-text">Voice dictation</div>
+                  <div class="pill-sub">Speak your findings — AI fills the sheet</div>
+                </div>
+              </div>
+              <div class="pill">
+                <div class="pill-icon" style="background:rgba(99,179,237,0.15);">🧠</div>
+                <div>
+                  <div class="pill-text">Clinical decision support</div>
+                  <div class="pill-sub">Differential diagnoses with guideline citations</div>
+                </div>
+              </div>
+              <div class="pill">
+                <div class="pill-icon" style="background:rgba(246,173,85,0.15);">📋</div>
+                <div>
+                  <div class="pill-text">One-tap discharge summary</div>
+                  <div class="pill-sub">Complete PDF/DOCX in seconds</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Slide 1: Time Savings -->
+          <div class="tour-slide" id="slide-1">
+            <p class="time-heading">Your time, <span>back.</span></p>
+            <p class="time-sub">What a single shift actually costs on paper</p>
+
+            <div class="compare-table">
+              <div class="compare-header">
+                <div class="compare-header-cell">Task</div>
+                <div class="compare-header-cell">Paper</div>
+                <div class="compare-header-cell green">ErMate</div>
+              </div>
+              <div class="compare-row" id="row-0">
+                <div class="compare-row-label">Case sheet</div>
+                <div class="compare-before">18 min</div>
+                <div class="compare-after">3 min</div>
+              </div>
+              <div class="compare-row" id="row-1">
+                <div class="compare-row-label">Discharge</div>
+                <div class="compare-before">8 min</div>
+                <div class="compare-after">1 min</div>
+              </div>
+              <div class="compare-total-row" id="row-total">
+                <div class="compare-total-label">Per case</div>
+                <div class="compare-total-before">26 min</div>
+                <div class="compare-total-after">4 min</div>
+              </div>
+            </div>
+
+            <div class="multiplier" id="multiplier">
+              <strong>× 15 cases</strong> in a typical shift
+            </div>
+
+            <div class="shift-compare" id="shiftCompare">
+              <div class="shift-box bad">
+                <div class="shift-label">Paper shift</div>
+                <div class="shift-hours">6.5<span style="font-size:16px;font-weight:600;"> hrs</span></div>
+                <div class="shift-desc">on paperwork</div>
+              </div>
+              <div class="shift-box good">
+                <div class="shift-label">ErMate shift</div>
+                <div class="shift-hours">1<span style="font-size:16px;font-weight:600;"> hr</span></div>
+                <div class="shift-desc">on paperwork</div>
+              </div>
+            </div>
+
+            <div class="time-kicker" id="timeKicker">
+              <div class="time-kicker-number">5.5 hours</div>
+              <div class="time-kicker-text">back in your shift.</div>
+              <div class="time-kicker-sub">Every. Single. Shift.</div>
+            </div>
+          </div>
+
+          <!-- Slide 2: How it works -->
+          <div class="tour-slide" id="slide-2">
+            <div class="slide-icon" style="background:linear-gradient(135deg,#667eea,#764ba2);">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
+              </svg>
+            </div>
+            <h2 class="slide-heading">Three steps.<br>One workflow.</h2>
+            <p class="slide-sub">From patient arrival to discharge in the smoothest documentation flow you've used.</p>
+            <div style="width:100%;">
+              <div class="how-step">
+                <div class="how-num">1</div>
+                <div class="how-content">
+                  <p class="how-title">Triage in under 30 seconds</p>
+                  <p class="how-desc">Vitals, chief complaint, triage category — tap or dictate. Age-aware fields for adults and paediatrics automatically.</p>
+                </div>
+              </div>
+              <div class="how-step">
+                <div class="how-num">2</div>
+                <div class="how-content">
+                  <p class="how-title">Dictate the case sheet</p>
+                  <p class="how-desc">Hold to record. Sarvam AI transcribes. OpenAI maps findings into ATLS/PALS fields. You review, not type.</p>
+                </div>
+              </div>
+              <div class="how-step">
+                <div class="how-num">3</div>
+                <div class="how-content">
+                  <p class="how-title">Discharge in one tap</p>
+                  <p class="how-desc">AI drafts the summary from your case notes. Export PDF or DOCX instantly. The referral letter practically writes itself.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Slide 3: CTA -->
+          <div class="tour-slide" id="slide-3">
+            <div class="cta-badge">Free to start</div>
+            <h2 class="cta-big">Ready to reclaim<br><span>your time?</span></h2>
+            <p class="cta-desc">10 free cases. No card needed. See the difference in your first shift.</p>
+            <div class="cta-stats">
+              <div class="cta-stat">
+                <div class="cta-stat-num">5.5 hrs</div>
+                <div class="cta-stat-label">saved per shift</div>
+              </div>
+              <div class="cta-stat">
+                <div class="cta-stat-num">3 min</div>
+                <div class="cta-stat-label">avg. case sheet</div>
+              </div>
+              <div class="cta-stat">
+                <div class="cta-stat-num">ATLS</div>
+                <div class="cta-stat-label">Adult protocol</div>
+              </div>
+              <div class="cta-stat">
+                <div class="cta-stat-num">PALS</div>
+                <div class="cta-stat-label">Paediatric protocol</div>
+              </div>
+            </div>
+            <a href="exps://EXPS_URL_PLACEHOLDER" class="cta-get-btn">Open in Expo Go</a>
+            <div style="font-size:12px;color:rgba(255,255,255,0.35);">Scan the QR code on the page to get started</div>
+          </div>
+
+        </div><!-- /tour-slides -->
+
+        <div class="tour-footer">
+          <div class="tour-dots" id="tourDots"></div>
+          <div class="tour-nav">
+            <button class="nav-btn nav-prev" id="prevBtn" onclick="prevSlide()">Back</button>
+            <button class="nav-btn nav-next" id="nextBtn" onclick="nextSlide()">Next</button>
           </div>
         </div>
       </div>
@@ -396,22 +576,17 @@
     <script src="https://unpkg.com/qr-code-styling@1.6.0/lib/qr-code-styling.js"></script>
     <script>
       (function () {
+        /* ── Expo / QR setup ── */
         const ua = navigator.userAgent;
         const loadingEl = document.getElementById("loading");
         const contentEl = document.getElementById("content");
-
         const isAndroid = /Android/i.test(ua);
-        const isIOS =
-          /iPhone|iPad|iPod/i.test(ua) ||
-          (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-
+        const isIOS = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
         const deepLink = "exps://EXPS_URL_PLACEHOLDER";
 
-        // Adjust store buttons based on platform
         const appStoreBtn = document.getElementById("app-store-btn");
         const playStoreBtn = document.getElementById("play-store-btn");
         const storeButtonsContainer = document.getElementById("store-buttons");
-
         if (isIOS) {
           playStoreBtn.className = "store-link";
           storeButtonsContainer.appendChild(playStoreBtn);
@@ -421,33 +596,15 @@
         }
 
         const qrCode = new QRCodeStyling({
-          width: 400,
-          height: 400,
-          data: deepLink,
+          width: 400, height: 400, data: deepLink,
           image: "assets/images/icon.png",
-          dotsOptions: {
-            color: "#333333",
-            type: "rounded",
-          },
-          backgroundOptions: {
-            color: "#ffffff",
-          },
-          imageOptions: {
-            crossOrigin: "anonymous",
-            margin: 6,
-            imageSize: 0.35,
-          },
-          cornersSquareOptions: {
-            type: "extra-rounded",
-          },
-          cornersDotOptions: {
-            type: "dot",
-          },
-          qrOptions: {
-            errorCorrectionLevel: "H",
-          },
+          dotsOptions: { color: "#333333", type: "rounded" },
+          backgroundOptions: { color: "#ffffff" },
+          imageOptions: { crossOrigin: "anonymous", margin: 6, imageSize: 0.35 },
+          cornersSquareOptions: { type: "extra-rounded" },
+          cornersDotOptions: { type: "dot" },
+          qrOptions: { errorCorrectionLevel: "H" },
         });
-
         qrCode.append(document.getElementById("qr-code"));
 
         if (isAndroid || isIOS) {
@@ -459,6 +616,97 @@
             contentEl.style.display = "block";
           }, 500);
         }
+
+        /* ── Tour ── */
+        const TOTAL_SLIDES = 4;
+        let currentSlide = 0;
+        let timeAnimated = false;
+
+        function buildDots() {
+          const dotsEl = document.getElementById("tourDots");
+          dotsEl.innerHTML = "";
+          for (let i = 0; i < TOTAL_SLIDES; i++) {
+            const d = document.createElement("div");
+            d.className = "dot" + (i === currentSlide ? " active" : "");
+            d.onclick = () => goToSlide(i);
+            dotsEl.appendChild(d);
+          }
+        }
+
+        function updateNav() {
+          document.getElementById("prevBtn").disabled = currentSlide === 0;
+          const nextBtn = document.getElementById("nextBtn");
+          nextBtn.textContent = currentSlide === TOTAL_SLIDES - 1 ? "Close" : "Next";
+        }
+
+        function goToSlide(n) {
+          const prev = document.getElementById("slide-" + currentSlide);
+          prev.classList.remove("active");
+          prev.classList.add("exit-left");
+          setTimeout(() => prev.classList.remove("exit-left"), 350);
+
+          currentSlide = n;
+          const next = document.getElementById("slide-" + currentSlide);
+          next.classList.add("active");
+
+          buildDots();
+          updateNav();
+
+          if (currentSlide === 1 && !timeAnimated) animateTimeSlide();
+        }
+
+        function nextSlide() {
+          if (currentSlide === TOTAL_SLIDES - 1) { closeTour(); return; }
+          goToSlide(currentSlide + 1);
+        }
+        function prevSlide() {
+          if (currentSlide === 0) return;
+          goToSlide(currentSlide - 1);
+        }
+
+        function animateTimeSlide() {
+          timeAnimated = true;
+          const delays = [0, 150, 350];
+          ["row-0","row-1"].forEach((id, i) => {
+            setTimeout(() => document.getElementById(id).classList.add("visible"), delays[i]);
+          });
+          setTimeout(() => document.getElementById("row-total").classList.add("visible"), 500);
+          setTimeout(() => document.getElementById("multiplier").classList.add("visible"), 700);
+          setTimeout(() => document.getElementById("shiftCompare").classList.add("visible"), 850);
+          setTimeout(() => document.getElementById("timeKicker").classList.add("visible"), 1100);
+        }
+
+        window.openTour = function () {
+          currentSlide = 0;
+          timeAnimated = false;
+          // Reset time slide animations
+          ["row-0","row-1","row-total","multiplier","shiftCompare","timeKicker"].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.classList.remove("visible");
+          });
+          // Reset all slides
+          for (let i = 0; i < TOTAL_SLIDES; i++) {
+            const s = document.getElementById("slide-" + i);
+            s.classList.remove("active","exit-left");
+          }
+          document.getElementById("slide-0").classList.add("active");
+          buildDots();
+          updateNav();
+          document.getElementById("tourOverlay").classList.add("open");
+          document.body.style.overflow = "hidden";
+        };
+
+        window.closeTour = function () {
+          document.getElementById("tourOverlay").classList.remove("open");
+          document.body.style.overflow = "";
+        };
+
+        window.handleOverlayClick = function (e) {
+          if (e.target === document.getElementById("tourOverlay")) closeTour();
+        };
+
+        window.nextSlide = nextSlide;
+        window.prevSlide = prevSlide;
       })();
     </script>
   </body>
