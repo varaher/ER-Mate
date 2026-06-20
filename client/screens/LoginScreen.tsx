@@ -42,6 +42,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("");
+  const [serverStatus, setServerStatus] = useState("");
   const [googleLoading, setGoogleLoading] = useState(false);
   const [googleError, setGoogleError] = useState<string | null>(null);
   const [appleLoading, setAppleLoading] = useState(false);
@@ -112,7 +113,7 @@ export default function LoginScreen() {
   }, []);
 
   useEffect(() => {
-    warmUpBackend();
+    warmUpBackend((msg) => setServerStatus(msg));
     if (Platform.OS === "ios") {
       AppleAuthentication.isAvailableAsync().then(setIsAppleAvailable).catch(() => setIsAppleAvailable(false));
     }
@@ -405,6 +406,12 @@ export default function LoginScreen() {
           <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
             Emergency Room EMR
           </Text>
+          {serverStatus ? (
+            <View style={styles.serverStatusRow}>
+              <ActivityIndicator size="small" color={theme.primary} style={{ transform: [{ scale: 0.7 }] }} />
+              <Text style={[styles.serverStatusText, { color: theme.textMuted }]}>{serverStatus}</Text>
+            </View>
+          ) : null}
         </View>
 
         <Pressable
@@ -904,6 +911,15 @@ const styles = StyleSheet.create({
   loadingText: {
     color: "#FFFFFF",
     ...Typography.bodyMedium,
+  },
+  serverStatusRow: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 4,
+    marginTop: Spacing.xs,
+  },
+  serverStatusText: {
+    ...Typography.small,
   },
   loadingHint: {
     ...Typography.small,

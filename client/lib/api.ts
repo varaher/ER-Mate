@@ -26,10 +26,35 @@ function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number =
   });
 }
 
-export function warmUpBackend(): void {
+export async function warmUpBackend(
+  onStatus?: (msg: string) => void
+): Promise<void> {
   const apiUrl = getExternalApiUrl();
-  fetch(`${apiUrl}/health`, { method: "GET" }).catch(() => {});
-  console.log("[API] Warming up backend server...");
+  const maxAttempts = 4;
+  const delays = [0, 3000, 6000, 10000]; // 0s, 3s, 6s, 10s
+
+  for (let i = 0; i < maxAttempts; i++) {
+    if (delays[i] > 0) {
+      await new Promise((r) => setTimeout(r, delays[i]));
+    }
+    try {
+      onStatus?.(i === 0 ? "Connecting…" : "Still connecting…");
+      const res = await fetch(`${apiUrl}/health`, {
+        method: "GET",
+        signal: AbortSignal.timeout(8000),
+      });
+      if (res.ok || res.status < 500) {
+        onStatus?.("");
+        console.log(`[API] Backend warm after ${i + 1} attempt(s)`);
+        return;
+      }
+    } catch {
+      // network error or timeout — retry
+    }
+    console.log(`[API] Warmup attempt ${i + 1} failed, retrying…`);
+  }
+  onStatus?.(""); // clear status — let login proceed anyway
+  console.log("[API] Warmup gave up — login will proceed anyway");
 }
 
 export interface ApiResponse<T> {

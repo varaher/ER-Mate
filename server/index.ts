@@ -411,6 +411,22 @@ function setupErrorHandler(app: express.Application) {
     },
     () => {
       log(`express server serving on port ${port}`);
+
+      // Keep the external backend warm — Render free tier spins down after
+      // 15 min of inactivity causing ~50 s cold starts for users.
+      // Pinging every 10 min from here prevents that entirely.
+      const EXTERNAL_API =
+        process.env.EXPO_PUBLIC_EXTERNAL_API_URL ||
+        "https://er-emr-backend.onrender.com/api";
+
+      const pingBackend = () => {
+        fetch(`${EXTERNAL_API}/health`, { method: "GET" })
+          .then(() => log("[Keepalive] External backend: warm"))
+          .catch(() => log("[Keepalive] External backend: unreachable (will retry in 10 min)"));
+      };
+
+      pingBackend(); // immediate ping on startup
+      setInterval(pingBackend, 10 * 60 * 1000); // then every 10 minutes
     },
   );
 })();
