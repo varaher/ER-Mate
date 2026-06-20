@@ -1,0 +1,269 @@
+// ═══════════════════════════════════════════════════════════════════════════
+// ANNUAL + MONTHLY BILLING — Backend Implementation Guide
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Final pricing locked:
+//   Base — ₹799/month  OR  ₹7,990/year (≈₹666/mo, save ₹1,598)
+//   Pro  — ₹1,199/month OR ₹11,990/year (≈₹999/mo, save ₹2,398)
+//
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ───────────────────────────────────────────────────────────────────────────
+// STEP 1 — Create 4 Price objects in Stripe Dashboard (or via API)
+// ───────────────────────────────────────────────────────────────────────────
+//
+// Go to Stripe Dashboard → Products → create one Product per plan,
+// then add TWO prices to each product (monthly + yearly recurring).
+//
+// Product: "ErMate Base"
+//   Price 1: ₹799  / month  → price_base_monthly
+//   Price 2: ₹7990 / year   → price_base_annual
+//
+// Product: "ErMate Pro"
+//   Price 1: ₹1199  / month → price_pro_monthly
+//   Price 2: ₹11990 / year  → price_pro_annual
+//
+// Copy the 4 generated price IDs (they look like price_1Nx...)
+// and paste them into the config below.
+
+// ───────────────────────────────────────────────────────────────────────────
+// STEP 2 — server/config/pricing.ts  (NEW FILE)
+// ───────────────────────────────────────────────────────────────────────────
+
+export const STRIPE_PRICE_IDS = {
+  base: {
+    monthly: "price_base_monthly_XXXXXXXX",   // ← replace with real Stripe price ID
+    annual: "price_base_annual_XXXXXXXX",     // ← replace with real Stripe price ID
+  },
+  pro: {
+    monthly: "price_pro_monthly_XXXXXXXX",    // ← replace with real Stripe price ID
+    annual: "price_pro_annual_XXXXXXXX",      // ← replace with real Stripe price ID
+  },
+} as const;
+
+export const PLAN_DISPLAY_PRICING = {
+  base: {
+    monthlyINR: 799,
+    annualINR: 7990,
+    annualMonthlyEquivalent: 666,
+    annualSavingsINR: 1598,
+  },
+  pro: {
+    monthlyINR: 1199,
+    annualINR: 11990,
+    annualMonthlyEquivalent: 999,
+    annualSavingsINR: 2398,
+  },
+} as const;
+
+export type PlanId = "base" | "pro";
+export type BillingCycle = "monthly" | "annual";
+
+export function getStripePriceId(plan: PlanId, cycle: BillingCycle): string {
+  return STRIPE_PRICE_IDS[plan][cycle];
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// STEP 3 — server/services/subscription.ts  (UPDATE)
+// ───────────────────────────────────────────────────────────────────────────
+//
+// Add billingCycle to the subscriptions table schema (Drizzle):
+//
+// In your schema file:
+/*
+export const subscriptions = pgTable("subscriptions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  plan: text("plan").notNull(),              // "free" | "base" | "pro"
+  billingCycle: text("billing_cycle"),       // "monthly" | "annual" | null
+  casesUsed: integer("cases_used").default(0),
+  casesLimit: integer("cases_limit"),
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  stripePriceId: text("stripe_price_id"),    // NEW — track which price they're on
+  currentPeriodStart: timestamp("current_period_start"),
+  currentPeriodEnd: timestamp("current_period_end"),
+});
+*/
+//
+// Run a migration to add billingCycle + stripePriceId columns.
+
+// ───────────────────────────────────────────────────────────────────────────
+// STEP 4 — server/routes.ts  (NEW ROUTE — create checkout session)
+// ───────────────────────────────────────────────────────────────────────────
+
+/*
+import Stripe from "stripe";
+import { getStripePriceId, PlanId, BillingCycle } from "./config/pricing";
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2024-06-20",
+});
+
+app.post("/api/subscription/create-checkout", async (req, res) => {
+  try {
+    const { plan, billingCycle } = req.body as {
+      plan: PlanId;
+      billingCycle: BillingCycle;
+    };
+    const userId = req.user.id; // from auth middleware
+
+    if (!["base", "pro"].includes(plan)) {
+      return res.status(400).json({ error: "Invalid plan" });
+    }
+    if (!["monthly", "annual"].includes(billingCycle)) {
+      return res.status(400).json({ error: "Invalid billing cycle" });
+    }
+
+    const priceId = getStripePriceId(plan, billingCycle);
+
+    // Reuse existing Stripe customer if present, else create one
+    let customerId = await getStripeCustomerId(userId);
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        metadata: { userId: String(userId) },
+      });
+      customerId = customer.id;
+      await saveStripeCustomerId(userId, customerId);
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      mode: "subscription",
+      line_items: [{ price: priceId, quantity: 1 }],
+      subscription_data: {
+        trial_period_days: 30, // first month free, for both cycles
+        metadata: { userId: String(userId), plan, billingCycle },
+      },
+      success_url: `${process.env.APP_URL}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.APP_URL}/upgrade`,
+      metadata: { userId: String(userId), plan, billingCycle },
+    });
+
+    res.json({ url: session.url, sessionId: session.id });
+  } catch (err) {
+    console.error("Checkout session error:", err);
+    res.status(500).json({ error: "Failed to create checkout session" });
+  }
+});
+*/
+
+// ───────────────────────────────────────────────────────────────────────────
+// STEP 5 — Stripe webhook handler (CRITICAL — don't skip)
+// ───────────────────────────────────────────────────────────────────────────
+//
+// Without this, a successful payment never updates your database.
+// The frontend redirect alone is not reliable — webhooks are the source of truth.
+
+/*
+app.post("/api/webhooks/stripe", express.raw({ type: "application/json" }), async (req, res) => {
+  const sig = req.headers["stripe-signature"] as string;
+  let event: Stripe.Event;
+
+  try {
+    event = stripe.webhooks.constructEvent(
+      req.body,
+      sig,
+      process.env.STRIPE_WEBHOOK_SECRET!
+    );
+  } catch (err) {
+    console.error("Webhook signature verification failed:", err);
+    return res.status(400).send(`Webhook Error: ${(err as Error).message}`);
+  }
+
+  switch (event.type) {
+    case "checkout.session.completed": {
+      const session = event.data.object as Stripe.Checkout.Session;
+      const userId = Number(session.metadata?.userId);
+      const plan = session.metadata?.plan as PlanId;
+      const billingCycle = session.metadata?.billingCycle as BillingCycle;
+
+      await activateSubscription({
+        userId,
+        plan,
+        billingCycle,
+        stripeCustomerId: session.customer as string,
+        stripeSubscriptionId: session.subscription as string,
+      });
+      break;
+    }
+
+    case "customer.subscription.updated": {
+      const sub = event.data.object as Stripe.Subscription;
+      await syncSubscriptionPeriod({
+        stripeSubscriptionId: sub.id,
+        currentPeriodStart: new Date(sub.current_period_start * 1000),
+        currentPeriodEnd: new Date(sub.current_period_end * 1000),
+        status: sub.status, // "active" | "trialing" | "past_due" | "canceled"
+      });
+      break;
+    }
+
+    case "customer.subscription.deleted": {
+      const sub = event.data.object as Stripe.Subscription;
+      await downgradeToFree({ stripeSubscriptionId: sub.id });
+      break;
+    }
+
+    case "invoice.payment_failed": {
+      const invoice = event.data.object as Stripe.Invoice;
+      // Optional: notify the user, flag account for grace period
+      break;
+    }
+  }
+
+  res.json({ received: true });
+});
+*/
+
+// ───────────────────────────────────────────────────────────────────────────
+// STEP 6 — Frontend: calling the checkout endpoint
+// ───────────────────────────────────────────────────────────────────────────
+
+/*
+// In UpgradeScreen.tsx, replace the placeholder alert with:
+
+const handleSubscribe = async (plan: "base" | "pro", billingCycle: "monthly" | "annual") => {
+  try {
+    setLoading(true);
+    const res = await fetch(`${API_URL}/api/subscription/create-checkout`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ plan, billingCycle }),
+    });
+    const data = await res.json();
+
+    if (data.url) {
+      // Web: redirect
+      // window.location.href = data.url;
+
+      // Mobile (React Native): open in browser
+      await WebBrowser.openBrowserAsync(data.url);
+    }
+  } catch (err) {
+    console.error("Subscribe error:", err);
+    Alert.alert("Something went wrong", "Please try again or contact support@ermate.app");
+  } finally {
+    setLoading(false);
+  }
+};
+*/
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CHECKLIST FOR DEVELOPER
+// ═══════════════════════════════════════════════════════════════════════════
+/*
+□ 1. Create 4 prices in Stripe Dashboard (Base monthly/annual, Pro monthly/annual)
+□ 2. Add billingCycle + stripePriceId columns to subscriptions table (migration)
+□ 3. Create server/config/pricing.ts with the 4 price IDs
+□ 4. Add POST /api/subscription/create-checkout route
+□ 5. Add POST /api/webhooks/stripe route — register webhook URL in Stripe Dashboard
+□ 6. Set STRIPE_WEBHOOK_SECRET env variable (from Stripe Dashboard → Webhooks)
+□ 7. Update UpgradeScreen.tsx to call create-checkout instead of showing the alert
+□ 8. Test with Stripe test mode card: 4242 4242 4242 4242
+□ 9. Test webhook locally with: stripe listen --forward-to localhost:5000/api/webhooks/stripe
+□ 10. Go live: switch STRIPE_SECRET_KEY to live key, re-create prices in live mode
+*/

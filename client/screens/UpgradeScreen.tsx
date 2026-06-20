@@ -13,13 +13,14 @@ import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
+import * as WebBrowser from "expo-web-browser";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
-import { Spacing, BorderRadius, TriageColors } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { getApiUrl } from "@/lib/query-client";
 
 type RouteProps = RouteProp<RootStackParamList, "Upgrade">;
+type BillingCycle = "monthly" | "annual";
 
 interface SubscriptionStatus {
   plan: string;
@@ -50,13 +51,17 @@ interface Plan {
   id: PlanId;
   name: string;
   monthlyPrice: string;
+  monthlyRaw: number;
+  annualPrice: string;
+  annualRaw: number;
+  annualEquiv: string;
+  annualSavings: string;
   tag?: string;
   tagColor?: string;
   description: string;
   accent: string;
   accentBg: string;
   isDark: boolean;
-  ctaLabel: string;
   ctaDisabled: boolean;
   icon: keyof typeof Feather.glyphMap;
   sections: FeatureSection[];
@@ -67,11 +72,15 @@ const PLANS: Plan[] = [
     id: "free",
     name: "Free",
     monthlyPrice: "₹0",
+    monthlyRaw: 0,
+    annualPrice: "₹0",
+    annualRaw: 0,
+    annualEquiv: "₹0",
+    annualSavings: "₹0",
     description: "Try ErMate with your first 10 cases.",
     accent: "#9CA3AF",
     accentBg: "rgba(156,163,175,0.10)",
     isDark: false,
-    ctaLabel: "Current Plan",
     ctaDisabled: true,
     icon: "clipboard",
     sections: [
@@ -93,13 +102,17 @@ const PLANS: Plan[] = [
     id: "base",
     name: "Base",
     monthlyPrice: "₹799",
+    monthlyRaw: 799,
+    annualPrice: "₹7,990",
+    annualRaw: 7990,
+    annualEquiv: "₹666",
+    annualSavings: "₹1,598",
     tag: "MOST POPULAR",
     tagColor: "#1DB870",
     description: "Unlimited documentation. No credit walls on core features.",
     accent: "#1DB870",
     accentBg: "rgba(30,184,112,0.10)",
     isDark: false,
-    ctaLabel: "Start Base — Free for 1st Month",
     ctaDisabled: false,
     icon: "zap",
     sections: [
@@ -139,14 +152,18 @@ const PLANS: Plan[] = [
   {
     id: "pro",
     name: "Pro",
-    monthlyPrice: "₹1,499",
+    monthlyPrice: "₹1,199",
+    monthlyRaw: 1199,
+    annualPrice: "₹11,990",
+    annualRaw: 11990,
+    annualEquiv: "₹999",
+    annualSavings: "₹2,398",
     tag: "FOR GROWTH",
     tagColor: "#818CF8",
     description: "Everything in Base, plus clinical growth built into every shift.",
     accent: "#818CF8",
     accentBg: "rgba(129,140,248,0.12)",
     isDark: true,
-    ctaLabel: "Start Pro — Free for 1st Month",
     ctaDisabled: false,
     icon: "layers",
     sections: [
@@ -210,16 +227,19 @@ export default function UpgradeScreen() {
   const { theme, isDark: isDarkMode } = useTheme();
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
-  const { user } = useAuth();
+  const { user, token } = useAuth();
 
   const { lockReason, lockMessage } = route.params || {};
   const [subStatus, setSubStatus] = useState<SubscriptionStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [ctaLoading, setCtaLoading] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<PlanId>("base");
+  const [billingCycle, setBillingCycle] = useState<BillingCycle>("monthly");
   const [selectedPack, setSelectedPack] = useState(1);
   const [showComparison, setShowComparison] = useState(false);
 
   const scaleAnims = useRef(PLANS.map(() => new Animated.Value(1))).current;
+  const toggleAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     fetchSubscriptionStatus();
@@ -254,14 +274,48 @@ export default function UpgradeScreen() {
     ]).start();
   };
 
-  const handleCTA = () => {
-    if (selectedPlan === "free") return;
-    const plan = PLANS.find(p => p.id === selectedPlan)!;
-    Alert.alert(
-      "Start Free Trial",
-      `Get your first month of ${plan.name} completely FREE — no charges for 30 days!\n\nPayment integration is being set up. For early access, contact support@ermate.app to activate your trial.`,
-      [{ text: "OK" }]
-    );
+  const handleBillingToggle = (cycle: BillingCycle) => {
+    setBillingCycle(cycle);
+    Animated.timing(toggleAnim, {
+      toValue: cycle === "annual" ? 1 : 0,
+      duration: 200,
+      useNativeDriver: false,
+    }).start();
+  };
+
+  const handleSubscribe = async (plan: PlanId, cycle: BillingCycle) => {
+    if (plan === "free") return;
+    setCtaLoading(true);
+    try {
+      const url = new URL("/api/subscription/create-checkout", getApiUrl()).href;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ plan, billingCycle: cycle }),
+      });
+      const data = await res.json();
+
+      if (data.url) {
+        await WebBrowser.openBrowserAsync(data.url);
+      } else {
+        const planObj = PLANS.find(p => p.id === plan)!;
+        const priceStr = cycle === "annual"
+          ? `${planObj.annualPrice}/year (${planObj.annualEquiv}/mo)`
+          : `${planObj.monthlyPrice}/month`;
+        Alert.alert(
+          "Start Free Trial",
+          `Get your first month of ${planObj.name} completely FREE — no charges for 30 days!\n\nPayment integration is being set up. For early access, contact support@ermate.app to activate your ${cycle === "annual" ? "annual" : "monthly"} plan at ${priceStr}.`,
+          [{ text: "OK" }]
+        );
+      }
+    } catch {
+      Alert.alert("Something went wrong", "Please try again or contact support@ermate.app");
+    } finally {
+      setCtaLoading(false);
+    }
   };
 
   const handleBuyCredits = () => {
@@ -286,6 +340,17 @@ export default function UpgradeScreen() {
   const usagePct = Math.min(1, casesUsed / Math.max(1, casesLimit));
   const limitReached = casesUsed >= casesLimit;
   const activePlan = PLANS.find(p => p.id === selectedPlan)!;
+  const isAnnual = billingCycle === "annual";
+
+  const ctaLabel = activePlan.id === "free"
+    ? "Current Plan"
+    : `Start ${activePlan.name} — Free for 1st Month`;
+
+  const stickySubtext = activePlan.id !== "free"
+    ? isAnnual
+      ? `Free for 30 days · Then ${activePlan.annualPrice}/year (${activePlan.annualEquiv}/mo) · Save ${activePlan.annualSavings}`
+      : `Free for 30 days · Then ${activePlan.monthlyPrice}/month · Cancel anytime`
+    : null;
 
   return (
     <View style={[styles.container, { backgroundColor: isDarkMode ? "#0D1117" : "#F5F6F8" }]}>
@@ -318,6 +383,44 @@ export default function UpgradeScreen() {
             <View style={[styles.barFill, { width: `${usagePct * 100}%`, backgroundColor: limitReached ? "#EF4444" : "#1DB870" }]} />
           </View>
           <Text style={[styles.usageText, { color: theme.textMuted }]}>{casesUsed} of {casesLimit} free cases used</Text>
+        </View>
+
+        <View style={[styles.billingToggleContainer, { backgroundColor: isDarkMode ? "#161B22" : "#FFFFFF" }]}>
+          <Pressable
+            onPress={() => handleBillingToggle("monthly")}
+            style={[
+              styles.billingToggleTab,
+              !isAnnual && { backgroundColor: isDarkMode ? "#2D333B" : "#F3F4F6" },
+            ]}
+          >
+            <Text style={[
+              styles.billingToggleText,
+              { color: !isAnnual ? (isDarkMode ? "#FFFFFF" : "#0D1117") : theme.textMuted },
+              !isAnnual && { fontWeight: "700" },
+            ]}>
+              Monthly
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => handleBillingToggle("annual")}
+            style={[
+              styles.billingToggleTab,
+              isAnnual && { backgroundColor: "#1DB870" },
+            ]}
+          >
+            <Text style={[
+              styles.billingToggleText,
+              { color: isAnnual ? "#FFFFFF" : theme.textMuted },
+              isAnnual && { fontWeight: "700" },
+            ]}>
+              Annual
+            </Text>
+            <View style={[styles.saveBadge, { backgroundColor: isAnnual ? "rgba(255,255,255,0.25)" : "rgba(29,184,112,0.12)" }]}>
+              <Text style={[styles.saveBadgeText, { color: isAnnual ? "#FFFFFF" : "#1DB870" }]}>
+                2 months free
+              </Text>
+            </View>
+          </Pressable>
         </View>
 
         <Text style={[styles.sectionLabel, { color: theme.textMuted }]}>Choose your plan</Text>
@@ -365,20 +468,36 @@ export default function UpgradeScreen() {
                       {plan.id === "free" ? (
                         <Text style={[styles.priceMain, { color: isDarkMode ? "#FFFFFF" : "#0D1117" }]}>₹0</Text>
                       ) : (
-                        <View style={styles.priceRow}>
-                          <Text style={[styles.priceStrike, { color: plan.isDark ? "rgba(255,255,255,0.22)" : "#C4C9D4" }]}>
-                            {plan.monthlyPrice}
-                          </Text>
-                          <Text style={[styles.priceFree, { color: plan.accent }]}>FREE</Text>
-                          <Text style={[styles.priceSub, { color: plan.isDark ? "rgba(255,255,255,0.35)" : theme.textMuted }]}>
-                            1st month
-                          </Text>
-                        </View>
-                      )}
-                      {plan.id !== "free" && (
-                        <Text style={[styles.priceAfter, { color: plan.isDark ? "rgba(255,255,255,0.28)" : theme.textMuted }]}>
-                          Then {plan.monthlyPrice}/month · Cancel anytime
-                        </Text>
+                        <>
+                          <View style={styles.priceRow}>
+                            <Text style={[styles.priceStrike, { color: plan.isDark ? "rgba(255,255,255,0.22)" : "#C4C9D4" }]}>
+                              {isAnnual ? plan.annualPrice : plan.monthlyPrice}
+                            </Text>
+                            <Text style={[styles.priceFree, { color: plan.accent }]}>FREE</Text>
+                            <Text style={[styles.priceSub, { color: plan.isDark ? "rgba(255,255,255,0.35)" : theme.textMuted }]}>
+                              1st month
+                            </Text>
+                          </View>
+                          {isAnnual ? (
+                            <>
+                              <Text style={[styles.priceAfter, { color: plan.isDark ? "rgba(255,255,255,0.28)" : theme.textMuted }]}>
+                                Then {plan.annualEquiv}/mo · billed {plan.annualPrice}/year
+                              </Text>
+                              <View style={styles.savingsRow}>
+                                <View style={[styles.savingsPill, { backgroundColor: `${plan.accent}18` }]}>
+                                  <Feather name="tag" size={10} color={plan.accent} />
+                                  <Text style={[styles.savingsText, { color: plan.accent }]}>
+                                    Save {plan.annualSavings}/year
+                                  </Text>
+                                </View>
+                              </View>
+                            </>
+                          ) : (
+                            <Text style={[styles.priceAfter, { color: plan.isDark ? "rgba(255,255,255,0.28)" : theme.textMuted }]}>
+                              Then {plan.monthlyPrice}/month · Cancel anytime
+                            </Text>
+                          )}
+                        </>
                       )}
                     </View>
                     <View style={[styles.iconBox, { backgroundColor: plan.accentBg, borderColor: `${plan.accent}30` }]}>
@@ -435,26 +554,36 @@ export default function UpgradeScreen() {
                   ))}
                 </View>
 
-                <View style={[styles.cardCTA, {
-                  backgroundColor: plan.ctaDisabled
-                    ? (isDarkMode ? "#2D333B" : "#F3F4F6")
-                    : plan.isDark
-                    ? "#6366F1"
-                    : "#1DB870",
-                  shadowColor: plan.ctaDisabled ? "transparent" : plan.isDark ? "#6366F1" : "#1DB870",
-                  shadowOpacity: plan.ctaDisabled ? 0 : 0.3,
-                  shadowRadius: 10,
-                  shadowOffset: { width: 0, height: 4 },
-                }]}>
+                <Pressable
+                  onPress={() => {
+                    if (!plan.ctaDisabled) {
+                      handlePlanSelect(plan.id, pi);
+                      handleSubscribe(plan.id, billingCycle);
+                    }
+                  }}
+                  style={[styles.cardCTA, {
+                    backgroundColor: plan.ctaDisabled
+                      ? (isDarkMode ? "#2D333B" : "#F3F4F6")
+                      : plan.isDark
+                      ? "#6366F1"
+                      : "#1DB870",
+                    shadowColor: plan.ctaDisabled ? "transparent" : plan.isDark ? "#6366F1" : "#1DB870",
+                    shadowOpacity: plan.ctaDisabled ? 0 : 0.3,
+                    shadowRadius: 10,
+                    shadowOffset: { width: 0, height: 4 },
+                  }]}
+                >
                   {!plan.ctaDisabled && (
                     <Feather name="gift" size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
                   )}
                   <Text style={[styles.cardCTAText, {
                     color: plan.ctaDisabled ? (isDarkMode ? "#6B7280" : "#9CA3AF") : "#FFFFFF",
                   }]}>
-                    {plan.ctaLabel}
+                    {plan.ctaDisabled
+                      ? "Current Plan"
+                      : `Start ${plan.name} — Free for 1st Month`}
                   </Text>
-                </View>
+                </Pressable>
               </Pressable>
             </Animated.View>
           );
@@ -579,7 +708,7 @@ export default function UpgradeScreen() {
                 : activePlan.isDark
                 ? "#6366F1"
                 : "#1DB870",
-              opacity: pressed && !activePlan.ctaDisabled ? 0.88 : 1,
+              opacity: (pressed && !activePlan.ctaDisabled) || ctaLoading ? 0.88 : 1,
               shadowColor: activePlan.ctaDisabled ? "transparent" : activePlan.isDark ? "#6366F1" : "#1DB870",
               shadowOpacity: activePlan.ctaDisabled ? 0 : 0.38,
               shadowRadius: 16,
@@ -587,25 +716,25 @@ export default function UpgradeScreen() {
               elevation: activePlan.ctaDisabled ? 0 : 8,
             },
           ]}
-          onPress={handleCTA}
-          disabled={activePlan.ctaDisabled}
+          onPress={() => handleSubscribe(selectedPlan, billingCycle)}
+          disabled={activePlan.ctaDisabled || ctaLoading}
         >
-          {!activePlan.ctaDisabled && <Feather name="gift" size={16} color="#FFFFFF" style={{ marginRight: 8 }} />}
+          {ctaLoading ? (
+            <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
+          ) : !activePlan.ctaDisabled ? (
+            <Feather name="gift" size={16} color="#FFFFFF" style={{ marginRight: 8 }} />
+          ) : null}
           <Text style={[styles.stickyCTAText, {
             color: activePlan.ctaDisabled ? (isDarkMode ? "#6B7280" : "#9CA3AF") : "#FFFFFF",
           }]}>
-            {activePlan.id === "free"
-              ? "Current Plan"
-              : activePlan.id === "base"
-              ? "Start Base — Free for 1st Month"
-              : "Start Pro — Free for 1st Month"}
+            {ctaLoading ? "Setting up..." : ctaLabel}
           </Text>
         </Pressable>
-        {!activePlan.ctaDisabled && (
+        {stickySubtext ? (
           <Text style={[styles.stickySubtext, { color: theme.textMuted }]}>
-            Free for 30 days · Then {activePlan.monthlyPrice}/month · Cancel anytime
+            {stickySubtext}
           </Text>
-        )}
+        ) : null}
       </View>
     </View>
   );
@@ -623,7 +752,7 @@ const styles = StyleSheet.create({
   lockMsg: { fontSize: 13, marginTop: 3 },
 
   usageCard: {
-    borderRadius: 16, padding: 16, marginBottom: 16,
+    borderRadius: 16, padding: 16, marginBottom: 14,
     shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
     elevation: 1,
   },
@@ -633,6 +762,22 @@ const styles = StyleSheet.create({
   barBg: { height: 7, backgroundColor: "#F3F4F6", borderRadius: 99, overflow: "hidden", marginBottom: 7 },
   barFill: { height: "100%", borderRadius: 99 },
   usageText: { fontSize: 12 },
+
+  billingToggleContainer: {
+    flexDirection: "row", borderRadius: 14, padding: 4,
+    marginBottom: 16,
+    shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+  },
+  billingToggleTab: {
+    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 7, paddingVertical: 10, borderRadius: 10,
+  },
+  billingToggleText: { fontSize: 14 },
+  saveBadge: {
+    borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3,
+  },
+  saveBadgeText: { fontSize: 10, fontWeight: "700", letterSpacing: 0.2 },
 
   sectionLabel: {
     fontSize: 11, fontWeight: "700", letterSpacing: 1.2,
@@ -661,6 +806,12 @@ const styles = StyleSheet.create({
   priceFree: { fontSize: 30, fontWeight: "900", letterSpacing: -1 },
   priceSub: { fontSize: 13 },
   priceAfter: { fontSize: 12, marginTop: 3 },
+  savingsRow: { marginTop: 6 },
+  savingsPill: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    alignSelf: "flex-start", borderRadius: 20, paddingHorizontal: 9, paddingVertical: 4,
+  },
+  savingsText: { fontSize: 11, fontWeight: "700" },
   iconBox: {
     width: 42, height: 42, borderRadius: 13,
     alignItems: "center", justifyContent: "center",

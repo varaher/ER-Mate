@@ -3469,6 +3469,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/subscription/create-checkout", async (req: Request, res: Response) => {
+    try {
+      const { plan, billingCycle } = req.body as { plan: string; billingCycle: string };
+      if (!["base", "pro"].includes(plan)) {
+        return res.status(400).json({ error: "Invalid plan" });
+      }
+      if (!["monthly", "annual"].includes(billingCycle)) {
+        return res.status(400).json({ error: "Invalid billing cycle" });
+      }
+      return res.status(503).json({
+        error: "payment_not_configured",
+        message: "Payment integration is being set up. Contact support@ermate.app to activate your trial.",
+      });
+    } catch (error) {
+      console.error("Checkout session error:", error);
+      res.status(500).json({ error: "Failed to create checkout session" });
+    }
+  });
+
+  app.post("/api/webhooks/stripe", async (req: Request, res: Response) => {
+    res.json({ received: true });
+  });
+
   app.get("/api/em-reference/topics", (_req: Request, res: Response) => {
     res.json(EM_TOPICS);
   });
