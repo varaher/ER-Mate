@@ -1,11 +1,11 @@
-export const STRIPE_PRICE_IDS = {
+export const RAZORPAY_PLAN_IDS = {
   base: {
-    monthly: "price_base_monthly_XXXXXXXX",
-    annual: "price_base_annual_XXXXXXXX",
+    monthly: "plan_base_monthly_XXXXXXXX",
+    annual: "plan_base_annual_XXXXXXXX",
   },
   pro: {
-    monthly: "price_pro_monthly_XXXXXXXX",
-    annual: "price_pro_annual_XXXXXXXX",
+    monthly: "plan_pro_monthly_XXXXXXXX",
+    annual: "plan_pro_annual_XXXXXXXX",
   },
 } as const;
 
@@ -27,6 +27,6 @@ export const PLAN_DISPLAY_PRICING = {
 export type PlanId = "base" | "pro";
 export type BillingCycle = "monthly" | "annual";
 
-export function getStripePriceId(plan: PlanId, cycle: BillingCycle): string {
-  return STRIPE_PRICE_IDS[plan][cycle];
+export function getRazorpayPlanId(plan: PlanId, cycle: BillingCycle): string {
+  return RAZORPAY_PLAN_IDS[plan][cycle];
 }

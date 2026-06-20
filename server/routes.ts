@@ -3478,17 +3478,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!["monthly", "annual"].includes(billingCycle)) {
         return res.status(400).json({ error: "Invalid billing cycle" });
       }
+      // TODO: Razorpay integration
+      // 1. Look up RAZORPAY_PLAN_IDS[plan][billingCycle] from server/config/pricing.ts
+      // 2. Create a Razorpay Subscription via the Razorpay API:
+      //    POST https://api.razorpay.com/v1/subscriptions
+      //    { plan_id, total_count, quantity, start_at (30 days from now for trial) }
+      // 3. Return { subscriptionId, keyId } to the client
+      // 4. Client opens Razorpay checkout with subscriptionId
       return res.status(503).json({
         error: "payment_not_configured",
         message: "Payment integration is being set up. Contact support@ermate.app to activate your trial.",
       });
     } catch (error) {
-      console.error("Checkout session error:", error);
+      console.error("[Razorpay] Checkout error:", error);
       res.status(500).json({ error: "Failed to create checkout session" });
     }
   });
 
-  app.post("/api/webhooks/stripe", async (req: Request, res: Response) => {
+  app.post("/api/webhooks/razorpay", async (req: Request, res: Response) => {
+    // TODO: Razorpay webhook handler
+    // 1. Verify signature: razorpay.webhooks.verify(body, sig, RAZORPAY_WEBHOOK_SECRET)
+    // 2. Handle events:
+    //    subscription.activated  → activateSubscription(userId, plan, billingCycle)
+    //    subscription.charged    → syncSubscriptionPeriod(subscriptionId, periodEnd)
+    //    subscription.cancelled  → downgradeToFree(subscriptionId)
+    //    payment.failed          → flag account / notify user
     res.json({ received: true });
   });
 
