@@ -66,6 +66,7 @@ export default function HandoverScreen() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [showAll, setShowAll] = useState(false);
+  const [receivingDoctor, setReceivingDoctor] = useState("");
 
   useFocusEffect(
     useCallback(() => {
@@ -169,6 +170,7 @@ export default function HandoverScreen() {
       const payload = {
         cases: fullCases,
         doctorName: (user as any)?.name || (user as any)?.fullName || user?.email || "Doctor",
+        receivingDoctor: receivingDoctor.trim() || undefined,
         shiftDate: now.toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" }),
         shiftTime: now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false }),
       };
@@ -254,9 +256,28 @@ export default function HandoverScreen() {
           <View style={styles.infoRow}>
             <Feather name="info" size={14} color={theme.primary} />
             <Text style={[styles.infoText, { color: theme.textSecondary }]}>
-              Select cases to include. Add bed number and pending notes for each. Then generate the handover PDF.
+              Select cases, add bed numbers and pending notes, then generate the PDF.
             </Text>
           </View>
+
+          <View style={[styles.receivingRow, { borderTopColor: isDark ? "#2D333B" : "#F3F4F6" }]}>
+            <Feather name="user" size={13} color={theme.textMuted} style={{ marginTop: 2 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.inputLabel, { color: theme.textMuted }]}>Receiving Doctor</Text>
+              <TextInput
+                style={[styles.receivingInput, {
+                  color: isDark ? "#FFFFFF" : "#0D1117",
+                  backgroundColor: isDark ? "#0D1117" : "#F9FAFB",
+                  borderColor: isDark ? "#2D333B" : "#E5E7EB",
+                }]}
+                placeholder="Dr. name of incoming doctor…"
+                placeholderTextColor={theme.textMuted}
+                value={receivingDoctor}
+                onChangeText={setReceivingDoctor}
+              />
+            </View>
+          </View>
+
           <View style={styles.filterRow}>
             <Pressable
               onPress={() => setShowAll((v) => !v)}
@@ -502,6 +523,15 @@ const styles = StyleSheet.create({
   priorityBadgeText: { fontSize: 11, fontWeight: "700" },
   statusBadge: { borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 },
   statusBadgeText: { fontSize: 11, fontWeight: "600" },
+
+  receivingRow: {
+    flexDirection: "row", alignItems: "flex-start", gap: 8,
+    paddingTop: 10, borderTopWidth: 1, marginTop: 4, marginBottom: 4,
+  },
+  receivingInput: {
+    borderWidth: 1.5, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7,
+    fontSize: 14, fontWeight: "500",
+  },
 
   handoverInputs: { marginTop: 12 },
   inputRow: {

@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>ErMate — Handover Sheet Mockup</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --ink: #0D1117;
+    --green: #1DB870;
+    --green-dark: #15924F;
+    --surface: #F5F7F5;
+    --border: #D1D5DB;
+    --muted: #6B7280;
+    --p1: #EF4444;
+    --p2: #F97316;
+    --p3: #EAB308;
+    --p4: #22C55E;
+    --p5: #3B82F6;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: #E8EBE8;
+    min-height: 100vh;
+    padding: 32px 20px 60px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Preview wrapper ── */
+  .preview-controls {
+    max-width: 1100px; margin: 0 auto 20px;
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 12px;
+  }
+  .preview-label {
+    font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
+    text-transform: uppercase; color: #6B7280;
+  }
+  .preview-title {
+    font-size: 18px; font-weight: 800; color: var(--ink);
+    letter-spacing: -0.3px; margin-top: 2px;
+  }
+  .btn-print {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--ink); color: white;
+    border: none; border-radius: 10px; padding: 10px 20px;
+    font-size: 13px; font-weight: 700; cursor: pointer;
+    font-family: 'Inter', sans-serif; transition: transform 0.15s;
+  }
+  .btn-print:hover { transform: translateY(-1px); }
+  .btn-pdf {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--green); color: white;
+    border: none; border-radius: 10px; padding: 10px 20px;
+    font-size: 13px; font-weight: 700; cursor: pointer;
+    font-family: 'Inter', sans-serif; transition: transform 0.15s;
+  }
+  .btn-pdf:hover { transform: translateY(-1px); }
+  .btn-row { display: flex; gap: 10px; }
+
+  /* ── Sheet wrapper ── */
+  .sheet-wrapper {
+    max-width: 1100px;
+    margin: 0 auto;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.14);
+    overflow: hidden;
+  }
+
+  /* ── Sheet header ── */
+  .sheet-header {
+    background: var(--ink);
+    padding: 18px 28px 16px;
+    display: flex; align-items: flex-start; justify-content: space-between;
+  }
+  .sheet-header-left { }
+  .sheet-title {
+    font-size: 15px; font-weight: 800; color: white;
+    letter-spacing: 1.5px; text-transform: uppercase;
+  }
+  .sheet-subtitle {
+    font-size: 11px; color: rgba(255,255,255,0.45);
+    margin-top: 3px; letter-spacing: 0.5px;
+  }
+  .sheet-header-right { text-align: right; }
+  .sheet-date {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px; font-weight: 500; color: var(--green);
+    letter-spacing: 0.5px;
+  }
+  .sheet-meta {
+    font-size: 11px; color: rgba(255,255,255,0.4);
+    margin-top: 4px;
+  }
+  .sheet-meta span { color: rgba(255,255,255,0.7); }
+
+  /* ── Table ── */
+  .handover-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+
+  /* Column widths — tuned for A4 landscape proportion */
+  .col-bed       { width: 7%; }
+  .col-patient   { width: 11%; }
+  .col-complaint { width: 13%; }
+  .col-diagnosis { width: 14%; }
+  .col-vitals    { width: 13%; }
+  .col-ix        { width: 14%; }
+  .col-treatment { width: 14%; }
+  .col-pending   { width: 14%; }
+
+  .handover-table thead tr {
+    background: #F1F3F1;
+    border-bottom: 2px solid var(--border);
+  }
+  .handover-table thead th {
+    padding: 10px 10px;
+    font-size: 9.5px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.8px;
+    color: #4B5563; text-align: left;
+    border-right: 1px solid var(--border);
+  }
+  .handover-table thead th:last-child { border-right: none; }
+
+  .handover-table tbody tr {
+    border-bottom: 1px solid #EFEFEF;
+    transition: background 0.1s;
+  }
+  .handover-table tbody tr:last-child { border-bottom: none; }
+  .handover-table tbody tr:hover { background: #FAFCFA; }
+
+  .handover-table tbody td {
+    padding: 10px 10px;
+    font-size: 11px; line-height: 1.55;
+    color: var(--ink); vertical-align: top;
+    border-right: 1px solid #F0F0F0;
+    position: relative;
+  }
+  .handover-table tbody td:last-child { border-right: none; }
+
+  /* Priority strip */
+  .priority-strip {
+    position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+  }
+  .p1 .priority-strip { background: var(--p1); }
+  .p2 .priority-strip { background: var(--p2); }
+  .p3 .priority-strip { background: var(--p3); }
+  .p4 .priority-strip { background: var(--p4); }
+  .p5 .priority-strip { background: var(--p5); }
+
+  .cell-bed { padding-left: 14px !important; }
+
+  /* Priority badge */
+  .p-badge {
+    display: inline-block;
+    font-size: 9px; font-weight: 800; letter-spacing: 0.3px;
+    border-radius: 4px; padding: 2px 5px;
+    text-transform: uppercase; margin-top: 3px;
+  }
+  .p-badge.p1 { background: rgba(239,68,68,0.12); color: #DC2626; }
+  .p-badge.p2 { background: rgba(249,115,22,0.12); color: #EA580C; }
+  .p-badge.p3 { background: rgba(234,179,8,0.12); color: #CA8A04; }
+  .p-badge.p4 { background: rgba(34,197,94,0.12); color: #16A34A; }
+  .p-badge.p5 { background: rgba(59,130,246,0.12); color: #2563EB; }
+
+  .bed-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px; font-weight: 700; color: var(--ink);
+    line-height: 1.2;
+  }
+  .patient-name {
+    font-weight: 700; font-size: 12px; color: var(--ink);
+  }
+  .patient-age {
+    font-size: 10px; color: var(--muted); margin-top: 1px;
+  }
+
+  .dx-main { font-weight: 600; color: var(--ink); font-size: 11px; }
+  .dx-sub { color: var(--muted); font-size: 10px; margin-top: 2px; }
+
+  .vital-item {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9.5px; color: #374151; line-height: 1.8;
+  }
+  .vital-label { color: #9CA3AF; margin-right: 3px; font-size: 9px; }
+  .vital-alert { color: var(--p1); font-weight: 700; }
+
+  .ix-item { font-size: 10.5px; color: #374151; line-height: 1.7; }
+  .ix-pending { color: #F97316; font-size: 10px; font-weight: 600; }
+  .ix-done { color: #16A34A; font-size: 10px; }
+
+  .rx-item { font-size: 10.5px; color: #374151; line-height: 1.7; }
+  .rx-consult { color: #7C3AED; font-size: 10px; font-weight: 600; }
+
+  .pending-item { font-size: 10.5px; line-height: 1.7; color: #374151; }
+  .pending-dot { color: #F97316; margin-right: 3px; }
+  .pending-urgent { color: var(--p1); font-weight: 600; font-size: 10px; }
+
+  /* ── Footer ── */
+  .sheet-footer {
+    padding: 14px 28px;
+    background: #F9FAF9;
+    border-top: 1.5px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 16px;
+  }
+  .footer-left { font-size: 11px; color: var(--muted); line-height: 1.6; }
+  .footer-left strong { color: var(--ink); }
+  .footer-sig {
+    display: flex; gap: 32px;
+  }
+  .sig-block { text-align: center; }
+  .sig-line {
+    width: 140px; height: 1px; background: var(--border);
+    margin: 20px 0 6px;
+  }
+  .sig-label { font-size: 9.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; }
+
+  /* ── Legend ── */
+  .legend {
+    display: flex; align-items: center; gap: 14px;
+    padding: 10px 28px;
+    background: white;
+    border-top: 1px solid #F0F0F0;
+    flex-wrap: wrap;
+  }
+  .legend-label { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-right: 4px; }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 10px; color: #4B5563; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+
+  /* ── Print styles ── */
+  @media print {
+    body { background: white; padding: 0; }
+    .preview-controls { display: none; }
+    .sheet-wrapper {
+      border-radius: 0; box-shadow: none;
+      max-width: 100%;
+    }
+    @page { size: A4 landscape; margin: 10mm; }
+  }
+</style>
+</head>
+<body>
+
+<div class="preview-controls">
+  <div>
+    <div class="preview-label">ErMate — PDF Preview</div>
+    <div class="preview-title">Emergency Doctors Handover Sheet</div>
+  </div>
+  <div class="btn-row">
+    <button class="btn-print" onclick="window.print()">
+      🖨️ Print
+    </button>
+    <button class="btn-pdf" onclick="alert('In the app, this downloads a PDF directly to your device.')">
+      ⬇️ Download PDF
+    </button>
+  </div>
+</div>
+
+<div class="sheet-wrapper">
+
+  <!-- Header -->
+  <div class="sheet-header">
+    <div class="sheet-header-left">
+      <div class="sheet-title">Emergency Doctors Handover Sheet</div>
+      <div class="sheet-subtitle">ErMate · Varah Group · All times in IST</div>
+    </div>
+    <div class="sheet-header-right">
+      <div class="sheet-date">21 / 06 / 2026 &nbsp;·&nbsp; 20:45</div>
+      <div class="sheet-meta">Handing over: <span>Dr. Neeraj</span></div>
+      <div class="sheet-meta">Receiving: <span>________________</span></div>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div style="overflow-x:auto;">
+  <table class="handover-table">
+    <colgroup>
+      <col class="col-bed"/>
+      <col class="col-patient"/>
+      <col class="col-complaint"/>
+      <col class="col-diagnosis"/>
+      <col class="col-vitals"/>
+      <col class="col-ix"/>
+      <col class="col-treatment"/>
+      <col class="col-pending"/>
+    </colgroup>
+    <thead>
+      <tr>
+        <th>Bed</th>
+        <th>Patient</th>
+        <th>Complaint / Summary</th>
+        <th>Provisional Diagnosis</th>
+        <th>Initial Vitals + VBG/ECG</th>
+        <th>Key Investigations</th>
+        <th>Treatment / Consults</th>
+        <th>Pending / Plan</th>
+      </tr>
+    </thead>
+    <tbody>
+
+      <!-- Row 1 — P1 -->
+      <tr class="p1">
+        <td class="cell-bed">
+          <div class="priority-strip"></div>
+          <div class="bed-num">Bed 10</div>
+          <div class="p-badge p1">P1 · Red</div>
+        </td>
+        <td>
+          <div class="patient-name">Abdulahad</div>
+          <div class="patient-age">45M · Active</div>
+        </td>
+        <td>Sudden onset abdominal pain with vomiting. Left iliac fossa tenderness.</td>
+        <td>
+          <div class="dx-main">Ureteric colic — left VUJ calculus</div>
+          <div class="dx-sub">+ VBG / ECG / Echo done</div>
+        </td>
+        <td>
+          <div class="vital-item"><span class="vital-label">HR</span>100 bpm</div>
+          <div class="vital-item"><span class="vital-label">BP</span>138/86</div>
+          <div class="vital-item"><span class="vital-label">SpO₂</span>98%</div>
+          <div class="vital-item"><span class="vital-label">RR</span>22/min</div>
+          <div class="vital-item"><span class="vital-label">Temp</span>97°F</div>
+          <div class="vital-item" style="margin-top:4px;"><span class="vital-label">VBG</span>pH 7.43 · Lac 4.2</div>
+          <div class="vital-item"><span class="vital-label">K</span>4.8 · <span class="vital-label">Na</span>139</div>
+        </td>
+        <td>
+          <div class="ix-done">✓ CT Abdomen — 4mm left VUJ calculus, mild HUN</div>
+          <div class="ix-item" style="margin-top:4px;">Creatinine 1.27</div>
+          <div class="ix-pending" style="margin-top:4px;">⏳ URE pending</div>
+          <div class="ix-pending">⏳ VBG creatinine repeat at 22:00</div>
+        </td>
+        <td>
+          <div class="rx-item">IV cannula</div>
+          <div class="rx-item">IVF NS 500 ml</div>
+          <div class="rx-item">Inj Buscopan, Somit</div>
+          <div class="rx-item">Tab Emset, Penta 30mg</div>
+          <div class="rx-item">Advised small water intake</div>
+          <div class="rx-consult" style="margin-top:4px;">🔵 Urology consult done — SOS / Urology OPD</div>
+        </td>
+        <td>
+          <div class="pending-item"><span class="pending-dot">→</span>URE result</div>
+          <div class="pending-item"><span class="pending-dot">→</span>Decision: URS vs conservative</div>
+          <div class="pending-item"><span class="pending-dot">→</span>Repeat VBG at 22:00</div>
+          <div class="pending-item"><span class="pending-dot">→</span>Urology review before discharge</div>
+        </td>
+      </tr>
+
+      <!-- Row 2 — P2 -->
+      <tr class="p2">
+        <td class="cell-bed">
+          <div class="priority-strip"></div>
+          <div class="bed-num">Bed 11</div>
+          <div class="p-badge p2">P2 · Orange</div>
+        </td>
+        <td>
+          <div class="patient-name">Biju Varghese</div>
+          <div class="patient-age">56M · Active</div>
+        </td>
+        <td>Calculi case. Referred from private clinic. Further details awaited.</td>
+        <td>
+          <div class="dx-main">Calculi — provisional</div>
+          <div class="dx-sub">Further workup needed</div>
+        </td>
+        <td>
+          <div class="vital-item"><span class="vital-label">HR</span>88 bpm</div>
+          <div class="vital-item"><span class="vital-label">BP</span>142/90</div>
+          <div class="vital-item"><span class="vital-label">SpO₂</span>97%</div>
+          <div class="vital-item"><span class="vital-label">Temp</span>98.2°F</div>
+          <div class="vital-item" style="margin-top:4px;color:#9CA3AF;font-size:10px;">ECG — not done</div>
+        </td>
+        <td>
+          <div class="ix-pending">⏳ Echo not documented</div>
+          <div class="ix-pending">⏳ VBG pending</div>
+          <div class="ix-item" style="margin-top:4px;color:#9CA3AF;">Labs ordered — awaiting</div>
+        </td>
+        <td>
+          <div class="rx-item">IV access done</div>
+          <div class="rx-item">IVF running</div>
+          <div class="rx-item">Analgesia given</div>
+        </td>
+        <td>
+          <div class="pending-item"><span class="pending-dot">→</span>Complete clinical history</div>
+          <div class="pending-item"><span class="pending-dot">→</span>ECG and echo</div>
+          <div class="pending-item"><span class="pending-dot">→</span>Review referring letter</div>
+          <div class="pending-urgent">⚠ Urology not yet consulted</div>
+        </td>
+      </tr>
+
+      <!-- Row 3 — P1 -->
+      <tr class="p1">
+        <td class="cell-bed">
+          <div class="priority-strip"></div>
+          <div class="bed-num">Bed 12</div>
+          <div class="p-badge p1">P1 · Red</div>
+        </td>
+        <td>
+          <div class="patient-name">Mohammed Jaffar</div>
+          <div class="patient-age">67M · Active</div>
+        </td>
+        <td>Room admission — exact complaint pending documentation.</td>
+        <td>
+          <div class="dx-main">Working diagnosis not finalised</div>
+          <div class="dx-sub">Room admission — vitals stable</div>
+        </td>
+        <td>
+          <div class="vital-item"><span class="vital-label">HR</span>92 bpm</div>
+          <div class="vital-item"><span class="vital-label">BP</span>154/94</div>
+          <div class="vital-item"><span class="vital-label">SpO₂</span>95%</div>
+          <div class="vital-item"><span class="vital-label">Temp</span>99.1°F</div>
+          <div class="vital-item" style="margin-top:4px;color:#9CA3AF;font-size:10px;">VBG / ECG / Echo — NA in notes</div>
+        </td>
+        <td>
+          <div class="ix-pending">⏳ All investigations pending</div>
+        </td>
+        <td>
+          <div class="rx-item">IV access</div>
+          <div class="rx-item">Vitals monitoring</div>
+        </td>
+        <td>
+          <div class="pending-item"><span class="pending-dot">→</span>Complete case sheet</div>
+          <div class="pending-item"><span class="pending-dot">→</span>ECG — urgent</div>
+          <div class="pending-item"><span class="pending-dot">→</span>Clinical diagnosis to be established</div>
+          <div class="pending-urgent">⚠ High priority — needs urgent review</div>
+        </td>
+      </tr>
+
+      <!-- Row 4 — P3 -->
+      <tr class="p3">
+        <td class="cell-bed">
+          <div class="priority-strip"></div>
+          <div class="bed-num">Bed 13</div>
+          <div class="p-badge p3">P3 · Yellow</div>
+        </td>
+        <td>
+          <div class="patient-name">Annama</div>
+          <div class="patient-age">72F · Active</div>
+        </td>
+        <td>Trauma case. Fall at home. Right hip pain.</td>
+        <td>
+          <div class="dx-main">? NOF fracture — right hip</div>
+          <div class="dx-sub">Trauma mechanism confirmed</div>
+        </td>
+        <td>
+          <div class="vital-item"><span class="vital-label">HR</span>78 bpm</div>
+          <div class="vital-item"><span class="vital-label">BP</span>126/78</div>
+          <div class="vital-item"><span class="vital-label">SpO₂</span>99%</div>
+          <div class="vital-item"><span class="vital-label">Temp</span>97.8°F</div>
+          <div class="vital-item"><span class="vital-label">GCS</span>15/15</div>
+        </td>
+        <td>
+          <div class="ix-pending">⏳ X-ray pelvis — pending report</div>
+          <div class="ix-item" style="margin-top:4px;">Bloods sent</div>
+          <div class="ix-item">CBC / BMP / Coag ordered</div>
+        </td>
+        <td>
+          <div class="rx-item">Inj Morphine 2mg IV — pain relief</div>
+          <div class="rx-item">IVF 500ml NS</div>
+          <div class="rx-item">Limb elevated, ice pack</div>
+          <div class="rx-consult" style="margin-top:4px;">🔵 Ortho consult called</div>
+        </td>
+        <td>
+          <div class="pending-item"><span class="pending-dot">→</span>X-ray pelvis report</div>
+          <div class="pending-item"><span class="pending-dot">→</span>Ortho review pending</div>
+          <div class="pending-item"><span class="pending-dot">→</span>Consider CT hip if X-ray inconclusive</div>
+          <div class="pending-item"><span class="pending-dot">→</span>Confirm glucose / electrolytes</div>
+        </td>
+      </tr>
+
+      <!-- Row 5 — P4 -->
+      <tr class="p4">
+        <td class="cell-bed">
+          <div class="priority-strip"></div>
+          <div class="bed-num">Bed 14</div>
+          <div class="p-badge p4">P4 · Green</div>
+        </td>
+        <td>
+          <div class="patient-name">Sebastian</div>
+          <div class="patient-age">34M · Active</div>
+        </td>
+        <td>HHS — hyperglycaemic hyperosmolar state. Known diabetic. Referred from clinic.</td>
+        <td>
+          <div class="dx-main">HHS — confirmed</div>
+          <div class="dx-sub">GRBS 480 mg/dL on arrival</div>
+        </td>
+        <td>
+          <div class="vital-item"><span class="vital-label">HR</span>110 bpm</div>
+          <div class="vital-item"><span class="vital-label">BP</span>108/72</div>
+          <div class="vital-item"><span class="vital-label">SpO₂</span>97%</div>
+          <div class="vital-item"><span class="vital-alert">GRBS 480</span></div>
+          <div class="vital-item"><span class="vital-label">Na</span>148 · <span class="vital-label">K</span>3.2</div>
+        </td>
+        <td>
+          <div class="ix-done">✓ VBG — pH 7.38, Glucose 26.4</div>
+          <div class="ix-done">✓ CBC, BMP done</div>
+          <div class="ix-pending" style="margin-top:4px;">⏳ HbA1c pending</div>
+          <div class="ix-pending">⏳ Urine ketones</div>
+        </td>
+        <td>
+          <div class="rx-item">IV NS 1L/hr × 2hrs → 500ml/hr</div>
+          <div class="rx-item">Insulin infusion started — 0.05 U/kg/hr</div>
+          <div class="rx-item">K+ replacement — 20mEq in 500ml NS</div>
+          <div class="rx-item">Hourly GRBS monitoring</div>
+          <div class="rx-consult" style="margin-top:4px;">🔵 Medicine consult — admit ICU</div>
+        </td>
+        <td>
+          <div class="pending-item"><span class="pending-dot">→</span>GRBS target: 250–300 mg/dL</div>
+          <div class="pending-item"><span class="pending-dot">→</span>Repeat VBG at 22:30</div>
+          <div class="pending-item"><span class="pending-dot">→</span>ICU bed confirmed — transfer when stable</div>
+          <div class="pending-item"><span class="pending-dot">→</span>Family counselling done</div>
+        </td>
+      </tr>
+
+    </tbody>
+  </table>
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    <span class="legend-label">Priority</span>
+    <div class="legend-item"><div class="legend-dot" style="background:#EF4444;"></div> P1 Red — Immediate</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#F97316;"></div> P2 Orange — Urgent</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#EAB308;"></div> P3 Yellow — Semi-urgent</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#22C55E;"></div> P4 Green — Non-urgent</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#3B82F6;"></div> P5 Blue — Review</div>
+    <div style="margin-left:auto;font-size:10px;color:#9CA3AF;">⏳ Pending &nbsp;·&nbsp; ✓ Done &nbsp;·&nbsp; 🔵 Consult &nbsp;·&nbsp; ⚠ Urgent action</div>
+  </div>
+
+  <!-- Footer -->
+  <div class="sheet-footer">
+    <div class="footer-left">
+      Generated by <strong>ErMate</strong> · <strong>5 active cases</strong> · 21/06/2026 20:45 IST<br/>
+      Handing over: <strong>Dr. Neeraj</strong> &nbsp;·&nbsp; Department: Emergency Medicine<br/>
+      <span style="font-size:10px;color:#9CA3AF;">This document is confidential. For clinical handover use only.</span>
+    </div>
+    <div class="footer-sig">
+      <div class="sig-block">
+        <div class="sig-line"></div>
+        <div class="sig-label">Handing Over Doctor</div>
+      </div>
+      <div class="sig-block">
+        <div class="sig-line"></div>
+        <div class="sig-label">Receiving Doctor</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>
