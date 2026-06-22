@@ -40,6 +40,7 @@ import QuickCaseSheetScreen from "@/screens/QuickCaseSheetScreen";
 import StatsScreen from "@/screens/StatsScreen";
 import VoiceCaseSheetScreen from "@/screens/VoiceCaseSheetScreen";
 import RoundsScreen from "@/screens/RoundsScreen";
+import HandoverScreen from "@/screens/HandoverScreen";
 
 export type RootStackParamList = {
   Login: undefined;
@@ -91,6 +92,7 @@ export type RootStackParamList = {
   };
   Stats: undefined;
   Rounds: { caseId?: string; lensId?: string } | undefined;
+  Handover: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -362,6 +364,13 @@ export default function RootStackNavigator() {
             options={{
               presentation: "modal",
               headerTitle: "Rounds",
+            }}
+          />
+          <Stack.Screen
+            name="Handover"
+            component={HandoverScreen}
+            options={{
+              headerTitle: "Handover Sheet",
             }}
           />
         </>

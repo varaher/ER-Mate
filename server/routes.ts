@@ -621,6 +621,238 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/export/handover-pdf", async (req: Request, res: Response) => {
+    try {
+      const { cases, doctorName, shiftDate, shiftTime } = req.body as {
+        cases: Array<{ caseData: any; bed: string; pendingPlan: string }>;
+        doctorName: string;
+        shiftDate: string;
+        shiftTime: string;
+      };
+
+      if (!cases || !Array.isArray(cases) || cases.length === 0) {
+        return res.status(400).json({ error: "No cases provided" });
+      }
+
+      const { default: PDFDoc } = await import("pdfkit");
+      const doc = new PDFDoc({
+        size: "A4",
+        layout: "landscape",
+        margins: { top: 28, bottom: 28, left: 28, right: 28 },
+      });
+
+      const chunks: Buffer[] = [];
+      doc.on("data", (chunk: Buffer) => chunks.push(chunk));
+      doc.on("end", () => {
+        const buf = Buffer.concat(chunks);
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", `attachment; filename="handover_${shiftDate.replace(/\//g, "-")}.pdf"`);
+        res.send(buf);
+      });
+
+      const nv = (v: any, d = "—") => {
+        if (v === undefined || v === null || v === "") return d;
+        if (Array.isArray(v)) return v.filter(Boolean).join(", ") || d;
+        return String(v);
+      };
+
+      const truncate = (s: string, max: number) =>
+        s.length > max ? s.slice(0, max - 1) + "…" : s;
+
+      // ── Layout constants ────────────────────────────────────────────────
+      const PW = 841.89;
+      const marginL = 28;
+      const marginR = 28;
+      const tableW = PW - marginL - marginR;
+
+      // 7 columns — widths must sum to tableW (785.89)
+      const COLS = [
+        { label: "Bed / Patient", w: 110 },
+        { label: "Complaint / Summary", w: 110 },
+        { label: "Provisional Diagnosis", w: 120 },
+        { label: "Initial Vitals", w: 100 },
+        { label: "Key Investigations", w: 105 },
+        { label: "Treatment / Consults", w: 120 },
+        { label: "Pending / Plan", w: 120.89 },
+      ];
+
+      const HEADER_H = 22;
+      const ROW_H = 70;
+      const FONT_HEADER = 7.5;
+      const FONT_CELL = 8;
+      const CELL_PAD = 4;
+      const GREEN = "#1DB870";
+      const DARK = "#0D1117";
+      const GRAY = "#6B7280";
+
+      // ── Page header ──────────────────────────────────────────────────────
+      doc.fontSize(13).font("Helvetica-Bold").fillColor(DARK)
+        .text("EMERGENCY DOCTORS HANDOVER SHEET", marginL, 20, { width: tableW, align: "center" });
+
+      doc.fontSize(9).font("Helvetica").fillColor(GRAY)
+        .text(
+          `Date: ${shiftDate}   Time: ${shiftTime}   Doctor: ${doctorName}`,
+          marginL, 36, { width: tableW, align: "center" }
+        );
+
+      const tableTop = 52;
+
+      // ── Column header row ────────────────────────────────────────────────
+      doc.rect(marginL, tableTop, tableW, HEADER_H).fill("#0D1117");
+      let cx = marginL;
+      COLS.forEach((col) => {
+        doc.fontSize(FONT_HEADER).font("Helvetica-Bold").fillColor("#FFFFFF")
+          .text(col.label.toUpperCase(), cx + CELL_PAD, tableTop + 7, {
+            width: col.w - CELL_PAD * 2,
+            lineBreak: false,
+          });
+        cx += col.w;
+      });
+
+      // column dividers in header
+      cx = marginL;
+      COLS.forEach((col, ci) => {
+        if (ci > 0) {
+          doc.moveTo(cx, tableTop).lineTo(cx, tableTop + HEADER_H)
+            .strokeColor("rgba(255,255,255,0.25)").lineWidth(0.5).stroke();
+        }
+        cx += col.w;
+      });
+
+      // ── Data rows ────────────────────────────────────────────────────────
+      cases.forEach((entry, ri) => {
+        const cd = entry.caseData || {};
+        const patient = cd.patient || {};
+        const vitals = cd.vitals_at_arrival || cd.triage?.vitals || {};
+        const primary = cd.primary_assessment || cd.abcde || {};
+        const treatment = cd.treatment || {};
+        const investigations = cd.investigations || {};
+        const complaint = cd.presenting_complaint?.text || cd.presenting_complaint || "";
+        const invPanels = investigations.panels_selected || investigations.individual_tests || [];
+
+        // Build cell content strings
+        const patientStr = [
+          entry.bed ? `Bed: ${entry.bed}` : "",
+          patient.name || "Unknown",
+          [patient.age ? `${patient.age}y` : "", patient.sex].filter(Boolean).join(" "),
+        ].filter(Boolean).join("\n");
+
+        const complaintStr = nv(complaint, "—");
+
+        const diagnosisList: string[] = [];
+        if (treatment.primary_diagnosis) diagnosisList.push(treatment.primary_diagnosis);
+        if (treatment.provisional_diagnoses?.length) {
+          treatment.provisional_diagnoses.slice(0, 2).forEach((d: any) => {
+            const t = typeof d === "string" ? d : d?.text || d?.diagnosis || "";
+            if (t) diagnosisList.push(t);
+          });
+        }
+        const diagnosisStr = diagnosisList.length > 0 ? diagnosisList.join("\n") : "—";
+
+        const hr = vitals.hr || primary.circulation_hr || "";
+        const bp = (vitals.bp_systolic && vitals.bp_diastolic)
+          ? `${vitals.bp_systolic}/${vitals.bp_diastolic}` : "";
+        const spo2 = vitals.spo2 || primary.breathing_spo2 || "";
+        const rr = vitals.rr || primary.breathing_rr || "";
+        const temp = vitals.temperature || primary.exposure_temperature || "";
+        const gcsE = vitals.gcs_e || primary.disability_gcs_e || "";
+        const gcsV = vitals.gcs_v || primary.disability_gcs_v || "";
+        const gcsM = vitals.gcs_m || primary.disability_gcs_m || "";
+        const gcsParts = [gcsE, gcsV, gcsM].filter(Boolean);
+        const gcs = gcsParts.length === 3 ? `GCS ${gcsParts.join("+")}=${Number(gcsE)+Number(gcsV)+Number(gcsM)}` : "";
+        const vitalsStr = [
+          hr ? `HR: ${hr}` : "",
+          bp ? `BP: ${bp}` : "",
+          spo2 ? `SpO2: ${spo2}%` : "",
+          rr ? `RR: ${rr}` : "",
+          temp ? `Temp: ${temp}°C` : "",
+          gcs,
+        ].filter(Boolean).join("\n");
+
+        const invStr = Array.isArray(invPanels) && invPanels.length > 0
+          ? invPanels.slice(0, 4).join(", ")
+          : nv(investigations.other_tests || investigations.lab_results, "—");
+
+        const meds: string[] = [];
+        if (treatment.medications?.length) {
+          treatment.medications.slice(0, 3).forEach((m: any) => {
+            const n = typeof m === "string" ? m : m?.drug || m?.name || "";
+            if (n) meds.push(n);
+          });
+        }
+        const consults = treatment.consults?.join(", ") || treatment.consultation || "";
+        const txStr = [...meds, consults ? `Consult: ${consults}` : ""].filter(Boolean).join("\n") || "—";
+
+        const pendingStr = entry.pendingPlan || "—";
+
+        const cells = [patientStr, complaintStr, diagnosisStr, vitalsStr, invStr, txStr, pendingStr];
+        const maxChars = [55, 65, 65, 55, 60, 70, 70];
+
+        const rowY = tableTop + HEADER_H + ri * ROW_H;
+        const isEven = ri % 2 === 0;
+
+        // row background
+        doc.rect(marginL, rowY, tableW, ROW_H)
+          .fill(isEven ? "#FAFAFA" : "#FFFFFF");
+
+        // outer row border
+        doc.rect(marginL, rowY, tableW, ROW_H)
+          .strokeColor("#E5E7EB").lineWidth(0.5).stroke();
+
+        // cell content + dividers
+        cx = marginL;
+        cells.forEach((cellText, ci) => {
+          const col = COLS[ci];
+          const truncated = truncate(cellText, maxChars[ci]);
+
+          // vertical divider
+          if (ci > 0) {
+            doc.moveTo(cx, rowY).lineTo(cx, rowY + ROW_H)
+              .strokeColor("#E5E7EB").lineWidth(0.5).stroke();
+          }
+
+          // first column bold
+          doc.fontSize(FONT_CELL)
+            .font(ci === 0 ? "Helvetica-Bold" : "Helvetica")
+            .fillColor(ci === 0 ? DARK : "#374151")
+            .text(truncated, cx + CELL_PAD, rowY + CELL_PAD + 2, {
+              width: col.w - CELL_PAD * 2,
+              height: ROW_H - CELL_PAD * 2,
+              lineBreak: true,
+              ellipsis: true,
+            });
+
+          cx += col.w;
+        });
+
+        // priority color strip on far left
+        const priorityColors: Record<number, string> = {
+          1: "#EF4444", 2: "#F97316", 3: "#EAB308", 4: "#22C55E", 5: "#3B82F6",
+        };
+        const pColor = priorityColors[cd.triage_priority || 4] || "#9CA3AF";
+        doc.rect(marginL, rowY, 3, ROW_H).fill(pColor);
+      });
+
+      // ── Outer table border ───────────────────────────────────────────────
+      const totalTableH = HEADER_H + cases.length * ROW_H;
+      doc.rect(marginL, tableTop, tableW, totalTableH)
+        .strokeColor("#D1D5DB").lineWidth(1).stroke();
+
+      // ── Footer ───────────────────────────────────────────────────────────
+      const footerY = tableTop + totalTableH + 10;
+      doc.fontSize(7.5).font("Helvetica").fillColor(GRAY)
+        .text(
+          `Generated by ErMate · ${shiftDate} ${shiftTime} · ${cases.length} patient${cases.length !== 1 ? "s" : ""}`,
+          marginL, footerY, { width: tableW, align: "right" }
+        );
+
+      doc.end();
+    } catch (error) {
+      console.error("[HANDOVER] PDF error:", error);
+      res.status(500).json({ error: "Failed to generate handover PDF" });
+    }
+  });
+
   app.post("/api/export/discharge-pdf", async (req: Request, res: Response) => {
     try {
       const data: DischargeSummaryData = req.body;

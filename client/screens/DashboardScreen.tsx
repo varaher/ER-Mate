@@ -714,6 +714,30 @@ export default function DashboardScreen() {
           <Feather name="chevron-right" size={20} color={theme.primary} />
         </Pressable>
 
+        <Pressable
+          style={({ pressed }) => [
+            styles.statsNavCard,
+            {
+              backgroundColor: theme.card,
+              borderColor: "#818CF830",
+              opacity: pressed ? 0.85 : 1,
+              marginTop: Spacing.sm,
+            },
+          ]}
+          onPress={() => navigation.navigate("Handover")}
+        >
+          <View style={[styles.statsNavIcon, { backgroundColor: "#818CF815" }]}>
+            <Feather name="clipboard" size={20} color="#818CF8" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.statsNavTitle, { color: theme.text }]}>Handover Sheet</Text>
+            <Text style={[styles.statsNavSub, { color: theme.textSecondary }]}>
+              Select cases, add pending notes, export PDF
+            </Text>
+          </View>
+          <Feather name="chevron-right" size={20} color="#818CF8" />
+        </Pressable>
+
         {aiCredits !== null ? (
           <Pressable
             style={({ pressed }) => [

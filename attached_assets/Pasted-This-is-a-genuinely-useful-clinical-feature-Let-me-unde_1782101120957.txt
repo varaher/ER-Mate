@@ -1,0 +1,74 @@
+This is a genuinely useful clinical feature. Let me understand exactly what you're showing me first.
+
+---
+
+**What this handover sheet is:**
+
+A structured one-page document showing all active patients at shift change — bed number, patient name, complaint, provisional diagnosis, key investigations, treatment done, and what's pending. Exactly what a doctor hands to the incoming doctor at the end of a shift.
+
+**What you're asking for:**
+
+1. **Auto-generate** — dashboard pulls all active cases and builds the handover sheet automatically
+2. **Selective** — doctor ticks which cases to include (maybe some are already discharged or irrelevant)
+3. **Export** — download as PDF or Word, print-ready format matching this column layout
+
+---
+
+**This is very buildable. Here's exactly how:**
+
+**What ErMate already has that feeds this:**
+
+From your case sheet data, every handover column maps directly:
+
+| Handover Column | ErMate Source |
+|----------------|---------------|
+| Bed / Patient | Patient name field |
+| Complaint / Summary | Chief complaint |
+| Provisional Diagnosis | Working diagnosis tab |
+| Initial Vitals | Vitals section |
+| VBG/ECG/Echo | Investigations tab |
+| Key Investigations | Investigations results |
+| Treatment / Consults | Treatment tab |
+| Pending / Plan | Addendum notes or pending field |
+
+**The only new thing needed** is a "Pending / Plan" field in each case — a free-text box where the doctor notes what's outstanding before handover. Everything else is already captured.
+
+---
+
+**The two flows:**
+
+**Flow 1 — Auto Dashboard Handover**
+```
+Dashboard → "Handover" button (top right)
+     ↓
+All active cases pulled automatically
+     ↓
+Handover sheet generated in table format
+     ↓
+One tap — Download PDF or DOCX
+```
+
+**Flow 2 — Selective Handover**
+```
+Cases screen → tap "Handover" mode
+     ↓
+Checkboxes appear on each case
+     ↓
+Doctor ticks the cases they want
+     ↓
+"Generate Handover" button
+     ↓
+PDF / DOCX download
+```
+
+---
+
+**The printed format** should match exactly what you photographed — landscape orientation, one row per patient, columns across. That's what doctors are used to and what works at the nurses' station.
+
+---
+
+**Two questions before I design this:**
+
+1. Should the "Pending / Plan" field be added to the existing case sheet as a new tab/section, or do you want it as a separate quick-fill that only appears when generating a handover?
+
+2. Should the handover sheet include the doctor's name and date/time auto-stamped at the top — like this one says "21/06/2026"?
