@@ -50,7 +50,8 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "npm run expo:static:build && npm run server:dev"
+args = "REPLIT_INTERNAL_APP_DOMAIN=er-mate.replit.app npm run expo:static:build && npm run server:dev"
+waitForPort = 5000
 
 [userenv]
 
