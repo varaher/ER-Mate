@@ -351,8 +351,11 @@ self.addEventListener('fetch', function(event) {
       if (filePath.endsWith(".html") || filePath.endsWith(".json") || filePath.endsWith(".webmanifest")) {
         res.setHeader("Cache-Control", "no-cache");
       }
-      // JS/CSS bundles have content hashes — safe to cache long-term
-      if (filePath.endsWith(".js") || filePath.endsWith(".css")) {
+      // web/bundle.js has no content hash in its name — must revalidate on every deploy
+      if (filePath.endsWith(`${path.sep}web${path.sep}bundle.js`)) {
+        res.setHeader("Cache-Control", "no-cache");
+      } else if (filePath.endsWith(".js") || filePath.endsWith(".css")) {
+        // Timestamp-based iOS/Android bundles have unique paths — safe to cache long-term
         res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
       }
     },
@@ -363,7 +366,10 @@ self.addEventListener('fetch', function(event) {
       if (filePath.endsWith(".html") || filePath.endsWith(".json")) {
         res.setHeader("Cache-Control", "no-cache");
       }
-      if (filePath.endsWith(".js") || filePath.endsWith(".css")) {
+      // bundle.js served from /web/ has no hash — must not be cached immutably
+      if (filePath.endsWith("bundle.js")) {
+        res.setHeader("Cache-Control", "no-cache");
+      } else if (filePath.endsWith(".js") || filePath.endsWith(".css")) {
         res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
       }
     },
