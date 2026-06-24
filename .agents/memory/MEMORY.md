@@ -1,0 +1,1 @@
+- [Deployment build Metro timeout](deployment-build-timeout.md) — production publish fails because Metro iOS/Android compilation exceeds 2-min timeout; fix is to pre-build with production domain and commit static-build.
