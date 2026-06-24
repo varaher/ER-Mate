@@ -161,13 +161,18 @@ export async function fetchFromApi<T>(endpoint: string): Promise<T> {
     let errorMessage = "Request failed";
     try {
       const errorJson = JSON.parse(responseText);
-      errorMessage = errorJson.detail || errorJson.message || responseText;
+      errorMessage = errorJson.detail || errorJson.message || errorJson.error || responseText;
+      if (typeof errorMessage !== "string") errorMessage = JSON.stringify(errorMessage);
     } catch {
       if (responseText.trim().startsWith("<") || responseText.includes("<!DOCTYPE")) {
         errorMessage = "Server is temporarily unavailable. Please try again in a moment.";
       } else {
         errorMessage = responseText || res.statusText;
       }
+    }
+    if (token && isTokenExpiredError(errorMessage, res.status)) {
+      await handleTokenExpiry();
+      throw new Error("Your session has expired. Please log in again.");
     }
     throw new Error(errorMessage);
   }
@@ -319,7 +324,17 @@ export async function fetchCasesFromProxy<T = any[]>(): Promise<T> {
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(text || "Failed to fetch cases");
+    let errorMessage = text || "Failed to fetch cases";
+    try {
+      const errJson = JSON.parse(text);
+      const raw = errJson.detail || errJson.message || errJson.error;
+      if (raw && typeof raw === "string") errorMessage = raw;
+    } catch { /* keep raw text */ }
+    if (token && isTokenExpiredError(errorMessage, res.status)) {
+      await handleTokenExpiry();
+      throw new Error("Your session has expired. Please log in again.");
+    }
+    throw new Error(errorMessage);
   }
   return res.json();
 }

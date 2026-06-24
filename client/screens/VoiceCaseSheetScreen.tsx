@@ -436,8 +436,33 @@ export default function VoiceCaseSheetScreen() {
         }),
       });
 
-      const result = await resp.json();
-      if (!result.success) throw new Error(result.error || "Save failed");
+      if (resp.status === 401) {
+        await AsyncStorage.multiRemove(["token", "user"]);
+        Alert.alert("Session Expired", "Your session has expired. Please log in again.", [
+          { text: "Log In", onPress: () => navigation.navigate("Login") },
+        ]);
+        return;
+      }
+
+      let result: any;
+      try {
+        result = await resp.json();
+      } catch {
+        throw new Error("Unexpected response from server. Please try again.");
+      }
+
+      if (!result.success) {
+        const rawErr: string = result.error || result.detail || "Save failed";
+        const lower = rawErr.toLowerCase();
+        if (lower.includes("token expired") || lower.includes("not authenticated") || lower.includes("jwt expired")) {
+          await AsyncStorage.multiRemove(["token", "user"]);
+          Alert.alert("Session Expired", "Your session has expired. Please log in again.", [
+            { text: "Log In", onPress: () => navigation.navigate("Login") },
+          ]);
+          return;
+        }
+        throw new Error(rawErr);
+      }
 
       setSavedCaseId(String(result.caseId));
       await invalidateCases();
