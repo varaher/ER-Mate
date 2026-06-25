@@ -684,6 +684,46 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  // ─── User profile (role: consultant / resident / doctor) ─────────────────
+  app.get("/api/profile", async (req: Request, res: Response) => {
+    try {
+      const userId = (req.query.userId as string) || (req.headers["x-user-id"] as string);
+      if (!userId) return res.status(400).json({ error: "userId required" });
+      const pool = getPool();
+      if (!pool) return res.status(503).json({ error: "Database unavailable" });
+      const result = await pool.query(
+        "SELECT role FROM user_profiles WHERE user_id = $1",
+        [userId]
+      );
+      const role = result.rows[0]?.role || "doctor";
+      return res.json({ role });
+    } catch (err) {
+      console.error("[Profile GET] Error:", err);
+      return res.status(500).json({ error: "Server error" });
+    }
+  });
+
+  app.put("/api/profile", async (req: Request, res: Response) => {
+    try {
+      const { userId, role } = req.body as { userId?: string; role?: string };
+      if (!userId || !role) return res.status(400).json({ error: "userId and role required" });
+      const validRoles = ["consultant", "resident", "doctor", "hod"];
+      if (!validRoles.includes(role)) return res.status(400).json({ error: "Invalid role" });
+      const pool = getPool();
+      if (!pool) return res.status(503).json({ error: "Database unavailable" });
+      await pool.query(
+        `INSERT INTO user_profiles (user_id, role, updated_at)
+         VALUES ($1, $2, CURRENT_TIMESTAMP)
+         ON CONFLICT (user_id) DO UPDATE SET role = $2, updated_at = CURRENT_TIMESTAMP`,
+        [userId, role]
+      );
+      return res.json({ success: true, role });
+    } catch (err) {
+      console.error("[Profile PUT] Error:", err);
+      return res.status(500).json({ error: "Server error" });
+    }
+  });
+
   // ─── Silent re-authentication session management ──────────────────────────
   // Store encrypted credentials server-side so the app can silently re-login
   // when the external backend token expires. Password never leaves the server

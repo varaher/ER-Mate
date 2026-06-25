@@ -7,13 +7,15 @@ import {
   Pressable,
   RefreshControl,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
+import { useHeaderHeight } from "@react-navigation/elements";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
-import { apiGet } from "@/lib/api";
+import { fetchCasesFromProxy, deleteCaseFromProxy } from "@/lib/api";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -28,38 +30,33 @@ interface LogItem {
   details?: string;
 }
 
-interface CaseItem {
-  id: string;
-  patient: { name: string; age: string };
-  status: string;
-  created_at: string;
-  triage_priority: number;
-}
-
 export default function LogsScreen() {
   const navigation = useNavigation<NavigationProp>();
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [logs, setLogs] = useState<LogItem[]>([]);
+  const [rawCases, setRawCases] = useState<any[]>([]);
 
   const loadLogs = async () => {
     try {
-      const res = await apiGet<CaseItem[]>("/cases");
-      if (res.success && res.data) {
-        const generatedLogs: LogItem[] = res.data.map((c) => ({
-          id: c.id,
-          action: c.status === "discharged" || c.status === "completed" ? "Discharged" : "Created",
-          case_id: c.id,
-          patient_name: c.patient?.name || "Unknown",
-          created_at: c.created_at,
-          details: `Priority: ${c.triage_priority}`,
-        }));
-        generatedLogs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-        setLogs(generatedLogs);
-      }
+      const cases = await fetchCasesFromProxy<any[]>();
+      const arr = Array.isArray(cases) ? cases : [];
+      setRawCases(arr);
+      const generatedLogs: LogItem[] = arr.map((c: any) => ({
+        id: c.id,
+        action: c.status === "discharged" || c.status === "completed" ? "Discharged" : "Active",
+        case_id: c.id,
+        patient_name: c.patient?.name || c.patient_name || "Unknown",
+        created_at: c.created_at,
+        details: c.triage_priority ? `Priority ${c.triage_priority}` : undefined,
+      }));
+      generatedLogs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      setLogs(generatedLogs);
     } catch (err) {
       console.error("Error loading logs:", err);
     } finally {
@@ -69,6 +66,7 @@ export default function LogsScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      setLoading(true);
       loadLogs();
     }, [])
   );
@@ -79,33 +77,60 @@ export default function LogsScreen() {
     setRefreshing(false);
   };
 
-  const formatDateTime = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+  const handleDeleteAll = () => {
+    if (rawCases.length === 0) {
+      Alert.alert("Nothing to delete", "You have no cases recorded.");
+      return;
+    }
+    Alert.alert(
+      "Delete All Cases",
+      `This will permanently delete all ${rawCases.length} cases from your account. This cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: `Delete ${rawCases.length} Cases`,
+          style: "destructive",
+          onPress: async () => {
+            setDeleting(true);
+            const ids = rawCases.map((c: any) => c.id).filter(Boolean);
+            let deleted = 0;
+            for (const id of ids) {
+              try { await deleteCaseFromProxy(id); deleted++; } catch {}
+            }
+            setDeleting(false);
+            await loadLogs();
+            Alert.alert("Done", `${deleted} case${deleted !== 1 ? "s" : ""} deleted.`);
+          },
+        },
+      ]
+    );
   };
 
-  const getActionIcon = (action: string) => {
-    if (action === "Discharged") return "check-circle";
-    if (action === "Created") return "plus-circle";
-    return "activity";
+  const formatDateTime = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleString("en-IN", {
+        month: "short", day: "numeric",
+        hour: "2-digit", minute: "2-digit",
+      });
+    } catch { return dateString; }
   };
 
   const getActionColor = (action: string) => {
     if (action === "Discharged") return TriageColors.green;
-    if (action === "Created") return theme.primary;
-    return theme.textSecondary;
+    return theme.primary;
+  };
+
+  const getActionIcon = (action: string): keyof typeof Feather.glyphMap => {
+    if (action === "Discharged") return "check-circle";
+    return "plus-circle";
   };
 
   const renderLog = ({ item }: { item: LogItem }) => (
     <Pressable
       style={({ pressed }) => [
         styles.logCard,
-        { backgroundColor: theme.card, opacity: pressed ? 0.9 : 1 },
+        { backgroundColor: theme.card, opacity: pressed ? 0.88 : 1 },
       ]}
       onPress={() => item.case_id && navigation.navigate("ViewCase", { caseId: item.case_id })}
     >
@@ -114,18 +139,23 @@ export default function LogsScreen() {
       </View>
       <View style={styles.logInfo}>
         <Text style={[styles.patientName, { color: theme.text }]}>{item.patient_name}</Text>
-        <Text style={[styles.actionText, { color: theme.textSecondary }]}>
-          {item.action} | {item.details}
-        </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
+          <View style={[styles.actionBadge, { backgroundColor: getActionColor(item.action) + "18" }]}>
+            <Text style={[styles.actionBadgeText, { color: getActionColor(item.action) }]}>{item.action}</Text>
+          </View>
+          {item.details ? (
+            <Text style={[styles.detailText, { color: theme.textMuted }]}>{item.details}</Text>
+          ) : null}
+        </View>
         <Text style={[styles.timeText, { color: theme.textMuted }]}>{formatDateTime(item.created_at)}</Text>
       </View>
-      <Feather name="chevron-right" size={20} color={theme.textMuted} />
+      <Feather name="chevron-right" size={18} color={theme.textMuted} />
     </Pressable>
   );
 
   if (loading) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: theme.backgroundDefault }]}>
+      <View style={[styles.center, { flex: 1, backgroundColor: theme.backgroundDefault }]}>
         <ActivityIndicator size="large" color={theme.primary} />
       </View>
     );
@@ -133,23 +163,48 @@ export default function LogsScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundDefault }]}>
-      <View style={[styles.header, { backgroundColor: theme.card, paddingTop: insets.top + Spacing.md }]}>
-        <Text style={[styles.title, { color: theme.text }]}>Activity Logs</Text>
-        <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-          {logs.length} activities recorded
-        </Text>
-      </View>
-
       <FlatList
         data={logs}
         renderItem={renderLog}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        contentContainerStyle={{
+          paddingTop: headerHeight + 12,
+          paddingHorizontal: Spacing.lg,
+          paddingBottom: insets.bottom + 100,
+        }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
+        ListHeaderComponent={
+          logs.length > 0 ? (
+            <View style={styles.listHeader}>
+              <Text style={[styles.countText, { color: theme.textMuted }]}>
+                {logs.length} case{logs.length !== 1 ? "s" : ""} in your account
+              </Text>
+              <Pressable
+                onPress={handleDeleteAll}
+                disabled={deleting}
+                style={({ pressed }) => [styles.deleteAllBtn, { opacity: pressed || deleting ? 0.7 : 1 }]}
+              >
+                {deleting ? (
+                  <ActivityIndicator size="small" color={theme.danger} />
+                ) : (
+                  <Feather name="trash-2" size={14} color={theme.danger} />
+                )}
+                <Text style={[styles.deleteAllText, { color: theme.danger }]}>
+                  {deleting ? "Deleting…" : "Delete All"}
+                </Text>
+              </Pressable>
+            </View>
+          ) : null
+        }
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Feather name="list" size={48} color={theme.textMuted} />
-            <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No activity yet</Text>
+            <View style={[styles.emptyIcon, { backgroundColor: isDark ? "#1e293b" : "#F1F5F9" }]}>
+              <Feather name="list" size={32} color={theme.textMuted} />
+            </View>
+            <Text style={[styles.emptyTitle, { color: theme.text }]}>No cases yet</Text>
+            <Text style={[styles.emptySub, { color: theme.textMuted }]}>
+              Cases you document will appear here
+            </Text>
           </View>
         }
       />
@@ -159,35 +214,42 @@ export default function LogsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
-  header: {
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(0,0,0,0.05)",
+  center: { justifyContent: "center", alignItems: "center" },
+  listHeader: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    marginBottom: Spacing.md,
   },
-  title: { ...Typography.h2 },
-  subtitle: { ...Typography.small, marginTop: Spacing.xs },
-  list: { padding: Spacing.lg, paddingBottom: 120 },
-  logCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: Spacing.md,
+  countText: { fontSize: 13 },
+  deleteAllBtn: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    paddingHorizontal: 10, paddingVertical: 6,
     borderRadius: BorderRadius.md,
-    marginBottom: Spacing.sm,
-    gap: Spacing.md,
+    backgroundColor: "rgba(239,68,68,0.08)",
+  },
+  deleteAllText: { fontSize: 13, fontWeight: "600" },
+  logCard: {
+    flexDirection: "row", alignItems: "center",
+    padding: Spacing.md, borderRadius: BorderRadius.md,
+    marginBottom: Spacing.sm, gap: Spacing.md,
   },
   iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: BorderRadius.full,
-    justifyContent: "center",
-    alignItems: "center",
+    width: 40, height: 40, borderRadius: BorderRadius.full,
+    justifyContent: "center", alignItems: "center",
   },
   logInfo: { flex: 1 },
   patientName: { ...Typography.bodyMedium },
-  actionText: { ...Typography.small, marginTop: 2 },
-  timeText: { ...Typography.caption, marginTop: 2 },
-  emptyState: { alignItems: "center", paddingVertical: Spacing["4xl"] },
-  emptyText: { ...Typography.body, marginTop: Spacing.md },
+  actionBadge: {
+    paddingHorizontal: 7, paddingVertical: 2,
+    borderRadius: BorderRadius.full,
+  },
+  actionBadgeText: { fontSize: 11, fontWeight: "700" },
+  detailText: { fontSize: 11 },
+  timeText: { ...Typography.caption, marginTop: 3 },
+  emptyState: { alignItems: "center", paddingTop: 80, paddingHorizontal: 32 },
+  emptyIcon: {
+    width: 72, height: 72, borderRadius: 36,
+    alignItems: "center", justifyContent: "center", marginBottom: Spacing.lg,
+  },
+  emptyTitle: { ...Typography.h4, marginBottom: Spacing.sm },
+  emptySub: { ...Typography.body, textAlign: "center", lineHeight: 22 },
 });
