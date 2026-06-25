@@ -3,12 +3,38 @@ import { createServer, type Server } from "node:http";
 import PDFDocument from "pdfkit";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, BorderStyle } from "docx";
 import multer from "multer";
+import crypto from "crypto";
 import { generateDiagnosisSuggestions, recordFeedback, getFeedbackStats, getLearningInsights, generateCourseInHospital, extractClinicalDataFromVoice, transcribeAndExtractVoice, generateRoundsDebrief, type AIFeedback, type FeedbackResult, type ExtractedClinicalData } from "./services/aiDiagnosis";
 import { getOrCreateSubscription, canCreateCase, incrementCaseCount, activatePremium, cancelSubscription, FREE_CASE_LIMIT, PREMIUM_PRICE_INR } from "./services/subscription";
 import { getEMReferenceResponse, EM_TOPICS, type EMReferenceMessage } from "./services/emReference";
-import { getDb } from "./db";
+import { getDb, getPool, ensureAuthSessionsTable } from "./db";
 import { emReferenceFeedback, userFeedback } from "@shared/schema";
 import { eq, desc, count, sql as drizzleSql } from "drizzle-orm";
+
+// ─── AES-256-GCM helpers for credential encryption ───────────────────────────
+const CIPHER_ALGO = "aes-256-gcm";
+function _encKey(): Buffer {
+  const secret = process.env.SESSION_SECRET || "ermate-fallback-dev-key-change-in-prod";
+  return crypto.createHash("sha256").update(secret).digest();
+}
+function encryptPassword(text: string): { enc: string; iv: string; tag: string } {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv(CIPHER_ALGO, _encKey(), iv);
+  const encrypted = Buffer.concat([cipher.update(text, "utf8"), cipher.final()]);
+  return {
+    enc: encrypted.toString("base64"),
+    iv: iv.toString("base64"),
+    tag: cipher.getAuthTag().toString("base64"),
+  };
+}
+function decryptPassword(enc: string, iv: string, tag: string): string {
+  const decipher = crypto.createDecipheriv(CIPHER_ALGO, _encKey(), Buffer.from(iv, "base64"));
+  decipher.setAuthTag(Buffer.from(tag, "base64"));
+  return Buffer.concat([
+    decipher.update(Buffer.from(enc, "base64")),
+    decipher.final(),
+  ]).toString("utf8");
+}
 
 const upload = multer({ 
   storage: multer.memoryStorage(),
@@ -163,6 +189,9 @@ function decodeJwt(token: string): Record<string, any> | null {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Ensure the auth_sessions table exists (idempotent — runs once on startup)
+  ensureAuthSessionsTable().catch(() => {});
+
   const EXTERNAL_API = process.env.EXPO_PUBLIC_EXTERNAL_API_URL || "https://er-emr-backend.onrender.com/api";
 
   app.get("/api/proxy/cases", async (req: Request, res: Response) => {
@@ -618,6 +647,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("[Forgot Password] Error:", error);
       return res.json({ success: true, message: "If an account exists with this email, a password reset link has been sent." });
+    }
+  });
+
+  // ─── Silent re-authentication session management ──────────────────────────
+  // Store encrypted credentials server-side so the app can silently re-login
+  // when the external backend token expires. Password never leaves the server
+  // in plaintext — only the non-sensitive session_token is sent to the client.
+
+  app.post("/api/auth/store-creds", async (req: Request, res: Response) => {
+    try {
+      const { email, password, userId } = req.body as { email?: string; password?: string; userId?: string };
+      if (!email || !password) {
+        return res.status(400).json({ error: "email and password are required" });
+      }
+      const pool = getPool();
+      if (!pool) return res.status(503).json({ error: "Database unavailable" });
+
+      const { enc, iv, tag } = encryptPassword(password);
+      const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000); // 90 days
+
+      // Remove any existing sessions for this email
+      await pool.query("DELETE FROM auth_sessions WHERE email = $1", [email]);
+
+      const result = await pool.query(
+        `INSERT INTO auth_sessions (user_id, email, encrypted_password, iv, tag, expires_at)
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+        [userId || null, email, enc, iv, tag, expiresAt]
+      );
+
+      const sessionToken = result.rows[0]?.id;
+      console.log(`[StoreCreds] Session stored for ${email}`);
+      return res.json({ session_token: sessionToken });
+    } catch (error) {
+      console.error("[StoreCreds] Error:", error);
+      return res.status(500).json({ error: "Failed to store session" });
+    }
+  });
+
+  app.post("/api/auth/silent-refresh", async (req: Request, res: Response) => {
+    try {
+      const { session_token } = req.body as { session_token?: string };
+      if (!session_token) {
+        return res.status(400).json({ error: "session_token is required" });
+      }
+      const pool = getPool();
+      if (!pool) return res.status(503).json({ error: "Database unavailable" });
+
+      const result = await pool.query(
+        "SELECT * FROM auth_sessions WHERE id = $1",
+        [session_token]
+      );
+      const session = result.rows[0];
+      if (!session) return res.status(404).json({ error: "Session not found" });
+      if (new Date() > new Date(session.expires_at)) {
+        await pool.query("DELETE FROM auth_sessions WHERE id = $1", [session_token]);
+        return res.status(401).json({ error: "Session expired — please log in again" });
+      }
+
+      const password = decryptPassword(session.encrypted_password, session.iv, session.tag);
+      const EXT = process.env.EXPO_PUBLIC_EXTERNAL_API_URL || "https://er-emr-backend.onrender.com/api";
+      const loginRes = await fetch(`${EXT}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: session.email, password }),
+      });
+
+      if (!loginRes.ok) {
+        console.warn(`[SilentRefresh] External login failed with ${loginRes.status} for ${session.email}`);
+        return res.status(401).json({ error: "Re-authentication failed — please log in again" });
+      }
+
+      const data = await loginRes.json();
+      if (!data.access_token) {
+        return res.status(401).json({ error: "No token returned from server" });
+      }
+
+      console.log(`[SilentRefresh] Token refreshed silently for ${session.email}`);
+      return res.json({ access_token: data.access_token, refresh_token: data.refresh_token });
+    } catch (error) {
+      console.error("[SilentRefresh] Error:", error);
+      return res.status(500).json({ error: "Silent refresh failed" });
     }
   });
 

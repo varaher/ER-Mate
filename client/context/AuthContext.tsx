@@ -3,6 +3,28 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { apiPost, apiGet, setOnTokenExpiredCallback } from "@/lib/api";
 import { getApiUrl, queryClient } from "@/lib/query-client";
 
+// Store credentials server-side (encrypted) so the app can silently re-login
+// when the external token expires. Only the non-sensitive session_token is kept on device.
+async function storeCredsForSilentRefresh(email: string, password: string, userId?: string) {
+  try {
+    const baseUrl = getApiUrl();
+    const res = await fetch(`${baseUrl}/api/auth/store-creds`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password, userId }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.session_token) {
+        await AsyncStorage.setItem("session_token", data.session_token);
+        console.log("[AuthContext] Silent-refresh session stored");
+      }
+    }
+  } catch (e) {
+    console.warn("[AuthContext] Could not store silent-refresh session:", e);
+  }
+}
+
 export interface User {
   id: string;
   name: string;
@@ -96,6 +118,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await AsyncStorage.setItem("user", JSON.stringify(userData));
         setToken(access_token);
         setUser(userData);
+        // Store encrypted credentials server-side for silent re-login when token expires
+        storeCredsForSilentRefresh(email, password, userData.id).catch(() => {});
         return { success: true };
       }
 
@@ -199,6 +223,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await AsyncStorage.removeItem("token");
       await AsyncStorage.removeItem("refresh_token");
+      await AsyncStorage.removeItem("session_token");
       await AsyncStorage.removeItem("user");
       queryClient.clear();
       setToken(null);

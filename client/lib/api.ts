@@ -119,30 +119,53 @@ async function tryRefreshToken(): Promise<string | null> {
   }
   _refreshPromise = (async () => {
     try {
+      // ── Step 1: Try the standard /auth/refresh endpoint ──────────────────
       const refreshToken = await AsyncStorage.getItem("refresh_token");
-      if (!refreshToken) {
-        console.log("[API] No refresh_token stored — cannot refresh");
+      if (refreshToken) {
+        const apiUrl = getExternalApiUrl();
+        const res = await fetch(`${apiUrl}/auth/refresh`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refresh_token: refreshToken }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.access_token) {
+            await AsyncStorage.setItem("token", data.access_token);
+            if (data.refresh_token) {
+              await AsyncStorage.setItem("refresh_token", data.refresh_token);
+            }
+            console.log("[API] Token refreshed via /auth/refresh");
+            return data.access_token;
+          }
+        }
+        console.log("[API] /auth/refresh returned", res.status, "— falling back to silent re-login");
+      }
+
+      // ── Step 2: Silent re-login via server-side encrypted session ─────────
+      const sessionToken = await AsyncStorage.getItem("session_token");
+      if (!sessionToken) {
+        console.log("[API] No session_token stored — cannot silent-refresh");
         return null;
       }
-      const apiUrl = getExternalApiUrl();
-      const res = await fetch(`${apiUrl}/auth/refresh`, {
+      const proxyUrl = new URL("/api/auth/silent-refresh", getApiUrl()).href;
+      const silentRes = await fetch(proxyUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refresh_token: refreshToken }),
+        body: JSON.stringify({ session_token: sessionToken }),
       });
-      if (!res.ok) {
-        console.log("[API] Refresh endpoint returned", res.status);
+      if (!silentRes.ok) {
+        console.log("[API] Silent refresh returned", silentRes.status);
         return null;
       }
-      const data = await res.json();
-      const newToken = data.access_token;
-      if (!newToken) return null;
-      await AsyncStorage.setItem("token", newToken);
-      if (data.refresh_token) {
-        await AsyncStorage.setItem("refresh_token", data.refresh_token);
+      const silentData = await silentRes.json();
+      if (!silentData.access_token) return null;
+      await AsyncStorage.setItem("token", silentData.access_token);
+      if (silentData.refresh_token) {
+        await AsyncStorage.setItem("refresh_token", silentData.refresh_token);
       }
-      console.log("[API] Token refreshed silently");
-      return newToken;
+      console.log("[API] Token refreshed silently via stored session");
+      return silentData.access_token;
     } catch (e) {
       console.log("[API] tryRefreshToken error:", e);
       return null;
