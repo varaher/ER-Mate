@@ -1,0 +1,68 @@
+These logs tell a clear story. Let me read them precisely.
+
+---
+
+**What the logs show:**
+
+```
+healthcheck failed error=healthcheck  ← repeating constantly
+> NODE_ENV=production node server     ← server trying to start
+> my-app@1.0.0 server:prod           ← restarts again
+healthcheck failed                    ← fails again immediately
+...repeats in a crash loop...
+```
+
+Then eventually:
+```
+Serving static Expo files
+express server serving on port 8081   ← finally starts
+[Keepalive] External backend: warm    ← backend connected
+GET /api/proxy/cases 401              ← token expired hitting the API
+```
+
+---
+
+**Two separate problems:**
+
+**Problem 1 — Healthcheck crash loop (the red lines)**
+
+Replit is checking if your server is healthy before marking the deployment as live. Your server is taking too long to start — Replit's healthcheck times out, kills the process, and restarts it. This cycle repeats 10-15 times before it finally survives.
+
+**Tell your developer:**
+```
+In Replit deployment settings:
+Increase healthcheck timeout to 60 seconds
+or change healthcheck path to /health
+and make sure that endpoint responds 
+within 2 seconds of server start
+
+The healthcheck is firing before the 
+server finishes initialising.
+```
+
+**Problem 2 — `GET /api/proxy/cases 401`**
+
+This confirms the token expired issue. The server is up but every API call is returning 401.
+
+**The one-line fix — do this right now:**
+
+```
+Find where JWT is signed in your backend.
+Change expiresIn to '30d'
+
+jwt.sign(payload, SECRET, { expiresIn: '30d' })
+
+Then redeploy.
+```
+
+---
+
+**Priority order:**
+
+1. Change JWT expiry to 30d — fixes the error doctors see
+2. Fix healthcheck timeout — stops the crash loop on deployment
+3. Token refresh logic — can come later
+
+The crash loop is worrying but the server does eventually stabilise (you can see it reaches "express server serving on port 8081"). So the app works — it just takes too long to deploy cleanly.
+
+**Send your developer these two exact instructions right now. Both are under 30 minutes to fix.**

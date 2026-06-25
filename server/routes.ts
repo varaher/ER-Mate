@@ -188,7 +188,7 @@ function decodeJwt(token: string): Record<string, any> | null {
   }
 }
 
-export async function registerRoutes(app: Express): Promise<Server> {
+export async function registerRoutes(app: Express, existingServer?: Server): Promise<Server> {
   // Ensure the auth_sessions table exists (idempotent — runs once on startup)
   ensureAuthSessionsTable().catch(() => {});
 
@@ -4086,7 +4086,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  const httpServer = createServer(app);
+  const httpServer = existingServer ?? createServer(app);
 
   return httpServer;
 }

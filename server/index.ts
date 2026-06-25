@@ -1,5 +1,6 @@
 import express from "express";
 import type { Request, Response, NextFunction } from "express";
+import { createServer } from "node:http";
 import compression from "compression";
 import { registerRoutes } from "./routes";
 import * as fs from "fs";
@@ -402,37 +403,39 @@ function setupErrorHandler(app: express.Application) {
   setupBodyParsing(app);
   setupRequestLogging(app);
 
+  // Health endpoint — responds immediately even during DB/route initialization
+  // so Replit's deployment healthcheck passes before the async setup completes
+  app.get("/health", (_req: Request, res: Response) => {
+    res.status(200).json({ status: "ok" });
+  });
+
   configureExpoAndLanding(app);
 
-  const server = await registerRoutes(app);
+  // Open the port IMMEDIATELY so healthchecks pass while routes/DB are initialising
+  const port = parseInt(process.env.PORT || "5000", 10);
+  const httpServer = createServer(app);
+  await new Promise<void>((resolve) => {
+    httpServer.listen({ port, host: "0.0.0.0", reusePort: true }, () => {
+      log(`express server serving on port ${port}`);
+      resolve();
+    });
+  });
+
+  // Keep the external backend warm — Render free tier spins down after
+  // 15 min of inactivity causing ~50 s cold starts for users.
+  const EXTERNAL_API =
+    process.env.EXPO_PUBLIC_EXTERNAL_API_URL ||
+    "https://er-emr-backend.onrender.com/api";
+  const pingBackend = () => {
+    fetch(`${EXTERNAL_API}/health`, { method: "GET" })
+      .then(() => log("[Keepalive] External backend: warm"))
+      .catch(() => log("[Keepalive] External backend: unreachable (will retry in 10 min)"));
+  };
+  pingBackend();
+  setInterval(pingBackend, 10 * 60 * 1000);
+
+  // Register all routes (includes async DB init — server is already accepting /health)
+  await registerRoutes(app, httpServer);
 
   setupErrorHandler(app);
-
-  const port = parseInt(process.env.PORT || "5000", 10);
-  server.listen(
-    {
-      port,
-      host: "0.0.0.0",
-      reusePort: true,
-    },
-    () => {
-      log(`express server serving on port ${port}`);
-
-      // Keep the external backend warm — Render free tier spins down after
-      // 15 min of inactivity causing ~50 s cold starts for users.
-      // Pinging every 10 min from here prevents that entirely.
-      const EXTERNAL_API =
-        process.env.EXPO_PUBLIC_EXTERNAL_API_URL ||
-        "https://er-emr-backend.onrender.com/api";
-
-      const pingBackend = () => {
-        fetch(`${EXTERNAL_API}/health`, { method: "GET" })
-          .then(() => log("[Keepalive] External backend: warm"))
-          .catch(() => log("[Keepalive] External backend: unreachable (will retry in 10 min)"));
-      };
-
-      pingBackend(); // immediate ping on startup
-      setInterval(pingBackend, 10 * 60 * 1000); // then every 10 minutes
-    },
-  );
 })();
