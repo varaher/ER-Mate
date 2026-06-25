@@ -41,6 +41,11 @@ import StatsScreen from "@/screens/StatsScreen";
 import VoiceCaseSheetScreen from "@/screens/VoiceCaseSheetScreen";
 import RoundsScreen from "@/screens/RoundsScreen";
 import HandoverScreen from "@/screens/HandoverScreen";
+import SetupDepartmentScreen from "@/screens/department/SetupDepartmentScreen";
+import ManageRosterScreen from "@/screens/department/ManageRosterScreen";
+import AdminDashboardScreen from "@/screens/department/AdminDashboardScreen";
+import HandoverDetailScreen from "@/screens/HandoverDetailScreen";
+import EscalationScreen from "@/screens/EscalationScreen";
 
 export type RootStackParamList = {
   Login: undefined;
@@ -93,6 +98,11 @@ export type RootStackParamList = {
   Stats: undefined;
   Rounds: { caseId?: string; lensId?: string } | undefined;
   Handover: undefined;
+  SetupDepartment: undefined;
+  ManageRoster: undefined;
+  AdminDashboard: undefined;
+  HandoverDetail: undefined;
+  Escalation: { caseId?: string } | undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -371,6 +381,43 @@ export default function RootStackNavigator() {
             component={HandoverScreen}
             options={{
               headerTitle: "Handover Sheet",
+            }}
+          />
+          <Stack.Screen
+            name="SetupDepartment"
+            component={SetupDepartmentScreen}
+            options={{
+              presentation: "modal",
+              headerTitle: "Create Department",
+            }}
+          />
+          <Stack.Screen
+            name="ManageRoster"
+            component={ManageRosterScreen}
+            options={{
+              headerTitle: "Manage Roster",
+            }}
+          />
+          <Stack.Screen
+            name="AdminDashboard"
+            component={AdminDashboardScreen}
+            options={{
+              headerTitle: "HOD Dashboard",
+            }}
+          />
+          <Stack.Screen
+            name="HandoverDetail"
+            component={HandoverDetailScreen}
+            options={{
+              headerTitle: "Incoming Handovers",
+            }}
+          />
+          <Stack.Screen
+            name="Escalation"
+            component={EscalationScreen}
+            options={{
+              presentation: "modal",
+              headerTitle: "Escalations",
             }}
           />
         </>

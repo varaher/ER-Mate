@@ -1,2 +1,5 @@
 - [Deployment build Metro timeout](deployment-build-timeout.md) — production publish fails because Metro iOS/Android compilation exceeds 2-min timeout; fix is to pre-build with production domain and commit static-build.
 - [Silent token refresh architecture](silent-token-refresh.md) — external backend has no /auth/refresh endpoint; solved with server-side encrypted credential cache in auth_sessions PostgreSQL table.
+- [DB schema migration interactive prompts](db-migration-interactive.md) — drizzle-kit push blocks on interactive prompts for new tables; bypass by running raw SQL via node pg Pool directly.
+- [Typography constants usage](typography-constants.md) — Typography object only has style-object keys (h1, h2, small, label, caption, body, etc.), NOT numeric shortcuts like .sm/.xs/.base/.lg. Use inline numbers or Typography.small.fontSize for fontSize in StyleSheet.
+- [Team System architecture](team-system-arch.md) — departments/shifts/handovers live in local PostgreSQL; cases remain on external backend. Merge on caseId (text) client-side. Route files in server/routes/*.ts, registered via registerXxxRoutes() calls at end of registerRoutes() in routes.ts.

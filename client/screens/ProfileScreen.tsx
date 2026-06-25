@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
+import { useDepartment } from "@/context/DepartmentContext";
 import { fetchCasesFromProxy, deleteCaseFromProxy } from "@/lib/api";
 import { getApiUrl } from "@/lib/query-client";
 import { Spacing, BorderRadius, Typography } from "@/constants/theme";
@@ -165,6 +166,8 @@ export default function ProfileScreen() {
     { label: "Always Dark", value: "dark", icon: "minus-circle" },
   ];
 
+  const { department, membership, isHOD, shiftSession, activeShift, checkOut, refresh: refreshDept, incomingCount } = useDepartment();
+
   const menuItems = [
     { icon: "bar-chart-2", label: "My Stats", onPress: () => navigation.navigate("Stats"), locked: false },
     { icon: "monitor", label: "Link to Web", onPress: () => navigation.navigate("LinkDevices"), locked: false },
@@ -175,6 +178,19 @@ export default function ProfileScreen() {
     { icon: "help-circle", label: "Help & Support", onPress: () => navigation.navigate("HelpSupport"), locked: false },
     { icon: "info", label: "About ErMate", onPress: () => navigation.navigate("About"), locked: false },
   ];
+
+  const handleCheckOut = async () => {
+    const result = await checkOut();
+    if (!result.success) {
+      if (result.pendingCases) {
+        Alert.alert("Pending Handovers", `You have ${result.pendingCases} case(s) not yet handed over. Please hand them over before ending your shift.`, [{ text: "OK" }]);
+      } else {
+        Alert.alert("Error", result.error || "Could not end shift");
+      }
+    } else {
+      refreshDept();
+    }
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundDefault }]}>
@@ -205,6 +221,81 @@ export default function ProfileScreen() {
             </Text>
           </View>
         </View>
+
+        {department ? (
+          <View style={[styles.section, { backgroundColor: theme.card, marginBottom: Spacing.sm }]}>
+            <View style={[styles.menuItem, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
+              <Feather name="activity" size={20} color={theme.primary} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.menuLabel, { color: theme.text }]}>{department.name}</Text>
+                <Text style={[{ fontSize: 12, color: theme.textSecondary }]}>{membership?.role === "hod" ? "HOD" : membership?.role === "consultant" ? "Consultant" : "Resident"}</Text>
+              </View>
+              {shiftSession ? (
+                <View style={[{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#d1fae5", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }]}>
+                  <View style={[{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#10b981" }]} />
+                  <Text style={[{ fontSize: 12, fontWeight: "700", color: "#065f46" }]}>{activeShift?.name || "On Shift"}</Text>
+                </View>
+              ) : null}
+            </View>
+            {shiftSession ? (
+              <Pressable
+                style={({ pressed }) => [styles.menuItem, { borderBottomWidth: 1, borderBottomColor: theme.border, opacity: pressed ? 0.7 : 1 }]}
+                onPress={() => navigation.navigate("HandoverDetail")}
+              >
+                <Feather name="arrow-right-circle" size={20} color={theme.textSecondary} />
+                <Text style={[styles.menuLabel, { color: theme.text }]}>Incoming Handovers</Text>
+                {incomingCount > 0 ? (
+                  <View style={[{ backgroundColor: theme.danger, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }]}>
+                    <Text style={[{ color: "#fff", fontSize: 12, fontWeight: "800" }]}>{incomingCount}</Text>
+                  </View>
+                ) : <Feather name="chevron-right" size={20} color={theme.textMuted} />}
+              </Pressable>
+            ) : null}
+            {isHOD ? (
+              <>
+                <Pressable
+                  style={({ pressed }) => [styles.menuItem, { borderBottomWidth: 1, borderBottomColor: theme.border, opacity: pressed ? 0.7 : 1 }]}
+                  onPress={() => navigation.navigate("AdminDashboard")}
+                >
+                  <Feather name="shield" size={20} color={theme.textSecondary} />
+                  <Text style={[styles.menuLabel, { color: theme.text }]}>HOD Dashboard</Text>
+                  <Feather name="chevron-right" size={20} color={theme.textMuted} />
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [styles.menuItem, { opacity: pressed ? 0.7 : 1 }]}
+                  onPress={() => navigation.navigate("ManageRoster")}
+                >
+                  <Feather name="users" size={20} color={theme.textSecondary} />
+                  <Text style={[styles.menuLabel, { color: theme.text }]}>Manage Roster</Text>
+                  <Feather name="chevron-right" size={20} color={theme.textMuted} />
+                </Pressable>
+              </>
+            ) : null}
+            {shiftSession ? (
+              <Pressable
+                style={({ pressed }) => [styles.menuItem, { borderTopWidth: 1, borderTopColor: theme.border, opacity: pressed ? 0.7 : 1 }]}
+                onPress={handleCheckOut}
+              >
+                <Feather name="log-out" size={20} color={theme.danger} />
+                <Text style={[styles.menuLabel, { color: theme.danger }]}>End Shift</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : (
+          <Pressable
+            style={({ pressed }) => [styles.section, { backgroundColor: theme.card, marginBottom: Spacing.sm, opacity: pressed ? 0.85 : 1 }]}
+            onPress={() => navigation.navigate("SetupDepartment")}
+          >
+            <View style={[styles.menuItem]}>
+              <Feather name="users" size={20} color={theme.primary} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.menuLabel, { color: theme.primary }]}>Set Up Department</Text>
+                <Text style={[{ fontSize: 12, color: theme.textSecondary }]}>Create your team, manage shifts &amp; handovers</Text>
+              </View>
+              <Feather name="chevron-right" size={20} color={theme.primary} />
+            </View>
+          </Pressable>
+        )}
 
         <View style={[styles.section, { backgroundColor: theme.card }]}>
           {menuItems.map((item, index) => (

@@ -10,6 +10,9 @@ import { getEMReferenceResponse, EM_TOPICS, type EMReferenceMessage } from "./se
 import { getDb, getPool, ensureAuthSessionsTable } from "./db";
 import { emReferenceFeedback, userFeedback } from "@shared/schema";
 import { eq, desc, count, sql as drizzleSql } from "drizzle-orm";
+import { registerDepartmentRoutes } from "./routes/department";
+import { registerShiftRoutes } from "./routes/shifts";
+import { registerEscalationRoutes } from "./routes/escalations";
 
 // ─── AES-256-GCM helpers for credential encryption ───────────────────────────
 const CIPHER_ALGO = "aes-256-gcm";
@@ -4114,6 +4117,10 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       res.status(500).json({ error: "Failed to generate debrief" });
     }
   });
+
+  registerDepartmentRoutes(app);
+  registerShiftRoutes(app);
+  registerEscalationRoutes(app);
 
   const httpServer = existingServer ?? createServer(app);
 

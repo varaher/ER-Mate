@@ -16,6 +16,8 @@ import RootStackNavigator from "@/navigation/RootStackNavigator";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider } from "@/context/AuthContext";
 import { CaseProvider } from "@/context/CaseContext";
+import { DepartmentProvider } from "@/context/DepartmentContext";
+import ShiftSelectScreen from "@/screens/ShiftSelectScreen";
 import { PWABanner } from "@/components/PWABanner";
 
 if (Platform.OS !== "web") {
@@ -42,17 +44,20 @@ export default function App() {
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <CaseProvider>
-            <SafeAreaProvider>
-              <GestureHandlerRootView style={styles.root}>
-                <KeyboardProvider>
-                  <PWABanner />
-                  <NavigationContainer>
-                    <RootStackNavigator />
-                  </NavigationContainer>
-                  <StatusBar style="auto" />
-                </KeyboardProvider>
-              </GestureHandlerRootView>
-            </SafeAreaProvider>
+            <DepartmentProvider>
+              <SafeAreaProvider>
+                <GestureHandlerRootView style={styles.root}>
+                  <KeyboardProvider>
+                    <PWABanner />
+                    <NavigationContainer>
+                      <RootStackNavigator />
+                    </NavigationContainer>
+                    <ShiftSelectScreen />
+                    <StatusBar style="auto" />
+                  </KeyboardProvider>
+                </GestureHandlerRootView>
+              </SafeAreaProvider>
+            </DepartmentProvider>
           </CaseProvider>
         </AuthProvider>
       </QueryClientProvider>

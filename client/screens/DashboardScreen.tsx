@@ -22,6 +22,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as IntentLauncher from "expo-intent-launcher";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
+import { useDepartment } from "@/context/DepartmentContext";
 import { fetchFromApi, fetchCasesFromProxy } from "@/lib/api";
 import { getApiUrl } from "@/lib/query-client";
 import { isPediatric } from "@/lib/pediatricVitals";
@@ -76,6 +77,7 @@ export default function DashboardScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
   const { user } = useAuth();
+  const { department, shiftSession, activeShift, incomingCount, isHOD } = useDepartment();
   const insets = useSafeAreaInsets();
   const [downloadModalVisible, setDownloadModalVisible] = useState(false);
   const [selectedCase, setSelectedCase] = useState<CaseItem | null>(null);
@@ -618,6 +620,43 @@ export default function DashboardScreen() {
           </View>
         ) : null}
 
+        {department ? (
+          <Pressable
+            style={({ pressed }) => [
+              styles.shiftBanner,
+              {
+                backgroundColor: shiftSession ? "#ecfdf5" : theme.card,
+                borderColor: shiftSession ? "#10b981" : theme.border,
+                opacity: pressed ? 0.9 : 1,
+              },
+            ]}
+            onPress={() => navigation.navigate("Profile" as any)}
+          >
+            <View style={[styles.shiftBannerLeft]}>
+              <View style={[styles.shiftDot, { backgroundColor: shiftSession ? "#10b981" : theme.textMuted }]} />
+              <View>
+                <Text style={[styles.shiftBannerTitle, { color: shiftSession ? "#065f46" : theme.text }]}>
+                  {shiftSession ? `${activeShift?.name || "Morning"} Shift — ${department.name}` : `${department.name} · No Active Shift`}
+                </Text>
+                <Text style={[styles.shiftBannerSub, { color: shiftSession ? "#059669" : theme.textMuted }]}>
+                  {shiftSession ? "Currently on shift · Tap to manage" : "Tap Profile to start your shift"}
+                </Text>
+              </View>
+            </View>
+            {incomingCount > 0 ? (
+              <Pressable
+                style={[styles.handoverBadge, { backgroundColor: theme.danger }]}
+                onPress={() => navigation.navigate("HandoverDetail")}
+              >
+                <Feather name="arrow-right-circle" size={14} color="#fff" />
+                <Text style={styles.handoverBadgeText}>{incomingCount} handover{incomingCount > 1 ? "s" : ""}</Text>
+              </Pressable>
+            ) : (
+              <Feather name="chevron-right" size={18} color={shiftSession ? "#059669" : theme.textMuted} />
+            )}
+          </Pressable>
+        ) : null}
+
         <Pressable
           style={({ pressed }) => [
             styles.newPatientBtn,
@@ -1063,6 +1102,22 @@ const styles = StyleSheet.create({
   },
   errorText: { flex: 1, ...Typography.small },
   retryText: { ...Typography.label },
+  shiftBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: Spacing.lg,
+    marginTop: Spacing.lg,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1.5,
+    gap: Spacing.sm,
+  },
+  shiftBannerLeft: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10 },
+  shiftDot: { width: 10, height: 10, borderRadius: 5 },
+  shiftBannerTitle: { fontSize: 13, fontWeight: "700" },
+  shiftBannerSub: { fontSize: 11, marginTop: 2 },
+  handoverBadge: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
+  handoverBadgeText: { color: "#fff", fontSize: 12, fontWeight: "700" },
   newPatientBtn: {
     flexDirection: "row",
     alignItems: "center",
