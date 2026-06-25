@@ -1,0 +1,481 @@
+Smart approach. Let me map the complete flow for every step before a single line of code is written.
+
+Let me read what's already built first.
+
+No code files uploaded — just the user guide. That's fine. I have everything from our conversation. Let me now do the complete flow analysis before any coding starts.
+
+---
+
+# ErMate Team System — Complete Flow Analysis
+
+## What Already Exists (don't rebuild)
+
+```
+✓ users table — auth, roles, subscription
+✓ cases table — with userId filter
+✓ subscriptions table — razorpay fields
+✓ shift_sessions — partial (from handover build)
+✓ case_handovers table — built
+✓ /api/auth routes — login, register, Google
+✓ /api/cases routes — CRUD
+✓ /api/rounds routes — debrief
+✓ /api/webhooks/razorpay — webhook handler
+✓ React Native navigation — Stack + Bottom tabs
+✓ AuthContext — token, user, login/logout
+```
+
+---
+
+## What Needs to Be Built — In Exact Dependency Order
+
+```
+LAYER 1 — Database (no dependencies)
+  → departments
+  → department_members
+  → department_invites
+  → shifts
+  → shift_sessions (extend existing)
+  → escalations
+
+LAYER 2 — Backend services (depends on Layer 1)
+  → DepartmentService
+  → ShiftService
+  → HandoverService (extend existing)
+  → BillingService (extend Razorpay)
+
+LAYER 3 — API routes (depends on Layer 2)
+  → /api/department/*
+  → /api/shifts/*
+  → /api/handover/*
+  → Extend /api/cases/* for handover flag
+
+LAYER 4 — Frontend context (depends on Layer 3)
+  → DepartmentContext
+  → Shift check-in state
+
+LAYER 5 — Screens (depends on Layer 4)
+  → HOD: SetupDepartment, ManageRoster, AdminDashboard
+  → Doctor: ShiftSelectScreen
+  → Shared: HandoverScreen (extend existing)
+  → Consultant: EscalationScreen
+
+LAYER 6 — Navigation (depends on Layer 5)
+  → Register new screens
+  → Conditional routing based on department membership
+```
+
+---
+
+## Flow 1 — HOD Setup (runs once)
+
+```
+HOD registers normally → Individual account
+         ↓
+Profile → "Create Department"
+         ↓
+Fills: Department name, hospital name
+Sets: Shift times (Morning/Evening/Night)
+Sets: Max concurrent (default 2C + 6R)
+Sets: Overflow allowed (default yes)
+         ↓
+POST /api/department/create
+Creates: departments row
+Creates: 3 default shifts
+HOD user gets: role = "hod" in department_members
+         ↓
+Department created → goes to Manage Roster screen
+         ↓
+HOD adds doctors by email:
+POST /api/department/:id/invite
+{ email, role: "consultant"|"resident" }
+         ↓
+Backend checks:
+  Does user exist with this email?
+    YES → add to department_members (status: pending_accept)
+          send push notification + email
+    NO  → create department_invites row
+          send invite email with token link
+         ↓
+HOD sees roster with statuses:
+  ✓ Active  ⏳ Invited  ✗ Inactive
+```
+
+---
+
+## Flow 2 — Doctor Joins Department
+
+```
+EXISTING ERMATE USER:
+Receives notification:
+"Dr. Neeraj added you to City Emergency"
+         ↓
+Opens app → notification banner on dashboard
+"You've been invited to join City Emergency
+ as a Resident. [Accept] [Decline]"
+         ↓
+Taps Accept
+POST /api/department/invite/:memberId/accept
+department_members status → "active"
+         ↓
+Dashboard now shows department name
+Shift selection appears on next login
+
+─────────────────────────────────────────
+
+NEW TO ERMATE:
+Receives email with link:
+ermate.in/invite?token=xxx
+         ↓
+Opens link → signup screen pre-filled with email
+Creates account
+         ↓
+POST /api/auth/register
+Backend sees invite token → auto-joins department
+department_members created → status: "active"
+department_invites → accepted_at = now
+         ↓
+Lands on shift selection (first login in department)
+```
+
+---
+
+## Flow 3 — Doctor Starts Shift (every shift)
+
+```
+Doctor opens app → Login
+         ↓
+Auth succeeds → backend checks:
+  Is this user a member of any active department?
+    NO  → normal individual dashboard
+    YES → Shift Select Screen
+         ↓
+SHIFT SELECT SCREEN shows:
+  Department name
+  3 shift cards with live slot counts
+  (fetched from GET /api/shifts/active-counts)
+         ↓
+Doctor taps their shift card
+Sees: X consultants, Y residents currently active
+Sees: Slots available
+         ↓
+If slots available for their role:
+  Taps [Start Shift]
+  POST /api/shifts/:shiftId/checkin
+  { roleForShift }
+  Creates shift_sessions row
+  Returns: session token, shift context
+         ↓
+If NO slots (all 8 filled):
+  "This shift is full. 
+   All 8 slots are currently active.
+   Please wait for a slot to open."
+  Auto-refreshes every 60 seconds
+         ↓
+Doctor enters dashboard
+Dashboard now shows:
+  Department mode (not individual mode)
+  Shift badge: "Morning Shift · Active"
+  Cases are filtered to show shift queue
+```
+
+---
+
+## Flow 4 — During Shift (case work)
+
+```
+RESIDENT FLOW:
+Documents case normally
+All existing features work identically
+Additional button on case: [Escalate to Consultant]
+         ↓
+Escalation:
+POST /api/cases/:id/escalate
+{ reason, consultantId (optional — or any on-duty) }
+Creates escalations row
+Push notification → on-duty consultants
+         ↓
+CONSULTANT FLOW:
+Sees own cases AND all shift cases (tab toggle)
+Receives escalation notification
+Taps [Review] → opens case
+Adds consultant note
+POST /api/escalations/:id/review
+{ reviewNote }
+Case flagged: CONSULTANT REVIEWED ✓
+Resident notified
+         ↓
+HOD FLOW:
+Admin dashboard (separate screen in Profile menu)
+Shows all shifts, all cases, all active doctors
+Pending handovers with time warnings
+Force logout button per doctor
+```
+
+---
+
+## Flow 5 — Shift Handover (end of shift)
+
+```
+15 min before shift end:
+  Backend cron (or client-side timer) fires
+  Push notification → all active doctors in shift:
+  "Your shift ends in 15 minutes.
+   Complete handovers and log out."
+         ↓
+Doctor goes to Cases screen
+Each active case shows: [Hand Over] button
+         ↓
+Doctor taps [Hand Over] on a case:
+  Modal opens:
+  - Select shift to hand over to
+  - Add bed number (text input)
+  - Add pending notes (multiline)
+  Taps [Confirm Handover]
+  POST /api/cases/:id/handover
+  { toShiftId, bedNumber, pendingNotes }
+  case_handovers row created
+  Case flagged: status = "handed_over"
+  Outgoing doctor access → READ ONLY
+         ↓
+After handing over all cases:
+  Doctor taps [End Shift & Log Out]
+  POST /api/shifts/:sessionId/checkout
+  shift_sessions → checkedOutAt = now, status = "completed"
+  Slot freed immediately
+         ↓
+CRITICAL CHECK:
+  If doctor tries to leave shift WITHOUT handing over:
+  "You have X cases not yet handed over.
+   Hand them over or mark them complete before logging out."
+  Cannot force-exit shift with active non-handed cases
+
+─────────────────────────────────────────
+
+INCOMING SHIFT — receiving handover:
+  Doctor checks in to their shift
+  Cases screen shows: "RECEIVED — X cases waiting"
+  Each case card shows:
+    Patient name, complaint, priority
+    "From Dr. [Name] · [Time]"
+    Pending notes preview
+  Taps [Take Over]
+  POST /api/cases/:id/handover/receive
+  case_handovers → receivedByUserId, receivedAt
+  Case moves to their active queue
+  Full case sheet accessible — read + write
+```
+
+---
+
+## Flow 6 — HOD Force Actions
+
+```
+HOD Admin Dashboard:
+  Sees doctor still active 20 min after shift end
+  Taps [Force Logout] next to doctor name
+         ↓
+  POST /api/shifts/:sessionId/force-logout
+  { reason: "HOD action" }
+  shift_sessions → status = "force_logout", forceLogoutBy = hodId
+  Doctor's auth token invalidated for shift context
+  Doctor sees: "Your shift session was ended by the admin.
+               Please check in again when ready."
+         ↓
+HOD taps [Generate Handover Sheet]:
+  GET /api/department/:id/handover-sheet
+  { fromShiftId, date }
+  Returns all handed-over cases for that shift
+  Frontend downloads PDF
+  Button: [WhatsApp to Evening team]
+```
+
+---
+
+## Flow 7 — Billing (HOD manages)
+
+```
+HOD adds first doctor → billing not yet active
+When HOD taps [Activate Team Plan]:
+  Shows calculated bill:
+  X consultants × ₹599 + Y residents × ₹399
+         ↓
+  POST /api/department/:id/billing/subscribe
+  Backend calls Razorpay:
+    Creates subscription with dynamic amount
+    Returns subscriptionId
+  Frontend opens Razorpay checkout
+         ↓
+  On payment success → webhook fires:
+  subscription.activated
+  department → plan = "team", billingActive = true
+  All members get team features unlocked
+         ↓
+HOD adds new doctor later:
+  POST /api/department/:id/invite (as before)
+  billing.js recalculates total
+  Razorpay subscription amount updated
+  Prorated charge for remainder of month
+         ↓
+HOD removes doctor:
+  PATCH /api/department/:id/members/:userId
+  { status: "inactive" }
+  billing.js recalculates
+  Credit applied to next invoice
+```
+
+---
+
+## Critical Edge Cases — Handle These
+
+```
+1. Doctor in two departments:
+   → Allow — they choose which department at shift select
+   → Each department tracked separately
+
+2. Doctor's individual plan + department plan:
+   → Department plan features take precedence during shift
+   → Individual plan active when not in a shift
+
+3. HOD removes doctor mid-shift:
+   → Doctor finishes current shift
+   → Cannot check into next shift after removal
+   → HOD can force-logout immediately if needed
+
+4. Shift time overlap (e.g. doctor forgets to log out):
+   → 15 min warning sent
+   → After shift end + 30 min grace:
+     System auto-checks out (soft logout)
+     Cases not handed over get flagged: NEEDS HANDOVER
+     HOD alerted
+
+5. No consultant on shift (both slots empty):
+   → Residents can still work normally
+   → Escalation goes to HOD notification instead
+   → HOD dashboard shows: "No consultant on duty"
+
+6. Internet drops during handover:
+   → Handover data saved locally first
+   → Synced to backend when connection restored
+   → Case not marked handed-over until backend confirms
+
+7. Doctor tries to check in to wrong shift:
+   → "Evening shift is not active yet.
+      It starts at 14:00. Current time: 12:30."
+   → They can still check into the current shift
+
+8. Payment fails after team is active:
+   → 7-day grace period
+   → Doctors can still work during grace
+   → After 7 days → reverts to individual plans
+   → Cases and data fully preserved
+```
+
+---
+
+## File Structure — Tell Your Developer
+
+```
+NEW FILES TO CREATE:
+
+server/
+  db/
+    schema.ts              ← add 6 new tables
+  services/
+    departmentService.ts   ← create/manage departments
+    shiftService.ts        ← checkin/checkout/counts
+    inviteService.ts       ← email invites, token logic
+    escalationService.ts   ← escalation flow
+    teamBillingService.ts  ← per-doctor Razorpay billing
+  routes/
+    department.ts          ← all /api/department/* routes
+    shifts.ts              ← all /api/shifts/* routes
+    escalations.ts         ← all /api/escalations/* routes
+  emails/
+    inviteExisting.ts      ← email template
+    inviteNew.ts           ← email template
+    shiftWarning.ts        ← email template
+
+client/
+  screens/
+    department/
+      SetupDepartmentScreen.tsx
+      ManageRosterScreen.tsx
+      AdminDashboardScreen.tsx
+    shifts/
+      ShiftSelectScreen.tsx
+    handover/
+      HandoverScreen.tsx   ← extend existing
+      HandoverDetailScreen.tsx
+    consultant/
+      EscalationScreen.tsx
+  context/
+    DepartmentContext.tsx  ← department + shift state
+  hooks/
+    useShiftSession.ts     ← active shift management
+    useDepartment.ts       ← department data
+
+MODIFIED FILES:
+  server/routes.ts         ← register new route files
+  server/db/schema.ts      ← add new tables
+  client/navigation/RootStackNavigator.tsx  ← new screens
+  client/screens/DashboardScreen.tsx        ← shift badge
+  client/screens/CaseSheetScreen.tsx        ← handover + escalate buttons
+  client/screens/CasesScreen.tsx            ← handover queue
+  client/context/AuthContext.tsx            ← department context
+```
+
+---
+
+## Build Order for Developer
+
+```
+WEEK 1 — Foundation (no UI yet)
+  Day 1-2: Schema migration — 6 new tables
+  Day 3-4: departmentService + inviteService
+  Day 5:   shiftService (checkin/checkout/counts)
+
+WEEK 2 — Backend routes + email
+  Day 1-2: /api/department/* routes
+  Day 3:   /api/shifts/* routes
+  Day 4:   inviteService email sending
+  Day 5:   teamBillingService + Razorpay wiring
+
+WEEK 3 — HOD screens
+  Day 1-2: SetupDepartmentScreen
+  Day 2-3: ManageRosterScreen
+  Day 4-5: AdminDashboardScreen
+
+WEEK 4 — Doctor shift flow
+  Day 1-2: ShiftSelectScreen
+  Day 3:   DepartmentContext
+  Day 4-5: Dashboard shift badge + conditional routing
+
+WEEK 5 — Handover
+  Day 1-2: Extend HandoverScreen with shift selection
+  Day 3:   HandoverDetailScreen (incoming queue)
+  Day 4-5: Auto handover sheet PDF + WhatsApp
+
+WEEK 6 — Consultant module + escalation
+  Day 1-2: EscalationScreen
+  Day 3:   Consultant case view (all shift cases)
+  Day 4-5: Push notifications for escalation + warnings
+
+WEEK 7 — Edge cases + billing
+  Day 1-2: Edge case handling (auto-logout, grace period)
+  Day 3-4: Team billing UI (HOD billing screen)
+  Day 5:   Testing end to end
+
+WEEK 8 — QA + polish
+  Full shift simulation test
+  HOD → invite → accept → checkin → case → handover → checkout
+  Fix anything broken
+  Deploy
+```
+
+---
+
+**Send this entire document to your developer.** This is the complete spec — flows, edge cases, file structure, and build order. They should not write a single line of code until they've read all 7 flows and confirmed they understand the edge cases.
+
+The most important thing to get right first is **Flow 3 (Shift Check-in)** and **Flow 5 (Handover)**. Everything else builds on these two working correctly.
+
+Shall I now produce the actual database schema migration file as the first concrete piece of code?
