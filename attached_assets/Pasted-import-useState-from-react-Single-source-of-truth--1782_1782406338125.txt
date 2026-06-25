@@ -1,0 +1,638 @@
+import { useState } from "react";
+
+// ── Single source of truth ─────────────────────────────────────────────────
+const PRICING = {
+  base:  { monthly: 799,  annual: 7990,  annualEq: 666,  annualSave: 1598 },
+  pro:   { monthly: 1199, annual: 11990, annualEq: 999,  annualSave: 2398 },
+  team:  { consultant: 599, resident: 399,
+           annualConsultant: 5990, annualResident: 3990 },
+};
+
+// ── Icons ──────────────────────────────────────────────────────────────────
+const CheckIcon = ({ color = "#1DB870" }) => (
+  <svg width="15" height="15" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+    <circle cx="8" cy="8" r="7.5" fill={color} fillOpacity="0.12"/>
+    <path d="M4.5 8.5L6.5 10.5L11.5 5.5" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+const CrossIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+    <circle cx="8" cy="8" r="7.5" fill="rgba(0,0,0,0.04)"/>
+    <path d="M5.5 5.5L10.5 10.5M10.5 5.5L5.5 10.5" stroke="#D1D5DB" strokeWidth="1.5" strokeLinecap="round"/>
+  </svg>
+);
+const BoltIcon = ({ color }) => (
+  <svg width="12" height="12" viewBox="0 0 13 13" fill="none" style={{ flexShrink: 0, marginTop: 1 }}>
+    <path d="M7.5 1L2 7.5H6.5L5.5 12L11 5.5H6.5L7.5 1Z" fill={color}/>
+  </svg>
+);
+const GiftIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <rect x="2" y="7" width="12" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
+    <path d="M2 10h12M8 7v7" stroke="currentColor" strokeWidth="1.3"/>
+    <path d="M8 7C8 7 5.5 7 5.5 4.5C5.5 3.1 6.5 2 7.7 2C9 2 8 5 8 7Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
+    <path d="M8 7C8 7 10.5 7 10.5 4.5C10.5 3.1 9.5 2 8.3 2C7 2 8 5 8 7Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
+  </svg>
+);
+const ArrowLeft = () => (
+  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+    <path d="M13 4L7 10L13 16" stroke="#1a1a1a" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+const PeopleIcon = () => (
+  <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+    <circle cx="8" cy="7" r="3" stroke="white" strokeWidth="1.4"/>
+    <circle cx="15" cy="7" r="3" stroke="white" strokeWidth="1.4"/>
+    <path d="M2 18c0-3.3 2.7-6 6-6h1" stroke="white" strokeWidth="1.4" strokeLinecap="round"/>
+    <path d="M10 18c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="white" strokeWidth="1.4" strokeLinecap="round"/>
+  </svg>
+);
+
+// ── Billing toggle ─────────────────────────────────────────────────────────
+function BillingToggle({ billing, onChange }) {
+  return (
+    <div style={{
+      display: "flex", background: "#EEF0F2",
+      borderRadius: 14, padding: 4, gap: 3,
+    }}>
+      {["monthly", "annual"].map(b => (
+        <button key={b} onClick={() => onChange(b)} style={{
+          flex: 1, border: "none", cursor: "pointer",
+          background: billing === b ? "white" : "transparent",
+          borderRadius: 11, padding: "10px 16px",
+          fontSize: 13, fontWeight: 700,
+          color: billing === b ? "#0D1117" : "#9CA3AF",
+          boxShadow: billing === b ? "0 2px 8px rgba(0,0,0,0.08)" : "none",
+          transition: "all 0.2s", fontFamily: "inherit",
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+        }}>
+          {b === "monthly" ? "Monthly" : "Annual"}
+          {b === "annual" && (
+            <span style={{
+              fontSize: 9, fontWeight: 800,
+              background: billing === "annual" ? "rgba(30,184,112,0.15)" : "rgba(156,163,175,0.15)",
+              color: billing === "annual" ? "#15924F" : "#9CA3AF",
+              borderRadius: 5, padding: "2px 6px",
+            }}>SAVE 17%</span>
+          )}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ── Individual plan card ───────────────────────────────────────────────────
+function IndividualCard({ plan, billing, selected, onSelect }) {
+  const p = PRICING[plan.id];
+  const isPro = plan.id === "pro";
+  const isFree = plan.id === "free";
+
+  return (
+    <button onClick={() => onSelect(plan.id)} style={{
+      width: "100%", textAlign: "left", cursor: "pointer",
+      background: isPro ? "linear-gradient(145deg,#0D1117,#151c2c)" : "white",
+      border: selected ? `2px solid ${plan.accent}` : isPro ? "2px solid rgba(129,140,248,0.2)" : "2px solid #F0F0F0",
+      borderRadius: 20, padding: 0, overflow: "hidden",
+      boxShadow: selected ? `0 8px 28px ${plan.accent}20` : "0 1px 4px rgba(0,0,0,0.04)",
+      transition: "all 0.2s",
+    }}>
+      {plan.tag && (
+        <div style={{
+          background: isPro ? "rgba(129,140,248,0.1)" : "rgba(30,184,112,0.08)",
+          padding: "6px 18px",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+        }}>
+          <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.4, color: plan.tagColor, textTransform: "uppercase" }}>
+            {plan.tag}
+          </span>
+          {selected && (
+            <div style={{ width: 16, height: 16, borderRadius: "50%", background: plan.accent, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M2 5L4 7L8 3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div style={{ padding: "16px 18px 0" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: isPro ? "rgba(255,255,255,0.35)" : "#9CA3AF", marginBottom: 4 }}>
+              {plan.name}
+            </div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 5, flexWrap: "wrap" }}>
+              {isFree ? (
+                <span style={{ fontSize: 28, fontWeight: 900, color: "#1a1a1a", letterSpacing: -1, lineHeight: 1 }}>₹0</span>
+              ) : billing === "monthly" ? (
+                <>
+                  <span style={{ fontSize: 12, color: isPro ? "rgba(255,255,255,0.25)" : "#C4C9D4", textDecoration: "line-through" }}>₹{p.monthly}</span>
+                  <span style={{ fontSize: 28, fontWeight: 900, color: plan.accent, letterSpacing: -1, lineHeight: 1 }}>FREE</span>
+                  <span style={{ fontSize: 12, color: isPro ? "rgba(255,255,255,0.35)" : "#9CA3AF" }}>1st month</span>
+                </>
+              ) : (
+                <>
+                  <span style={{ fontSize: 28, fontWeight: 900, color: isPro ? "white" : "#0D1117", letterSpacing: -1, lineHeight: 1 }}>₹{p.annualEq}</span>
+                  <span style={{ fontSize: 12, color: isPro ? "rgba(255,255,255,0.35)" : "#9CA3AF" }}>/mo</span>
+                </>
+              )}
+            </div>
+            {!isFree && (
+              <div style={{ fontSize: 11, color: isPro ? "rgba(255,255,255,0.3)" : "#9CA3AF", marginTop: 2 }}>
+                {billing === "monthly" ? `Then ₹${p.monthly}/month · Cancel anytime` : `₹${p.annual?.toLocaleString("en-IN")}/year · Cancel anytime`}
+              </div>
+            )}
+          </div>
+          <div style={{ width: 38, height: 38, borderRadius: 11, background: plan.accentBg, border: `1.5px solid ${plan.accent}30`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 19, flexShrink: 0 }}>
+            {plan.icon}
+          </div>
+        </div>
+
+        <div style={{ fontSize: 12, lineHeight: 1.6, marginBottom: 12, color: isPro ? "rgba(255,255,255,0.4)" : "#6B7280" }}>
+          {plan.description}
+        </div>
+        <div style={{ height: 1, background: isPro ? "rgba(255,255,255,0.06)" : "#F3F4F6", marginBottom: 12 }}/>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {plan.features.map((f, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 9 }}>
+              {f.ok ? (f.credit ? <BoltIcon color={plan.accent}/> : <CheckIcon color={plan.accent}/>) : <CrossIcon/>}
+              <span style={{ fontSize: 12.5, fontWeight: f.bold ? 600 : 400, color: !f.ok ? "#C4C9D4" : isPro ? (f.bold ? "white" : "rgba(255,255,255,0.6)") : (f.bold ? "#0D1117" : "#3A4050") }}>
+                {f.text}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ padding: "12px 18px 16px" }}>
+        <div style={{
+          width: "100%", textAlign: "center",
+          background: isFree ? "#F3F4F6" : isPro ? "linear-gradient(135deg,#6366F1,#818CF8)" : "linear-gradient(135deg,#1DB870,#15924F)",
+          color: isFree ? "#9CA3AF" : "white",
+          borderRadius: 11, padding: "12px",
+          fontSize: 13, fontWeight: 700,
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
+          boxShadow: isFree ? "none" : isPro ? "0 4px 14px rgba(99,102,241,0.3)" : "0 4px 14px rgba(30,184,112,0.3)",
+        }}>
+          {!isFree && <GiftIcon/>}
+          {plan.cta}
+        </div>
+      </div>
+    </button>
+  );
+}
+
+// ── Team plan card ─────────────────────────────────────────────────────────
+function TeamCard({ billing }) {
+  const [consultants, setConsultants] = useState(2);
+  const [residents, setResidents] = useState(6);
+  const p = PRICING.team;
+
+  const monthlyTotal = (consultants * p.consultant) + (residents * p.resident);
+  const annualTotal = (consultants * p.annualConsultant) + (residents * p.annualResident);
+  const displayTotal = billing === "monthly" ? monthlyTotal : Math.round(annualTotal / 12);
+  const annualBill = annualTotal;
+
+  const teamFeatures = [
+    "Everything in Pro — for every doctor",
+    "Shift management — Morning / Evening / Night",
+    "Case handover between shifts",
+    "Auto handover sheet — PDF + WhatsApp",
+    "Consultant escalation module",
+    "HOD admin dashboard — full access",
+    "All active cases visible to HOD",
+    "Department analytics & reports",
+    "Custom hospital branding on exports",
+    "6 phones + 2 desktops concurrent",
+    "Shift warnings + HOD force logout",
+    "Priority WhatsApp support",
+  ];
+
+  const StepBtn = ({ onClick, children }) => (
+    <button onClick={onClick} style={{
+      width: 28, height: 28, borderRadius: 8,
+      background: "rgba(30,184,112,0.1)",
+      border: "1.5px solid rgba(30,184,112,0.2)",
+      color: "#1DB870", fontSize: 16, fontWeight: 700,
+      cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+      fontFamily: "inherit",
+    }}>{children}</button>
+  );
+
+  return (
+    <div style={{
+      background: "linear-gradient(145deg,#0D1117,#0f1e14)",
+      border: "2px solid rgba(30,184,112,0.3)",
+      borderRadius: 20, overflow: "hidden",
+      boxShadow: "0 8px 32px rgba(30,184,112,0.15)",
+    }}>
+      {/* Tag */}
+      <div style={{ background: "rgba(30,184,112,0.12)", padding: "7px 18px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.4, color: "#1DB870", textTransform: "uppercase" }}>
+          TEAM PLAN · PER DOCTOR PRICING
+        </span>
+        <span style={{ fontSize: 9, fontWeight: 700, color: "rgba(30,184,112,0.6)", textTransform: "uppercase", letterSpacing: 0.8 }}>
+          No feature holdbacks
+        </span>
+      </div>
+
+      <div style={{ padding: "18px 18px 0" }}>
+        {/* Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: "rgba(255,255,255,0.35)", marginBottom: 4 }}>Team Plan</div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+              <span style={{ fontSize: 11, color: "rgba(255,255,255,0.3)" }}>from</span>
+              <span style={{ fontSize: 28, fontWeight: 900, color: "#1DB870", letterSpacing: -1, lineHeight: 1 }}>₹{p.resident}</span>
+              <span style={{ fontSize: 12, color: "rgba(255,255,255,0.35)" }}>/doctor/month</span>
+            </div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginTop: 2 }}>
+              Consultant ₹{p.consultant} · Resident ₹{p.resident}
+            </div>
+          </div>
+          <div style={{ width: 42, height: 42, borderRadius: 12, background: "rgba(30,184,112,0.12)", border: "1.5px solid rgba(30,184,112,0.25)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <PeopleIcon/>
+          </div>
+        </div>
+
+        <div style={{ height: 1, background: "rgba(255,255,255,0.06)", marginBottom: 16 }}/>
+
+        {/* Calculator */}
+        <div style={{ background: "rgba(255,255,255,0.04)", borderRadius: 14, padding: "14px 16px", marginBottom: 16 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.3)", letterSpacing: 1, textTransform: "uppercase", marginBottom: 12 }}>
+            Your bill calculator
+          </div>
+
+          {[
+            { label: "Consultants", val: consultants, setVal: setConsultants, rate: p.consultant, min: 0 },
+            { label: "Residents", val: residents, setVal: setResidents, rate: p.resident, min: 0 },
+          ].map((row, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: i === 0 ? 10 : 0 }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "white" }}>{row.label}</div>
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)" }}>₹{row.rate}/month each</div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <StepBtn onClick={() => row.setVal(Math.max(row.min, row.val - 1))}>−</StepBtn>
+                <span style={{ fontSize: 18, fontWeight: 800, color: "white", minWidth: 24, textAlign: "center" }}>{row.val}</span>
+                <StepBtn onClick={() => row.setVal(row.val + 1)}>+</StepBtn>
+              </div>
+            </div>
+          ))}
+
+          <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "14px 0" }}/>
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+            <div>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", marginBottom: 2 }}>
+                {billing === "annual" ? "Effective monthly (annual plan)" : "Monthly total"}
+              </div>
+              <div style={{ fontSize: 26, fontWeight: 900, color: "#1DB870", letterSpacing: -0.5 }}>
+                ₹{displayTotal.toLocaleString("en-IN")}
+                <span style={{ fontSize: 12, fontWeight: 400, color: "rgba(255,255,255,0.3)" }}>/month</span>
+              </div>
+              {billing === "annual" && (
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", marginTop: 2 }}>
+                  ₹{annualBill.toLocaleString("en-IN")} billed annually
+                </div>
+              )}
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)" }}>{consultants + residents} doctors total</div>
+              {billing === "annual" && (
+                <div style={{ fontSize: 10, color: "#1DB870", fontWeight: 600, marginTop: 2 }}>
+                  Save ₹{((monthlyTotal * 12) - annualBill).toLocaleString("en-IN")}/yr
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Features */}
+        <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.3)", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>
+          Everything included — no holdbacks
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {teamFeatures.map((f, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 9 }}>
+              <CheckIcon color="#1DB870"/>
+              <span style={{ fontSize: 12.5, color: i < 2 ? "white" : "rgba(255,255,255,0.6)", fontWeight: i < 2 ? 600 : 400 }}>{f}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ padding: "14px 18px 18px" }}>
+        <div style={{
+          width: "100%", textAlign: "center",
+          background: "linear-gradient(135deg,#1DB870,#15924F)",
+          color: "white", borderRadius: 11, padding: "13px",
+          fontSize: 13, fontWeight: 700,
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
+          boxShadow: "0 4px 16px rgba(30,184,112,0.35)",
+        }}>
+          <GiftIcon/>
+          Contact us to set up your team
+        </div>
+        <div style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", textAlign: "center", marginTop: 6 }}>
+          Minimum 4 doctors · Bill adjusts as you add or remove doctors
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Credit packs ───────────────────────────────────────────────────────────
+const PACKS = [
+  { label: "50 Credits", price: "₹499", per: "₹10/credit", best: false },
+  { label: "100 Credits", price: "₹899", per: "₹9/credit", best: true },
+  { label: "300 Credits", price: "₹2,499", per: "₹8.3/credit", best: false },
+];
+
+// ── Individual plans data ──────────────────────────────────────────────────
+const INDIVIDUAL_PLANS = [
+  {
+    id: "free", name: "Free", tag: null, tagColor: null,
+    icon: "📋", accent: "#9CA3AF", accentBg: "rgba(156,163,175,0.08)",
+    description: "Try ErMate with your first 10 cases. No card needed.",
+    cta: "Current Plan",
+    features: [
+      { text: "10 cases total", ok: true },
+      { text: "Smart Dictation", ok: true },
+      { text: "AI Discharge Summary", ok: true },
+      { text: "PDF / WhatsApp export", ok: true },
+      { text: "Trivia & EM Reference", ok: true },
+      { text: "Unlimited cases", ok: false },
+      { text: "Rounds & Clinical Memory", ok: false },
+    ],
+  },
+  {
+    id: "base", name: "Base", tag: "MOST POPULAR", tagColor: "#1DB870",
+    icon: "⚡", accent: "#1DB870", accentBg: "rgba(30,184,112,0.08)",
+    description: "Unlimited documentation. Dictation and discharge always free.",
+    cta: "Start Free Trial",
+    features: [
+      { text: "Unlimited case documentation", ok: true },
+      { text: "Smart Dictation — always free", ok: true, bold: true },
+      { text: "AI Discharge Summary — always free", ok: true, bold: true },
+      { text: "PDF / WhatsApp export", ok: true },
+      { text: "Clinical Decision Support (15/mo)", ok: true, credit: true },
+      { text: "Document Scanning (10/mo)", ok: true, credit: true },
+      { text: "Rounds — 10 free debriefs", ok: true },
+      { text: "Unlimited Rounds & Memory", ok: false },
+    ],
+  },
+  {
+    id: "pro", name: "Pro", tag: "FOR GROWTH", tagColor: "#818CF8",
+    icon: "🧠", accent: "#818CF8", accentBg: "rgba(129,140,248,0.1)",
+    description: "Everything in Base plus unlimited Rounds and Clinical Memory.",
+    cta: "Start Free Trial",
+    features: [
+      { text: "Everything in Base", ok: true },
+      { text: "Rounds — unlimited debriefs", ok: true, bold: true },
+      { text: "All 7 thinking lenses", ok: true, bold: true },
+      { text: "Clinical Memory — full career", ok: true, bold: true },
+      { text: "Post-save learning nudge", ok: true },
+      { text: "Unlimited Decision Support", ok: true },
+      { text: "Unlimited Document Scanning", ok: true },
+    ],
+  },
+];
+
+// ── Main screen ────────────────────────────────────────────────────────────
+export default function UpgradeScreen() {
+  const [billing, setBilling] = useState("monthly");
+  const [selectedPlan, setSelectedPlan] = useState("base");
+  const [selectedPack, setSelectedPack] = useState(1);
+  const [activeTab, setActiveTab] = useState("individual"); // "individual" | "team"
+
+  return (
+    <div style={{
+      fontFamily: "'DM Sans','Helvetica Neue',sans-serif",
+      background: "#F5F6F8", minHeight: "100vh",
+      maxWidth: 430, margin: "0 auto", paddingBottom: 110,
+    }}>
+      {/* Header */}
+      <div style={{
+        position: "sticky", top: 0, zIndex: 20,
+        background: "rgba(245,246,248,0.94)", backdropFilter: "blur(12px)",
+        padding: "16px 20px 14px", borderBottom: "1px solid rgba(0,0,0,0.05)",
+        display: "flex", alignItems: "center", gap: 12,
+      }}>
+        <button style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex" }}>
+          <ArrowLeft/>
+        </button>
+        <span style={{ fontSize: 17, fontWeight: 700, color: "#0D1117", letterSpacing: -0.3 }}>Upgrade Plan</span>
+        <span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 600, color: "#9CA3AF" }}>IN · INR</span>
+      </div>
+
+      <div style={{ padding: "16px 16px 0", display: "flex", flexDirection: "column", gap: 14 }}>
+
+        {/* Tab switcher */}
+        <div style={{
+          display: "grid", gridTemplateColumns: "1fr 1fr",
+          background: "white", borderRadius: 14, padding: 4,
+          border: "1.5px solid #F0F0F0", gap: 3,
+        }}>
+          {[
+            { id: "individual", label: "👤 Individual" },
+            { id: "team", label: "👥 Team / Hospital" },
+          ].map(tab => (
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
+              border: "none", cursor: "pointer", fontFamily: "inherit",
+              background: activeTab === tab.id ? "#0D1117" : "transparent",
+              color: activeTab === tab.id ? "white" : "#9CA3AF",
+              borderRadius: 10, padding: "10px",
+              fontSize: 13, fontWeight: 700, transition: "all 0.2s",
+            }}>{tab.label}</button>
+          ))}
+        </div>
+
+        {/* Billing toggle */}
+        <BillingToggle billing={billing} onChange={setBilling}/>
+
+        {/* Annual savings banner */}
+        {billing === "annual" && (
+          <div style={{
+            background: "rgba(30,184,112,0.08)", border: "1px solid rgba(30,184,112,0.2)",
+            borderRadius: 12, padding: "10px 14px",
+            fontSize: 12.5, color: "#15924F", fontWeight: 500,
+            display: "flex", alignItems: "center", gap: 8,
+          }}>
+            🎉 Annual billing — save 2 months on every plan
+          </div>
+        )}
+
+        {/* ── INDIVIDUAL TAB ── */}
+        {activeTab === "individual" && (
+          <>
+            {INDIVIDUAL_PLANS.map(plan => (
+              <IndividualCard key={plan.id} plan={plan} billing={billing} selected={selectedPlan === plan.id} onSelect={setSelectedPlan}/>
+            ))}
+
+            {/* Credit packs */}
+            <div style={{ background: "white", borderRadius: 20, padding: "18px", border: "1.5px solid #F0F0F0" }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: "#0D1117", marginBottom: 3, letterSpacing: -0.3 }}>AI Credit Packs</div>
+              <div style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 14 }}>Base plan · Top up Clinical Intelligence · Never expire</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+                {PACKS.map((pack, i) => (
+                  <button key={i} onClick={() => setSelectedPack(i)} style={{
+                    width: "100%",
+                    background: selectedPack === i ? "#F0FDF6" : "white",
+                    border: selectedPack === i ? "2px solid #1DB870" : "2px solid #F0F0F0",
+                    borderRadius: 12, padding: "11px 14px",
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    cursor: "pointer", transition: "all 0.15s", textAlign: "left",
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{
+                        width: 17, height: 17, borderRadius: "50%",
+                        border: selectedPack === i ? "none" : "2px solid #D1D5DB",
+                        background: selectedPack === i ? "#1DB870" : "transparent",
+                        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                      }}>
+                        {selectedPack === i && <div style={{ width: 6, height: 6, borderRadius: "50%", background: "white" }}/>}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "#0D1117" }}>{pack.label}</div>
+                        <div style={{ fontSize: 10, color: "#9CA3AF" }}>{pack.per}</div>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                      {pack.best && <span style={{ fontSize: 8, fontWeight: 800, color: "#1DB870", background: "rgba(30,184,112,0.1)", borderRadius: 4, padding: "2px 6px", textTransform: "uppercase", letterSpacing: 0.3 }}>BEST VALUE</span>}
+                      <span style={{ fontSize: 14, fontWeight: 800, color: "#0D1117" }}>{pack.price}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+              <div style={{ marginTop: 10, padding: "9px 12px", background: "#F9FAFB", borderRadius: 10, fontSize: 11, color: "#9CA3AF", lineHeight: 1.6 }}>
+                Smart Dictation and Discharge Summary are always free — credits only for Decision Support, Document Scanning, and EM Reference.
+              </div>
+            </div>
+
+            {/* Always free */}
+            <div style={{ background: "white", borderRadius: 20, padding: "16px 18px", border: "1.5px solid #F0F0F0" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "#9CA3AF", letterSpacing: 1, textTransform: "uppercase", marginBottom: 12 }}>
+                Always free · No plan needed
+              </div>
+              {["Manual typing & editing", "Case save & storage", "View cases & dashboard", "Export to PDF / DOCX", "Browse EM Reference", "Trivia & Simulation"].map((f, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: i < 5 ? 8 : 0 }}>
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0 }}>
+                    <rect x="3" y="6" width="8" height="6" rx="1.2" stroke="#C4C9D4" strokeWidth="1.2"/>
+                    <path d="M5 6V4.5a2 2 0 014 0V6" stroke="#C4C9D4" strokeWidth="1.2" strokeLinecap="round"/>
+                  </svg>
+                  <span style={{ fontSize: 12.5, color: "#6B7280" }}>{f}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* ── TEAM TAB ── */}
+        {activeTab === "team" && (
+          <>
+            <TeamCard billing={billing}/>
+
+            {/* Comparison note */}
+            <div style={{
+              background: "white", borderRadius: 16, padding: "16px 18px",
+              border: "1.5px solid #F0F0F0",
+            }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#0D1117", marginBottom: 10 }}>
+                Why Team plan has no feature holdbacks
+              </div>
+              {[
+                "Per-doctor pricing already scales with your department size",
+                "A 50-doctor department pays 50× — no need to gate features",
+                "Every doctor gets full Pro features including Rounds and Memory",
+                "HOD gets the complete admin layer — analytics, reports, branding",
+              ].map((pt, i) => (
+                <div key={i} style={{ display: "flex", gap: 8, marginBottom: i < 3 ? 8 : 0 }}>
+                  <span style={{ color: "#1DB870", flexShrink: 0, fontSize: 13 }}>→</span>
+                  <span style={{ fontSize: 12.5, color: "#3A4050", lineHeight: 1.6 }}>{pt}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Pricing examples */}
+            <div style={{ background: "white", borderRadius: 16, padding: "16px 18px", border: "1.5px solid #F0F0F0" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "#9CA3AF", letterSpacing: 1, textTransform: "uppercase", marginBottom: 12 }}>
+                Example bills
+              </div>
+              {[
+                { type: "Small clinic", c: 2, r: 6 },
+                { type: "Mid-size ER", c: 8, r: 28 },
+                { type: "Large hospital", c: 15, r: 50 },
+              ].map((ex, i) => {
+                const monthly = (ex.c * 599) + (ex.r * 399);
+                return (
+                  <div key={i} style={{
+                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                    padding: "10px 0", borderBottom: i < 2 ? "1px solid #F5F5F5" : "none",
+                  }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "#0D1117" }}>{ex.type}</div>
+                      <div style={{ fontSize: 11, color: "#9CA3AF" }}>{ex.c} consultants · {ex.r} residents</div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: "#1DB870" }}>₹{monthly.toLocaleString("en-IN")}</div>
+                      <div style={{ fontSize: 10, color: "#9CA3AF" }}>per month</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Sticky CTA */}
+      <div style={{
+        position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)",
+        width: "100%", maxWidth: 430,
+        background: "rgba(245,246,248,0.96)", backdropFilter: "blur(14px)",
+        borderTop: "1px solid rgba(0,0,0,0.06)", padding: "12px 16px 32px",
+      }}>
+        {activeTab === "individual" ? (
+          <>
+            <button style={{
+              width: "100%",
+              background: selectedPlan === "free" ? "#E5E7EB" : selectedPlan === "pro" ? "linear-gradient(135deg,#6366F1,#818CF8)" : "linear-gradient(135deg,#1DB870,#15924F)",
+              color: selectedPlan === "free" ? "#9CA3AF" : "white",
+              border: "none", borderRadius: 14, padding: "15px",
+              fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+              boxShadow: selectedPlan === "free" ? "none" : selectedPlan === "pro" ? "0 6px 22px rgba(99,102,241,0.35)" : "0 6px 22px rgba(30,184,112,0.35)",
+            }}>
+              {selectedPlan !== "free" && <GiftIcon/>}
+              {selectedPlan === "free" ? "Current Plan" : selectedPlan === "base" ? "Start Base — Free for 1st Month" : "Start Pro — Free for 1st Month"}
+            </button>
+            {selectedPlan !== "free" && (
+              <div style={{ textAlign: "center", fontSize: 11, color: "#9CA3AF", marginTop: 8 }}>
+                Free for 30 days · Then ₹{PRICING[selectedPlan].monthly}/month · Cancel anytime
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <button style={{
+              width: "100%",
+              background: "linear-gradient(135deg,#1DB870,#15924F)",
+              color: "white", border: "none", borderRadius: 14, padding: "15px",
+              fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+              boxShadow: "0 6px 22px rgba(30,184,112,0.35)",
+            }}>
+              <PeopleIcon/>
+              Set Up Your Team
+            </button>
+            <div style={{ textAlign: "center", fontSize: 11, color: "#9CA3AF", marginTop: 8 }}>
+              Contact support@ermate.app · We'll set it up for you
+            </div>
+          </>
+        )}
+      </div>
+
+      <style>{`@keyframes fadeUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}`}</style>
+    </div>
+  );
+}

@@ -8,6 +8,7 @@ import {
   Alert,
   ActivityIndicator,
   Animated,
+  Linking,
 } from "react-native";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -21,6 +22,8 @@ import { getApiUrl } from "@/lib/query-client";
 
 type RouteProps = RouteProp<RootStackParamList, "Upgrade">;
 type BillingCycle = "monthly" | "annual";
+type PlanId = "free" | "base" | "pro";
+type ActiveTab = "individual" | "team";
 
 interface SubscriptionStatus {
   plan: string;
@@ -34,19 +37,13 @@ interface SubscriptionStatus {
   credits_balance?: number;
 }
 
-type PlanId = "free" | "base" | "pro";
-
 interface FeatureItem {
   text: string;
   ok: boolean;
   bold?: boolean;
   credit?: boolean;
 }
-interface FeatureSection {
-  label?: string;
-  labelColor?: string;
-  items: FeatureItem[];
-}
+
 interface Plan {
   id: PlanId;
   name: string;
@@ -56,152 +53,104 @@ interface Plan {
   annualRaw: number;
   annualEquiv: string;
   annualSavings: string;
-  tag?: string;
-  tagColor?: string;
+  tag?: string | null;
+  tagColor?: string | null;
   description: string;
   accent: string;
   accentBg: string;
   isDark: boolean;
   ctaDisabled: boolean;
   icon: keyof typeof Feather.glyphMap;
-  sections: FeatureSection[];
+  features: FeatureItem[];
 }
 
 const PLANS: Plan[] = [
   {
     id: "free",
     name: "Free",
-    monthlyPrice: "₹0",
-    monthlyRaw: 0,
-    annualPrice: "₹0",
-    annualRaw: 0,
-    annualEquiv: "₹0",
-    annualSavings: "₹0",
-    description: "Try ErMate with your first 10 cases.",
-    accent: "#9CA3AF",
-    accentBg: "rgba(156,163,175,0.10)",
-    isDark: false,
-    ctaDisabled: true,
+    monthlyPrice: "₹0", monthlyRaw: 0,
+    annualPrice: "₹0", annualRaw: 0, annualEquiv: "₹0", annualSavings: "₹0",
+    tag: null, tagColor: null,
+    description: "Try ErMate with your first 10 cases. No card needed.",
+    accent: "#9CA3AF", accentBg: "rgba(156,163,175,0.08)",
+    isDark: false, ctaDisabled: true,
     icon: "clipboard",
-    sections: [
-      {
-        items: [
-          { text: "10 cases total", ok: true },
-          { text: "Smart Dictation", ok: true },
-          { text: "AI Discharge Summary", ok: true },
-          { text: "PDF / WhatsApp export", ok: true },
-          { text: "Trivia & EM Reference", ok: true },
-          { text: "Unlimited cases", ok: false },
-          { text: "Clinical Decision Support", ok: false },
-          { text: "Rounds & Case Debrief", ok: false },
-        ],
-      },
+    features: [
+      { text: "10 cases total", ok: true },
+      { text: "Smart Dictation", ok: true },
+      { text: "AI Discharge Summary", ok: true },
+      { text: "PDF / WhatsApp export", ok: true },
+      { text: "Trivia & EM Reference", ok: true },
+      { text: "Unlimited cases", ok: false },
+      { text: "Rounds & Clinical Memory", ok: false },
     ],
   },
   {
     id: "base",
     name: "Base",
-    monthlyPrice: "₹799",
-    monthlyRaw: 799,
-    annualPrice: "₹7,990",
-    annualRaw: 7990,
-    annualEquiv: "₹666",
-    annualSavings: "₹1,598",
-    tag: "MOST POPULAR",
-    tagColor: "#1DB870",
-    description: "Unlimited documentation. No credit walls on core features.",
-    accent: "#1DB870",
-    accentBg: "rgba(30,184,112,0.10)",
-    isDark: false,
-    ctaDisabled: false,
+    monthlyPrice: "₹799", monthlyRaw: 799,
+    annualPrice: "₹7,990", annualRaw: 7990, annualEquiv: "₹666", annualSavings: "₹1,598",
+    tag: "MOST POPULAR", tagColor: "#1DB870",
+    description: "Unlimited documentation. Dictation and discharge always free.",
+    accent: "#1DB870", accentBg: "rgba(30,184,112,0.08)",
+    isDark: false, ctaDisabled: false,
     icon: "zap",
-    sections: [
-      {
-        label: "Always included — no credits needed",
-        labelColor: "#1DB870",
-        items: [
-          { text: "Unlimited case documentation", ok: true },
-          { text: "Smart Dictation", ok: true, bold: true },
-          { text: "AI Discharge Summary", ok: true, bold: true },
-          { text: "PDF / WhatsApp export", ok: true },
-          { text: "Trivia & EM Reference", ok: true },
-          { text: "Paediatric drug calculator", ok: true },
-          { text: "Priority support", ok: true },
-        ],
-      },
-      {
-        label: "Clinical Intelligence — uses AI credits",
-        labelColor: "#9CA3AF",
-        items: [
-          { text: "Clinical Decision Support (15/month)", ok: true, credit: true },
-          { text: "Document OCR Scanning (10/month)", ok: true, credit: true },
-          { text: "ABG / VBG Interpretation", ok: true, credit: true },
-        ],
-      },
-      {
-        label: "Not included",
-        labelColor: "#C4C9D4",
-        items: [
-          { text: "Rounds & Case Debrief", ok: false },
-          { text: "All 7 Thinking Lenses", ok: false },
-          { text: "Clinical Memory", ok: false },
-        ],
-      },
+    features: [
+      { text: "Unlimited case documentation", ok: true },
+      { text: "Smart Dictation — always free", ok: true, bold: true },
+      { text: "AI Discharge Summary — always free", ok: true, bold: true },
+      { text: "PDF / WhatsApp export", ok: true },
+      { text: "Clinical Decision Support (15/mo)", ok: true, credit: true },
+      { text: "Document Scanning (10/mo)", ok: true, credit: true },
+      { text: "Rounds — 10 free debriefs", ok: true },
+      { text: "Unlimited Rounds & Memory", ok: false },
     ],
   },
   {
     id: "pro",
     name: "Pro",
-    monthlyPrice: "₹1,199",
-    monthlyRaw: 1199,
-    annualPrice: "₹11,990",
-    annualRaw: 11990,
-    annualEquiv: "₹999",
-    annualSavings: "₹2,398",
-    tag: "FOR GROWTH",
-    tagColor: "#818CF8",
-    description: "Everything in Base, plus clinical growth built into every shift.",
-    accent: "#818CF8",
-    accentBg: "rgba(129,140,248,0.12)",
-    isDark: true,
-    ctaDisabled: false,
+    monthlyPrice: "₹1,199", monthlyRaw: 1199,
+    annualPrice: "₹11,990", annualRaw: 11990, annualEquiv: "₹999", annualSavings: "₹2,398",
+    tag: "FOR GROWTH", tagColor: "#818CF8",
+    description: "Everything in Base plus unlimited Rounds and Clinical Memory.",
+    accent: "#818CF8", accentBg: "rgba(129,140,248,0.10)",
+    isDark: true, ctaDisabled: false,
     icon: "layers",
-    sections: [
-      {
-        label: "Everything in Base, plus:",
-        labelColor: "#818CF8",
-        items: [
-          { text: "Rounds — debrief after every case", ok: true, bold: true },
-          { text: "Post-save Learning Nudge", ok: true, bold: true },
-          { text: "Clinical Memory — full career history", ok: true, bold: true },
-          { text: "All 7 thinking lenses", ok: true },
-          { text: "Disease Snapshot for any diagnosis", ok: true },
-          { text: "Unlimited Clinical Decision Support", ok: true },
-          { text: "Unlimited Document Scanning", ok: true },
-          { text: "Unlimited EM Reference queries", ok: true },
-        ],
-      },
+    features: [
+      { text: "Everything in Base", ok: true },
+      { text: "Rounds — unlimited debriefs", ok: true, bold: true },
+      { text: "All 7 thinking lenses", ok: true, bold: true },
+      { text: "Clinical Memory — full career", ok: true, bold: true },
+      { text: "Post-save learning nudge", ok: true },
+      { text: "Unlimited Decision Support", ok: true },
+      { text: "Unlimited Document Scanning", ok: true },
     ],
   },
 ];
 
-const CREDIT_PACKS = [
-  { label: "50 Credits", price: "₹499", per: "₹10 / credit", popular: false },
-  { label: "100 Credits", price: "₹899", per: "₹9 / credit", popular: true },
-  { label: "300 Credits", price: "₹2,499", per: "₹8.3 / credit", popular: false },
+const CREDIT_PACKS_DISPLAY = [
+  { label: "50 Credits",  price: "₹499",   per: "₹10 / credit", popular: false },
+  { label: "100 Credits", price: "₹899",   per: "₹9 / credit",  popular: true  },
+  { label: "300 Credits", price: "₹2,499", per: "₹8.3 / credit",popular: false },
 ];
 
-const COMPARISON_ROWS = [
-  { feature: "Cases", free: "10 total", base: "Unlimited", pro: "Unlimited" },
-  { feature: "Smart Dictation", free: "Yes", base: "Always", pro: "Always" },
-  { feature: "Discharge Summary", free: "Yes", base: "Always", pro: "Always" },
-  { feature: "PDF / WhatsApp", free: "Yes", base: "Yes", pro: "Yes" },
-  { feature: "Trivia & Learn", free: "Yes", base: "Yes", pro: "Yes" },
-  { feature: "Decision Support", free: "—", base: "15/mo", pro: "Unlimited" },
-  { feature: "Document Scan", free: "—", base: "10/mo", pro: "Unlimited" },
-  { feature: "Rounds", free: "—", base: "—", pro: "Yes" },
-  { feature: "Clinical Memory", free: "—", base: "—", pro: "Yes" },
-  { feature: "All 7 Lenses", free: "—", base: "—", pro: "Yes" },
+const TEAM_FEATURES = [
+  { text: "Everything in Pro — for every doctor", bold: true },
+  { text: "Shift management — Morning / Evening / Night", bold: true },
+  { text: "Case handover between shifts", bold: false },
+  { text: "Auto handover sheet — PDF + WhatsApp", bold: false },
+  { text: "Consultant escalation module", bold: false },
+  { text: "HOD admin dashboard — full access", bold: false },
+  { text: "All active cases visible to HOD", bold: false },
+  { text: "Department analytics & reports", bold: false },
+  { text: "Custom hospital branding on exports", bold: false },
+  { text: "Priority WhatsApp support", bold: false },
+];
+
+const EXAMPLE_BILLS = [
+  { type: "Small clinic / nursing home", consultants: 2, residents: 6 },
+  { type: "Mid-size ER", consultants: 8, residents: 28 },
+  { type: "Large hospital dept", consultants: 15, residents: 50 },
 ];
 
 const ALWAYS_FREE = [
@@ -213,14 +162,6 @@ const ALWAYS_FREE = [
   "Simulation cases & Trivia",
 ];
 
-const ROUNDS_POINTS = [
-  "Every case becomes a learning session",
-  "7 thinking lenses — First Principles to Full Debrief",
-  "Clinical memory across your entire career",
-  "Post-save nudge — learn in 2 min after every shift",
-  "10 free debriefs to try before you pay",
-];
-
 export default function UpgradeScreen() {
   const navigation = useNavigation();
   const route = useRoute<RouteProps>();
@@ -230,16 +171,18 @@ export default function UpgradeScreen() {
   const { user, token } = useAuth();
 
   const { lockReason, lockMessage } = route.params || {};
+
   const [subStatus, setSubStatus] = useState<SubscriptionStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [ctaLoading, setCtaLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<ActiveTab>("individual");
   const [selectedPlan, setSelectedPlan] = useState<PlanId>("base");
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("monthly");
   const [selectedPack, setSelectedPack] = useState(1);
-  const [showComparison, setShowComparison] = useState(false);
+  const [teamConsultants, setTeamConsultants] = useState(2);
+  const [teamResidents, setTeamResidents] = useState(6);
 
   const scaleAnims = useRef(PLANS.map(() => new Animated.Value(1))).current;
-  const toggleAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     fetchSubscriptionStatus();
@@ -256,11 +199,10 @@ export default function UpgradeScreen() {
       const text = await res.text();
       let data: any;
       try { data = JSON.parse(text); } catch {
-        data = { plan: "free", casesUsed: 0, casesLimit: 10, casesRemaining: 10, status: "active", credits_balance: 0 };
+        data = { plan: "free", casesUsed: 0, casesLimit: 10, casesRemaining: 10, status: "active" };
       }
       setSubStatus(data);
       if (data.plan === "pro") setSelectedPlan("pro");
-      else if (data.plan === "premium" || data.plan === "base") setSelectedPlan("base");
       else setSelectedPlan("base");
     } catch { }
     finally { setLoading(false); }
@@ -272,15 +214,6 @@ export default function UpgradeScreen() {
       Animated.timing(scaleAnims[index], { toValue: 0.97, duration: 80, useNativeDriver: true }),
       Animated.spring(scaleAnims[index], { toValue: 1, useNativeDriver: true, tension: 200, friction: 10 }),
     ]).start();
-  };
-
-  const handleBillingToggle = (cycle: BillingCycle) => {
-    setBillingCycle(cycle);
-    Animated.timing(toggleAnim, {
-      toValue: cycle === "annual" ? 1 : 0,
-      duration: 200,
-      useNativeDriver: false,
-    }).start();
   };
 
   const handleSubscribe = async (plan: PlanId, cycle: BillingCycle) => {
@@ -297,19 +230,10 @@ export default function UpgradeScreen() {
         body: JSON.stringify({ plan, billingCycle: cycle }),
       });
       const data = await res.json();
-
       if (data.url) {
         await WebBrowser.openBrowserAsync(data.url);
       } else {
-        const planObj = PLANS.find(p => p.id === plan)!;
-        const priceStr = cycle === "annual"
-          ? `${planObj.annualPrice}/year (${planObj.annualEquiv}/mo)`
-          : `${planObj.monthlyPrice}/month`;
-        Alert.alert(
-          "Start Free Trial",
-          `Get your first month of ${planObj.name} completely FREE — no charges for 30 days!\n\nPayment integration is being set up. For early access, contact support@ermate.app to activate your ${cycle === "annual" ? "annual" : "monthly"} plan at ${priceStr}.`,
-          [{ text: "OK" }]
-        );
+        Alert.alert("Something went wrong", "Please try again or contact support@ermate.app");
       }
     } catch {
       Alert.alert("Something went wrong", "Please try again or contact support@ermate.app");
@@ -343,9 +267,22 @@ export default function UpgradeScreen() {
     }
   };
 
+  const handleTeamContact = () => {
+    const monthly = (teamConsultants * 599) + (teamResidents * 399);
+    const annual = (teamConsultants * 5990) + (teamResidents * 3990);
+    const bill = billingCycle === "annual"
+      ? `₹${annual.toLocaleString("en-IN")}/year (₹${Math.round(annual / 12).toLocaleString("en-IN")}/month)`
+      : `₹${monthly.toLocaleString("en-IN")}/month`;
+    const subject = encodeURIComponent("ErMate Team Plan Setup");
+    const body = encodeURIComponent(
+      `Hi ErMate Team,\n\nI'd like to set up the Team Plan for our department.\n\nTeam size:\n- Consultants: ${teamConsultants}\n- Residents: ${teamResidents}\n- Total: ${teamConsultants + teamResidents} doctors\n\nBilling preference: ${billingCycle === "annual" ? "Annual" : "Monthly"}\nEstimated bill: ${bill}\n\nPlease get in touch to set up our account.\n\nThank you`
+    );
+    Linking.openURL(`mailto:support@ermate.app?subject=${subject}&body=${body}`);
+  };
+
   if (loading) {
     return (
-      <View style={[styles.container, styles.center, { backgroundColor: theme.backgroundDefault }]}>
+      <View style={[s.container, s.center, { backgroundColor: theme.backgroundDefault }]}>
         <ActivityIndicator size="large" color="#1DB870" />
       </View>
     );
@@ -355,210 +292,221 @@ export default function UpgradeScreen() {
   const casesLimit = subStatus?.casesLimit ?? 10;
   const usagePct = Math.min(1, casesUsed / Math.max(1, casesLimit));
   const limitReached = casesUsed >= casesLimit;
+
   const activePlan = PLANS.find(p => p.id === selectedPlan)!;
   const isAnnual = billingCycle === "annual";
 
-  const ctaLabel = activePlan.id === "free"
-    ? "Current Plan"
-    : `Start ${activePlan.name} — Free for 1st Month`;
-
-  const stickySubtext = activePlan.id !== "free"
-    ? isAnnual
-      ? `Free for 30 days · Then ${activePlan.annualPrice}/year (${activePlan.annualEquiv}/mo) · Save ${activePlan.annualSavings}`
-      : `Free for 30 days · Then ${activePlan.monthlyPrice}/month · Cancel anytime`
-    : null;
+  const teamMonthly = (teamConsultants * 599) + (teamResidents * 399);
+  const teamAnnual = (teamConsultants * 5990) + (teamResidents * 3990);
+  const teamDisplay = isAnnual ? Math.round(teamAnnual / 12) : teamMonthly;
+  const teamSavings = (teamMonthly * 12) - teamAnnual;
 
   return (
-    <View style={[styles.container, { backgroundColor: isDarkMode ? "#0D1117" : "#F5F6F8" }]}>
+    <View style={[s.container, { backgroundColor: isDarkMode ? "#0D1117" : "#F5F6F8" }]}>
       <ScrollView
         contentContainerStyle={{
           paddingTop: headerHeight + 12,
           paddingHorizontal: 16,
-          paddingBottom: insets.bottom + 120,
+          paddingBottom: insets.bottom + 130,
         }}
         showsVerticalScrollIndicator={false}
       >
         {lockReason ? (
-          <View style={[styles.lockBanner, { backgroundColor: "#FEF2F2" }]}>
+          <View style={[s.lockBanner, { backgroundColor: "#FEF2F2" }]}>
             <Feather name="lock" size={18} color="#EF4444" />
             <View style={{ flex: 1 }}>
-              <Text style={[styles.lockTitle, { color: "#EF4444" }]}>{lockReason}</Text>
-              {lockMessage ? <Text style={[styles.lockMsg, { color: theme.text }]}>{lockMessage}</Text> : null}
+              <Text style={[s.lockTitle, { color: "#EF4444" }]}>{lockReason}</Text>
+              {lockMessage ? <Text style={[s.lockMsg, { color: theme.text }]}>{lockMessage}</Text> : null}
             </View>
           </View>
         ) : null}
 
-        <View style={[styles.usageCard, { backgroundColor: isDarkMode ? "#161B22" : "#FFFFFF" }]}>
-          <View style={styles.usageRow}>
-            <Text style={[styles.usageLabel, { color: theme.textSecondary }]}>Your usage</Text>
-            <Text style={[styles.usageStatus, { color: limitReached ? "#EF4444" : "#1DB870" }]}>
+        {/* Usage card */}
+        <View style={[s.usageCard, { backgroundColor: isDarkMode ? "#161B22" : "#FFFFFF" }]}>
+          <View style={s.usageRow}>
+            <Text style={[s.usageLabel, { color: theme.textSecondary }]}>Your usage</Text>
+            <Text style={[s.usageStatus, { color: limitReached ? "#EF4444" : "#1DB870" }]}>
               {limitReached ? "Limit reached" : `${casesLimit - casesUsed} remaining`}
             </Text>
           </View>
-          <View style={styles.barBg}>
-            <View style={[styles.barFill, { width: `${usagePct * 100}%`, backgroundColor: limitReached ? "#EF4444" : "#1DB870" }]} />
+          <View style={s.barBg}>
+            <View style={[s.barFill, { width: `${usagePct * 100}%` as any, backgroundColor: limitReached ? "#EF4444" : "#1DB870" }]} />
           </View>
-          <Text style={[styles.usageText, { color: theme.textMuted }]}>{casesUsed} of {casesLimit} free cases used</Text>
+          <Text style={[s.usageText, { color: theme.textMuted }]}>{casesUsed} of {casesLimit} free cases used</Text>
         </View>
 
-        <View style={[styles.billingToggleContainer, { backgroundColor: isDarkMode ? "#161B22" : "#FFFFFF" }]}>
-          <Pressable
-            onPress={() => handleBillingToggle("monthly")}
-            style={[
-              styles.billingToggleTab,
-              !isAnnual && { backgroundColor: isDarkMode ? "#2D333B" : "#F3F4F6" },
-            ]}
-          >
-            <Text style={[
-              styles.billingToggleText,
-              { color: !isAnnual ? (isDarkMode ? "#FFFFFF" : "#0D1117") : theme.textMuted },
-              !isAnnual && { fontWeight: "700" },
-            ]}>
-              Monthly
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => handleBillingToggle("annual")}
-            style={[
-              styles.billingToggleTab,
-              isAnnual && { backgroundColor: "#1DB870" },
-            ]}
-          >
-            <Text style={[
-              styles.billingToggleText,
-              { color: isAnnual ? "#FFFFFF" : theme.textMuted },
-              isAnnual && { fontWeight: "700" },
-            ]}>
-              Annual
-            </Text>
-            <View style={[styles.saveBadge, { backgroundColor: isAnnual ? "rgba(255,255,255,0.25)" : "rgba(29,184,112,0.12)" }]}>
-              <Text style={[styles.saveBadgeText, { color: isAnnual ? "#FFFFFF" : "#1DB870" }]}>
-                2 months free
+        {/* Tab switcher */}
+        <View style={[s.tabContainer, { backgroundColor: isDarkMode ? "#161B22" : "#FFFFFF" }]}>
+          {([
+            { id: "individual" as ActiveTab, label: "Individual" },
+            { id: "team" as ActiveTab, label: "Team / Hospital" },
+          ]).map(tab => (
+            <Pressable
+              key={tab.id}
+              onPress={() => setActiveTab(tab.id)}
+              style={[
+                s.tab,
+                activeTab === tab.id && { backgroundColor: isDarkMode ? "#FFFFFF" : "#0D1117" },
+              ]}
+            >
+              <Feather
+                name={tab.id === "individual" ? "user" : "users"}
+                size={13}
+                color={activeTab === tab.id ? (isDarkMode ? "#0D1117" : "#FFFFFF") : theme.textMuted}
+                style={{ marginRight: 5 }}
+              />
+              <Text style={[
+                s.tabText,
+                { color: activeTab === tab.id ? (isDarkMode ? "#0D1117" : "#FFFFFF") : theme.textMuted },
+                activeTab === tab.id && { fontWeight: "700" },
+              ]}>{tab.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+
+        {/* Billing toggle */}
+        <View style={[s.billingToggle, { backgroundColor: isDarkMode ? "#161B22" : "#EEF0F2" }]}>
+          {(["monthly", "annual"] as BillingCycle[]).map(cycle => (
+            <Pressable
+              key={cycle}
+              onPress={() => setBillingCycle(cycle)}
+              style={[
+                s.billingTab,
+                billingCycle === cycle && { backgroundColor: isDarkMode ? "#2D333B" : "#FFFFFF" },
+              ]}
+            >
+              <Text style={[
+                s.billingTabText,
+                { color: billingCycle === cycle ? (isDarkMode ? "#FFFFFF" : "#0D1117") : theme.textMuted },
+                billingCycle === cycle && { fontWeight: "700" },
+              ]}>
+                {cycle === "monthly" ? "Monthly" : "Annual"}
               </Text>
-            </View>
-          </Pressable>
+              {cycle === "annual" && (
+                <View style={[s.saveBadge, {
+                  backgroundColor: billingCycle === "annual" ? "rgba(30,184,112,0.15)" : "rgba(156,163,175,0.12)",
+                }]}>
+                  <Text style={[s.saveBadgeText, {
+                    color: billingCycle === "annual" ? "#15924F" : theme.textMuted,
+                  }]}>SAVE 17%</Text>
+                </View>
+              )}
+            </Pressable>
+          ))}
         </View>
 
-        <Text style={[styles.sectionLabel, { color: theme.textMuted }]}>Choose your plan</Text>
+        {isAnnual ? (
+          <View style={s.annualBanner}>
+            <Feather name="gift" size={13} color="#15924F" />
+            <Text style={s.annualBannerText}>Annual billing — save 2 months on every plan</Text>
+          </View>
+        ) : null}
 
-        {PLANS.map((plan, pi) => {
-          const isSelected = selectedPlan === plan.id;
-          return (
-            <Animated.View key={plan.id} style={{ transform: [{ scale: scaleAnims[pi] }], marginBottom: 12 }}>
-              <Pressable
-                onPress={() => handlePlanSelect(plan.id, pi)}
-                style={[
-                  styles.planCard,
-                  {
-                    backgroundColor: plan.isDark ? "#0D1117" : (isDarkMode ? "#161B22" : "#FFFFFF"),
-                    borderColor: isSelected ? plan.accent : plan.isDark ? "rgba(129,140,248,0.20)" : (isDarkMode ? "#2D333B" : "#F0F0F0"),
-                    borderWidth: isSelected ? 2 : plan.isDark ? 1.5 : 1.5,
-                    shadowColor: plan.accent,
-                    shadowOpacity: isSelected ? 0.18 : 0,
-                    shadowRadius: 16,
-                    shadowOffset: { width: 0, height: 6 },
-                    elevation: isSelected ? 6 : 1,
-                  },
-                ]}
-              >
-                {plan.tag ? (
-                  <View style={[styles.tagRow, {
-                    backgroundColor: plan.isDark ? "rgba(129,140,248,0.08)" : `${plan.accent}12`,
-                    borderBottomColor: plan.isDark ? "rgba(129,140,248,0.10)" : `${plan.accent}18`,
-                  }]}>
-                    <Text style={[styles.tagText, { color: plan.tagColor ?? plan.accent }]}>{plan.tag}</Text>
-                    {isSelected && (
-                      <View style={[styles.selectedDot, { backgroundColor: plan.accent }]}>
-                        <Feather name="check" size={10} color="#FFFFFF" />
-                      </View>
-                    )}
-                  </View>
-                ) : null}
-
-                <View style={styles.planBody}>
-                  <View style={styles.priceHeader}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.planName, { color: plan.isDark ? "rgba(255,255,255,0.35)" : theme.textMuted }]}>
-                        {plan.name.toUpperCase()}
-                      </Text>
-                      {plan.id === "free" ? (
-                        <Text style={[styles.priceMain, { color: isDarkMode ? "#FFFFFF" : "#0D1117" }]}>₹0</Text>
-                      ) : (
-                        <>
-                          <View style={styles.priceRow}>
-                            <Text style={[styles.priceStrike, { color: plan.isDark ? "rgba(255,255,255,0.22)" : "#C4C9D4" }]}>
-                              {isAnnual ? plan.annualPrice : plan.monthlyPrice}
-                            </Text>
-                            <Text style={[styles.priceFree, { color: plan.accent }]}>FREE</Text>
-                            <Text style={[styles.priceSub, { color: plan.isDark ? "rgba(255,255,255,0.35)" : theme.textMuted }]}>
-                              1st month
-                            </Text>
+        {/* ── INDIVIDUAL TAB ── */}
+        {activeTab === "individual" && (
+          <>
+            {PLANS.map((plan, pi) => {
+              const isSelected = selectedPlan === plan.id;
+              return (
+                <Animated.View key={plan.id} style={{ transform: [{ scale: scaleAnims[pi] }], marginBottom: 12 }}>
+                  <Pressable
+                    onPress={() => handlePlanSelect(plan.id, pi)}
+                    style={[
+                      s.planCard,
+                      {
+                        backgroundColor: plan.isDark ? "#0D1117" : (isDarkMode ? "#161B22" : "#FFFFFF"),
+                        borderColor: isSelected ? plan.accent : plan.isDark ? "rgba(129,140,248,0.20)" : (isDarkMode ? "#2D333B" : "#F0F0F0"),
+                        borderWidth: isSelected ? 2 : 1.5,
+                        shadowColor: plan.accent,
+                        shadowOpacity: isSelected ? 0.18 : 0,
+                        shadowRadius: 16,
+                        shadowOffset: { width: 0, height: 6 },
+                        elevation: isSelected ? 6 : 1,
+                      },
+                    ]}
+                  >
+                    {plan.tag ? (
+                      <View style={[s.tagRow, {
+                        backgroundColor: plan.isDark ? "rgba(129,140,248,0.08)" : `${plan.accent}12`,
+                        borderBottomColor: plan.isDark ? "rgba(129,140,248,0.10)" : `${plan.accent}18`,
+                      }]}>
+                        <Text style={[s.tagText, { color: plan.tagColor ?? plan.accent }]}>{plan.tag}</Text>
+                        {isSelected && (
+                          <View style={[s.selectedDot, { backgroundColor: plan.accent }]}>
+                            <Feather name="check" size={10} color="#FFFFFF" />
                           </View>
-                          {isAnnual ? (
+                        )}
+                      </View>
+                    ) : null}
+
+                    <View style={s.planBody}>
+                      {/* Price header */}
+                      <View style={s.priceHeader}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[s.planNameLabel, { color: plan.isDark ? "rgba(255,255,255,0.35)" : theme.textMuted }]}>
+                            {plan.name.toUpperCase()}
+                          </Text>
+                          {plan.id === "free" ? (
+                            <Text style={[s.priceMain, { color: isDarkMode ? "#FFFFFF" : "#0D1117" }]}>₹0</Text>
+                          ) : (
                             <>
-                              <Text style={[styles.priceAfter, { color: plan.isDark ? "rgba(255,255,255,0.28)" : theme.textMuted }]}>
-                                Then {plan.annualEquiv}/mo · billed {plan.annualPrice}/year
-                              </Text>
-                              <View style={styles.savingsRow}>
-                                <View style={[styles.savingsPill, { backgroundColor: `${plan.accent}18` }]}>
-                                  <Feather name="tag" size={10} color={plan.accent} />
-                                  <Text style={[styles.savingsText, { color: plan.accent }]}>
-                                    Save {plan.annualSavings}/year
+                              {isAnnual ? (
+                                <View style={s.priceRow}>
+                                  <Text style={[s.priceMain, { color: plan.isDark ? "#FFFFFF" : "#0D1117" }]}>
+                                    {plan.annualEquiv}
+                                  </Text>
+                                  <Text style={[s.pricePer, { color: plan.isDark ? "rgba(255,255,255,0.35)" : theme.textMuted }]}>/mo</Text>
+                                </View>
+                              ) : (
+                                <View style={s.priceRow}>
+                                  <Text style={[s.priceStrike, { color: plan.isDark ? "rgba(255,255,255,0.22)" : "#C4C9D4" }]}>
+                                    {plan.monthlyPrice}
+                                  </Text>
+                                  <Text style={[s.priceFree, { color: plan.accent }]}>FREE</Text>
+                                  <Text style={[s.pricePer, { color: plan.isDark ? "rgba(255,255,255,0.35)" : theme.textMuted }]}>
+                                    1st month
                                   </Text>
                                 </View>
-                              </View>
+                              )}
+                              <Text style={[s.priceAfter, { color: plan.isDark ? "rgba(255,255,255,0.28)" : theme.textMuted }]}>
+                                {isAnnual
+                                  ? `${plan.annualPrice}/year · Save ${plan.annualSavings}`
+                                  : `Then ${plan.monthlyPrice}/month · Cancel anytime`}
+                              </Text>
                             </>
-                          ) : (
-                            <Text style={[styles.priceAfter, { color: plan.isDark ? "rgba(255,255,255,0.28)" : theme.textMuted }]}>
-                              Then {plan.monthlyPrice}/month · Cancel anytime
-                            </Text>
                           )}
-                        </>
-                      )}
-                    </View>
-                    <View style={[styles.iconBox, { backgroundColor: plan.accentBg, borderColor: `${plan.accent}30` }]}>
-                      <Feather name={plan.icon} size={20} color={plan.accent} />
-                    </View>
-                  </View>
+                        </View>
+                        <View style={[s.iconBox, { backgroundColor: plan.accentBg, borderColor: `${plan.accent}30` }]}>
+                          <Feather name={plan.icon} size={20} color={plan.accent} />
+                        </View>
+                      </View>
 
-                  <Text style={[styles.planDesc, { color: plan.isDark ? "rgba(255,255,255,0.40)" : theme.textSecondary }]}>
-                    {plan.description}
-                  </Text>
+                      <Text style={[s.planDesc, { color: plan.isDark ? "rgba(255,255,255,0.40)" : theme.textSecondary }]}>
+                        {plan.description}
+                      </Text>
 
-                  <View style={[styles.divider, { backgroundColor: plan.isDark ? "rgba(255,255,255,0.07)" : (isDarkMode ? "#2D333B" : "#F3F4F6") }]} />
+                      <View style={[s.divider, { backgroundColor: plan.isDark ? "rgba(255,255,255,0.07)" : (isDarkMode ? "#2D333B" : "#F3F4F6") }]} />
 
-                  {plan.sections.map((sec, si) => (
-                    <View key={si} style={{ marginBottom: si < plan.sections.length - 1 ? 14 : 0 }}>
-                      {sec.label ? (
-                        <Text style={[styles.secLabel, { color: sec.labelColor ?? theme.textMuted }]}>
-                          {sec.label.toUpperCase()}
-                        </Text>
-                      ) : null}
-                      {sec.items.map((item, ii) => (
-                        <View key={ii} style={styles.featureRow}>
+                      {/* Features */}
+                      {plan.features.map((item, ii) => (
+                        <View key={ii} style={[s.featureRow, ii > 0 && { marginTop: 9 }]}>
                           {item.ok ? (
-                            item.credit ? (
-                              <View style={[styles.iconCircle, { backgroundColor: `${plan.accent}18` }]}>
-                                <Feather name="zap" size={10} color={plan.accent} />
-                              </View>
-                            ) : (
-                              <View style={[styles.iconCircle, { backgroundColor: `${plan.accent}18` }]}>
-                                <Feather name="check" size={10} color={plan.accent} />
-                              </View>
-                            )
+                            <View style={[s.iconCircle, { backgroundColor: item.credit ? `${plan.accent}15` : `${plan.accent}18` }]}>
+                              <Feather name={item.credit ? "zap" : "check"} size={10} color={plan.accent} />
+                            </View>
                           ) : (
-                            <View style={[styles.iconCircle, { backgroundColor: "rgba(0,0,0,0.04)" }]}>
+                            <View style={[s.iconCircle, { backgroundColor: "rgba(0,0,0,0.04)" }]}>
                               <Feather name="x" size={10} color="#C4C9D4" />
                             </View>
                           )}
                           <Text style={[
-                            styles.featureText,
+                            s.featureText,
                             {
                               color: !item.ok
                                 ? "#C4C9D4"
                                 : plan.isDark
-                                ? item.bold ? "#FFFFFF" : "rgba(255,255,255,0.55)"
-                                : item.bold ? (isDarkMode ? "#FFFFFF" : "#0D1117") : theme.textSecondary,
+                                ? (item.bold ? "#FFFFFF" : "rgba(255,255,255,0.55)")
+                                : (item.bold ? (isDarkMode ? "#FFFFFF" : "#0D1117") : theme.textSecondary),
                               fontWeight: item.bold ? "600" : "400",
                             },
                           ]}>
@@ -567,196 +515,318 @@ export default function UpgradeScreen() {
                         </View>
                       ))}
                     </View>
-                  ))}
-                </View>
 
+                    {!plan.ctaDisabled && (
+                      <Pressable
+                        onPress={() => {
+                          handlePlanSelect(plan.id, pi);
+                          handleSubscribe(plan.id, billingCycle);
+                        }}
+                        style={[s.cardCTA, {
+                          backgroundColor: plan.isDark ? "#6366F1" : "#1DB870",
+                          shadowColor: plan.isDark ? "#6366F1" : "#1DB870",
+                          shadowOpacity: 0.3, shadowRadius: 10,
+                          shadowOffset: { width: 0, height: 4 },
+                        }]}
+                      >
+                        <Feather name="gift" size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
+                        <Text style={s.cardCTAText}>
+                          Start {plan.name} — Free for 1st Month
+                        </Text>
+                      </Pressable>
+                    )}
+                  </Pressable>
+                </Animated.View>
+              );
+            })}
+
+            {/* AI Credit Packs */}
+            <View style={[s.sectionCard, { backgroundColor: isDarkMode ? "#161B22" : "#FFFFFF", borderColor: isDarkMode ? "#2D333B" : "#F0F0F0" }]}>
+              <Text style={[s.sectionTitle, { color: isDarkMode ? "#FFFFFF" : "#0D1117" }]}>AI Credit Packs</Text>
+              <Text style={[s.sectionSub, { color: theme.textMuted }]}>Base plan only · Top up Clinical Intelligence · Never expire</Text>
+              {CREDIT_PACKS_DISPLAY.map((pack, i) => (
                 <Pressable
-                  onPress={() => {
-                    if (!plan.ctaDisabled) {
-                      handlePlanSelect(plan.id, pi);
-                      handleSubscribe(plan.id, billingCycle);
-                    }
-                  }}
-                  style={[styles.cardCTA, {
-                    backgroundColor: plan.ctaDisabled
-                      ? (isDarkMode ? "#2D333B" : "#F3F4F6")
-                      : plan.isDark
-                      ? "#6366F1"
-                      : "#1DB870",
-                    shadowColor: plan.ctaDisabled ? "transparent" : plan.isDark ? "#6366F1" : "#1DB870",
-                    shadowOpacity: plan.ctaDisabled ? 0 : 0.3,
-                    shadowRadius: 10,
-                    shadowOffset: { width: 0, height: 4 },
+                  key={i}
+                  onPress={() => setSelectedPack(i)}
+                  style={[s.packRow, {
+                    backgroundColor: selectedPack === i ? (isDarkMode ? "rgba(29,184,112,0.10)" : "#F0FDF6") : "transparent",
+                    borderColor: selectedPack === i ? "#1DB870" : (isDarkMode ? "#2D333B" : "#F0F0F0"),
                   }]}
                 >
-                  {!plan.ctaDisabled && (
-                    <Feather name="gift" size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
-                  )}
-                  <Text style={[styles.cardCTAText, {
-                    color: plan.ctaDisabled ? (isDarkMode ? "#6B7280" : "#9CA3AF") : "#FFFFFF",
-                  }]}>
-                    {plan.ctaDisabled
-                      ? "Current Plan"
-                      : `Start ${plan.name} — Free for 1st Month`}
-                  </Text>
+                  <View style={s.packLeft}>
+                    <View style={[s.radio, {
+                      borderColor: selectedPack === i ? "#1DB870" : "#D1D5DB",
+                      backgroundColor: selectedPack === i ? "#1DB870" : "transparent",
+                    }]}>
+                      {selectedPack === i && <View style={s.radioDot} />}
+                    </View>
+                    <View>
+                      <Text style={[s.packLabel, { color: isDarkMode ? "#FFFFFF" : "#0D1117" }]}>{pack.label}</Text>
+                      <Text style={[s.packPer, { color: theme.textMuted }]}>{pack.per}</Text>
+                    </View>
+                  </View>
+                  <View style={s.packRight}>
+                    {pack.popular && (
+                      <View style={s.bestValueBadge}>
+                        <Text style={s.bestValueText}>BEST VALUE</Text>
+                      </View>
+                    )}
+                    <Text style={[s.packPrice, { color: isDarkMode ? "#FFFFFF" : "#0D1117" }]}>{pack.price}</Text>
+                  </View>
                 </Pressable>
+              ))}
+              <Pressable style={s.buyCreditsBtn} onPress={handleBuyCredits} disabled={ctaLoading}>
+                {ctaLoading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Feather name="zap" size={14} color="#FFFFFF" />
+                )}
+                <Text style={s.buyCreditsBtnText}>Buy {CREDIT_PACKS_DISPLAY[selectedPack].label}</Text>
               </Pressable>
-            </Animated.View>
-          );
-        })}
+              <View style={[s.creditNote, { backgroundColor: isDarkMode ? "#0D1117" : "#F9FAFB" }]}>
+                <Text style={[s.creditNoteText, { color: theme.textMuted }]}>
+                  Smart Dictation and Discharge Summary are always free — credits only for Decision Support, Document Scanning, and EM Reference.
+                </Text>
+              </View>
+            </View>
 
-        <Pressable
-          onPress={() => setShowComparison(v => !v)}
-          style={styles.compareToggle}
-        >
-          <Text style={styles.compareToggleText}>
-            {showComparison ? "Hide comparison" : "Compare all plans"}
-          </Text>
-          <Feather name={showComparison ? "chevron-up" : "chevron-down"} size={14} color="#1DB870" />
-        </Pressable>
-
-        {showComparison && (
-          <View style={[styles.compareTable, { backgroundColor: isDarkMode ? "#161B22" : "#FFFFFF", borderColor: isDarkMode ? "#2D333B" : "#F0F0F0" }]}>
-            <View style={[styles.tableHeader, { backgroundColor: isDarkMode ? "#0D1117" : "#F9FAFB", borderBottomColor: isDarkMode ? "#2D333B" : "#F0F0F0" }]}>
-              {["Feature", "Free", "Base", "Pro"].map((h, i) => (
-                <Text key={i} style={[
-                  styles.tableHeaderCell,
-                  { flex: i === 0 ? 1.6 : 1, textAlign: i === 0 ? "left" : "center" },
-                  { color: i === 3 ? "#818CF8" : i === 2 ? "#1DB870" : theme.textMuted },
-                ]}>{h}</Text>
+            {/* Always Free */}
+            <View style={[s.sectionCard, { backgroundColor: isDarkMode ? "#161B22" : "#FFFFFF", borderColor: isDarkMode ? "#2D333B" : "#F0F0F0" }]}>
+              <Text style={[s.sectionCaption, { color: theme.textMuted }]}>ALWAYS FREE · NO PLAN NEEDED</Text>
+              {ALWAYS_FREE.map((f, i) => (
+                <View key={i} style={[s.alwaysFreeRow, i > 0 && { marginTop: 10 }]}>
+                  <Feather name="unlock" size={13} color="#C4C9D4" />
+                  <Text style={[s.alwaysFreeText, { color: theme.textSecondary }]}>{f}</Text>
+                </View>
               ))}
             </View>
-            {COMPARISON_ROWS.map((row, i) => (
-              <View key={i} style={[
-                styles.tableRow,
-                { backgroundColor: i % 2 === 0 ? "transparent" : (isDarkMode ? "rgba(255,255,255,0.02)" : "#FAFAFA") },
-                i < COMPARISON_ROWS.length - 1 && { borderBottomWidth: 1, borderBottomColor: isDarkMode ? "#2D333B" : "#F5F5F5" },
-              ]}>
-                <Text style={[styles.tableFeature, { flex: 1.6, color: theme.text }]}>{row.feature}</Text>
-                <Text style={[styles.tableCell, { flex: 1, color: row.free === "—" ? "#C4C9D4" : theme.textSecondary }]}>{row.free}</Text>
-                <Text style={[styles.tableCell, { flex: 1, color: row.base === "—" ? "#C4C9D4" : "#1DB870", fontWeight: row.base !== "—" ? "600" : "400" }]}>{row.base}</Text>
-                <Text style={[styles.tableCell, { flex: 1, color: row.pro === "—" ? "#C4C9D4" : "#818CF8", fontWeight: row.pro !== "—" ? "700" : "400" }]}>{row.pro}</Text>
-              </View>
-            ))}
-          </View>
+          </>
         )}
 
-        <View style={[styles.roundsCallout, { borderColor: "rgba(129,140,248,0.22)" }]}>
-          <View style={styles.roundsCalloutHeader}>
-            <Feather name="layers" size={15} color="#818CF8" />
-            <Text style={styles.roundsCalloutTitle}>What Rounds gives you</Text>
-          </View>
-          {ROUNDS_POINTS.map((pt, i) => (
-            <View key={i} style={styles.roundsPoint}>
-              <Text style={styles.roundsArrow}>→</Text>
-              <Text style={styles.roundsPointText}>{pt}</Text>
-            </View>
-          ))}
-        </View>
-
-        <View style={[styles.creditPackCard, { backgroundColor: isDarkMode ? "#161B22" : "#FFFFFF", borderColor: isDarkMode ? "#2D333B" : "#F0F0F0" }]}>
-          <Text style={[styles.creditPackTitle, { color: isDarkMode ? "#FFFFFF" : "#0D1117" }]}>AI Credit Packs</Text>
-          <Text style={[styles.creditPackSub, { color: theme.textMuted }]}>Base plan only · Top up Clinical Intelligence · Never expire</Text>
-          {CREDIT_PACKS.map((pack, i) => (
-            <Pressable
-              key={i}
-              onPress={() => setSelectedPack(i)}
-              style={[styles.packRow, {
-                backgroundColor: selectedPack === i ? (isDarkMode ? "rgba(29,184,112,0.10)" : "#F0FDF6") : "transparent",
-                borderColor: selectedPack === i ? "#1DB870" : (isDarkMode ? "#2D333B" : "#F0F0F0"),
-              }]}
-            >
-              <View style={styles.packLeft}>
-                <View style={[styles.radio, {
-                  borderColor: selectedPack === i ? "#1DB870" : "#D1D5DB",
-                  backgroundColor: selectedPack === i ? "#1DB870" : "transparent",
-                }]}>
-                  {selectedPack === i && <View style={styles.radioDot} />}
-                </View>
-                <View>
-                  <Text style={[styles.packLabel, { color: isDarkMode ? "#FFFFFF" : "#0D1117" }]}>{pack.label}</Text>
-                  <Text style={[styles.packPer, { color: theme.textMuted }]}>{pack.per}</Text>
-                </View>
+        {/* ── TEAM TAB ── */}
+        {activeTab === "team" && (
+          <>
+            {/* Team Plan Card */}
+            <View style={s.teamCard}>
+              <View style={s.teamTagRow}>
+                <Text style={s.teamTagText}>TEAM PLAN · PER DOCTOR PRICING</Text>
+                <Text style={s.teamTagRight}>No feature holdbacks</Text>
               </View>
-              <View style={styles.packRight}>
-                {pack.popular && (
-                  <View style={styles.bestValueBadge}>
-                    <Text style={styles.bestValueText}>BEST VALUE</Text>
+
+              <View style={s.teamBody}>
+                <View style={s.teamHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.teamPlanLabel}>TEAM PLAN</Text>
+                    <View style={s.teamPriceRow}>
+                      <Text style={s.teamPriceFrom}>from</Text>
+                      <Text style={s.teamPrice}>₹399</Text>
+                      <Text style={s.teamPricePer}>/doctor/month</Text>
+                    </View>
+                    <Text style={s.teamPriceSub}>Consultant ₹599 · Resident ₹399</Text>
                   </View>
-                )}
-                <Text style={[styles.packPrice, { color: isDarkMode ? "#FFFFFF" : "#0D1117" }]}>{pack.price}</Text>
-              </View>
-            </Pressable>
-          ))}
-          <Pressable style={styles.buyCreditsBtn} onPress={handleBuyCredits}>
-            <Feather name="zap" size={14} color="#FFFFFF" />
-            <Text style={styles.buyCreditsBtnText}>Buy {CREDIT_PACKS[selectedPack].label}</Text>
-          </Pressable>
-          <View style={[styles.creditNote, { backgroundColor: isDarkMode ? "#0D1117" : "#F9FAFB" }]}>
-            <Text style={[styles.creditNoteText, { color: theme.textMuted }]}>
-              Credits power Clinical Decision Support, Document Scanning, ABG Interpretation, and EM Reference. Smart Dictation and Discharge Summary are always free on any paid plan.
-            </Text>
-          </View>
-        </View>
+                  <View style={s.teamIconBox}>
+                    <Feather name="users" size={22} color="#1DB870" />
+                  </View>
+                </View>
 
-        <View style={[styles.alwaysFreeCard, { backgroundColor: isDarkMode ? "#161B22" : "#FFFFFF", borderColor: isDarkMode ? "#2D333B" : "#F0F0F0" }]}>
-          <Text style={[styles.alwaysFreeLabel, { color: theme.textMuted }]}>ALWAYS FREE · NO PLAN NEEDED</Text>
-          {ALWAYS_FREE.map((f, i) => (
-            <View key={i} style={[styles.alwaysFreeRow, i > 0 && { marginTop: 10 }]}>
-              <Feather name="unlock" size={13} color="#C4C9D4" />
-              <Text style={[styles.alwaysFreeText, { color: theme.textSecondary }]}>{f}</Text>
+                <View style={s.teamDivider} />
+
+                {/* Bill Calculator */}
+                <View style={s.calcBox}>
+                  <Text style={s.calcLabel}>YOUR BILL CALCULATOR</Text>
+
+                  {[
+                    { label: "Consultants", rate: "₹599/month each", val: teamConsultants, set: setTeamConsultants },
+                    { label: "Residents", rate: "₹399/month each", val: teamResidents, set: setTeamResidents },
+                  ].map((row, i) => (
+                    <View key={i} style={[s.calcRow, i > 0 && { marginTop: 12 }]}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.calcRowLabel}>{row.label}</Text>
+                        <Text style={s.calcRowRate}>{row.rate}</Text>
+                      </View>
+                      <View style={s.stepper}>
+                        <Pressable
+                          onPress={() => row.set(Math.max(0, row.val - 1))}
+                          style={s.stepBtn}
+                        >
+                          <Text style={s.stepBtnText}>−</Text>
+                        </Pressable>
+                        <Text style={s.stepVal}>{row.val}</Text>
+                        <Pressable
+                          onPress={() => row.set(row.val + 1)}
+                          style={s.stepBtn}
+                        >
+                          <Text style={s.stepBtnText}>+</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  ))}
+
+                  <View style={s.calcDivider} />
+
+                  <View style={s.calcTotal}>
+                    <View>
+                      <Text style={s.calcTotalLabel}>
+                        {isAnnual ? "Effective monthly (annual)" : "Monthly total"}
+                      </Text>
+                      <View style={s.calcTotalRow}>
+                        <Text style={s.calcTotalAmount}>
+                          ₹{teamDisplay.toLocaleString("en-IN")}
+                        </Text>
+                        <Text style={s.calcTotalPer}>/month</Text>
+                      </View>
+                      {isAnnual && (
+                        <Text style={s.calcAnnualNote}>
+                          ₹{teamAnnual.toLocaleString("en-IN")} billed annually
+                        </Text>
+                      )}
+                    </View>
+                    <View style={{ alignItems: "flex-end" }}>
+                      <Text style={s.calcDoctorsCount}>{teamConsultants + teamResidents} doctors total</Text>
+                      {isAnnual && teamSavings > 0 && (
+                        <Text style={s.calcSavings}>
+                          Save ₹{teamSavings.toLocaleString("en-IN")}/yr
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                </View>
+
+                {/* Team Features */}
+                <Text style={s.teamFeaturesLabel}>EVERYTHING INCLUDED — NO HOLDBACKS</Text>
+                {TEAM_FEATURES.map((f, i) => (
+                  <View key={i} style={[s.featureRow, i > 0 && { marginTop: 9 }]}>
+                    <View style={[s.iconCircle, { backgroundColor: "rgba(30,184,112,0.15)" }]}>
+                      <Feather name="check" size={10} color="#1DB870" />
+                    </View>
+                    <Text style={[s.featureText, {
+                      color: f.bold ? "#FFFFFF" : "rgba(255,255,255,0.6)",
+                      fontWeight: f.bold ? "600" : "400",
+                    }]}>{f.text}</Text>
+                  </View>
+                ))}
+              </View>
+
+              <Pressable style={s.teamCTA} onPress={handleTeamContact}>
+                <Feather name="mail" size={15} color="#FFFFFF" style={{ marginRight: 7 }} />
+                <Text style={s.teamCTAText}>Contact us to set up your team</Text>
+              </Pressable>
+              <Text style={s.teamCTANote}>Minimum 4 doctors · Bill adjusts as you add or remove doctors</Text>
             </View>
-          ))}
-        </View>
+
+            {/* Why no holdbacks */}
+            <View style={[s.sectionCard, { backgroundColor: isDarkMode ? "#161B22" : "#FFFFFF", borderColor: isDarkMode ? "#2D333B" : "#F0F0F0", marginTop: 0 }]}>
+              <Text style={[s.sectionTitle, { color: isDarkMode ? "#FFFFFF" : "#0D1117" }]}>Why Team plan has no feature holdbacks</Text>
+              {[
+                "Per-doctor pricing already scales with your department size",
+                "A 50-doctor department pays 50× — no need to gate features",
+                "Every doctor gets full Pro features including Rounds and Memory",
+                "HOD gets the complete admin layer — analytics, reports, branding",
+              ].map((pt, i) => (
+                <View key={i} style={[s.whyRow, i > 0 && { marginTop: 8 }]}>
+                  <Text style={s.whyArrow}>→</Text>
+                  <Text style={[s.whyText, { color: theme.textSecondary }]}>{pt}</Text>
+                </View>
+              ))}
+            </View>
+
+            {/* Example bills */}
+            <View style={[s.sectionCard, { backgroundColor: isDarkMode ? "#161B22" : "#FFFFFF", borderColor: isDarkMode ? "#2D333B" : "#F0F0F0", marginTop: 0 }]}>
+              <Text style={s.sectionCaption}>EXAMPLE BILLS</Text>
+              {EXAMPLE_BILLS.map((ex, i) => {
+                const monthly = (ex.consultants * 599) + (ex.residents * 399);
+                return (
+                  <View key={i} style={[
+                    s.exampleRow,
+                    i < EXAMPLE_BILLS.length - 1 && { borderBottomWidth: 1, borderBottomColor: isDarkMode ? "#2D333B" : "#F5F5F5" },
+                  ]}>
+                    <View>
+                      <Text style={[s.exampleType, { color: isDarkMode ? "#FFFFFF" : "#0D1117" }]}>{ex.type}</Text>
+                      <Text style={[s.exampleDoctors, { color: theme.textMuted }]}>
+                        {ex.consultants} consultants · {ex.residents} residents
+                      </Text>
+                    </View>
+                    <View style={{ alignItems: "flex-end" }}>
+                      <Text style={s.exampleAmount}>₹{monthly.toLocaleString("en-IN")}</Text>
+                      <Text style={[s.examplePer, { color: theme.textMuted }]}>per month</Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          </>
+        )}
       </ScrollView>
 
-      <View style={[styles.stickyBottom, {
+      {/* Sticky CTA */}
+      <View style={[s.stickyBottom, {
         backgroundColor: isDarkMode ? "rgba(13,17,23,0.96)" : "rgba(245,246,248,0.96)",
         borderTopColor: isDarkMode ? "#2D333B" : "rgba(0,0,0,0.06)",
         paddingBottom: Math.max(insets.bottom, 16),
       }]}>
-        <Pressable
-          style={({ pressed }) => [
-            styles.stickyCTA,
-            {
-              backgroundColor: activePlan.ctaDisabled
-                ? (isDarkMode ? "#2D333B" : "#E5E7EB")
-                : activePlan.isDark
-                ? "#6366F1"
-                : "#1DB870",
-              opacity: (pressed && !activePlan.ctaDisabled) || ctaLoading ? 0.88 : 1,
-              shadowColor: activePlan.ctaDisabled ? "transparent" : activePlan.isDark ? "#6366F1" : "#1DB870",
-              shadowOpacity: activePlan.ctaDisabled ? 0 : 0.38,
-              shadowRadius: 16,
-              shadowOffset: { width: 0, height: 6 },
-              elevation: activePlan.ctaDisabled ? 0 : 8,
-            },
-          ]}
-          onPress={() => handleSubscribe(selectedPlan, billingCycle)}
-          disabled={activePlan.ctaDisabled || ctaLoading}
-        >
-          {ctaLoading ? (
-            <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
-          ) : !activePlan.ctaDisabled ? (
-            <Feather name="gift" size={16} color="#FFFFFF" style={{ marginRight: 8 }} />
-          ) : null}
-          <Text style={[styles.stickyCTAText, {
-            color: activePlan.ctaDisabled ? (isDarkMode ? "#6B7280" : "#9CA3AF") : "#FFFFFF",
-          }]}>
-            {ctaLoading ? "Setting up..." : ctaLabel}
-          </Text>
-        </Pressable>
-        {stickySubtext ? (
-          <Text style={[styles.stickySubtext, { color: theme.textMuted }]}>
-            {stickySubtext}
-          </Text>
-        ) : null}
+        {activeTab === "individual" ? (
+          <>
+            <Pressable
+              style={({ pressed }) => [
+                s.stickyCTA,
+                {
+                  backgroundColor: activePlan.ctaDisabled
+                    ? (isDarkMode ? "#2D333B" : "#E5E7EB")
+                    : activePlan.isDark ? "#6366F1" : "#1DB870",
+                  opacity: (pressed && !activePlan.ctaDisabled) || ctaLoading ? 0.88 : 1,
+                  shadowColor: activePlan.ctaDisabled ? "transparent" : activePlan.isDark ? "#6366F1" : "#1DB870",
+                  shadowOpacity: activePlan.ctaDisabled ? 0 : 0.38,
+                  shadowRadius: 16, shadowOffset: { width: 0, height: 6 },
+                  elevation: activePlan.ctaDisabled ? 0 : 8,
+                },
+              ]}
+              onPress={() => handleSubscribe(selectedPlan, billingCycle)}
+              disabled={activePlan.ctaDisabled || ctaLoading}
+            >
+              {ctaLoading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
+              ) : !activePlan.ctaDisabled ? (
+                <Feather name="gift" size={16} color="#FFFFFF" style={{ marginRight: 8 }} />
+              ) : null}
+              <Text style={[s.stickyCTAText, {
+                color: activePlan.ctaDisabled ? (isDarkMode ? "#6B7280" : "#9CA3AF") : "#FFFFFF",
+              }]}>
+                {ctaLoading ? "Setting up..." : activePlan.ctaDisabled ? "Current Plan" : `Start ${activePlan.name} — Free for 1st Month`}
+              </Text>
+            </Pressable>
+            {!activePlan.ctaDisabled && (
+              <Text style={[s.stickySubtext, { color: theme.textMuted }]}>
+                {isAnnual
+                  ? `Free 30 days · Then ${activePlan.annualPrice}/year (${activePlan.annualEquiv}/mo) · Save ${activePlan.annualSavings}`
+                  : `Free for 30 days · Then ${activePlan.monthlyPrice}/month · Cancel anytime`}
+              </Text>
+            )}
+          </>
+        ) : (
+          <>
+            <Pressable
+              style={({ pressed }) => [
+                s.stickyCTA,
+                { backgroundColor: "#1DB870", opacity: pressed ? 0.88 : 1,
+                  shadowColor: "#1DB870", shadowOpacity: 0.38, shadowRadius: 16,
+                  shadowOffset: { width: 0, height: 6 }, elevation: 8 },
+              ]}
+              onPress={handleTeamContact}
+            >
+              <Feather name="users" size={16} color="#FFFFFF" style={{ marginRight: 8 }} />
+              <Text style={[s.stickyCTAText, { color: "#FFFFFF" }]}>Set Up Your Team</Text>
+            </Pressable>
+            <Text style={[s.stickySubtext, { color: theme.textMuted }]}>
+              Contact support@ermate.app · We'll set it up for you
+            </Text>
+          </>
+        )}
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   container: { flex: 1 },
   center: { justifyContent: "center", alignItems: "center" },
 
@@ -768,37 +838,47 @@ const styles = StyleSheet.create({
   lockMsg: { fontSize: 13, marginTop: 3 },
 
   usageCard: {
-    borderRadius: 16, padding: 16, marginBottom: 14,
-    shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
+    borderRadius: 16, padding: 16, marginBottom: 12,
+    shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 }, elevation: 1,
   },
   usageRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 10 },
-  usageLabel: { fontSize: 13, fontWeight: "600" },
-  usageStatus: { fontSize: 12, fontWeight: "700" },
-  barBg: { height: 7, backgroundColor: "#F3F4F6", borderRadius: 99, overflow: "hidden", marginBottom: 7 },
-  barFill: { height: "100%", borderRadius: 99 },
+  usageLabel: { fontSize: 13 },
+  usageStatus: { fontSize: 13, fontWeight: "700" },
+  barBg: { height: 6, borderRadius: 3, backgroundColor: "#F3F4F6", marginBottom: 8 },
+  barFill: { height: 6, borderRadius: 3 },
   usageText: { fontSize: 12 },
 
-  billingToggleContainer: {
+  tabContainer: {
     flexDirection: "row", borderRadius: 14, padding: 4,
-    marginBottom: 16,
-    shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
+    marginBottom: 12, gap: 3,
+    borderWidth: 1.5, borderColor: "#F0F0F0",
   },
-  billingToggleTab: {
+  tab: {
     flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 7, paddingVertical: 10, borderRadius: 10,
+    borderRadius: 10, paddingVertical: 10, paddingHorizontal: 8,
   },
-  billingToggleText: { fontSize: 14 },
-  saveBadge: {
-    borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3,
-  },
-  saveBadgeText: { fontSize: 10, fontWeight: "700", letterSpacing: 0.2 },
+  tabText: { fontSize: 13 },
 
-  sectionLabel: {
-    fontSize: 11, fontWeight: "700", letterSpacing: 1.2,
-    textTransform: "uppercase", marginBottom: 12, marginTop: 4,
+  billingToggle: {
+    flexDirection: "row", borderRadius: 14, padding: 4,
+    marginBottom: 12, gap: 3,
   },
+  billingTab: {
+    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
+    borderRadius: 11, paddingVertical: 10, gap: 6,
+  },
+  billingTabText: { fontSize: 13 },
+  saveBadge: { borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2 },
+  saveBadgeText: { fontSize: 9, fontWeight: "800", letterSpacing: 0.3 },
+
+  annualBanner: {
+    flexDirection: "row", alignItems: "center", gap: 7,
+    backgroundColor: "rgba(30,184,112,0.08)",
+    borderWidth: 1, borderColor: "rgba(30,184,112,0.2)",
+    borderRadius: 12, padding: 10, marginBottom: 12,
+  },
+  annualBannerText: { fontSize: 12.5, color: "#15924F", fontWeight: "500", flex: 1 },
 
   planCard: {
     borderRadius: 20, overflow: "hidden",
@@ -808,128 +888,175 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18, paddingVertical: 8,
     borderBottomWidth: 1,
   },
-  tagText: { fontSize: 10, fontWeight: "800", letterSpacing: 1.5 },
+  tagText: { fontSize: 9, fontWeight: "800", letterSpacing: 1.4, textTransform: "uppercase" },
   selectedDot: {
     width: 18, height: 18, borderRadius: 9,
     alignItems: "center", justifyContent: "center",
   },
-  planBody: { padding: 18, paddingBottom: 4 },
-  priceHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 },
-  planName: { fontSize: 11, fontWeight: "700", letterSpacing: 1.2, marginBottom: 5 },
-  priceMain: { fontSize: 30, fontWeight: "900", letterSpacing: -1 },
-  priceRow: { flexDirection: "row", alignItems: "baseline", gap: 6, flexWrap: "wrap" },
-  priceStrike: { fontSize: 13, fontWeight: "500", textDecorationLine: "line-through" },
-  priceFree: { fontSize: 30, fontWeight: "900", letterSpacing: -1 },
-  priceSub: { fontSize: 13 },
-  priceAfter: { fontSize: 12, marginTop: 3 },
-  savingsRow: { marginTop: 6 },
-  savingsPill: {
-    flexDirection: "row", alignItems: "center", gap: 4,
-    alignSelf: "flex-start", borderRadius: 20, paddingHorizontal: 9, paddingVertical: 4,
-  },
-  savingsText: { fontSize: 11, fontWeight: "700" },
+  planBody: { padding: 18 },
+  priceHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 8 },
+  planNameLabel: { fontSize: 10, fontWeight: "700", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 4 },
+  priceMain: { fontSize: 28, fontWeight: "900", letterSpacing: -1, lineHeight: 32 },
+  priceRow: { flexDirection: "row", alignItems: "baseline", gap: 5, flexWrap: "wrap" },
+  priceStrike: { fontSize: 12, textDecorationLine: "line-through" },
+  priceFree: { fontSize: 28, fontWeight: "900", letterSpacing: -1, lineHeight: 32 },
+  pricePer: { fontSize: 12 },
+  priceAfter: { fontSize: 11, marginTop: 3 },
   iconBox: {
-    width: 42, height: 42, borderRadius: 13,
+    width: 38, height: 38, borderRadius: 11, borderWidth: 1.5,
     alignItems: "center", justifyContent: "center",
-    borderWidth: 1.5, flexShrink: 0,
   },
-  planDesc: { fontSize: 13, lineHeight: 20, marginBottom: 14 },
+  planDesc: { fontSize: 12, lineHeight: 18, marginBottom: 12 },
   divider: { height: 1, marginBottom: 14 },
-  secLabel: {
-    fontSize: 9, fontWeight: "800", letterSpacing: 0.9,
-    textTransform: "uppercase", marginBottom: 10,
-  },
-  featureRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 8 },
+  featureRow: { flexDirection: "row", alignItems: "center", gap: 9 },
   iconCircle: {
     width: 18, height: 18, borderRadius: 9,
-    alignItems: "center", justifyContent: "center", flexShrink: 0,
-  },
-  featureText: { fontSize: 13, flex: 1, lineHeight: 18 },
-
-  cardCTA: {
-    margin: 14, marginTop: 10, borderRadius: 12, paddingVertical: 13,
-    flexDirection: "row", alignItems: "center", justifyContent: "center",
-  },
-  cardCTAText: { fontSize: 13, fontWeight: "700" },
-
-  compareToggle: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 6, paddingVertical: 8, marginBottom: 12,
-  },
-  compareToggleText: { fontSize: 13, fontWeight: "600", color: "#1DB870" },
-
-  compareTable: {
-    borderRadius: 20, overflow: "hidden", borderWidth: 1.5, marginBottom: 14,
-  },
-  tableHeader: {
-    flexDirection: "row", alignItems: "center",
-    paddingVertical: 12, paddingHorizontal: 14,
-    borderBottomWidth: 1,
-  },
-  tableHeaderCell: { fontSize: 10, fontWeight: "700", letterSpacing: 0.8, textTransform: "uppercase" },
-  tableRow: { flexDirection: "row", alignItems: "center", paddingVertical: 10, paddingHorizontal: 14 },
-  tableFeature: { fontSize: 12, fontWeight: "500" },
-  tableCell: { fontSize: 11, textAlign: "center" },
-
-  roundsCallout: {
-    backgroundColor: "#0D1117", borderRadius: 20, padding: 20,
-    borderWidth: 1, marginBottom: 14,
-  },
-  roundsCalloutHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
-  roundsCalloutTitle: { fontSize: 13, fontWeight: "700", color: "#818CF8" },
-  roundsPoint: { flexDirection: "row", gap: 8, marginBottom: 8 },
-  roundsArrow: { color: "#818CF8", fontWeight: "700", fontSize: 13, flexShrink: 0, marginTop: 1 },
-  roundsPointText: { fontSize: 13, color: "rgba(255,255,255,0.50)", lineHeight: 20, flex: 1 },
-
-  creditPackCard: {
-    borderRadius: 20, padding: 18, borderWidth: 1.5, marginBottom: 14,
-  },
-  creditPackTitle: { fontSize: 15, fontWeight: "800", letterSpacing: -0.3, marginBottom: 3 },
-  creditPackSub: { fontSize: 13, marginBottom: 14 },
-  packRow: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    borderWidth: 2, borderRadius: 13, padding: 13, marginBottom: 8,
-  },
-  packLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
-  radio: {
-    width: 18, height: 18, borderRadius: 9, borderWidth: 2,
     alignItems: "center", justifyContent: "center",
   },
-  radioDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#FFFFFF" },
-  packLabel: { fontSize: 14, fontWeight: "600" },
-  packPer: { fontSize: 11, marginTop: 1 },
-  packRight: { flexDirection: "row", alignItems: "center", gap: 8 },
-  bestValueBadge: {
-    backgroundColor: "rgba(30,184,112,0.12)", borderRadius: 5, paddingHorizontal: 7, paddingVertical: 3,
-  },
-  bestValueText: { fontSize: 9, fontWeight: "800", color: "#1DB870", letterSpacing: 0.5 },
-  packPrice: { fontSize: 15, fontWeight: "800" },
-  buyCreditsBtn: {
-    backgroundColor: "#1DB870", borderRadius: 12, paddingVertical: 12,
+  featureText: { fontSize: 12.5, flex: 1 },
+  cardCTA: {
+    margin: 18, marginTop: 14, borderRadius: 11, paddingVertical: 13,
     flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 6, marginBottom: 12, marginTop: 4,
   },
-  buyCreditsBtnText: { fontSize: 14, fontWeight: "700", color: "#FFFFFF" },
-  creditNote: { borderRadius: 10, padding: 12 },
-  creditNoteText: { fontSize: 12, lineHeight: 18 },
+  cardCTAText: { color: "#FFFFFF", fontSize: 13, fontWeight: "700" },
 
-  alwaysFreeCard: {
-    borderRadius: 20, padding: 18, borderWidth: 1.5, marginBottom: 8,
+  sectionCard: {
+    borderRadius: 20, padding: 18, marginBottom: 12,
+    borderWidth: 1.5,
   },
-  alwaysFreeLabel: {
-    fontSize: 10, fontWeight: "700", letterSpacing: 1.2,
-    textTransform: "uppercase", marginBottom: 14,
+  sectionTitle: { fontSize: 15, fontWeight: "800", letterSpacing: -0.3, marginBottom: 3 },
+  sectionSub: { fontSize: 12, marginBottom: 14 },
+  sectionCaption: {
+    fontSize: 10, fontWeight: "700", color: "#9CA3AF",
+    letterSpacing: 1, textTransform: "uppercase", marginBottom: 12,
   },
-  alwaysFreeRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  alwaysFreeText: { fontSize: 13 },
+
+  packRow: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    borderWidth: 1.5, borderRadius: 12, padding: 12, marginBottom: 8,
+  },
+  packLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
+  packRight: { flexDirection: "row", alignItems: "center", gap: 8 },
+  radio: {
+    width: 17, height: 17, borderRadius: 8.5, borderWidth: 2,
+    alignItems: "center", justifyContent: "center",
+  },
+  radioDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#FFFFFF" },
+  packLabel: { fontSize: 13, fontWeight: "600" },
+  packPer: { fontSize: 10, marginTop: 1 },
+  packPrice: { fontSize: 14, fontWeight: "800" },
+  bestValueBadge: {
+    backgroundColor: "rgba(30,184,112,0.10)", borderRadius: 4,
+    paddingHorizontal: 6, paddingVertical: 2,
+  },
+  bestValueText: { fontSize: 8, fontWeight: "800", color: "#1DB870", textTransform: "uppercase" },
+  buyCreditsBtn: {
+    backgroundColor: "#1DB870", borderRadius: 11, paddingVertical: 13,
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 7, marginTop: 4, marginBottom: 12,
+  },
+  buyCreditsBtnText: { color: "#FFFFFF", fontSize: 13, fontWeight: "700" },
+  creditNote: { borderRadius: 10, padding: 10 },
+  creditNoteText: { fontSize: 11, lineHeight: 17 },
+
+  alwaysFreeRow: { flexDirection: "row", alignItems: "center", gap: 9 },
+  alwaysFreeText: { fontSize: 12.5 },
+
+  // Team card
+  teamCard: {
+    backgroundColor: "#0D1117",
+    borderWidth: 2, borderColor: "rgba(30,184,112,0.3)",
+    borderRadius: 20, overflow: "hidden", marginBottom: 12,
+    shadowColor: "#1DB870", shadowOpacity: 0.15, shadowRadius: 20,
+    shadowOffset: { width: 0, height: 8 }, elevation: 6,
+  },
+  teamTagRow: {
+    backgroundColor: "rgba(30,184,112,0.12)", paddingHorizontal: 18, paddingVertical: 8,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+  },
+  teamTagText: { fontSize: 9, fontWeight: "800", letterSpacing: 1.4, color: "#1DB870", textTransform: "uppercase" },
+  teamTagRight: { fontSize: 9, fontWeight: "700", color: "rgba(30,184,112,0.6)", letterSpacing: 0.8 },
+  teamBody: { padding: 18 },
+  teamHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16 },
+  teamPlanLabel: { fontSize: 10, fontWeight: "700", letterSpacing: 1.2, color: "rgba(255,255,255,0.35)", marginBottom: 4, textTransform: "uppercase" },
+  teamPriceRow: { flexDirection: "row", alignItems: "baseline", gap: 5 },
+  teamPriceFrom: { fontSize: 11, color: "rgba(255,255,255,0.3)" },
+  teamPrice: { fontSize: 28, fontWeight: "900", color: "#1DB870", letterSpacing: -1, lineHeight: 32 },
+  teamPricePer: { fontSize: 12, color: "rgba(255,255,255,0.35)" },
+  teamPriceSub: { fontSize: 11, color: "rgba(255,255,255,0.3)", marginTop: 2 },
+  teamIconBox: {
+    width: 42, height: 42, borderRadius: 12,
+    backgroundColor: "rgba(30,184,112,0.12)", borderWidth: 1.5,
+    borderColor: "rgba(30,184,112,0.25)", alignItems: "center", justifyContent: "center",
+  },
+  teamDivider: { height: 1, backgroundColor: "rgba(255,255,255,0.06)", marginBottom: 16 },
+
+  calcBox: {
+    backgroundColor: "rgba(255,255,255,0.04)", borderRadius: 14,
+    padding: 14, marginBottom: 16,
+  },
+  calcLabel: {
+    fontSize: 10, fontWeight: "700", color: "rgba(255,255,255,0.3)",
+    letterSpacing: 1, textTransform: "uppercase", marginBottom: 12,
+  },
+  calcRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  calcRowLabel: { fontSize: 13, fontWeight: "600", color: "#FFFFFF" },
+  calcRowRate: { fontSize: 10, color: "rgba(255,255,255,0.3)", marginTop: 1 },
+  stepper: { flexDirection: "row", alignItems: "center", gap: 10 },
+  stepBtn: {
+    width: 28, height: 28, borderRadius: 8,
+    backgroundColor: "rgba(30,184,112,0.10)",
+    borderWidth: 1.5, borderColor: "rgba(30,184,112,0.2)",
+    alignItems: "center", justifyContent: "center",
+  },
+  stepBtnText: { color: "#1DB870", fontSize: 16, fontWeight: "700", lineHeight: 20 },
+  stepVal: { fontSize: 18, fontWeight: "800", color: "#FFFFFF", minWidth: 24, textAlign: "center" },
+  calcDivider: { height: 1, backgroundColor: "rgba(255,255,255,0.08)", marginVertical: 14 },
+  calcTotal: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between" },
+  calcTotalLabel: { fontSize: 10, color: "rgba(255,255,255,0.3)", marginBottom: 2 },
+  calcTotalRow: { flexDirection: "row", alignItems: "baseline", gap: 3 },
+  calcTotalAmount: { fontSize: 26, fontWeight: "900", color: "#1DB870", letterSpacing: -0.5 },
+  calcTotalPer: { fontSize: 12, color: "rgba(255,255,255,0.3)" },
+  calcAnnualNote: { fontSize: 10, color: "rgba(255,255,255,0.3)", marginTop: 2 },
+  calcDoctorsCount: { fontSize: 10, color: "rgba(255,255,255,0.3)" },
+  calcSavings: { fontSize: 10, color: "#1DB870", fontWeight: "600", marginTop: 2 },
+
+  teamFeaturesLabel: {
+    fontSize: 10, fontWeight: "700", color: "rgba(255,255,255,0.3)",
+    letterSpacing: 1, textTransform: "uppercase", marginBottom: 12,
+  },
+  teamCTA: {
+    margin: 18, marginTop: 4, backgroundColor: "#1DB870",
+    borderRadius: 11, paddingVertical: 14,
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    shadowColor: "#1DB870", shadowOpacity: 0.35, shadowRadius: 16,
+    shadowOffset: { width: 0, height: 4 }, elevation: 6,
+  },
+  teamCTAText: { color: "#FFFFFF", fontSize: 14, fontWeight: "700" },
+  teamCTANote: {
+    textAlign: "center", fontSize: 10, color: "rgba(255,255,255,0.25)",
+    marginBottom: 16, paddingHorizontal: 18,
+  },
+
+  whyRow: { flexDirection: "row", gap: 8 },
+  whyArrow: { color: "#1DB870", fontSize: 13, flexShrink: 0 },
+  whyText: { fontSize: 12.5, lineHeight: 20, flex: 1 },
+
+  exampleRow: { paddingVertical: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  exampleType: { fontSize: 13, fontWeight: "600" },
+  exampleDoctors: { fontSize: 11, marginTop: 2 },
+  exampleAmount: { fontSize: 14, fontWeight: "800", color: "#1DB870" },
+  examplePer: { fontSize: 10, marginTop: 2 },
 
   stickyBottom: {
-    borderTopWidth: 1, paddingHorizontal: 16, paddingTop: 12,
+    position: "absolute", bottom: 0, left: 0, right: 0,
+    paddingTop: 12, paddingHorizontal: 16,
+    borderTopWidth: 1,
   },
   stickyCTA: {
-    borderRadius: 14, paddingVertical: 15,
     flexDirection: "row", alignItems: "center", justifyContent: "center",
+    borderRadius: 14, paddingVertical: 15, marginBottom: 8,
   },
   stickyCTAText: { fontSize: 15, fontWeight: "700" },
-  stickySubtext: { fontSize: 11, textAlign: "center", marginTop: 8 },
+  stickySubtext: { fontSize: 11, textAlign: "center", marginBottom: 4 },
 });
