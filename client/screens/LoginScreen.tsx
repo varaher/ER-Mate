@@ -639,7 +639,7 @@ export default function LoginScreen() {
                   <Feather name="mail" size={32} color={theme.primary} />
                 </View>
                 <Text style={[styles.modalDesc, { color: theme.textSecondary, textAlign: "center" }]}>
-                  If an account exists with this email, a password reset link has been sent. Please check your inbox and spam folder.
+                  A reset link has been sent to {forgotEmail}. Check your inbox — and your spam folder if you don't see it within 5 minutes.
                 </Text>
                 <Pressable
                   style={[styles.modalButton, { backgroundColor: theme.primary }]}

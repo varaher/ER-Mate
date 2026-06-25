@@ -8,6 +8,7 @@ import {
   Modal,
   Alert,
   ActivityIndicator,
+  TextInput,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -16,6 +17,7 @@ import { Feather } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { fetchCasesFromProxy, deleteCaseFromProxy } from "@/lib/api";
+import { getApiUrl } from "@/lib/query-client";
 import { Spacing, BorderRadius, Typography } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -24,12 +26,78 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 export default function ProfileScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
-  const { user, logout } = useAuth();
+  const { user, token, authMethod, logout } = useAuth();
   const insets = useSafeAreaInsets();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [clearingCases, setClearingCases] = useState(false);
   const [devTapCount, setDevTapCount] = useState(0);
   const [showDevTools, setShowDevTools] = useState(false);
+
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
+
+  const isGoogleUser = authMethod === "google";
+
+  const closePasswordModal = () => {
+    setShowPasswordModal(false);
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setPasswordError(null);
+    setPasswordSuccess(false);
+    setShowCurrentPw(false);
+    setShowNewPw(false);
+    setShowConfirmPw(false);
+  };
+
+  const handleChangePassword = async () => {
+    setPasswordError(null);
+    if (newPassword.length < 6) {
+      setPasswordError("Password must be at least 6 characters.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError("Passwords do not match.");
+      return;
+    }
+    if (!isGoogleUser && !currentPassword.trim()) {
+      setPasswordError("Please enter your current password.");
+      return;
+    }
+    setPasswordLoading(true);
+    try {
+      const url = new URL("/api/auth/change-password", getApiUrl());
+      const res = await fetch(url.toString(), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          currentPassword: isGoogleUser ? undefined : currentPassword.trim(),
+          newPassword: newPassword.trim(),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        setPasswordSuccess(true);
+      } else {
+        setPasswordError(data.error || "Could not update password. Please try again.");
+      }
+    } catch {
+      setPasswordError("Connection error. Please try again.");
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
 
   const handleAvatarTap = () => {
     const next = devTapCount + 1;
@@ -101,6 +169,7 @@ export default function ProfileScreen() {
     { icon: "bar-chart-2", label: "My Stats", onPress: () => navigation.navigate("Stats"), locked: false },
     { icon: "monitor", label: "Link to Web", onPress: () => navigation.navigate("LinkDevices"), locked: false },
     { icon: "star", label: "Upgrade Plan", onPress: () => navigation.navigate("Upgrade", {}), locked: false },
+    { icon: "lock", label: isGoogleUser ? "Set Password" : "Change Password", onPress: () => setShowPasswordModal(true), locked: false },
     { icon: "bell", label: "Notifications", onPress: () => navigation.navigate("Notifications"), locked: false },
     { icon: "shield", label: "Privacy", onPress: () => navigation.navigate("Privacy"), locked: false },
     { icon: "help-circle", label: "Help & Support", onPress: () => navigation.navigate("HelpSupport"), locked: false },
@@ -278,6 +347,128 @@ export default function ProfileScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      <Modal
+        visible={showPasswordModal}
+        transparent
+        animationType="fade"
+        onRequestClose={closePasswordModal}
+      >
+        <Pressable style={styles.modalOverlay} onPress={closePasswordModal}>
+          <Pressable style={[styles.modalContent, { backgroundColor: theme.card }]} onPress={() => {}}>
+            <View style={[styles.modalHeader, { marginBottom: Spacing.md }]}>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>
+                {isGoogleUser ? "Set Password" : "Change Password"}
+              </Text>
+              <Pressable onPress={closePasswordModal}>
+                <Feather name="x" size={22} color={theme.textMuted} />
+              </Pressable>
+            </View>
+
+            {passwordSuccess ? (
+              <View style={{ alignItems: "center", paddingVertical: Spacing.lg }}>
+                <View style={[styles.successIcon, { backgroundColor: theme.primary + "20" }]}>
+                  <Feather name="check-circle" size={32} color={theme.primary} />
+                </View>
+                <Text style={[styles.modalDesc, { color: theme.textSecondary, textAlign: "center", marginBottom: Spacing.xl }]}>
+                  Password updated successfully. Use it next time you sign in.
+                </Text>
+                <Pressable
+                  style={[styles.modalBtn, { backgroundColor: theme.primary, flex: 0, paddingHorizontal: Spacing.xl, height: 44 }]}
+                  onPress={closePasswordModal}
+                >
+                  <Text style={[styles.modalBtnText, { color: "#FFFFFF" }]}>Done</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <View>
+                {isGoogleUser ? (
+                  <Text style={[styles.modalDesc, { color: theme.textSecondary, marginBottom: Spacing.md }]}>
+                    You signed in with Google. Set a password so you can also log in with your email.
+                  </Text>
+                ) : (
+                  <View style={[styles.pwInputRow, { borderColor: theme.border, backgroundColor: theme.backgroundDefault }]}>
+                    <Feather name="lock" size={18} color={theme.textMuted} />
+                    <TextInput
+                      style={[styles.pwInput, { color: theme.text }]}
+                      placeholder="Current password"
+                      placeholderTextColor={theme.textMuted}
+                      secureTextEntry={!showCurrentPw}
+                      value={currentPassword}
+                      onChangeText={setCurrentPassword}
+                      autoCapitalize="none"
+                    />
+                    <Pressable onPress={() => setShowCurrentPw((v) => !v)}>
+                      <Feather name={showCurrentPw ? "eye-off" : "eye"} size={18} color={theme.textMuted} />
+                    </Pressable>
+                  </View>
+                )}
+
+                <View style={[styles.pwInputRow, { borderColor: theme.border, backgroundColor: theme.backgroundDefault }]}>
+                  <Feather name="lock" size={18} color={theme.textMuted} />
+                  <TextInput
+                    style={[styles.pwInput, { color: theme.text }]}
+                    placeholder="New password"
+                    placeholderTextColor={theme.textMuted}
+                    secureTextEntry={!showNewPw}
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                    autoCapitalize="none"
+                  />
+                  <Pressable onPress={() => setShowNewPw((v) => !v)}>
+                    <Feather name={showNewPw ? "eye-off" : "eye"} size={18} color={theme.textMuted} />
+                  </Pressable>
+                </View>
+
+                <View style={[styles.pwInputRow, { borderColor: theme.border, backgroundColor: theme.backgroundDefault }]}>
+                  <Feather name="lock" size={18} color={theme.textMuted} />
+                  <TextInput
+                    style={[styles.pwInput, { color: theme.text }]}
+                    placeholder="Confirm new password"
+                    placeholderTextColor={theme.textMuted}
+                    secureTextEntry={!showConfirmPw}
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    autoCapitalize="none"
+                  />
+                  <Pressable onPress={() => setShowConfirmPw((v) => !v)}>
+                    <Feather name={showConfirmPw ? "eye-off" : "eye"} size={18} color={theme.textMuted} />
+                  </Pressable>
+                </View>
+
+                {passwordError ? (
+                  <View style={[styles.errorBox, { backgroundColor: theme.danger + "15", borderColor: theme.danger + "40" }]}>
+                    <Feather name="alert-circle" size={14} color={theme.danger} />
+                    <Text style={[styles.errorText, { color: theme.danger }]}>{passwordError}</Text>
+                  </View>
+                ) : null}
+
+                <View style={[styles.modalActions, { marginTop: Spacing.md }]}>
+                  <Pressable
+                    style={[styles.modalBtn, { backgroundColor: theme.backgroundTertiary }]}
+                    onPress={closePasswordModal}
+                  >
+                    <Text style={[styles.modalBtnText, { color: theme.text }]}>Cancel</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.modalBtn, { backgroundColor: theme.primary, opacity: passwordLoading ? 0.7 : 1 }]}
+                    onPress={handleChangePassword}
+                    disabled={passwordLoading}
+                  >
+                    {passwordLoading ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Text style={[styles.modalBtnText, { color: "#FFFFFF" }]}>
+                        {isGoogleUser ? "Set Password" : "Update"}
+                      </Text>
+                    )}
+                  </Pressable>
+                </View>
+              </View>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -402,4 +593,43 @@ const styles = StyleSheet.create({
   modalBtnText: {
     ...Typography.bodyMedium,
   },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  successIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "center",
+    marginBottom: Spacing.md,
+  },
+  pwInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.md,
+    height: 48,
+    marginBottom: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  pwInput: {
+    flex: 1,
+    ...Typography.body,
+    height: "100%",
+  },
+  errorBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    borderWidth: 1,
+    borderRadius: BorderRadius.sm,
+    padding: Spacing.sm,
+    marginTop: Spacing.xs,
+  },
+  errorText: { ...Typography.small, flex: 1 },
 });

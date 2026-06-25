@@ -627,6 +627,35 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  app.post("/api/auth/change-password", async (req: Request, res: Response) => {
+    try {
+      const { currentPassword, newPassword } = req.body;
+      if (!newPassword || newPassword.length < 6) {
+        return res.status(400).json({ error: "New password must be at least 6 characters" });
+      }
+      const authHeader = req.headers.authorization;
+      if (!authHeader) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+      const EXTERNAL_API = "https://er-emr-backend.onrender.com/api";
+      const response = await fetch(`${EXTERNAL_API}/auth/change-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": authHeader },
+        body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+      });
+      if (response.ok) {
+        const data = await response.json().catch(() => ({}));
+        return res.json({ success: true, message: data.message || "Password changed successfully." });
+      }
+      const errData = await response.json().catch(() => ({}));
+      const errMsg = errData.detail || errData.message || errData.error || "Could not change password.";
+      return res.status(response.status).json({ error: errMsg });
+    } catch (error) {
+      console.error("[Change Password] Error:", error);
+      return res.status(500).json({ error: "Something went wrong. Please try again." });
+    }
+  });
+
   app.post("/api/auth/forgot-password", async (req: Request, res: Response) => {
     try {
       const { email } = req.body;

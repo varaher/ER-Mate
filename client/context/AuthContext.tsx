@@ -34,9 +34,12 @@ export interface User {
   subscription_plan?: string;
 }
 
+export type AuthMethod = "email" | "google" | null;
+
 interface AuthContextType {
   user: User | null;
   token: string | null;
+  authMethod: AuthMethod;
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
@@ -60,6 +63,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [authMethod, setAuthMethod] = useState<AuthMethod>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // Handle token expiry callback from API layer
@@ -80,11 +84,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const storedToken = await AsyncStorage.getItem("token");
       const storedUser = await AsyncStorage.getItem("user");
+      const storedMethod = await AsyncStorage.getItem("auth_method") as AuthMethod;
       
       if (storedToken && storedUser) {
         setToken(storedToken);
         setUser(JSON.parse(storedUser));
       }
+      if (storedMethod) setAuthMethod(storedMethod);
     } catch (error) {
       console.error("Error loading stored auth:", error);
     } finally {
@@ -116,8 +122,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.log("[AuthContext] Refresh token stored");
         }
         await AsyncStorage.setItem("user", JSON.stringify(userData));
+        await AsyncStorage.setItem("auth_method", "email");
         setToken(access_token);
         setUser(userData);
+        setAuthMethod("email");
         // Store encrypted credentials server-side for silent re-login when token expires
         storeCredsForSilentRefresh(email, password, userData.id).catch(() => {});
         return { success: true };
@@ -200,8 +208,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await AsyncStorage.setItem("refresh_token", refresh_token);
         }
         await AsyncStorage.setItem("user", JSON.stringify(userData));
+        await AsyncStorage.setItem("auth_method", "google");
         setToken(access_token);
         setUser(userData);
+        setAuthMethod("google");
         return { success: true };
       }
 
@@ -225,14 +235,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await AsyncStorage.removeItem("refresh_token");
       await AsyncStorage.removeItem("session_token");
       await AsyncStorage.removeItem("user");
+      await AsyncStorage.removeItem("auth_method");
       queryClient.clear();
       setToken(null);
       setUser(null);
+      setAuthMethod(null);
     } catch (error) {
       console.error("[AuthContext] Logout error:", error);
       queryClient.clear();
       setToken(null);
       setUser(null);
+      setAuthMethod(null);
     }
   };
 
@@ -255,6 +268,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         token,
+        authMethod,
         isLoading,
         isAuthenticated: !!token && !!user,
         login,
