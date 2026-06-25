@@ -1,0 +1,316 @@
+This is an excellent, honest review from your developer. Let me digest it and give you a clear action plan.
+
+---
+
+## What the Review Tells Us
+
+**The good news:** The 7 flows, edge cases, and build sequence are correct. The architecture is sound.
+
+**The critical gap:** Cases live on an external backend we don't control. This changes everything about how handover data is stored.
+
+---
+
+## The Most Important Decision — Day 0
+
+Before any code, your developer needs to lock this:
+
+```
+External backend (er-emr-backend.onrender.com)
+  → Owns all clinical data
+  → Cases, vitals, history, treatment
+  → We CANNOT add columns here
+  → We can only read case_id from it
+
+Our local DB (PostgreSQL via Drizzle)
+  → Owns all team/shift data
+  → Stores case_id as a TEXT reference
+  → No real foreign key to cases
+  → Merges with external data on the client
+```
+
+**The merge pattern — tell your developer:**
+
+```typescript
+// Every case card in team mode = 
+// external case data + our local overlay
+
+async function getEnrichedCases(userId, shiftId) {
+  // 1. Fetch cases from external backend
+  const externalCases = await fetch(
+    'https://er-emr-backend.onrender.com/api/cases',
+    { headers: { Authorization: token } }
+  );
+
+  // 2. Fetch local shift/handover data
+  const localOverlays = await db
+    .select()
+    .from(caseOverlays)
+    .where(eq(caseOverlays.shiftId, shiftId));
+
+  // 3. Merge on case_id
+  return externalCases.map(c => ({
+    ...c,
+    overlay: localOverlays.find(o => o.caseId === c.id) || null
+  }));
+}
+```
+
+---
+
+## The 5 Prerequisites — Do These First
+
+Before Week 1 starts:
+
+**Day 0 — Architecture decision (1 day)**
+```
+Lock the merge pattern above.
+Write exactly which fields go where:
+
+Our local DB stores:
+  case_id (text reference)
+  handover_status
+  bed_number
+  pending_notes
+  to_shift_id
+  from_user_id
+  escalation_status
+  shift_session_id
+
+External backend owns:
+  Everything clinical — vitals, history,
+  diagnosis, treatment, discharge
+```
+
+**Day 0 — Email provider (half day)**
+```
+Set up Resend (resend.com) — simplest for India:
+  npm install resend
+  Get API key → add to .env as RESEND_API_KEY
+  3 email templates needed:
+    1. Invite existing user
+    2. Invite new user (with signup link)
+    3. Shift end warning
+```
+
+**Day 0 — Push notifications (half day)**
+```
+Use Expo Push Notifications:
+  npm install expo-notifications (already in Expo)
+  
+  On login: register push token, save to users table
+  Add column: users.pushToken TEXT
+  
+  Server sends via:
+  POST https://exp.host/--/api/v2/push/send
+  { to: pushToken, title, body }
+  
+  No paid service needed — Expo handles delivery
+```
+
+**Day 0 — Schema decision**
+```
+Add all new tables to @shared/schema
+(NOT to a new server/db/ folder)
+Follow exact same Drizzle pattern as existing tables
+```
+
+**Day 0 — Routes decision**
+```
+Create new route files:
+  server/routes/department.ts
+  server/routes/shifts.ts
+  server/routes/escalations.ts
+
+Import and register them inside the existing
+registerRoutes() function in server/routes.ts
+DO NOT replace routes.ts — add to it
+```
+
+---
+
+## Corrected Schema — Local DB Only
+
+```typescript
+// Add to @shared/schema
+
+// ── Departments ──────────────────────────────
+export const departments = pgTable("departments", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  hospitalName: text("hospital_name"),
+  hodUserId: integer("hod_user_id").notNull(),
+  maxConcurrent: integer("max_concurrent").default(8),
+  allowOverflow: boolean("allow_overflow").default(true),
+  plan: text("plan").default("team"), // "team" | "hospital"
+  billingActive: boolean("billing_active").default(false),
+  razorpaySubscriptionId: text("razorpay_subscription_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// ── Department Members ────────────────────────
+export const departmentMembers = pgTable("department_members", {
+  id: serial("id").primaryKey(),
+  departmentId: integer("department_id").notNull(),
+  userId: integer("user_id").notNull(),
+  role: text("role").notNull(), // "hod" | "consultant" | "resident"
+  status: text("status").default("pending"), // "pending" | "active" | "inactive"
+  invitedAt: timestamp("invited_at").defaultNow(),
+  joinedAt: timestamp("joined_at"),
+  removedAt: timestamp("removed_at"),
+});
+
+// ── Department Invites (for non-ErMate users) ─
+export const departmentInvites = pgTable("department_invites", {
+  id: serial("id").primaryKey(),
+  departmentId: integer("department_id").notNull(),
+  email: text("email").notNull(),
+  role: text("role").notNull(),
+  token: text("token").unique().notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  acceptedAt: timestamp("accepted_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// ── Shifts ────────────────────────────────────
+export const shifts = pgTable("shifts", {
+  id: serial("id").primaryKey(),
+  departmentId: integer("department_id").notNull(),
+  name: text("name").notNull(), // "Morning" | "Evening" | "Night"
+  startTime: text("start_time").notNull(), // "06:00"
+  endTime: text("end_time").notNull(),     // "14:00"
+  maxConsultants: integer("max_consultants").default(2),
+  maxResidents: integer("max_residents").default(6),
+});
+
+// ── Shift Sessions ────────────────────────────
+export const shiftSessions = pgTable("shift_sessions", {
+  id: serial("id").primaryKey(),
+  shiftId: integer("shift_id").notNull(),
+  departmentId: integer("department_id").notNull(),
+  userId: integer("user_id").notNull(),
+  roleForShift: text("role_for_shift").notNull(),
+  checkedInAt: timestamp("checked_in_at").defaultNow(),
+  checkedOutAt: timestamp("checked_out_at"),
+  status: text("status").default("active"),
+  // "active" | "completed" | "force_logout" | "auto_logout"
+  forceLogoutBy: integer("force_logout_by"),
+  forceLogoutAt: timestamp("force_logout_at"),
+});
+
+// ── Case Overlays (local supplement to external cases) ─
+export const caseOverlays = pgTable("case_overlays", {
+  id: serial("id").primaryKey(),
+  caseId: text("case_id").notNull(), // external backend case ID
+  departmentId: integer("department_id").notNull(),
+  shiftSessionId: integer("shift_session_id"),
+  // Handover fields
+  handoverStatus: text("handover_status").default("active"),
+  // "active" | "handed_over" | "received"
+  handedOverToShiftId: integer("handed_over_to_shift_id"),
+  handedOverByUserId: integer("handed_over_by_user_id"),
+  handedOverAt: timestamp("handed_over_at"),
+  receivedByUserId: integer("received_by_user_id"),
+  receivedAt: timestamp("received_at"),
+  bedNumber: text("bed_number"),
+  pendingNotes: text("pending_notes"),
+  // Consultant review
+  consultantReviewedBy: integer("consultant_reviewed_by"),
+  consultantReviewedAt: timestamp("consultant_reviewed_at"),
+  consultantNote: text("consultant_note"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// ── Escalations ───────────────────────────────
+export const escalations = pgTable("escalations", {
+  id: serial("id").primaryKey(),
+  caseId: text("case_id").notNull(), // external case ID
+  departmentId: integer("department_id").notNull(),
+  fromResidentId: integer("from_resident_id").notNull(),
+  toConsultantId: integer("to_consultant_id"), // null = any consultant
+  reason: text("reason"),
+  escalatedAt: timestamp("escalated_at").defaultNow(),
+  reviewedBy: integer("reviewed_by"),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewNote: text("review_note"),
+  status: text("status").default("pending"), // "pending" | "reviewed"
+});
+
+// ── Department Billing ────────────────────────
+export const departmentBilling = pgTable("department_billing", {
+  id: serial("id").primaryKey(),
+  departmentId: integer("department_id").notNull(),
+  consultantCount: integer("consultant_count").default(0),
+  residentCount: integer("resident_count").default(0),
+  consultantRateMonthly: integer("consultant_rate").default(59900), // paise
+  residentRateMonthly: integer("resident_rate").default(39900),     // paise
+  billingCycle: text("billing_cycle").default("monthly"),
+  razorpaySubscriptionId: text("razorpay_subscription_id"),
+  status: text("status").default("pending"),
+  currentPeriodStart: timestamp("current_period_start"),
+  currentPeriodEnd: timestamp("current_period_end"),
+});
+
+// ── Push Tokens (add to existing users or separate) ─
+export const pushTokens = pgTable("push_tokens", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  token: text("token").notNull(),
+  platform: text("platform"), // "ios" | "android" | "web"
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+```
+
+---
+
+## Revised Build Order — 8 Weeks Unchanged, Sequence Adjusted
+
+```
+WEEK 0 — Prerequisites (3 days)
+  Day 1: Lock merge pattern, document case_id references
+  Day 2: Set up Resend email, 3 email templates
+  Day 2: Set up Expo push tokens (store on login)
+  Day 3: Schema migration — all 8 tables above
+  Day 3: Register new route files in routes.ts
+
+WEEK 1-2 — Backend services (unchanged)
+WEEK 3 — HOD screens (unchanged)
+WEEK 4 — Doctor shift flow (unchanged)
+WEEK 5 — Handover — NOW uses caseOverlays not cases table
+WEEK 6 — Consultant + escalation (unchanged)
+WEEK 7 — Edge cases + billing (unchanged)
+WEEK 8 — QA + deploy (unchanged)
+```
+
+---
+
+## What To Send Your Developer Right Now
+
+Three things in this order:
+
+**1. This message** — the corrected architecture with the merge pattern and schema
+
+**2. This instruction:**
+```
+Do not write any feature code until:
+  a) You confirm the merge pattern works —
+     write a test endpoint that fetches 5 cases
+     from the external backend, fetches their
+     caseOverlays from our DB, and merges them.
+     If this works cleanly, proceed.
+     If not, fix it before anything else.
+
+  b) Resend email is sending one test email
+     to your own address successfully.
+
+  c) Expo push notification is delivering
+     to your own phone successfully.
+
+These three proofs-of-concept are the
+foundation. Build on them, not on assumptions.
+```
+
+**3. The schema above** — copy-paste into @shared/schema
+
+Once those three proofs-of-concept work, the rest of the build follows the 8-week plan cleanly.
+
+**One question for you:** Does the external backend team (who runs er-emr-backend.onrender.com) have an API you can call to add fields or create new endpoints — or is that backend completely locked and read-only from your side?
