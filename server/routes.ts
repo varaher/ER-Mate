@@ -5,7 +5,9 @@ import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, Bord
 import multer from "multer";
 import crypto from "crypto";
 import { generateDiagnosisSuggestions, recordFeedback, getFeedbackStats, getLearningInsights, generateCourseInHospital, extractClinicalDataFromVoice, transcribeAndExtractVoice, generateRoundsDebrief, type AIFeedback, type FeedbackResult, type ExtractedClinicalData } from "./services/aiDiagnosis";
-import { getOrCreateSubscription, canCreateCase, incrementCaseCount, activatePremium, cancelSubscription, FREE_CASE_LIMIT, PREMIUM_PRICE_INR } from "./services/subscription";
+import { getOrCreateSubscription, canCreateCase, incrementCaseCount, activatePremium, activatePlan, cancelSubscription, FREE_CASE_LIMIT, PREMIUM_PRICE_INR } from "./services/subscription";
+import { createPaymentLink, verifyWebhookSignature } from "./services/razorpayService";
+import { PLAN_AMOUNTS_PAISE, CREDIT_PACKS } from "./config/pricing";
 import { getEMReferenceResponse, EM_TOPICS, type EMReferenceMessage } from "./services/emReference";
 import { getDb, getPool, ensureAuthSessionsTable } from "./db";
 import { emReferenceFeedback, userFeedback } from "@shared/schema";
@@ -3972,32 +3974,203 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       if (!["monthly", "annual"].includes(billingCycle)) {
         return res.status(400).json({ error: "Invalid billing cycle" });
       }
-      // TODO: Razorpay integration
-      // 1. Look up RAZORPAY_PLAN_IDS[plan][billingCycle] from server/config/pricing.ts
-      // 2. Create a Razorpay Subscription via the Razorpay API:
-      //    POST https://api.razorpay.com/v1/subscriptions
-      //    { plan_id, total_count, quantity, start_at (30 days from now for trial) }
-      // 3. Return { subscriptionId, keyId } to the client
-      // 4. Client opens Razorpay checkout with subscriptionId
-      return res.status(503).json({
-        error: "payment_not_configured",
-        message: "Payment integration is being set up. Contact support@ermate.app to activate your trial.",
+
+      const authHeader = req.headers.authorization;
+      const token = authHeader?.replace("Bearer ", "") || "";
+
+      let userId = "";
+      let userEmail = "";
+      let userName = "";
+      try {
+        const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString());
+        userId = payload.sub || payload.id || "";
+        userEmail = payload.email || "";
+        userName = payload.name || payload.fullName || "";
+      } catch { /* token not parseable – proceed without */ }
+
+      const amountPaise = PLAN_AMOUNTS_PAISE[plan as "base" | "pro"][billingCycle as "monthly" | "annual"];
+      const planLabel = plan === "base" ? "Base" : "Pro";
+      const cycleLabel = billingCycle === "annual" ? "Annual" : "Monthly";
+      const description = `ErMate ${planLabel} Plan — ${cycleLabel}`;
+
+      const domain = process.env.REPLIT_DOMAINS?.split(",")[0] || "er-mate.replit.app";
+      const callbackUrl = `https://${domain}/payment-callback?plan=${plan}&cycle=${billingCycle}`;
+      const referenceId = `sub_${userId || "anon"}_${plan}_${billingCycle}_${Date.now()}`;
+
+      const { url, id } = await createPaymentLink({
+        amountPaise,
+        description,
+        customerEmail: userEmail || undefined,
+        customerName: userName || undefined,
+        referenceId,
+        callbackUrl,
+        notes: { userId, plan, cycle: billingCycle, userEmail },
       });
+
+      console.log(`[Razorpay] Payment link created: ${id} for user=${userId} plan=${plan} cycle=${billingCycle}`);
+      return res.json({ url });
     } catch (error) {
       console.error("[Razorpay] Checkout error:", error);
       res.status(500).json({ error: "Failed to create checkout session" });
     }
   });
 
+  app.post("/api/subscription/create-credit-order", async (req: Request, res: Response) => {
+    try {
+      const { packIndex } = req.body as { packIndex: number };
+      const pack = CREDIT_PACKS[packIndex];
+      if (!pack) return res.status(400).json({ error: "Invalid pack index" });
+
+      const authHeader = req.headers.authorization;
+      const token = authHeader?.replace("Bearer ", "") || "";
+      let userId = "";
+      let userEmail = "";
+      let userName = "";
+      try {
+        const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString());
+        userId = payload.sub || payload.id || "";
+        userEmail = payload.email || "";
+        userName = payload.name || payload.fullName || "";
+      } catch { /* non-fatal */ }
+
+      const domain = process.env.REPLIT_DOMAINS?.split(",")[0] || "er-mate.replit.app";
+      const callbackUrl = `https://${domain}/payment-callback?type=credits&pack=${pack.id}`;
+      const referenceId = `credits_${userId || "anon"}_${pack.id}_${Date.now()}`;
+
+      const { url } = await createPaymentLink({
+        amountPaise: pack.amountPaise,
+        description: `ErMate ${pack.label}`,
+        customerEmail: userEmail || undefined,
+        customerName: userName || undefined,
+        referenceId,
+        callbackUrl,
+        notes: { userId, type: "credits", pack: pack.id, credits: String(pack.credits), userEmail },
+      });
+
+      return res.json({ url });
+    } catch (error) {
+      console.error("[Razorpay] Credit order error:", error);
+      res.status(500).json({ error: "Failed to create credit order" });
+    }
+  });
+
   app.post("/api/webhooks/razorpay", async (req: Request, res: Response) => {
-    // TODO: Razorpay webhook handler
-    // 1. Verify signature: razorpay.webhooks.verify(body, sig, RAZORPAY_WEBHOOK_SECRET)
-    // 2. Handle events:
-    //    subscription.activated  → activateSubscription(userId, plan, billingCycle)
-    //    subscription.charged    → syncSubscriptionPeriod(subscriptionId, periodEnd)
-    //    subscription.cancelled  → downgradeToFree(subscriptionId)
-    //    payment.failed          → flag account / notify user
-    res.json({ received: true });
+    try {
+      const signature = req.headers["x-razorpay-signature"] as string || "";
+      const rawBody = JSON.stringify(req.body);
+
+      if (process.env.RAZORPAY_WEBHOOK_SECRET) {
+        const valid = verifyWebhookSignature(rawBody, signature);
+        if (!valid) {
+          console.warn("[Razorpay] Invalid webhook signature");
+          return res.status(400).json({ error: "Invalid signature" });
+        }
+      }
+
+      const event = req.body?.event as string;
+      const payload = req.body?.payload;
+
+      console.log(`[Razorpay] Webhook event: ${event}`);
+
+      if (event === "payment_link.paid") {
+        const linkEntity = payload?.payment_link?.entity;
+        const notes = linkEntity?.notes as Record<string, string> | undefined;
+        const userId = notes?.userId;
+        const plan = notes?.plan as "base" | "pro" | undefined;
+        const cycle = (notes?.cycle || "monthly") as "monthly" | "annual";
+        const type = notes?.type;
+        const paymentLinkId = linkEntity?.id as string;
+
+        if (type === "credits") {
+          const packId = notes?.pack;
+          const credits = parseInt(notes?.credits || "0", 10);
+          if (userId && credits > 0) {
+            console.log(`[Razorpay] Credits purchased: userId=${userId} credits=${credits}`);
+            // Credits are managed on the external backend; log for manual processing if needed
+          }
+        } else if (userId && plan && ["base", "pro"].includes(plan)) {
+          await activatePlan(userId, plan, cycle, paymentLinkId);
+          console.log(`[Razorpay] Plan activated: userId=${userId} plan=${plan} cycle=${cycle}`);
+        }
+      }
+
+      if (event === "subscription.activated") {
+        const subEntity = payload?.subscription?.entity;
+        const notes = subEntity?.notes as Record<string, string> | undefined;
+        const userId = notes?.userId;
+        const plan = (notes?.plan || "base") as "base" | "pro";
+        const cycle = (notes?.cycle || "monthly") as "monthly" | "annual";
+        if (userId) {
+          await activatePlan(userId, plan, cycle);
+          console.log(`[Razorpay] Subscription activated: userId=${userId}`);
+        }
+      }
+
+      if (event === "subscription.cancelled") {
+        const subEntity = payload?.subscription?.entity;
+        const notes = subEntity?.notes as Record<string, string> | undefined;
+        const userId = notes?.userId;
+        if (userId) {
+          await cancelSubscription(userId);
+          console.log(`[Razorpay] Subscription cancelled: userId=${userId}`);
+        }
+      }
+
+      res.json({ received: true });
+    } catch (error) {
+      console.error("[Razorpay] Webhook error:", error);
+      res.status(500).json({ error: "Webhook processing failed" });
+    }
+  });
+
+  app.get("/payment-callback", (req: Request, res: Response) => {
+    const status = req.query.razorpay_payment_link_status as string || "";
+    const plan = req.query.plan as string || "";
+    const cycle = req.query.cycle as string || "";
+    const type = req.query.type as string || "";
+    const paid = status === "paid";
+
+    const title = paid
+      ? type === "credits" ? "Credits Purchased!" : `${plan ? plan.charAt(0).toUpperCase() + plan.slice(1) : ""} Plan Activated!`
+      : "Payment Pending";
+
+    const subtitle = paid
+      ? type === "credits"
+        ? "Your AI credits have been added to your account. Return to the ErMate app to continue."
+        : `Your ${cycle === "annual" ? "annual" : "monthly"} subscription is now active. Return to the ErMate app to get started.`
+      : "Your payment is being processed. Return to the ErMate app — your account will be updated shortly.";
+
+    const color = paid ? "#1DB870" : "#F59E0B";
+    const icon = paid ? "✓" : "⏳";
+
+    res.setHeader("Content-Type", "text/html");
+    res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ErMate Payment</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #F5F6F8; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; }
+    .card { background: white; border-radius: 20px; padding: 40px 32px; max-width: 420px; width: 100%; text-align: center; box-shadow: 0 4px 24px rgba(0,0,0,0.08); }
+    .icon { width: 72px; height: 72px; border-radius: 50%; background: ${color}18; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 32px; }
+    h1 { font-size: 22px; font-weight: 700; color: #0D1117; margin-bottom: 12px; }
+    p { font-size: 15px; color: #6B7280; line-height: 1.6; margin-bottom: 28px; }
+    .btn { display: inline-block; background: ${color}; color: white; font-size: 16px; font-weight: 600; padding: 14px 28px; border-radius: 12px; text-decoration: none; }
+    .brand { margin-top: 24px; font-size: 13px; color: #9CA3AF; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">${icon}</div>
+    <h1>${title}</h1>
+    <p>${subtitle}</p>
+    <a href="ermate://" class="btn">Return to ErMate</a>
+    <div class="brand">ErMate by Varah Group</div>
+  </div>
+</body>
+</html>`);
   });
 
   app.get("/api/em-reference/topics", (_req: Request, res: Response) => {

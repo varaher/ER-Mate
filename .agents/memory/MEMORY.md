@@ -3,3 +3,4 @@
 - [DB schema migration interactive prompts](db-migration-interactive.md) — drizzle-kit push blocks on interactive prompts for new tables; bypass by running raw SQL via node pg Pool directly.
 - [Typography constants usage](typography-constants.md) — Typography object only has style-object keys (h1, h2, small, label, caption, body, etc.), NOT numeric shortcuts like .sm/.xs/.base/.lg. Use inline numbers or Typography.small.fontSize for fontSize in StyleSheet.
 - [Team System architecture](team-system-arch.md) — departments/shifts/handovers live in local PostgreSQL; cases remain on external backend. Merge on caseId (text) client-side. Route files in server/routes/*.ts, registered via registerXxxRoutes() calls at end of registerRoutes() in routes.ts.
+- [Razorpay integration approach](razorpay-integration.md) — uses Payment Links API (no native SDK, no npm package) via fetch + Basic auth. Webhook needs RAZORPAY_WEBHOOK_SECRET env var to verify signatures.

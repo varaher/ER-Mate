@@ -54,17 +54,36 @@ export async function incrementCaseCount(userId: string, userEmail: string) {
   return { casesUsed: sub.casesUsed + 1, casesLimit: sub.casesLimit };
 }
 
+/** Legacy – kept for backward compatibility */
 export async function activatePremium(userId: string, stripeCustomerId?: string, stripeSubscriptionId?: string) {
+  return activatePlan(userId, "base", "monthly", undefined, stripeCustomerId, stripeSubscriptionId);
+}
+
+/**
+ * Activate (or upgrade) a plan after a successful Razorpay payment.
+ */
+export async function activatePlan(
+  userId: string,
+  plan: "base" | "pro",
+  cycle: "monthly" | "annual",
+  razorpayPaymentLinkId?: string,
+  stripeCustomerId?: string,
+  stripeSubscriptionId?: string,
+) {
   const db = getDb();
   const sub = await getOrCreateSubscription(userId, "");
 
   const now = new Date();
   const periodEnd = new Date(now);
-  periodEnd.setMonth(periodEnd.getMonth() + 1);
+  if (cycle === "annual") {
+    periodEnd.setFullYear(periodEnd.getFullYear() + 1);
+  } else {
+    periodEnd.setMonth(periodEnd.getMonth() + 1);
+  }
 
   await db.update(subscriptions)
     .set({
-      plan: "premium",
+      plan,
       status: "active",
       casesLimit: PREMIUM_CASE_LIMIT,
       currentPeriodStart: now,
@@ -74,6 +93,20 @@ export async function activatePremium(userId: string, stripeCustomerId?: string,
       updatedAt: now,
     })
     .where(eq(subscriptions.id, sub.id));
+
+  // Also persist razorpay payment link id via raw SQL (column may not be in Drizzle schema yet)
+  if (razorpayPaymentLinkId) {
+    try {
+      const { getPool } = await import("../db");
+      const pool = getPool();
+      await pool.query(
+        `UPDATE subscriptions SET razorpay_payment_link_id = $1, billing_cycle = $2 WHERE id = $3`,
+        [razorpayPaymentLinkId, cycle, sub.id]
+      );
+    } catch {
+      // Column may not exist yet – non-fatal
+    }
+  }
 }
 
 export async function cancelSubscription(userId: string) {

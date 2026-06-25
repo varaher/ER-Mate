@@ -318,13 +318,29 @@ export default function UpgradeScreen() {
     }
   };
 
-  const handleBuyCredits = () => {
-    const pack = CREDIT_PACKS[selectedPack];
-    Alert.alert(
-      "Buy AI Credits",
-      `Purchase ${pack.label} for ${pack.price}?\n\nPayment integration is being set up. Contact support@ermate.app for credit purchases.`,
-      [{ text: "Cancel", style: "cancel" }, { text: "Contact Support" }]
-    );
+  const handleBuyCredits = async () => {
+    setCtaLoading(true);
+    try {
+      const url = new URL("/api/subscription/create-credit-order", getApiUrl()).href;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ packIndex: selectedPack }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        await WebBrowser.openBrowserAsync(data.url);
+      } else {
+        Alert.alert("Something went wrong", "Please try again or contact support@ermate.app");
+      }
+    } catch {
+      Alert.alert("Something went wrong", "Please try again or contact support@ermate.app");
+    } finally {
+      setCtaLoading(false);
+    }
   };
 
   if (loading) {
