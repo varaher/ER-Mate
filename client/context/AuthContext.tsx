@@ -74,9 +74,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       // Clear any old tokens first
       await AsyncStorage.removeItem("token");
+      await AsyncStorage.removeItem("refresh_token");
       await AsyncStorage.removeItem("user");
       
-      const res = await apiPost<{ access_token: string; user: User }>("/auth/login", {
+      const res = await apiPost<{ access_token: string; refresh_token?: string; user: User }>("/auth/login", {
         email,
         password,
       });
@@ -84,10 +85,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log("[AuthContext] Login response:", res.success, res.error);
 
       if (res.success && res.data) {
-        const { access_token, user: userData } = res.data;
+        const { access_token, refresh_token, user: userData } = res.data;
         console.log("[AuthContext] Got new token, length:", access_token?.length);
         queryClient.clear();
         await AsyncStorage.setItem("token", access_token);
+        if (refresh_token) {
+          await AsyncStorage.setItem("refresh_token", refresh_token);
+          console.log("[AuthContext] Refresh token stored");
+        }
         await AsyncStorage.setItem("user", JSON.stringify(userData));
         setToken(access_token);
         setUser(userData);
@@ -102,12 +107,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = async (data: RegisterData) => {
     try {
-      const res = await apiPost<{ access_token: string; user: User }>("/auth/register", data);
+      const res = await apiPost<{ access_token: string; refresh_token?: string; user: User }>("/auth/register", data);
 
       if (res.success && res.data) {
-        const { access_token, user: userData } = res.data;
+        const { access_token, refresh_token, user: userData } = res.data;
         queryClient.clear();
         await AsyncStorage.setItem("token", access_token);
+        if (refresh_token) {
+          await AsyncStorage.setItem("refresh_token", refresh_token);
+        }
         await AsyncStorage.setItem("user", JSON.stringify(userData));
         setToken(access_token);
         setUser(userData);
@@ -123,6 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const googleSignIn = async (params: { name: string; email: string; idToken?: string; accessToken?: string; password?: string }) => {
     try {
       await AsyncStorage.removeItem("token");
+      await AsyncStorage.removeItem("refresh_token");
       await AsyncStorage.removeItem("user");
 
       const baseUrl = getApiUrl();
@@ -159,10 +168,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       queryClient.clear();
-      const { access_token, user: userData } = data;
+      const { access_token, refresh_token, user: userData } = data;
 
       if (access_token && userData) {
         await AsyncStorage.setItem("token", access_token);
+        if (refresh_token) {
+          await AsyncStorage.setItem("refresh_token", refresh_token);
+        }
         await AsyncStorage.setItem("user", JSON.stringify(userData));
         setToken(access_token);
         setUser(userData);
@@ -186,6 +198,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = async () => {
     try {
       await AsyncStorage.removeItem("token");
+      await AsyncStorage.removeItem("refresh_token");
       await AsyncStorage.removeItem("user");
       queryClient.clear();
       setToken(null);
