@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "ZdC5IUelBK2jJhGN0UFwg"
+uri = "file://ErMate_User_Guide.md"
+type = "text"
+title = "ErMate Complete User Guide"
