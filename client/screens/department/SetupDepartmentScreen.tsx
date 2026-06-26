@@ -24,7 +24,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export default function SetupDepartmentScreen() {
   const { theme } = useTheme();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const { refresh } = useDepartment();
   const navigation = useNavigation<Nav>();
   const headerHeight = useHeaderHeight();
@@ -49,7 +49,7 @@ export default function SetupDepartmentScreen() {
       const res = await fetch(`${getApiUrl()}/api/department/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ name: deptName.trim(), hospitalName: hospitalName.trim(), morningStart, morningEnd, eveningStart, eveningEnd, nightStart, nightEnd }),
+        body: JSON.stringify({ name: deptName.trim(), hospitalName: hospitalName.trim(), morningStart, morningEnd, eveningStart, eveningEnd, nightStart, nightEnd, hodName: user?.name || "", hodEmail: (user as any)?.email || "" }),
       });
       const data = await res.json();
       if (!res.ok) { Alert.alert("Error", data.error || "Failed to create department"); return; }

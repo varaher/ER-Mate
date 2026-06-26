@@ -13,6 +13,8 @@ import { CollapsibleSection } from "@/components/CollapsibleSection";
 import SmartDictation, { SmartDictationExtracted } from "@/components/SmartDictation";
 import { AIDiagnosisPanel } from "@/components/AIDiagnosisPanel";
 import { useTheme } from "@/hooks/useTheme";
+import { useAuth } from "@/context/AuthContext";
+import { useDepartment } from "@/context/DepartmentContext";
 import { apiGet, apiPatch, apiPut, invalidateCases, saveClinicalDataToServer } from "@/lib/api";
 import { getApiUrl } from "@/lib/query-client";
 import { cacheCasePayload } from "@/lib/caseCache";
@@ -286,6 +288,8 @@ export default function PediatricCaseSheetScreen() {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<PediatricCaseSheetRouteProp>();
   const { theme, isDark } = useTheme();
+  const { user } = useAuth();
+  const { membership } = useDepartment();
   const insets = useSafeAreaInsets();
   
 
@@ -363,6 +367,17 @@ export default function PediatricCaseSheetScreen() {
       }
     };
   }, [caseId]);
+
+  // Auto-fill doctor name from department role once case loads
+  useEffect(() => {
+    if (loading || !user?.name || !membership) return;
+    const role = membership.role;
+    setDispositionData((prev) => ({
+      ...prev,
+      emResident: prev.emResident || (role === "resident" ? user.name : ""),
+      emConsultant: prev.emConsultant || (role === "consultant" || role === "hod" ? user.name : ""),
+    }));
+  }, [loading, membership?.role, user?.name]);
 
   const loadFromCaseSheetData = (caseSheetData: any) => {
     if (!caseSheetData) return false;

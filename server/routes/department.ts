@@ -32,6 +32,7 @@ export function registerDepartmentRoutes(app: Express) {
       if (existing.length > 0) {
         return res.status(400).json({ error: "You are already in a department" });
       }
+      const { hodName, hodEmail } = req.body;
       const [dept] = await db
         .insert(departments)
         .values({ name: name.trim(), hospitalName: hospitalName?.trim() || null, hodUserId: userId })
@@ -41,6 +42,8 @@ export function registerDepartmentRoutes(app: Express) {
         userId,
         role: "hod",
         status: "active",
+        name: hodName?.trim() || null,
+        email: hodEmail?.trim() || null,
         joinedAt: new Date(),
       });
       const defaultShifts = [
@@ -152,7 +155,7 @@ export function registerDepartmentRoutes(app: Express) {
         ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
         : "https://er-mate.replit.app";
       await sendInviteNewUser(email, inviterName || "Your HOD", deptName, role, token, domain);
-      res.json({ success: true, token, inviteLink: `${domain}/invite?token=${token}` });
+      res.json({ success: true, token, inviteLink: `${domain}/invite?token=${token}`, email: email.toLowerCase().trim() });
     } catch (e) {
       console.error("[Dept] Invite error:", e);
       res.status(500).json({ error: "Failed to send invite" });
@@ -295,6 +298,51 @@ export function registerDepartmentRoutes(app: Express) {
       res.json({ success: true });
     } catch (e) {
       res.status(500).json({ error: "Failed to save push token" });
+    }
+  });
+
+  // ── POST /api/department/invite/join ────────────────────────
+  // Authenticated doctor clicks the invite link and joins the department
+  app.post("/api/department/invite/join", async (req: Request, res: Response) => {
+    const userId = extractUserId(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    const db = getDb();
+    if (!db) return res.status(503).json({ error: "DB unavailable" });
+    try {
+      const { token, name } = req.body;
+      if (!token) return res.status(400).json({ error: "token required" });
+      const invite = await db
+        .select()
+        .from(departmentInvites)
+        .where(eq(departmentInvites.token, token))
+        .limit(1);
+      if (!invite.length) return res.status(404).json({ error: "Invite not found" });
+      const inv = invite[0];
+      if (inv.acceptedAt) return res.status(409).json({ error: "Invite already used" });
+      if (new Date() > inv.expiresAt) return res.status(410).json({ error: "Invite expired" });
+      // Check not already in a department
+      const existing = await db
+        .select({ id: departmentMembers.id })
+        .from(departmentMembers)
+        .where(and(eq(departmentMembers.userId, userId), eq(departmentMembers.status, "active")))
+        .limit(1);
+      if (existing.length) return res.status(400).json({ error: "Already in a department" });
+      // Create member row
+      const [member] = await db.insert(departmentMembers).values({
+        departmentId: inv.departmentId,
+        userId,
+        role: inv.role,
+        status: "active",
+        name: name?.trim() || null,
+        email: inv.email,
+        joinedAt: new Date(),
+      }).returning();
+      // Mark invite accepted
+      await db.update(departmentInvites).set({ acceptedAt: new Date() }).where(eq(departmentInvites.id, inv.id));
+      res.json({ success: true, member });
+    } catch (e) {
+      console.error("[Dept] Join error:", e);
+      res.status(500).json({ error: "Failed to join department" });
     }
   });
 

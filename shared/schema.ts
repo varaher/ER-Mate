@@ -175,6 +175,8 @@ export const departmentMembers = pgTable("department_members", {
   userId: text("user_id").notNull(),
   role: text("role").notNull(),
   status: text("status").default("pending"),
+  name: text("name"),
+  email: text("email"),
   invitedAt: timestamp("invited_at").default(sql`CURRENT_TIMESTAMP`),
   joinedAt: timestamp("joined_at"),
   removedAt: timestamp("removed_at"),

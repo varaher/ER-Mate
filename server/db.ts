@@ -149,6 +149,11 @@ export async function ensureDepartmentTables(): Promise<void> {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+    // Add name/email columns if they don't exist yet (idempotent)
+    await p.query(`
+      ALTER TABLE department_members ADD COLUMN IF NOT EXISTS name TEXT;
+      ALTER TABLE department_members ADD COLUMN IF NOT EXISTS email TEXT;
+    `);
     console.log("[DB] Department tables ready");
   } catch (e) {
     console.error("[DB] Failed to ensure department tables:", e);

@@ -102,14 +102,19 @@ export default function ManageRosterScreen() {
   const activeMembers = members.filter((m) => m.status === "active");
   const pendingMembers = members.filter((m) => m.status === "pending");
 
-  const MemberRow = ({ member, isPending }: { member: any; isPending?: boolean }) => (
+  const MemberRow = ({ member, isPending }: { member: any; isPending?: boolean }) => {
+    const displayName = member.name || member.email || member.userId || "Unknown";
+    const initials = displayName.charAt(0).toUpperCase();
+    return (
     <View style={[styles.memberRow, { borderBottomColor: theme.border }]}>
       <View style={[styles.avatar, { backgroundColor: theme.primaryLight }]}>
-        <Text style={[styles.avatarText, { color: theme.primary }]}>{(member.userId || "?").charAt(0).toUpperCase()}</Text>
+        <Text style={[styles.avatarText, { color: theme.primary }]}>{initials}</Text>
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={[styles.memberName, { color: theme.text }]} numberOfLines={1}>{member.userId}</Text>
-        <Text style={[styles.memberRole, { color: theme.textSecondary }]}>{member.role}</Text>
+        <Text style={[styles.memberName, { color: theme.text }]} numberOfLines={1}>{displayName}</Text>
+        <Text style={[styles.memberRole, { color: theme.textSecondary }]}>
+          {member.role}{member.email && member.name ? ` · ${member.email}` : ""}
+        </Text>
       </View>
       <View style={[styles.statusBadge, { backgroundColor: (STATUS_COLORS[member.status] || "#9ca3af") + "20" }]}>
         <Text style={[styles.statusText, { color: STATUS_COLORS[member.status] || "#9ca3af" }]}>
@@ -123,6 +128,7 @@ export default function ManageRosterScreen() {
       ) : null}
     </View>
   );
+  };
 
   if (!department) {
     return (

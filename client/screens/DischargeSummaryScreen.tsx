@@ -22,6 +22,8 @@ import * as Sharing from "expo-sharing";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { useTheme } from "@/hooks/useTheme";
+import { useAuth } from "@/context/AuthContext";
+import { useDepartment } from "@/context/DepartmentContext";
 import { apiGet, apiPatch, apiPost, apiPut, invalidateCases } from "@/lib/api";
 import { getCachedCaseData, mergeCaseWithCache, cacheDischargeSummary } from "@/lib/caseCache";
 import { getApiUrl } from "@/lib/query-client";
@@ -220,6 +222,8 @@ export default function DischargeSummaryScreen() {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RouteProps>();
   const { theme } = useTheme();
+  const { user } = useAuth();
+  const { membership } = useDepartment();
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const { caseId } = route.params;
@@ -239,6 +243,19 @@ export default function DischargeSummaryScreen() {
   useEffect(() => {
     loadCase();
   }, [caseId]);
+
+  // Auto-fill doctor name fields based on department role
+  useEffect(() => {
+    if (!caseData || !user?.name || !membership) return;
+    const role = membership.role;
+    if ((role === "consultant" || role === "hod") && !summaryRef.current.ed_consultant) {
+      summaryRef.current.ed_consultant = user.name;
+      forceUpdate();
+    } else if (role === "resident" && !summaryRef.current.ed_resident) {
+      summaryRef.current.ed_resident = user.name;
+      forceUpdate();
+    }
+  }, [caseData, membership?.role, user?.name]);
 
   // Auto-trigger generation when case loads — only if no saved narrative exists
   useEffect(() => {
