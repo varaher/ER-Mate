@@ -129,8 +129,9 @@ const FIELD_LABELS: Record<string, string> = {
   diagnosis: 'Diagnosis',
   differentialDiagnosis: 'Differential Diagnosis',
   treatmentNotes: 'Treatment Notes',
-  prescribedMedications: 'Prescribed Medications',
+  prescribedMedications: 'Medications Administered (ER)',
   prescribedInfusions: 'Infusions / IV Fluids',
+  vbgResults: 'ABG / VBG Results',
   investigationsOrdered: 'Investigations',
   imagingOrdered: 'Imaging',
 };
@@ -151,6 +152,7 @@ const FIELD_ICONS: Record<string, string> = {
   treatmentNotes: 'edit-3',
   prescribedMedications: 'thermometer',
   prescribedInfusions: 'droplet',
+  vbgResults: 'wind',
 };
 
 type FlowStep = 'idle' | 'recording' | 'transcribing' | 'transcript_ready' | 'extracting' | 'review';

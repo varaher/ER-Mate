@@ -754,6 +754,12 @@ export interface ExtractedClinicalData {
   treatmentNotes?: string;
   prescribedMedications?: Array<{ name: string; dose?: string; route?: string; frequency?: string }>;
   prescribedInfusions?: Array<{ name: string; dose?: string; dilution?: string; rate?: string }>;
+  abgValues?: {
+    sampleType?: string;
+    ph?: string; pco2?: string; po2?: string; hco3?: string; be?: string;
+    lactate?: string; sao2?: string; fio2?: string;
+    na?: string; k?: string; cl?: string; anionGap?: string; glucose?: string; hb?: string;
+  };
   investigationsOrdered?: string;
   imagingOrdered?: string;
   rawTranscription?: string;
@@ -825,6 +831,22 @@ Respond in JSON format:
   "prescribedInfusions": [
     {"name": "Fluid or drug name (NS, RL, Dopamine, etc)", "dose": "Amount if mentioned", "dilution": "Dilution details", "rate": "Rate of infusion"}
   ],
+  "abgValues": {
+    "sampleType": "ABG or VBG — only if blood gas values are mentioned",
+    "ph": "pH value e.g. 7.32 — ONLY if mentioned",
+    "pco2": "pCO2 / PCO2 in mmHg — ONLY if mentioned",
+    "po2": "pO2 / PO2 in mmHg — ONLY if mentioned",
+    "hco3": "HCO3 / bicarbonate in mEq/L — ONLY if mentioned",
+    "be": "Base excess / BE in mEq/L — ONLY if mentioned",
+    "lactate": "Lactate / lactic acid in mmol/L — ONLY if mentioned",
+    "sao2": "SaO2 from blood gas — ONLY if mentioned",
+    "fio2": "FiO2 fraction/percentage — ONLY if mentioned",
+    "na": "Sodium from blood gas — ONLY if mentioned",
+    "k": "Potassium from blood gas — ONLY if mentioned",
+    "cl": "Chloride from blood gas — ONLY if mentioned",
+    "glucose": "Glucose from blood gas — ONLY if mentioned",
+    "hb": "Haemoglobin from blood gas — ONLY if mentioned"
+  },
   "investigationsOrdered": "Labs ordered (CBC, RFT, LFT, etc.)",
   "imagingOrdered": "Imaging ordered (X-ray, CT, USG, etc.)",
   "treatmentNotes": "Any other treatment plans or notes not captured above",
@@ -832,14 +854,18 @@ Respond in JSON format:
 }
 
 IMPORTANT RULES:
-1. When the doctor mentions prescribing or administering medications (e.g., "give paracetamol 1g IV", "start on Tab Pantoprazole 40mg OD"), extract them into "prescribedMedications" array. When IV fluids or continuous infusions are mentioned (e.g., "start NS at 100ml/hr", "Dopamine drip"), extract them into "prescribedInfusions" array. "medications" field is ONLY for the patient's current/home medications (medication history).
-2. CRITICAL: Only include fields that have ACTUAL content mentioned in the transcript. Do NOT include fields with values like "Not mentioned", "None", "N/A", "Unknown", or empty strings. Simply OMIT the field entirely if no relevant information was mentioned.
-3. For "historyOfPresentIllness": Write 2–4 sentences in third-person prose covering ONLY the patient's symptoms, chief complaint, onset, duration, and relevant background history as reported by the patient or bystander. DO NOT include vital signs, ABCDE examination findings, GCS scores, ECG/ABG results, CRT, pupils, power, or any clinical assessment data — those belong in their dedicated fields. Keep it concise. Example: "The patient presented with severe retrosternal chest pain of sudden onset 2 hours ago, radiating to the left arm. Associated with profuse sweating and breathlessness. He has a background history of hypertension."
-4. For "painDetails": Only include specific subfields (location, severity, character, etc.) where the doctor ACTUALLY describes pain characteristics. Do NOT include subfields with "Not mentioned" values. Omit the entire painDetails object if pain is not relevant to the presentation. Pain details should ALSO be woven into the historyOfPresentIllness narrative.
-5. For "chiefComplaint": Extract the main reason the patient came to the ER. This should be a brief phrase like "Vomiting and loose stools" or "Chest pain" or "Difficulty breathing".
-6. "REST ALL NORMAL" DETECTION: If the doctor says phrases like "rest all examination normal", "other systems normal", "rest all systems within normal limits", "systemic examination otherwise normal", "rest of examination unremarkable", or any similar wording indicating unmentioned exam systems should be considered normal — set "restAllNormal" to true. The examFindings should still contain any SPECIFIC findings mentioned, and restAllNormal covers everything else.
-7. ECG DETECTION: If the doctor mentions ECG findings (e.g. "ECG tachycardia", "ECG normal", "ECG showed ST elevation", "ECG sinus rhythm", "ECG done"), extract adjuncts.ecgDone as true and adjuncts.ecgFindings as the finding described (e.g. "Sinus tachycardia", "Normal sinus rhythm", "ST elevation in leads II, III, aVF"). A phrase like "ECG tachycardia" means ecgDone=true, ecgFindings="Sinus tachycardia".
-8. SYMPTOMS: The "symptoms" array must contain only UNIQUE items. If the same symptom appears via multiple parts of the transcript, include it only once.`;
+1. CRITICAL — STAT MEDICATIONS vs HOME MEDICATIONS (this is the most important distinction):
+   - "prescribedMedications" = drugs YOU (the ER doctor) are giving RIGHT NOW to this patient in the ER. Trigger phrases: "give", "administer", "push", "bolus", "start", "infuse", "IV", "IM", "SC", "subcutaneous", "intramuscular", "intravenous", "stat", "inject" — when used with a drug name. Examples: "give morphine 5mg IV stat" → prescribedMedications. "ondansetron 4mg IV" → prescribedMedications. "start NS 500ml wide open" → prescribedInfusions. "dopamine drip" → prescribedInfusions.
+   - "medications" field is STRICTLY for the patient's current/home medications taken BEFORE coming to the ER. Examples: "patient is on metformin", "he takes amlodipine 5mg OD", "she is on warfarin". NEVER put ER-administered drugs here.
+   - When IV fluids or continuous infusions are mentioned (e.g., "start NS at 100ml/hr", "Dopamine drip", "RL infusion"), extract them into "prescribedInfusions" array.
+2. CRITICAL — ABG / VBG VALUES: If the doctor mentions ANY blood gas parameter — pH, pCO2/PCO2, pO2/PO2, HCO3/bicarbonate, base excess/BE, lactate/lactic acid, SaO2, FiO2, sodium, potassium from a blood gas — extract them ALL into the "abgValues" object with the exact keys listed in the schema. These are ALWAYS investigation values. They are NEVER part of history, vitals, or assessment. If the doctor says "ABG shows pH 7.28, pCO2 52, HCO3 16, lactate 3.8" — ALL four values go into abgValues.
+3. CRITICAL: Only include fields that have ACTUAL content mentioned in the transcript. Do NOT include fields with values like "Not mentioned", "None", "N/A", "Unknown", or empty strings. Simply OMIT the field entirely if no relevant information was mentioned. For abgValues: only include it if at least one blood gas value is mentioned.
+4. For "historyOfPresentIllness": Write 2–4 sentences in third-person prose covering ONLY the patient's symptoms, chief complaint, onset, duration, and relevant background history as reported by the patient or bystander. DO NOT include vital signs, ABCDE examination findings, GCS scores, ECG/ABG results, CRT, pupils, power, or any clinical assessment data — those belong in their dedicated fields. Keep it concise. Example: "The patient presented with severe retrosternal chest pain of sudden onset 2 hours ago, radiating to the left arm. Associated with profuse sweating and breathlessness. He has a background history of hypertension."
+5. For "painDetails": Only include specific subfields (location, severity, character, etc.) where the doctor ACTUALLY describes pain characteristics. Do NOT include subfields with "Not mentioned" values. Omit the entire painDetails object if pain is not relevant to the presentation. Pain details should ALSO be woven into the historyOfPresentIllness narrative.
+6. For "chiefComplaint": Extract the main reason the patient came to the ER. This should be a brief phrase like "Vomiting and loose stools" or "Chest pain" or "Difficulty breathing".
+7. "REST ALL NORMAL" DETECTION: If the doctor says phrases like "rest all examination normal", "other systems normal", "rest all systems within normal limits", "systemic examination otherwise normal", "rest of examination unremarkable", or any similar wording indicating unmentioned exam systems should be considered normal — set "restAllNormal" to true. The examFindings should still contain any SPECIFIC findings mentioned, and restAllNormal covers everything else.
+8. ECG DETECTION: If the doctor mentions ECG findings (e.g. "ECG tachycardia", "ECG normal", "ECG showed ST elevation", "ECG sinus rhythm", "ECG done"), extract adjuncts.ecgDone as true and adjuncts.ecgFindings as the finding described (e.g. "Sinus tachycardia", "Normal sinus rhythm", "ST elevation in leads II, III, aVF"). A phrase like "ECG tachycardia" means ecgDone=true, ecgFindings="Sinus tachycardia".
+9. SYMPTOMS: The "symptoms" array must contain only UNIQUE items. If the same symptom appears via multiple parts of the transcript, include it only once.`;
 
   try {
     const response = await openai.chat.completions.create({
@@ -1329,8 +1355,11 @@ export interface SmartDictationResult {
     bp?: string; hr?: string; rr?: string; spo2?: string; temperature?: string; grbs?: string; gcs?: string;
   };
   vbgResults?: {
-    ph?: string; pco2?: string; po2?: string; hco3?: string; lactate?: string;
-    hemoglobin?: string; sodium?: string; potassium?: string; creatinine?: string; glucose?: string;
+    done?: boolean;
+    sampleType?: string;
+    ph?: string; pco2?: string; po2?: string; hco3?: string; be?: string; lactate?: string;
+    sao2?: string; fio2?: string;
+    hemoglobin?: string; sodium?: string; potassium?: string; chloride?: string; creatinine?: string; glucose?: string; bilirubin?: string;
   };
   examFindings?: {
     general?: string; cvs?: string; respiratory?: string; abdomen?: string;
@@ -1418,12 +1447,12 @@ ${contextInfo}
 RULES:
 1. Return JSON ONLY — no markdown, no explanation
 2. Use "" for missing strings, [] for missing arrays, false for missing booleans
-3. Medications: split into drug + dose + route + frequency
+3. CRITICAL — STAT MEDICATIONS vs HOME MEDICATIONS: "prescribedMedications" = drugs the ER doctor is giving RIGHT NOW in the ER. Trigger words: "give", "administer", "push", "bolus", "start", "inject", "IV", "IM", "SC", "stat" — when paired with a drug name. Examples: "give morphine 5mg IV stat" → prescribedMedications. "ondansetron 4mg IV" → prescribedMedications. "NS 500ml wide open" → prescribedInfusions. "dopamine drip at 5mcg/kg/min" → prescribedInfusions. "currentMedications" is STRICTLY for drugs the patient was ALREADY taking at home BEFORE arriving. Never put ER-administered drugs in currentMedications.
 4. GCS: extract E, V, M individually AND compute total (E+V+M)
-5. VBG/ABG: extract every parameter as a separate field
+5. CRITICAL — ABG / VBG VALUES: Any blood gas parameter the doctor states — pH, pCO2/PCO2, pO2/PO2, HCO3/bicarbonate, base excess/BE, lactate/lactic acid, SaO2, FiO2, Na/sodium, K/potassium from blood gas — MUST go into vbgResults with the exact keys: ph, pco2, po2, hco3, be, lactate, sao2, fio2, sodium, potassium, etc. Set vbgResults.done=true whenever any blood gas value is mentioned. These values are NEVER vitals, NEVER history items. Example: "ABG pH 7.28, pCO2 52, HCO3 16, lactate 3.8" → vbgResults: {done:true, ph:"7.28", pco2:"52", hco3:"16", lactate:"3.8"}
 6. Past medical history: always an array of strings
 7. Consultations: array with specialty + doctorName + adviceGiven
-8. Negative findings: put in hpi.negativeHistory array
+8. Negative findings: put in negativeSymptoms field
 9. confidence per section: "high" = explicitly stated, "medium" = inferred, "low" = unclear, "" = not mentioned
 
 TRANSCRIPT:

@@ -1,0 +1,105 @@
+This is a clinical data mapping problem, not a UI problem. The voice is being transcribed correctly but the AI extraction isn't mapping ABG values and stat medications to the right fields.
+
+---
+
+**What's likely happening:**
+
+```
+Doctor says:
+"pH 7.32, pCO2 48, pO2 72, HCO3 18, 
+ lactate 4.2, give IV morphine 5mg stat"
+
+Sarvam transcribes it correctly ✓
+
+GPT-4o extraction maps it to... 
+the wrong field or drops it entirely ✗
+```
+
+---
+
+**The two specific problems:**
+
+**ABG values** — These are highly structured numeric data. GPT-4o needs to know exactly which field in your case sheet corresponds to each ABG parameter.
+
+**Stat medications** — "Give X stat" needs to map to the Treatment tab, specifically the medications administered section — not the treatment plan or past medications.
+
+---
+
+**Tell your developer — two fixes needed:**
+
+**Fix 1 — ABG extraction prompt:**
+```
+In the GPT-4o extraction prompt,
+add explicit ABG field mapping:
+
+"If the doctor mentions any of these values,
+map them to the investigations.abg object:
+  pH → abg.pH
+  pCO2 / PCO2 → abg.pCO2
+  pO2 / PO2 → abg.pO2
+  HCO3 / bicarbonate → abg.hco3
+  SpO2 / saturation → abg.spo2
+  lactate / lactic acid → abg.lactate
+  base excess / BE → abg.baseExcess
+  FiO2 → abg.fio2
+
+These are ALWAYS investigation values,
+never history or assessment values."
+```
+
+**Fix 2 — Stat medication extraction:**
+```
+In the GPT-4o extraction prompt,
+add explicit medication mapping:
+
+"If the doctor says any of:
+  'give X', 'administer X', 'X stat',
+  'X IV', 'X IM', 'bolus X', 'start X'
+  
+Map to: treatment.medicationsAdministered
+as an array entry with:
+  { drug: X, dose: Y, route: Z, timing: 'stat' }
+
+NOT to history.medications (those are 
+what the patient was already taking).
+
+history.medications = patient's home drugs
+treatment.medicationsAdministered = 
+  what YOU gave in the ER right now"
+```
+
+---
+
+**The root cause in one sentence:**
+
+GPT-4o doesn't know your case sheet field structure unless you tell it explicitly. ABG values look like any other vitals, and "give morphine" sounds like it could be a history item. The prompt needs to be more specific about where each type of data belongs.
+
+---
+
+**To verify the fix is working:**
+
+After the prompt update, test with this exact dictation:
+```
+"pH 7.28, pCO2 52, HCO3 16, lactate 3.8.
+ Give morphine 5mg IV stat, 
+ ondansetron 4mg IV, 
+ start NS 500ml wide open."
+```
+
+Expected mapping:
+```
+Investigations → ABG:
+  pH: 7.28
+  pCO2: 52
+  HCO3: 16
+  Lactate: 3.8
+
+Treatment → Medications administered:
+  Morphine 5mg IV stat
+  Ondansetron 4mg IV
+  NS 500ml IV wide open
+```
+
+If these land in the right fields after the prompt update — fixed.
+
+Want me to write the complete updated extraction prompt for your developer?
