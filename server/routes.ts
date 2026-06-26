@@ -9,7 +9,7 @@ import { getOrCreateSubscription, canCreateCase, incrementCaseCount, activatePre
 import { createPaymentLink, verifyWebhookSignature } from "./services/razorpayService";
 import { PLAN_AMOUNTS_PAISE, CREDIT_PACKS } from "./config/pricing";
 import { getEMReferenceResponse, EM_TOPICS, type EMReferenceMessage } from "./services/emReference";
-import { getDb, getPool, ensureAuthSessionsTable } from "./db";
+import { getDb, getPool, ensureAuthSessionsTable, ensureDepartmentTables } from "./db";
 import { emReferenceFeedback, userFeedback } from "@shared/schema";
 import { eq, desc, count, sql as drizzleSql } from "drizzle-orm";
 import { registerDepartmentRoutes } from "./routes/department";
@@ -194,8 +194,9 @@ function decodeJwt(token: string): Record<string, any> | null {
 }
 
 export async function registerRoutes(app: Express, existingServer?: Server): Promise<Server> {
-  // Ensure the auth_sessions table exists (idempotent — runs once on startup)
+  // Ensure all local tables exist (idempotent — safe to run on every startup)
   ensureAuthSessionsTable().catch(() => {});
+  ensureDepartmentTables().catch(() => {});
 
   const EXTERNAL_API = process.env.EXPO_PUBLIC_EXTERNAL_API_URL || "https://er-emr-backend.onrender.com/api";
 
