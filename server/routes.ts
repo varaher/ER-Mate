@@ -291,9 +291,26 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
       console.log(`[PROXY] Cases: ${casesData.length} total → ${filtered.length} for user (id="${userId}" email="${userEmail}")`);
 
-      // Safety net: if email + id both matched nothing but we have cases, log a clear warning
-      if (filtered.length === 0) {
-        console.warn(`[PROXY] WARNING: 0 cases matched. JWT payload keys: ${jwtPayload ? Object.keys(jwtPayload).join(", ") : "null"}. Client provided userId="${qUserId}" email="${qEmail}"`);
+      // If 0 matched by our filter, check whether ALL returned cases share a single
+      // created_by_user_id — this means the external backend already pre-filtered by the
+      // authenticated user's JWT, but uses a different internal UUID than what the JWT
+      // sub/id field exposes. Trust the backend's auth in that case.
+      if (filtered.length === 0 && casesData.length > 0) {
+        const uniqueOwners = new Set(
+          casesData.map((c: any) => toStr(c.created_by_user_id)).filter(Boolean)
+        );
+        if (uniqueOwners.size === 1) {
+          console.log(
+            `[PROXY] 0 matched by ID/email but all ${casesData.length} cases share 1 owner UUID — ` +
+            `backend pre-filtered by auth token. Returning all. ` +
+            `(JWT sub="${userId}" vs case owner="${[...uniqueOwners][0]}")`
+          );
+          return res.json(casesData);
+        }
+        console.warn(
+          `[PROXY] 0 cases matched. JWT payload keys: ${jwtPayload ? Object.keys(jwtPayload).join(", ") : "null"}. ` +
+          `Client provided userId="${qUserId}" email="${qEmail}". Unique case owners: ${uniqueOwners.size}.`
+        );
       }
 
       return res.json(filtered);

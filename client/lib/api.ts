@@ -148,14 +148,29 @@ async function tryRefreshToken(): Promise<string | null> {
         console.log("[API] No session_token stored — cannot silent-refresh");
         return null;
       }
+      // Render.com free tier has a ~50 s cold-start. Retry up to 3 times with
+      // a short delay so we don't log the user out just because the backend was asleep.
       const proxyUrl = new URL("/api/auth/silent-refresh", getApiUrl()).href;
-      const silentRes = await fetch(proxyUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session_token: sessionToken }),
-      });
-      if (!silentRes.ok) {
-        console.log("[API] Silent refresh returned", silentRes.status);
+      let silentRes: Response | null = null;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          silentRes = await fetch(proxyUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ session_token: sessionToken }),
+          });
+          if (silentRes.ok) break;
+          // 401/404 are definitive failures — no point retrying
+          if (silentRes.status === 401 || silentRes.status === 404) break;
+        } catch (fetchErr) {
+          console.log(`[API] Silent refresh attempt ${attempt} failed (network):`, fetchErr);
+        }
+        if (attempt < 3) {
+          await new Promise((r) => setTimeout(r, attempt * 2000)); // 2 s, 4 s back-off
+        }
+      }
+      if (!silentRes || !silentRes.ok) {
+        console.log("[API] Silent refresh returned", silentRes?.status ?? "no response");
         return null;
       }
       const silentData = await silentRes.json();
@@ -176,14 +191,16 @@ async function tryRefreshToken(): Promise<string | null> {
   return _refreshPromise;
 }
 
-// Get a valid token, proactively refreshing if expiry is within 5 minutes
+// Get a valid token, proactively refreshing if expiry is within 30 minutes.
+// 30-min buffer gives the Render.com backend (50 s cold-start) enough time to
+// wake up and respond before the token actually expires.
 async function getValidToken(): Promise<string | null> {
   const token = await getToken();
   if (!token) return null;
-  if (isTokenNearExpiry(token, 300)) {
+  if (isTokenNearExpiry(token, 1800)) {
     console.log("[API] Token near expiry — proactively refreshing");
     const newToken = await tryRefreshToken();
-    return newToken ?? token;
+    return newToken ?? token; // fall back to current token if refresh fails
   }
   return token;
 }

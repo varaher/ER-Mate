@@ -424,16 +424,24 @@ function setupErrorHandler(app: express.Application) {
     res.json({ build, ts: Date.now() });
   });
 
-  configureExpoAndLanding(app);
-  // Override any "/" handler set by configureExpoAndLanding with a fast 200
-  // ONLY when the Accept header looks like a health probe (not a browser)
+  // MUST run before configureExpoAndLanding which claims GET "/".
+  // Replit's deployment healthcheck hits "/" with no text/html Accept header —
+  // intercept it here and return 200 immediately so the process is never killed.
   app.use("/", (req: Request, res: Response, next: NextFunction) => {
+    if (res.headersSent) return next();
     const accept = req.headers.accept || "";
-    if (!accept.includes("text/html") && !accept.includes("*/*")) {
+    const ua = req.headers["user-agent"] || "";
+    const isHealthProbe =
+      !accept.includes("text/html") &&
+      !accept.includes("*/*") &&
+      req.method === "GET";
+    if (isHealthProbe) {
       return res.status(200).json({ status: "ok" });
     }
     next();
   });
+
+  configureExpoAndLanding(app);
 
   // Open the port IMMEDIATELY so healthchecks pass while routes/DB are initialising
   const port = parseInt(process.env.PORT || "5000", 10);
