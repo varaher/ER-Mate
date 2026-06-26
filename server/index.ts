@@ -412,6 +412,18 @@ function setupErrorHandler(app: express.Application) {
   app.get("/health", healthHandler);
   app.get("/_health", healthHandler);
 
+  // Version endpoint — lets the PWA detect a new deployment without relying solely on SW
+  app.get("/version.json", (_req: Request, res: Response) => {
+    let build = "unknown";
+    try {
+      const entries = fs.readdirSync(path.resolve(process.cwd(), "static-build"));
+      const tsFolder = entries.find((e) => /^\d{13}/.test(e));
+      if (tsFolder) build = tsFolder;
+    } catch {}
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.json({ build, ts: Date.now() });
+  });
+
   configureExpoAndLanding(app);
   // Override any "/" handler set by configureExpoAndLanding with a fast 200
   // ONLY when the Accept header looks like a health probe (not a browser)
