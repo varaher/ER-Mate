@@ -450,9 +450,25 @@ export async function invalidateCase(caseId: string) {
 }
 
 export async function fetchCasesFromProxy<T = any[]>(): Promise<T> {
-  const proxyUrl = new URL("/api/proxy/cases", getApiUrl()).href;
+  // Pass userId + email as query params so the server filter is reliable
+  // (JWT decoding alone can have type mismatches: integer vs string IDs)
+  let userId = "";
+  let email = "";
+  try {
+    const stored = await AsyncStorage.getItem("user");
+    if (stored) {
+      const u = JSON.parse(stored);
+      userId = u?.id ? String(u.id) : "";
+      email  = u?.email ? String(u.email).toLowerCase() : "";
+    }
+  } catch { /* best effort */ }
+
+  const url = new URL("/api/proxy/cases", getApiUrl());
+  if (userId) url.searchParams.set("userId", userId);
+  if (email)  url.searchParams.set("email",  email);
+
   const res = await withTokenRefresh((tok) =>
-    fetch(proxyUrl, {
+    fetch(url.href, {
       headers: {
         "Content-Type": "application/json",
         ...(tok ? { Authorization: `Bearer ${tok}` } : {}),

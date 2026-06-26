@@ -1,0 +1,116 @@
+I can read this log clearly. Let me break it down.
+
+---
+
+**What the logs show:**
+
+```
+09:57:54  Server starts
+09:57:55  healthcheck failed × 2   ← Replit kills it
+09:57:57  Server starts again
+09:57:57  MODULE_TYPELESS warnings  ← non-critical
+09:57:57  express server on port 8081 ← server UP
+09:57:57  [Keepalive] External backend warm
+09:57:57  [DB] auth_sessions table ready
+09:58:26  system: received signal terminated ← Replit kills it AGAIN
+10:07:59  [Keepalive] fires (server running quietly)
+10:08:49  GET /api/subscription/status 304
+10:08:50  [PROXY] Cases: 161 total → 0 for user ← CRITICAL
+10:08:50  GET /api/proxy/cases 304
+```
+
+---
+
+**Two separate problems:**
+
+---
+
+**Problem 1 — Healthcheck killing the server on startup**
+
+Replit's healthcheck fires at 09:57:55 — just 1 second after server start. The server isn't ready yet. Replit kills it, restarts it. Eventually it survives but this is unstable.
+
+**Fix — tell your developer:**
+```
+In Replit deployment settings:
+Set healthcheck path to: /health
+Set healthcheck timeout to: 30 seconds
+Set healthcheck start period to: 15 seconds
+
+Add this endpoint to server/index.ts:
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
+```
+
+---
+
+**Problem 2 — `[PROXY] Cases: 161 total → 0 for user`**
+
+This is the serious one. There are 161 cases in the external backend but the proxy is returning 0 for the logged-in user.
+
+This means the **userId filter is stripping out all cases.**
+
+The proxy fetches all cases from the external backend, then filters by userId — but the userId isn't matching.
+
+**Most likely cause:**
+
+The token expired issue we've been fighting. When the token is expired, the proxy can't authenticate with the external backend properly, so it falls back to an empty result rather than throwing an error.
+
+**Secondary cause:**
+
+The userId stored locally doesn't match the userId format the external backend returns. UUID vs integer mismatch — similar to what we found in the schema review.
+
+**Fix — tell your developer:**
+```
+In server/routes.ts — the proxy cases route:
+
+1. Log the exact userId being used to filter:
+   console.log('[PROXY] Filtering by userId:', req.user.id);
+   console.log('[PROXY] First case userId:', cases[0]?.userId);
+
+2. Compare the two values:
+   If they don't match in format → 
+   the filter is wrong
+
+3. Also check: is the token being 
+   passed correctly to the external backend?
+   Log the Authorization header 
+   being sent to er-emr-backend.onrender.com
+
+4. Also fix JWT expiry immediately:
+   jwt.sign(payload, SECRET, { expiresIn: '30d' })
+   This stops token expiry mid-session
+```
+
+---
+
+**Why the PWA isn't updating:**
+
+The service worker is caching the old bundle. Even after publishing, the browser serves the cached version.
+
+**Fix:**
+```
+Hard refresh on Chrome mobile:
+  Settings → Privacy → Clear browsing data
+  Clear cached images and files
+  Reload ermate.in
+
+OR tell users:
+  Open ermate.in in browser
+  Three dots menu → More tools → 
+  Clear cache for this site
+  Reload
+```
+
+---
+
+**Priority order right now:**
+
+1. Fix the userId filter mismatch — doctors are seeing 0 cases
+2. Fix JWT expiry to 30 days — stops token errors
+3. Fix healthcheck timeout — stops the crash loop
+4. Hard refresh the PWA cache
+
+**The userId filter showing 0 cases is the most urgent.** A doctor opening the app and seeing no cases is a complete failure state.
+
+Can your developer check those two console.log values right now and tell you what they show?

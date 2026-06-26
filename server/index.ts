@@ -403,13 +403,25 @@ function setupErrorHandler(app: express.Application) {
   setupBodyParsing(app);
   setupRequestLogging(app);
 
-  // Health endpoint — responds immediately even during DB/route initialization
-  // so Replit's deployment healthcheck passes before the async setup completes
-  app.get("/health", (_req: Request, res: Response) => {
+  // Health endpoints — respond immediately even during DB/route initialization
+  // Replit deployment healthcheck uses "/" by default — handle both "/" and "/health"
+  // so the healthcheck passes before the async setup completes and avoids crash loops.
+  const healthHandler = (_req: Request, res: Response) => {
     res.status(200).json({ status: "ok" });
-  });
+  };
+  app.get("/health", healthHandler);
+  app.get("/_health", healthHandler);
 
   configureExpoAndLanding(app);
+  // Override any "/" handler set by configureExpoAndLanding with a fast 200
+  // ONLY when the Accept header looks like a health probe (not a browser)
+  app.use("/", (req: Request, res: Response, next: NextFunction) => {
+    const accept = req.headers.accept || "";
+    if (!accept.includes("text/html") && !accept.includes("*/*")) {
+      return res.status(200).json({ status: "ok" });
+    }
+    next();
+  });
 
   // Open the port IMMEDIATELY so healthchecks pass while routes/DB are initialising
   const port = parseInt(process.env.PORT || "5000", 10);

@@ -222,35 +222,81 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         return res.status(500).json({ error: "Invalid response from backend" });
       }
 
+      if (casesData.length === 0) return res.json([]);
+
+      // Collect all possible user identifiers:
+      // 1. From JWT payload (server-decoded)
       const token = authHeader.replace(/^Bearer\s+/i, "");
       const jwtPayload = decodeJwt(token);
+      const jwtUserId = jwtPayload?.sub || jwtPayload?.id || jwtPayload?.user_id || jwtPayload?.userId;
+      const jwtEmail   = jwtPayload?.email;
 
-      if (jwtPayload && casesData.length > 0) {
-        const userId = jwtPayload.sub || jwtPayload.id || jwtPayload.user_id;
-        const userEmail = jwtPayload.email;
-        const sample = casesData[0];
-        const hasUserField =
-          "doctor_id" in sample || "user_id" in sample ||
-          "created_by" in sample || "created_by_user_id" in sample ||
-          "doctor_email" in sample;
+      // 2. From query params (client-provided — most reliable since client has the full user object)
+      const qUserId = (req.query.userId as string | undefined)?.trim();
+      const qEmail  = (req.query.email  as string | undefined)?.trim().toLowerCase();
 
-        if (hasUserField) {
-          const filtered = casesData.filter((c: any) => {
-            if (userId && (
-              c.doctor_id === userId || c.user_id === userId ||
-              c.created_by === userId || c.created_by_user_id === userId
-            )) return true;
-            if (userEmail && c.doctor_email === userEmail) return true;
-            return false;
-          });
-          console.log(`[PROXY] Cases: ${casesData.length} total → ${filtered.length} for user ${userEmail || userId}`);
-          return res.json(filtered);
-        } else {
-          console.log(`[PROXY] No user field found on cases. Keys: ${Object.keys(sample).join(", ")}. Returning all ${casesData.length}.`);
-        }
+      // Merge: prefer client-supplied, fall back to JWT
+      const userId    = qUserId   || (jwtUserId ? String(jwtUserId) : undefined);
+      const userEmail = qEmail    || (jwtEmail ? String(jwtEmail).toLowerCase() : undefined);
+
+      const sample = casesData[0];
+      const caseKeys = Object.keys(sample);
+      const hasUserField =
+        "doctor_id" in sample || "user_id" in sample ||
+        "created_by" in sample || "created_by_user_id" in sample ||
+        "doctor_email" in sample;
+
+      // Diagnostic: log first case's identity fields alongside what we're filtering by
+      const diagFields = {
+        doctor_id: sample.doctor_id,
+        user_id: sample.user_id,
+        created_by: sample.created_by,
+        created_by_user_id: sample.created_by_user_id,
+        doctor_email: sample.doctor_email,
+      };
+      console.log(`[PROXY] Filter by → userId="${userId}" email="${userEmail}"`);
+      console.log(`[PROXY] Sample case identity fields:`, JSON.stringify(diagFields));
+
+      if (!hasUserField) {
+        console.log(`[PROXY] No user field found on cases (keys: ${caseKeys.join(", ")}). Returning all ${casesData.length}.`);
+        return res.json(casesData);
       }
 
-      return res.json(casesData);
+      // If we have no identifiers at all, return all (better than 0)
+      if (!userId && !userEmail) {
+        console.log(`[PROXY] No userId or email available — returning all ${casesData.length} cases (pass ?userId=&email= for filtering).`);
+        return res.json(casesData);
+      }
+
+      const toStr = (v: any) => (v === null || v === undefined ? "" : String(v).trim());
+
+      const filtered = casesData.filter((c: any) => {
+        // Email match (case-insensitive — most reliable cross-format identifier)
+        if (userEmail) {
+          const cEmail = toStr(c.doctor_email).toLowerCase();
+          if (cEmail && cEmail === userEmail) return true;
+        }
+        // ID match — compare as string to handle integer vs string mismatch
+        if (userId) {
+          const uid = toStr(userId);
+          if (uid && (
+            toStr(c.doctor_id)           === uid ||
+            toStr(c.user_id)             === uid ||
+            toStr(c.created_by)          === uid ||
+            toStr(c.created_by_user_id)  === uid
+          )) return true;
+        }
+        return false;
+      });
+
+      console.log(`[PROXY] Cases: ${casesData.length} total → ${filtered.length} for user (id="${userId}" email="${userEmail}")`);
+
+      // Safety net: if email + id both matched nothing but we have cases, log a clear warning
+      if (filtered.length === 0) {
+        console.warn(`[PROXY] WARNING: 0 cases matched. JWT payload keys: ${jwtPayload ? Object.keys(jwtPayload).join(", ") : "null"}. Client provided userId="${qUserId}" email="${qEmail}"`);
+      }
+
+      return res.json(filtered);
     } catch (err: any) {
       console.error("[PROXY] GET /cases error:", err);
       return res.status(500).json({ error: err.message });
