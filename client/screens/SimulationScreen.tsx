@@ -481,13 +481,13 @@ export default function SimulationScreen() {
     }
 
     if (action.timeCost && action.timeCost > 0) {
-      setElapsedTime((prev) => prev + action.timeCost);
+      setElapsedTime((prev) => prev + action.timeCost!);
     }
 
     if (action.timeToResult && action.timeToResult > 3) {
       setPendingInvestigations((prev) => ({
         ...prev,
-        [action.id]: elapsedTime + (action.timeCost || 0) + action.timeToResult,
+        [action.id]: elapsedTime + (action.timeCost || 0) + action.timeToResult!,
       }));
       setRevealedFindings((prev) => ({
         ...prev,
@@ -513,7 +513,7 @@ export default function SimulationScreen() {
     setRevealedFindings((prev) => ({ ...prev, [action.id]: action.effect }));
 
     if (action.timeCost && action.timeCost > 0) {
-      setElapsedTime((prev) => prev + action.timeCost);
+      setElapsedTime((prev) => prev + action.timeCost!);
     }
 
     if (action.vitalChanges) {

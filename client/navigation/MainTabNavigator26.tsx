@@ -24,12 +24,9 @@ export default function MainTabNavigator26() {
         component={HomeStackNavigator}
         options={{
           title: "Home",
-          icon: {
-            sfSymbolName: "house",
-          },
-          selectedIcon: {
-            sfSymbolName: "house.fill",
-          },
+          // @ts-expect-error – native tab uses sfSymbolName icon API (iOS 26)
+          icon: { sfSymbolName: "house" },
+          selectedIcon: { sfSymbolName: "house.fill" },
         }}
       />
       <Tab.Screen
@@ -37,12 +34,9 @@ export default function MainTabNavigator26() {
         component={ProfileStackNavigator}
         options={{
           title: "Profile",
-          icon: {
-            sfSymbolName: "person",
-          },
-          selectedIcon: {
-            sfSymbolName: "person.fill",
-          },
+          // @ts-expect-error – native tab uses sfSymbolName icon API (iOS 26)
+          icon: { sfSymbolName: "person" },
+          selectedIcon: { sfSymbolName: "person.fill" },
         }}
       />
     </Tab.Navigator>

@@ -188,7 +188,7 @@ export default function LoginScreen() {
   }, [googleSignIn]);
 
   // Native only: expo-auth-session
-  const redirectUri = AuthSession.makeRedirectUri({ projectNameForProxy: "@varah/ermate" });
+  const redirectUri = AuthSession.makeRedirectUri();
   const discovery = AuthSession.useAutoDiscovery("https://accounts.google.com");
   const [request, response, promptAsync] = AuthSession.useAuthRequest(
     {
@@ -576,7 +576,7 @@ export default function LoginScreen() {
                     <ActivityIndicator color={theme.primary} style={{ marginVertical: Spacing.xl }} />
                   ) : qrStatus === "expired" ? (
                     <View style={styles.qrExpiredBox}>
-                      <Text style={[styles.qrExpiredText, { color: theme.error || "#ef4444" }]}>QR code expired</Text>
+                      <Text style={[styles.qrExpiredText, { color: theme.danger || "#ef4444" }]}>QR code expired</Text>
                       <Pressable style={[styles.qrRetryBtn, { backgroundColor: theme.primary }]} onPress={startQrLogin}>
                         <Text style={styles.qrRetryText}>Generate New QR</Text>
                       </Pressable>

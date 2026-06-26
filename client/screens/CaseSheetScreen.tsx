@@ -1317,7 +1317,7 @@ export default function CaseSheetScreen() {
         const durationMs = Date.now() - caseStartRef.current;
         const durationMins = Math.max(1, Math.round(durationMs / 60000));
         const savedMins = getTimeSavedMinutes(durationMins);
-        const complaint = formData?.chiefComplaint || "";
+        const complaint = (formData as any)?.chiefComplaint || formData?.sample?.signsSymptoms?.split(",")[0]?.trim() || "";
         recordCaseTime(caseId, durationMins, complaint).catch(() => {});
         const patientAge = parseInt(String(caseData?.patient?.age ?? ""), 10) || 0;
         const patientGender = String(caseData?.patient?.sex ?? caseData?.patient?.gender ?? "");
@@ -1995,7 +1995,7 @@ export default function CaseSheetScreen() {
     } else {
       const success = await commitToBackend();
       if (success) {
-        navigation.navigate("Main", { screen: "DashboardTab" });
+        (navigation as any).navigate("Main", { screen: "DashboardTab" });
       }
     }
   };
@@ -3490,7 +3490,7 @@ export default function CaseSheetScreen() {
               <Feather name="file-text" size={18} color="#FFFFFF" />
               <Text style={styles.generateSummaryBtnText}>Generate Discharge Summary</Text>
             </Pressable>
-            <Pressable style={[styles.saveDashboardBtn, { borderColor: theme.primary }]} onPress={async () => { const success = await commitToBackend(); if (success) navigation.navigate("Main", { screen: "DashboardTab" }); }}>
+            <Pressable style={[styles.saveDashboardBtn, { borderColor: theme.primary }]} onPress={async () => { const success = await commitToBackend(); if (success) (navigation as any).navigate("Main", { screen: "DashboardTab" }); }}>
               <Feather name="home" size={18} color={theme.primary} />
               <Text style={[styles.saveDashboardBtnText, { color: theme.primary }]}>Save & Go to Dashboard</Text>
             </Pressable>

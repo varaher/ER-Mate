@@ -318,12 +318,12 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg,
   },
   sheetTitle: {
-    fontSize: Typography.xl,
+    fontSize: 20,
     fontWeight: "700",
     marginBottom: 4,
   },
   sheetSub: {
-    fontSize: Typography.sm,
+    fontSize: 14,
     marginBottom: Spacing.lg,
   },
 
@@ -350,11 +350,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   modeSectionTitle: {
-    fontSize: Typography.sm,
+    fontSize: 14,
     fontWeight: "700",
   },
   modeSectionDesc: {
-    fontSize: Typography.xs,
+    fontSize: 12,
     marginTop: 1,
   },
   entryRow: {
@@ -372,11 +372,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   entryLabel: {
-    fontSize: Typography.base,
+    fontSize: 16,
     fontWeight: "600",
   },
   entrySub: {
-    fontSize: Typography.xs,
+    fontSize: 12,
     marginTop: 1,
   },
 
@@ -403,11 +403,11 @@ const styles = StyleSheet.create({
     marginBottom: 3,
   },
   voiceCardTitle: {
-    fontSize: Typography.base,
+    fontSize: 16,
     fontWeight: "700",
   },
   voiceCardDesc: {
-    fontSize: Typography.xs,
+    fontSize: 12,
     lineHeight: 16,
   },
   newBadge: {

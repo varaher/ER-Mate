@@ -290,9 +290,9 @@ export default function CasesScreen() {
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               {deletingId === item.id ? (
-                <ActivityIndicator size="small" color={theme.error || "#EF4444"} />
+                <ActivityIndicator size="small" color={theme.danger || "#EF4444"} />
               ) : (
-                <Feather name="trash-2" size={16} color={theme.error || "#EF4444"} />
+                <Feather name="trash-2" size={16} color={theme.danger || "#EF4444"} />
               )}
             </Pressable>
           </>

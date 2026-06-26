@@ -7,14 +7,14 @@ const PREMIUM_CASE_LIMIT = 999999;
 const PREMIUM_PRICE_INR = 559;
 
 export async function getOrCreateSubscription(userId: string, userEmail: string) {
-  const db = getDb();
+  const db = getDb()!;
   const existing = await db.select().from(subscriptions).where(eq(subscriptions.userId, userId)).limit(1);
 
   if (existing.length > 0) {
     return existing[0];
   }
 
-  const [newSub] = await db.insert(subscriptions).values({
+  const [newSub] = await (db as any).insert(subscriptions).values({
     userId,
     userEmail,
     plan: "free",
@@ -41,7 +41,7 @@ export async function canCreateCase(userId: string, userEmail: string): Promise<
 }
 
 export async function incrementCaseCount(userId: string, userEmail: string) {
-  const db = getDb();
+  const db = getDb()!;
   const sub = await getOrCreateSubscription(userId, userEmail);
 
   await db.update(subscriptions)
@@ -70,7 +70,7 @@ export async function activatePlan(
   stripeCustomerId?: string,
   stripeSubscriptionId?: string,
 ) {
-  const db = getDb();
+  const db = getDb()!;
   const sub = await getOrCreateSubscription(userId, "");
 
   const now = new Date();
@@ -98,7 +98,7 @@ export async function activatePlan(
   if (razorpayPaymentLinkId) {
     try {
       const { getPool } = await import("../db");
-      const pool = getPool();
+      const pool = getPool()!;
       await pool.query(
         `UPDATE subscriptions SET razorpay_payment_link_id = $1, billing_cycle = $2 WHERE id = $3`,
         [razorpayPaymentLinkId, cycle, sub.id]
@@ -110,7 +110,7 @@ export async function activatePlan(
 }
 
 export async function cancelSubscription(userId: string) {
-  const db = getDb();
+  const db = getDb()!;
   const sub = await getOrCreateSubscription(userId, "");
 
   await db.update(subscriptions)
@@ -125,7 +125,7 @@ export async function cancelSubscription(userId: string) {
 }
 
 export async function resetMonthlyCases(userId: string) {
-  const db = getDb();
+  const db = getDb()!;
   const sub = await getOrCreateSubscription(userId, "");
 
   await db.update(subscriptions)

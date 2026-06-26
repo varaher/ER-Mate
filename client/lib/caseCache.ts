@@ -83,6 +83,23 @@ function hasData(val: any): boolean {
   return Boolean(val);
 }
 
+export async function cacheAddendumNotes(caseId: string, notes: string[]): Promise<void> {
+  const cache = await loadCache();
+  const existing = cache[caseId] || {};
+  cache[caseId] = {
+    treatment: existing.treatment || {},
+    investigations: existing.investigations || {},
+    procedures: existing.procedures || {},
+    addendum_notes: notes,
+    discharge_summary: existing.discharge_summary || {},
+    primary_assessment: existing.primary_assessment || {},
+    history: existing.history || {},
+    examination: existing.examination || {},
+    updatedAt: new Date().toISOString(),
+  };
+  await saveCache(cache);
+}
+
 export function mergeCaseWithCache(caseData: any, cached: CaseCacheEntry): any {
   const merged = { ...caseData };
 
