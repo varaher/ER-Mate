@@ -1928,6 +1928,23 @@ export default function CaseSheetScreen() {
     if (data.imagingOrdered) {
       setTreatmentData((prev) => ({ ...prev, imaging: prev.imaging ? prev.imaging + ", " + data.imagingOrdered : data.imagingOrdered! }));
     }
+    if (data.vbgResults) {
+      const vbg = data.vbgResults;
+      if (vbg.ph) updateFormData("adjuncts", "abgPh", vbg.ph);
+      if (vbg.pco2) updateFormData("adjuncts", "abgPco2", vbg.pco2);
+      if (vbg.po2) updateFormData("adjuncts", "abgPo2", vbg.po2);
+      if (vbg.hco3) updateFormData("adjuncts", "abgHco3", vbg.hco3);
+      if (vbg.be) updateFormData("adjuncts", "abgBe", vbg.be);
+      if (vbg.lactate) updateFormData("adjuncts", "abgLactate", vbg.lactate);
+      if (vbg.sao2) updateFormData("adjuncts", "abgSao2", vbg.sao2);
+      if (vbg.fio2) updateFormData("adjuncts", "abgFio2", vbg.fio2);
+      if (vbg.sodium) updateFormData("adjuncts", "abgNa", vbg.sodium);
+      if (vbg.potassium) updateFormData("adjuncts", "abgK", vbg.potassium);
+      if (vbg.chloride) updateFormData("adjuncts", "abgCl", vbg.chloride);
+      if (vbg.glucose) updateFormData("adjuncts", "abgGlucose", vbg.glucose);
+      if (vbg.hemoglobin) updateFormData("adjuncts", "abgHb", vbg.hemoglobin);
+      updateFormData("adjuncts", "abgStatus", "done");
+    }
     handleSave(true);
   };
 

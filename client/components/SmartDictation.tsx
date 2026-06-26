@@ -81,6 +81,14 @@ export interface SmartDictationExtracted {
   treatmentNotes?: string;
   prescribedMedications?: Array<{ name: string; dose?: string; route?: string; frequency?: string }>;
   prescribedInfusions?: Array<{ name: string; dose?: string; dilution?: string; rate?: string }>;
+  vbgResults?: {
+    done?: boolean;
+    sampleType?: string;
+    ph?: string; pco2?: string; po2?: string; hco3?: string; be?: string; lactate?: string;
+    sao2?: string; fio2?: string;
+    hemoglobin?: string; sodium?: string; potassium?: string; chloride?: string;
+    creatinine?: string; glucose?: string; bilirubin?: string;
+  };
   investigationsOrdered?: string;
   imagingOrdered?: string;
   rawTranscription?: string;
