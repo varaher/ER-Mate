@@ -30,6 +30,8 @@ import { TextInputField } from "@/components/TextInputField";
 import { AIDiagnosisPanel } from "@/components/AIDiagnosisPanel";
 import SmartDictation, { SmartDictationExtracted } from "@/components/SmartDictation";
 import { useTheme } from "@/hooks/useTheme";
+import { useAuth } from "@/context/AuthContext";
+import { useDepartment } from "@/context/DepartmentContext";
 import { useCase } from "@/context/CaseContext";
 import { apiGet, apiPatch, apiPut, apiUpload, invalidateCases, saveClinicalDataToServer, fetchCaseByIdFromProxy } from "@/lib/api";
 import { getApiUrl } from "@/lib/query-client";
@@ -191,6 +193,8 @@ interface DispositionData {
   referTo: string;
   erObservationNotes: string;
   durationInER: string;
+  emResident: string;
+  emConsultant: string;
 }
 
 interface PsychFormData {
@@ -278,6 +282,8 @@ const getDefaultDispositionData = (): DispositionData => ({
   referTo: "",
   erObservationNotes: "",
   durationInER: "",
+  emResident: "",
+  emConsultant: "",
 });
 
 const ADMIT_DESTINATIONS = [
@@ -516,6 +522,8 @@ export default function CaseSheetScreen() {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RouteProps>();
   const { theme, isDark } = useTheme();
+  const { user } = useAuth();
+  const { membership } = useDepartment();
   const insets = useSafeAreaInsets();
   
   const { caseId } = route.params;
@@ -697,6 +705,13 @@ export default function CaseSheetScreen() {
         durationInER: caseSheetData.er_observation.duration || "",
       }));
     }
+    if (caseSheetData.em_resident || caseSheetData.em_consultant) {
+      setDispositionData((prev) => ({
+        ...prev,
+        emResident: caseSheetData.em_resident || prev.emResident,
+        emConsultant: caseSheetData.em_consultant || prev.emConsultant,
+      }));
+    }
     setFormData(newFormData);
     
     if (caseSheetData.mode_of_arrival) {
@@ -740,6 +755,17 @@ export default function CaseSheetScreen() {
   useEffect(() => {
     loadCase();
   }, [caseId]);
+
+  // Auto-fill doctor name from department role once case loads
+  useEffect(() => {
+    if (loading || !user?.name || !membership) return;
+    const role = membership.role;
+    setDispositionData((prev) => ({
+      ...prev,
+      emResident: prev.emResident || (role === "resident" ? user.name : ""),
+      emConsultant: prev.emConsultant || (role === "consultant" || role === "hod" ? user.name : ""),
+    }));
+  }, [loading, membership?.role, user?.name]);
 
   const loadCase = async () => {
     try {
@@ -1249,6 +1275,8 @@ export default function CaseSheetScreen() {
         admit_to_room: dispositionData.admitToRoom || "",
         refer_to: dispositionData.referTo || "",
       },
+      em_resident: dispositionData.emResident || "",
+      em_consultant: dispositionData.emConsultant || "",
       presenting_complaint: {
         text: formData.sample.signsSymptoms || caseData?.presenting_complaint?.text || "",
         duration: complaintDurationRef.current || caseData?.presenting_complaint?.duration || "",
@@ -3480,6 +3508,10 @@ export default function CaseSheetScreen() {
               <TextInput style={[styles.textArea, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Patient's course in ER, response to treatment, changes in condition..." placeholderTextColor={theme.textMuted} value={dispositionData.erObservationNotes} onChangeText={(v) => setDispositionData((prev) => ({ ...prev, erObservationNotes: v }))} multiline />
               <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.md }]}>Duration in ER</Text>
               <TextInput style={[styles.inputField, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="e.g., 4 hours" placeholderTextColor={theme.textMuted} value={dispositionData.durationInER} onChangeText={(v) => setDispositionData((prev) => ({ ...prev, durationInER: v }))} />
+              <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.md }]}>EM Resident</Text>
+              <TextInput style={[styles.inputField, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Resident name" placeholderTextColor={theme.textMuted} value={dispositionData.emResident} onChangeText={(v) => setDispositionData((prev) => ({ ...prev, emResident: v }))} />
+              <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.md }]}>EM Consultant</Text>
+              <TextInput style={[styles.inputField, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Consultant name" placeholderTextColor={theme.textMuted} value={dispositionData.emConsultant} onChangeText={(v) => setDispositionData((prev) => ({ ...prev, emConsultant: v }))} />
             </View>
             <Pressable style={[styles.generateSummaryBtn, { backgroundColor: theme.primary }]} onPress={async () => {
               const success = await commitToBackend();
