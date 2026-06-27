@@ -38,6 +38,7 @@ import type { QuizAnswer } from "@/screens/TriviaQuizScreen";
 import type { TriviaCategory, TriviaDifficulty } from "@/data/triviaQuestions";
 import QuickCaseSheetScreen from "@/screens/QuickCaseSheetScreen";
 import StatsScreen from "@/screens/StatsScreen";
+import MySubscriptionsScreen from "@/screens/MySubscriptionsScreen";
 import VoiceCaseSheetScreen from "@/screens/VoiceCaseSheetScreen";
 import RoundsScreen from "@/screens/RoundsScreen";
 import HandoverScreen from "@/screens/HandoverScreen";
@@ -96,6 +97,7 @@ export type RootStackParamList = {
     hasCrashed: boolean;
   };
   Stats: undefined;
+  MySubscriptions: undefined;
   Rounds: { caseId?: string; lensId?: string } | undefined;
   Handover: undefined;
   SetupDepartment: undefined;
@@ -366,6 +368,13 @@ export default function RootStackNavigator() {
             component={StatsScreen}
             options={{
               headerTitle: "My Stats",
+            }}
+          />
+          <Stack.Screen
+            name="MySubscriptions"
+            component={MySubscriptionsScreen}
+            options={{
+              headerTitle: "My Subscriptions",
             }}
           />
           <Stack.Screen

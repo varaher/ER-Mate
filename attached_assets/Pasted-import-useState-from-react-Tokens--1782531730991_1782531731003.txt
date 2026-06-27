@@ -1,0 +1,631 @@
+import { useState } from "react";
+
+// ── Tokens ─────────────────────────────────────────────────────────────────
+const C = {
+  green:       "#1DB870",
+  greenDark:   "#15924F",
+  greenLight:  "rgba(29,184,112,0.09)",
+  greenBorder: "rgba(29,184,112,0.2)",
+  purple:      "#7C6AF6",
+  purpleDark:  "#5B4FD4",
+  purpleLight: "rgba(124,106,246,0.09)",
+  purpleBorder:"rgba(124,106,246,0.2)",
+  ink:         "#0B0F14",
+  inkSoft:     "#2E3440",
+  muted:       "#6B7280",
+  faint:       "#9CA3AF",
+  border:      "#E8EAED",
+  surface:     "#F7F8FA",
+  surfaceDark: "#ECEEF1",
+  white:       "#FFFFFF",
+  orange:      "#F59E0B",
+  orangeLight: "rgba(245,158,11,0.09)",
+};
+
+// ── Scenario selector labels ───────────────────────────────────────────────
+const SCENARIOS = [
+  { id: "both",       label: "Both plans active" },
+  { id: "team_only",  label: "Team only" },
+  { id: "pro_only",   label: "Individual Pro only" },
+  { id: "free",       label: "Free / no plan" },
+];
+
+// ── Icons ──────────────────────────────────────────────────────────────────
+const IconHospital = ({ size = 20, color = C.green }) => (
+  <svg width={size} height={size} viewBox="0 0 20 20" fill="none">
+    <rect x="3" y="4" width="14" height="13" rx="1.5" stroke={color} strokeWidth="1.4"/>
+    <path d="M8 17V13h4v4" stroke={color} strokeWidth="1.3" strokeLinecap="round"/>
+    <path d="M10 7v4M8 9h4" stroke={color} strokeWidth="1.4" strokeLinecap="round"/>
+  </svg>
+);
+const IconBrain = ({ size = 20, color = C.purple }) => (
+  <svg width={size} height={size} viewBox="0 0 20 20" fill="none">
+    <path d="M10 3C8.3 3 7 4.3 7 6C5.3 6 4 7.3 4 9C4 10.2 4.7 11.3 5.7 11.8C5.3 12.3 5 13 5 13.7C5 15.5 6.3 17 8 17V17.5H12V17C13.7 17 15 15.5 15 13.7C15 13 14.7 12.3 14.3 11.8C15.3 11.3 16 10.2 16 9C16 7.3 14.7 6 13 6C13 4.3 11.7 3 10 3Z" stroke={color} strokeWidth="1.3" strokeLinejoin="round"/>
+  </svg>
+);
+const IconShield = ({ size = 14, color = C.faint }) => (
+  <svg width={size} height={size} viewBox="0 0 14 14" fill="none">
+    <path d="M7 1.5L2 3.5V7C2 9.8 4.2 12.3 7 13C9.8 12.3 12 9.8 12 7V3.5L7 1.5Z" stroke={color} strokeWidth="1.2" strokeLinejoin="round"/>
+    <path d="M4.5 7L6 8.5L9.5 5" stroke={color} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+const IconChevron = ({ color = C.faint }) => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <path d="M6 4L10 8L6 12" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+const IconBack = () => (
+  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+    <path d="M13 4L7 10L13 16" stroke={C.ink} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+const IconWarning = ({ color = C.orange }) => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <path d="M8 2L14.5 13H1.5L8 2Z" stroke={color} strokeWidth="1.3" strokeLinejoin="round"/>
+    <path d="M8 6v3M8 11v.5" stroke={color} strokeWidth="1.3" strokeLinecap="round"/>
+  </svg>
+);
+const IconClock = ({ color = C.faint }) => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+    <circle cx="6" cy="6" r="5" stroke={color} strokeWidth="1.2"/>
+    <path d="M6 3.5V6L7.5 7.5" stroke={color} strokeWidth="1.2" strokeLinecap="round"/>
+  </svg>
+);
+
+// ── Status pill ────────────────────────────────────────────────────────────
+function StatusPill({ status }) {
+  const map = {
+    active:   { label: "Active",    bg: C.greenLight,  color: C.greenDark,  dot: C.green },
+    trial:    { label: "Trial",     bg: C.orangeLight, color: "#92400E",    dot: C.orange },
+    inactive: { label: "Inactive",  bg: "#F3F4F6",     color: C.faint,      dot: "#D1D5DB" },
+    grace:    { label: "Grace period", bg: C.orangeLight, color: "#92400E", dot: C.orange },
+  };
+  const s = map[status] || map.inactive;
+  return (
+    <div style={{
+      display:"inline-flex", alignItems:"center", gap:5,
+      background:s.bg, borderRadius:99, padding:"4px 10px",
+    }}>
+      <div style={{ width:6, height:6, borderRadius:"50%", background:s.dot, flexShrink:0 }}/>
+      <span style={{ fontSize:11, fontWeight:700, color:s.color, letterSpacing:0.2 }}>{s.label}</span>
+    </div>
+  );
+}
+
+// ── Team plan card ─────────────────────────────────────────────────────────
+function TeamPlanCard({ active }) {
+  if (!active) {
+    return (
+      <div style={{
+        background:C.white, border:`1.5px solid ${C.border}`,
+        borderRadius:18, padding:"18px",
+        display:"flex", alignItems:"center", gap:14,
+      }}>
+        <div style={{
+          width:44, height:44, borderRadius:13,
+          background:C.surface, border:`1.5px solid ${C.border}`,
+          display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0,
+        }}>
+          <IconHospital size={20} color={C.faint}/>
+        </div>
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:14, fontWeight:700, color:C.faint }}>Team Plan</div>
+          <div style={{ fontSize:12, color:C.faint, marginTop:2 }}>Not part of any department</div>
+        </div>
+        <div style={{
+          background:C.greenLight, border:`1px solid ${C.greenBorder}`,
+          borderRadius:10, padding:"7px 12px",
+          fontSize:12, fontWeight:700, color:C.greenDark, cursor:"pointer",
+          whiteSpace:"nowrap",
+        }}>
+          Join team →
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      background:C.white,
+      border:`2px solid ${C.greenBorder}`,
+      borderRadius:18, overflow:"hidden",
+      boxShadow:`0 4px 20px rgba(29,184,112,0.08)`,
+    }}>
+      {/* Header strip */}
+      <div style={{
+        background:`linear-gradient(135deg,#0B1A11,#0f2218)`,
+        padding:"14px 18px",
+        display:"flex", alignItems:"center", justifyContent:"space-between",
+      }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          <div style={{
+            width:36, height:36, borderRadius:10,
+            background:C.greenLight, border:`1.5px solid ${C.greenBorder}`,
+            display:"flex", alignItems:"center", justifyContent:"center",
+          }}>
+            <IconHospital size={18} color={C.green}/>
+          </div>
+          <div>
+            <div style={{ fontSize:11, fontWeight:700, color:"rgba(255,255,255,0.4)", letterSpacing:0.8, textTransform:"uppercase" }}>Team Plan</div>
+            <div style={{ fontSize:14, fontWeight:800, color:"white", letterSpacing:-0.3 }}>City Emergency</div>
+          </div>
+        </div>
+        <StatusPill status="active"/>
+      </div>
+
+      {/* Body */}
+      <div style={{ padding:"14px 18px" }}>
+        {/* Role + shift */}
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
+          {[
+            { label:"Your role", value:"Resident", color:C.greenDark },
+            { label:"Current shift", value:"Evening · Active", color:C.green },
+            { label:"HOD", value:"Dr. Neeraj", color:C.inkSoft },
+            { label:"Paid by", value:"Hospital", color:C.inkSoft },
+          ].map((item,i) => (
+            <div key={i} style={{
+              background:C.surface, borderRadius:10, padding:"10px 12px",
+            }}>
+              <div style={{ fontSize:10, color:C.faint, fontWeight:600, letterSpacing:0.5, textTransform:"uppercase", marginBottom:3 }}>{item.label}</div>
+              <div style={{ fontSize:13, fontWeight:700, color:item.color }}>{item.value}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* What hospital can see */}
+        <div style={{
+          background:C.orangeLight, border:`1px solid rgba(245,158,11,0.2)`,
+          borderRadius:12, padding:"10px 13px",
+          display:"flex", gap:10, alignItems:"flex-start",
+        }}>
+          <IconWarning/>
+          <div>
+            <div style={{ fontSize:12, fontWeight:700, color:"#92400E", marginBottom:2 }}>Your hospital can see</div>
+            <div style={{ fontSize:11, color:"#B45309", lineHeight:1.6 }}>
+              Cases documented during shifts · Handover records · Activity logs
+            </div>
+          </div>
+        </div>
+
+        {/* What hospital cannot see */}
+        <div style={{
+          background:C.greenLight, border:`1px solid ${C.greenBorder}`,
+          borderRadius:12, padding:"10px 13px", marginTop:8,
+          display:"flex", gap:10, alignItems:"flex-start",
+        }}>
+          <IconShield size={16} color={C.greenDark}/>
+          <div>
+            <div style={{ fontSize:12, fontWeight:700, color:C.greenDark, marginBottom:2 }}>Your hospital cannot see</div>
+            <div style={{ fontSize:11, color:C.muted, lineHeight:1.6 }}>
+              Rounds debriefs · Clinical Memory · Personal stats · Cases outside shift
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div style={{
+        borderTop:`1px solid ${C.border}`, padding:"12px 18px",
+        display:"flex", alignItems:"center", justifyContent:"space-between",
+      }}>
+        <div style={{ display:"flex", alignItems:"center", gap:5 }}>
+          <IconClock/>
+          <span style={{ fontSize:11, color:C.faint }}>Renews 1 Aug 2026</span>
+        </div>
+        <button style={{
+          background:"none", border:"none", cursor:"pointer",
+          fontSize:12, fontWeight:600, color:C.faint, fontFamily:"inherit",
+        }}>
+          Leave department
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Individual Pro card ────────────────────────────────────────────────────
+function IndividualProCard({ active, trial }) {
+  if (!active) {
+    return (
+      <div style={{
+        background:C.purpleLight, border:`1.5px dashed ${C.purpleBorder}`,
+        borderRadius:18, padding:"18px",
+        display:"flex", alignItems:"center", gap:14,
+      }}>
+        <div style={{
+          width:44, height:44, borderRadius:13,
+          background:"rgba(124,106,246,0.08)", border:`1.5px solid ${C.purpleBorder}`,
+          display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0,
+        }}>
+          <IconBrain size={20} color={C.purple}/>
+        </div>
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:14, fontWeight:700, color:C.purple }}>Individual Pro</div>
+          <div style={{ fontSize:12, color:C.muted, marginTop:2 }}>
+            Your personal career layer · Rounds + Clinical Memory
+          </div>
+          <div style={{ fontSize:11, color:C.faint, marginTop:4, fontStyle:"italic" }}>
+            Not subscribed — your hospital's Team plan doesn't include this
+          </div>
+        </div>
+        <div style={{ flexShrink:0 }}>
+          <div style={{
+            background:`linear-gradient(135deg,${C.purple},${C.purpleDark})`,
+            borderRadius:10, padding:"8px 14px",
+            fontSize:12, fontWeight:700, color:"white", cursor:"pointer",
+            boxShadow:"0 3px 12px rgba(124,106,246,0.3)",
+            whiteSpace:"nowrap",
+          }}>
+            ₹1,199/mo →
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      background:C.white,
+      border:`2px solid ${C.purpleBorder}`,
+      borderRadius:18, overflow:"hidden",
+      boxShadow:`0 4px 20px rgba(124,106,246,0.1)`,
+    }}>
+      {/* Header strip */}
+      <div style={{
+        background:`linear-gradient(135deg,#110d2a,#1a1440)`,
+        padding:"14px 18px",
+        display:"flex", alignItems:"center", justifyContent:"space-between",
+      }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          <div style={{
+            width:36, height:36, borderRadius:10,
+            background:C.purpleLight, border:`1.5px solid ${C.purpleBorder}`,
+            display:"flex", alignItems:"center", justifyContent:"center",
+          }}>
+            <IconBrain size={18} color={C.purple}/>
+          </div>
+          <div>
+            <div style={{ fontSize:11, fontWeight:700, color:"rgba(255,255,255,0.4)", letterSpacing:0.8, textTransform:"uppercase" }}>Individual Pro</div>
+            <div style={{ fontSize:14, fontWeight:800, color:"white", letterSpacing:-0.3 }}>Your career layer</div>
+          </div>
+        </div>
+        <StatusPill status={trial ? "trial" : "active"}/>
+      </div>
+
+      <div style={{ padding:"14px 18px" }}>
+        {/* Trial banner */}
+        {trial && (
+          <div style={{
+            background:C.orangeLight, border:`1px solid rgba(245,158,11,0.2)`,
+            borderRadius:10, padding:"9px 12px", marginBottom:12,
+            display:"flex", alignItems:"center", gap:8,
+          }}>
+            <IconClock color={C.orange}/>
+            <span style={{ fontSize:12, color:"#92400E", fontWeight:600 }}>
+              Free trial · 18 days remaining · Then ₹1,199/month
+            </span>
+          </div>
+        )}
+
+        {/* What this gives you */}
+        <div style={{
+          background:C.purpleLight, border:`1px solid ${C.purpleBorder}`,
+          borderRadius:12, padding:"13px 14px", marginBottom:12,
+        }}>
+          <div style={{ fontSize:11, fontWeight:700, color:C.purple, letterSpacing:0.8, textTransform:"uppercase", marginBottom:10 }}>
+            What this plan gives you
+          </div>
+          {[
+            { icon:"🧠", text:"Rounds — unlimited case debriefs", sub:"After every case, on any shift" },
+            { icon:"📚", text:"All 7 thinking lenses", sub:"First Principles to Full Debrief" },
+            { icon:"💾", text:"Clinical Memory", sub:"Your full career — every hospital you've worked at" },
+            { icon:"🔒", text:"Private to you forever", sub:"Your HOD cannot access this" },
+          ].map((item,i) => (
+            <div key={i} style={{
+              display:"flex", gap:10, marginBottom: i<3 ? 10 : 0,
+              alignItems:"flex-start",
+            }}>
+              <span style={{ fontSize:16, flexShrink:0, marginTop:1 }}>{item.icon}</span>
+              <div>
+                <div style={{ fontSize:13, fontWeight:600, color:C.inkSoft }}>{item.text}</div>
+                <div style={{ fontSize:11, color:C.faint, marginTop:1 }}>{item.sub}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Privacy statement */}
+        <div style={{
+          background:C.greenLight, border:`1px solid ${C.greenBorder}`,
+          borderRadius:12, padding:"10px 13px",
+          display:"flex", gap:10, alignItems:"flex-start",
+        }}>
+          <IconShield size={16} color={C.greenDark}/>
+          <div style={{ fontSize:12, color:C.greenDark, lineHeight:1.6 }}>
+            <strong>Fully private.</strong> No hospital, no HOD, no employer has access to your Rounds debriefs or Clinical Memory — ever. This is your personal record.
+          </div>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div style={{
+        borderTop:`1px solid ${C.border}`, padding:"12px 18px",
+        display:"flex", alignItems:"center", justifyContent:"space-between",
+      }}>
+        <div>
+          <div style={{ fontSize:13, fontWeight:700, color:C.ink }}>₹1,199/month</div>
+          <div style={{ display:"flex", alignItems:"center", gap:4, marginTop:2 }}>
+            <IconClock/>
+            <span style={{ fontSize:11, color:C.faint }}>
+              {trial ? "Free until 26 Jul · Then charged" : "Renews 1 Aug 2026"}
+            </span>
+          </div>
+        </div>
+        <button style={{
+          background:"none", border:`1px solid ${C.border}`,
+          borderRadius:8, padding:"6px 12px", cursor:"pointer",
+          fontSize:12, fontWeight:600, color:C.faint, fontFamily:"inherit",
+        }}>
+          Manage
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Combined status banner (shown when both active) ────────────────────────
+function CombinedBanner() {
+  return (
+    <div style={{
+      background:`linear-gradient(135deg,#0B1A11,#110d2a)`,
+      borderRadius:18, padding:"16px 18px",
+      border:"1px solid rgba(255,255,255,0.06)",
+      position:"relative", overflow:"hidden",
+    }}>
+      {/* Subtle glow blobs */}
+      <div style={{
+        position:"absolute", top:-20, left:-20, width:120, height:120,
+        background:"rgba(29,184,112,0.12)", borderRadius:"50%", filter:"blur(30px)",
+        pointerEvents:"none",
+      }}/>
+      <div style={{
+        position:"absolute", bottom:-20, right:-20, width:120, height:120,
+        background:"rgba(124,106,246,0.12)", borderRadius:"50%", filter:"blur(30px)",
+        pointerEvents:"none",
+      }}/>
+
+      <div style={{ position:"relative" }}>
+        <div style={{ fontSize:11, fontWeight:700, color:"rgba(255,255,255,0.4)", letterSpacing:1, textTransform:"uppercase", marginBottom:8 }}>
+          Both plans active
+        </div>
+        <div style={{ fontSize:15, fontWeight:800, color:"white", marginBottom:10, letterSpacing:-0.3 }}>
+          Full ErMate — shift work and career growth
+        </div>
+
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+          <div style={{
+            background:"rgba(29,184,112,0.1)", border:"1px solid rgba(29,184,112,0.18)",
+            borderRadius:11, padding:"10px 12px",
+          }}>
+            <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
+              <IconHospital size={14} color={C.green}/>
+              <span style={{ fontSize:10, fontWeight:700, color:C.green, letterSpacing:0.5 }}>TEAM PLAN</span>
+            </div>
+            <div style={{ fontSize:12, color:"rgba(255,255,255,0.55)", lineHeight:1.5 }}>
+              Your shift · Department cases · Hospital pays
+            </div>
+          </div>
+          <div style={{
+            background:"rgba(124,106,246,0.1)", border:"1px solid rgba(124,106,246,0.18)",
+            borderRadius:11, padding:"10px 12px",
+          }}>
+            <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
+              <IconBrain size={14} color={C.purple}/>
+              <span style={{ fontSize:10, fontWeight:700, color:C.purple, letterSpacing:0.5 }}>INDIVIDUAL PRO</span>
+            </div>
+            <div style={{ fontSize:12, color:"rgba(255,255,255,0.55)", lineHeight:1.5 }}>
+              Your Rounds · Your Memory · You pay
+            </div>
+          </div>
+        </div>
+
+        <div style={{ marginTop:12, fontSize:12, color:"rgba(255,255,255,0.3)", lineHeight:1.6 }}>
+          Cases documented during shifts belong to your department.
+          Your Rounds debriefs and Clinical Memory belong to you — always.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main component ─────────────────────────────────────────────────────────
+export default function SubscriptionSection() {
+  const [scenario, setScenario] = useState("both");
+
+  const showTeam    = scenario === "both" || scenario === "team_only";
+  const showPro     = scenario === "both" || scenario === "pro_only";
+  const proTrial    = scenario === "pro_only"; // show trial state for demo
+  const showBoth    = scenario === "both";
+  const showFree    = scenario === "free";
+
+  return (
+    <div style={{
+      fontFamily:"'DM Sans','Helvetica Neue',sans-serif",
+      background:C.surface, minHeight:"100vh",
+      maxWidth:430, margin:"0 auto", paddingBottom:60,
+    }}>
+
+      {/* Header */}
+      <div style={{
+        background:"rgba(247,248,250,0.96)", backdropFilter:"blur(14px)",
+        padding:"16px 20px 14px", borderBottom:`1px solid ${C.border}`,
+        display:"flex", alignItems:"center", gap:12,
+        position:"sticky", top:0, zIndex:20,
+      }}>
+        <button style={{ background:"none", border:"none", cursor:"pointer", padding:0, display:"flex" }}>
+          <IconBack/>
+        </button>
+        <span style={{ fontSize:17, fontWeight:800, color:C.ink, letterSpacing:-0.4 }}>My Subscriptions</span>
+      </div>
+
+      {/* Scenario switcher — demo only */}
+      <div style={{ padding:"12px 16px 0" }}>
+        <div style={{ fontSize:9, fontWeight:700, color:C.faint, letterSpacing:1.2, textTransform:"uppercase", marginBottom:6 }}>
+          Preview different states
+        </div>
+        <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+          {SCENARIOS.map(s => (
+            <button key={s.id} onClick={() => setScenario(s.id)} style={{
+              background: scenario===s.id ? C.ink : C.white,
+              color: scenario===s.id ? "white" : C.muted,
+              border:`1.5px solid ${scenario===s.id ? C.ink : C.border}`,
+              borderRadius:99, padding:"6px 12px",
+              fontSize:11, fontWeight:600, cursor:"pointer",
+              fontFamily:"inherit", transition:"all 0.15s",
+            }}>{s.label}</button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ padding:"16px 16px 0", display:"flex", flexDirection:"column", gap:14 }}>
+
+        {/* Doctor identity */}
+        <div style={{
+          background:C.white, borderRadius:18, padding:"16px 18px",
+          border:`1.5px solid ${C.border}`,
+          display:"flex", alignItems:"center", gap:14,
+        }}>
+          <div style={{
+            width:48, height:48, borderRadius:"50%",
+            background:`linear-gradient(135deg,${C.green},${C.greenDark})`,
+            display:"flex", alignItems:"center", justifyContent:"center",
+            fontSize:18, fontWeight:800, color:"white", flexShrink:0,
+          }}>N</div>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:16, fontWeight:800, color:C.ink, letterSpacing:-0.3 }}>Dr. Neeraj</div>
+            <div style={{ fontSize:12, color:C.faint, marginTop:1 }}>neeraj@ermate.in</div>
+          </div>
+          <div style={{ textAlign:"right" }}>
+            {showFree ? (
+              <div style={{ fontSize:12, color:C.faint }}>Free plan</div>
+            ) : showBoth ? (
+              <div>
+                <div style={{ fontSize:11, fontWeight:700, color:C.green }}>Team · Active</div>
+                <div style={{ fontSize:11, fontWeight:700, color:C.purple, marginTop:2 }}>Pro · Active</div>
+              </div>
+            ) : showTeam ? (
+              <div style={{ fontSize:12, fontWeight:700, color:C.green }}>Team · Active</div>
+            ) : (
+              <div style={{ fontSize:12, fontWeight:700, color:C.purple }}>Pro · Active</div>
+            )}
+          </div>
+        </div>
+
+        {/* Combined banner — only when both active */}
+        {showBoth && <CombinedBanner/>}
+
+        {/* FREE state */}
+        {showFree && (
+          <div style={{
+            background:C.white, border:`1.5px solid ${C.border}`,
+            borderRadius:18, padding:"20px 18px", textAlign:"center",
+          }}>
+            <div style={{ fontSize:32, marginBottom:10 }}>📋</div>
+            <div style={{ fontSize:15, fontWeight:800, color:C.ink, marginBottom:6 }}>Free plan</div>
+            <div style={{ fontSize:13, color:C.muted, lineHeight:1.6, marginBottom:16 }}>
+              You've used 7 of 10 free cases. Upgrade to keep documenting without limits.
+            </div>
+            <div style={{ display:"flex", gap:10 }}>
+              <div style={{
+                flex:1, background:C.greenLight, border:`1px solid ${C.greenBorder}`,
+                borderRadius:12, padding:"12px",
+                fontSize:13, fontWeight:700, color:C.greenDark, textAlign:"center", cursor:"pointer",
+              }}>
+                Individual Pro →
+              </div>
+              <div style={{
+                flex:1, background:C.purpleLight, border:`1px solid ${C.purpleBorder}`,
+                borderRadius:12, padding:"12px",
+                fontSize:13, fontWeight:700, color:C.purple, textAlign:"center", cursor:"pointer",
+              }}>
+                Join a team →
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Team plan card */}
+        {!showFree && (
+          <div>
+            <div style={{ fontSize:11, fontWeight:700, color:C.faint, letterSpacing:1, textTransform:"uppercase", marginBottom:8, paddingLeft:2 }}>
+              🏥  Department
+            </div>
+            <TeamPlanCard active={showTeam}/>
+          </div>
+        )}
+
+        {/* Individual Pro card */}
+        {!showFree && (
+          <div>
+            <div style={{ fontSize:11, fontWeight:700, color:C.faint, letterSpacing:1, textTransform:"uppercase", marginBottom:8, paddingLeft:2 }}>
+              🧠  Your personal plan
+            </div>
+            <IndividualProCard active={showPro} trial={proTrial}/>
+          </div>
+        )}
+
+        {/* What each plan covers — table */}
+        {!showFree && (
+          <div style={{
+            background:C.white, borderRadius:18, padding:"16px 18px",
+            border:`1.5px solid ${C.border}`,
+          }}>
+            <div style={{ fontSize:13, fontWeight:700, color:C.ink, marginBottom:14, letterSpacing:-0.2 }}>
+              Who can see what
+            </div>
+            {[
+              { item:"Cases on shift",            team:true,  pro:true,  hospital:true  },
+              { item:"Handover records",           team:true,  pro:false, hospital:true  },
+              { item:"Activity logs",              team:true,  pro:false, hospital:true  },
+              { item:"Rounds debriefs",            team:false, pro:true,  hospital:false },
+              { item:"Clinical Memory",            team:false, pro:true,  hospital:false },
+              { item:"Cases off-shift",            team:false, pro:true,  hospital:false },
+              { item:"Personal stats",             team:false, pro:true,  hospital:false },
+            ].map((row,i) => (
+              <div key={i} style={{
+                display:"grid", gridTemplateColumns:"1fr auto auto auto",
+                gap:12, alignItems:"center",
+                padding:"9px 0",
+                borderBottom: i<6 ? `1px solid #F5F6F8` : "none",
+              }}>
+                <span style={{ fontSize:12.5, color:C.inkSoft }}>{row.item}</span>
+                <span style={{ fontSize:11, color: row.team ? C.greenDark : C.faint, fontWeight:600, textAlign:"center", minWidth:42 }}>
+                  {row.team ? "Team ✓" : "—"}
+                </span>
+                <span style={{ fontSize:11, color: row.pro ? C.purple : C.faint, fontWeight:600, textAlign:"center", minWidth:32 }}>
+                  {row.pro ? "Pro ✓" : "—"}
+                </span>
+                <span style={{ fontSize:10, color: row.hospital ? "#B45309" : C.greenDark, fontWeight:700, textAlign:"right", minWidth:60 }}>
+                  {row.hospital ? "Hospital sees" : "Private"}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Help link */}
+        {!showFree && (
+          <button style={{
+            background:"none", border:"none", cursor:"pointer", fontFamily:"inherit",
+            display:"flex", alignItems:"center", justifyContent:"center", gap:6,
+            padding:"10px", color:C.faint, fontSize:13,
+          }}>
+            Questions about your subscriptions?
+            <span style={{ color:C.green, fontWeight:600 }}>Get help →</span>
+          </button>
+        )}
+
+      </div>
+    </div>
+  );
+}

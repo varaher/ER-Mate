@@ -210,6 +210,7 @@ export default function ProfileScreen() {
   const menuItems = [
     { icon: "bar-chart-2", label: "My Stats", onPress: () => navigation.navigate("Stats") },
     { icon: "monitor", label: "Link to Web", onPress: () => navigation.navigate("LinkDevices") },
+    { icon: "credit-card", label: "My Subscriptions", onPress: () => (navigation as any).navigate("MySubscriptions") },
     { icon: "star", label: "Upgrade Plan", onPress: () => navigation.navigate("Upgrade", {}) },
     { icon: "user-check", label: "My Role", sub: getRoleLabel(profileRole), onPress: () => { setSelectedRole(profileRole); setShowRoleModal(true); } },
     { icon: "lock", label: isGoogleUser ? "Set Password" : "Change Password", onPress: () => setShowPasswordModal(true) },
