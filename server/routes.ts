@@ -4245,7 +4245,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
-  app.post("/api/webhooks/razorpay", async (req: Request, res: Response) => {
+  app.post("/api/webhook/razorpay", async (req: Request, res: Response) => {
     try {
       const signature = req.headers["x-razorpay-signature"] as string || "";
       const rawBody = JSON.stringify(req.body);
