@@ -113,6 +113,7 @@ interface AIDiagnosisPanelProps {
   abgData?: ABGData;
   treatmentData?: TreatmentData;
   onDiagnosisSelect?: (diagnosis: string) => void;
+  userId?: string;
 }
 
 const SOURCE_TYPE_ICONS: Record<string, { icon: string; color: string; label: string }> = {
@@ -153,6 +154,7 @@ export function AIDiagnosisPanel({
   abgData,
   treatmentData,
   onDiagnosisSelect,
+  userId,
 }: AIDiagnosisPanelProps) {
   const { theme } = useTheme();
   const [isLoading, setIsLoading] = useState(false);
@@ -195,10 +197,14 @@ export function AIDiagnosisPanel({
           gender,
           abgData,
           treatmentData: treatmentData || undefined,
+          userId,
         }),
       });
 
-      if (response.ok) {
+      if (response.status === 402) {
+        const errData = await response.json().catch(() => ({}));
+        setError(errData.error || "No AI credits remaining. Upgrade to Pro for unlimited access.");
+      } else if (response.ok) {
         const data = await response.json();
         if (data.suggestions?.length === 0 && data.redFlags?.length === 0) {
           setError("AI could not generate suggestions. This may be due to service configuration. Please try again later.");
@@ -219,7 +225,7 @@ export function AIDiagnosisPanel({
       setIsLoading(false);
       setSearchStatus("");
     }
-  }, [chiefComplaint, vitals, history, examination, age, gender, abgData, treatmentData]);
+  }, [chiefComplaint, vitals, history, examination, age, gender, abgData, treatmentData, userId]);
 
   const submitFeedback = async (
     suggestionId: string,

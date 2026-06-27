@@ -59,9 +59,10 @@ interface DocumentScannerProps {
     patientSex?: string;
     presentingComplaint?: string;
   };
+  userId?: string;
 }
 
-export function DocumentScanner({ onDataExtracted, context }: DocumentScannerProps) {
+export function DocumentScanner({ onDataExtracted, context, userId }: DocumentScannerProps) {
   const { theme } = useTheme();
   const [showModal, setShowModal] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
@@ -108,6 +109,7 @@ export function DocumentScanner({ onDataExtracted, context }: DocumentScannerPro
           chiefComplaint: context.presentingComplaint,
         }));
       }
+      if (userId) formData.append("userId", userId);
       formData.append("mode", "clinical");
 
       const response = await fetch(scanUrl, {
@@ -125,6 +127,10 @@ export function DocumentScanner({ onDataExtracted, context }: DocumentScannerPro
         return;
       }
 
+      if (response.status === 402) {
+        Alert.alert("No AI Credits", data?.error || "No AI credits remaining. Upgrade to Pro for unlimited access.");
+        return;
+      }
       if (!response.ok) {
         Alert.alert("Scan Failed", data?.error || "Could not extract data from image. Please try again.");
         return;

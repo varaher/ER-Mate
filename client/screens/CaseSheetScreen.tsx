@@ -1596,6 +1596,7 @@ export default function CaseSheetScreen() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           abg_values: abgValues,
+          userId: user?.id,
           patient_context: {
             age: caseData?.patient?.age,
             sex: caseData?.patient?.sex,
@@ -1609,6 +1610,11 @@ export default function CaseSheetScreen() {
         }),
       });
       
+      if (response.status === 402) {
+        const errData = await response.json().catch(() => ({}));
+        Alert.alert("No AI Credits", errData.error || "No AI credits remaining. Upgrade to Pro for unlimited access.");
+        return;
+      }
       if (!response.ok) {
         throw new Error("Failed to interpret ABG");
       }
@@ -1630,9 +1636,14 @@ export default function CaseSheetScreen() {
       const response = await fetch(`${baseUrl}/api/ai/scan-abg`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageBase64 }),
+        body: JSON.stringify({ imageBase64, userId: user?.id }),
       });
 
+      if (response.status === 402) {
+        const errData = await response.json().catch(() => ({}));
+        Alert.alert("No AI Credits", errData.error || "No AI credits remaining. Upgrade to Pro for unlimited access.");
+        return;
+      }
       if (!response.ok) {
         throw new Error("Failed to scan ABG");
       }
@@ -2383,6 +2394,7 @@ export default function CaseSheetScreen() {
                   patientSex: caseData?.patient?.sex,
                   presentingComplaint: caseData?.presenting_complaint?.text,
                 }}
+                userId={user?.id}
               />
             </View>
             <CollapsibleSection title="A - AIRWAY" icon="*" iconColor={TriageColors.red} defaultExpanded>
@@ -2994,6 +3006,7 @@ export default function CaseSheetScreen() {
                   patientSex: caseData?.patient?.sex,
                   presentingComplaint: caseData?.presenting_complaint?.text,
                 }}
+                userId={user?.id}
               />
             </View>
             <View style={[styles.card, { backgroundColor: theme.card }]}>
@@ -3071,6 +3084,7 @@ export default function CaseSheetScreen() {
                   patientSex: caseData?.patient?.sex,
                   presentingComplaint: caseData?.presenting_complaint?.text,
                 }}
+                userId={user?.id}
               />
             </View>
             <Pressable style={[styles.markNormalBtn, { backgroundColor: isDark ? '#1B2D1E' : '#E8F5E9' }]} onPress={markAllExamNormal}>
@@ -3198,6 +3212,7 @@ export default function CaseSheetScreen() {
                   patientSex: caseData?.patient?.sex,
                   presentingComplaint: caseData?.presenting_complaint?.text,
                 }}
+                userId={user?.id}
               />
             </View>
             <View style={[styles.card, { backgroundColor: theme.card }]}>
@@ -3275,6 +3290,7 @@ export default function CaseSheetScreen() {
                   interventions: treatmentData.otherMedications,
                 }}
                 onDiagnosisSelect={(diagnosis) => setTreatmentData((prev) => ({ ...prev, primaryDiagnosis: diagnosis }))}
+                userId={user?.id}
               />
             </View>
             <View style={[styles.card, { backgroundColor: theme.card }]}>
@@ -3417,6 +3433,7 @@ export default function CaseSheetScreen() {
                   patientSex: caseData?.patient?.sex,
                   presentingComplaint: caseData?.presenting_complaint?.text,
                 }}
+                userId={user?.id}
               />
             </View>
             <View style={[styles.card, { backgroundColor: theme.card }]}>
@@ -3483,6 +3500,7 @@ export default function CaseSheetScreen() {
                   patientSex: caseData?.patient?.sex,
                   presentingComplaint: caseData?.presenting_complaint?.text,
                 }}
+                userId={user?.id}
               />
             </View>
             <View style={[styles.card, { backgroundColor: theme.card }]}>

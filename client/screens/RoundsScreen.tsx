@@ -420,8 +420,13 @@ export default function RoundsScreen() {
               gender: activeCase.gender,
             },
             mode: mode.id,
+            userId: user?.id,
           }),
         });
+        if (res.status === 402) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || "No AI credits remaining. Upgrade to Pro for unlimited access.");
+        }
         if (!res.ok) throw new Error("AI service unavailable");
         const data = await res.json();
         const text: string = data.text ?? "No response generated.";

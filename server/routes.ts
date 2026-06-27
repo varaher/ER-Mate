@@ -5,7 +5,7 @@ import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, Bord
 import multer from "multer";
 import crypto from "crypto";
 import { generateDiagnosisSuggestions, recordFeedback, getFeedbackStats, getLearningInsights, generateCourseInHospital, extractClinicalDataFromVoice, transcribeAndExtractVoice, generateRoundsDebrief, type AIFeedback, type FeedbackResult, type ExtractedClinicalData } from "./services/aiDiagnosis";
-import { getOrCreateSubscription, canCreateCase, incrementCaseCount, activatePremium, activatePlan, cancelSubscription, FREE_CASE_LIMIT, PREMIUM_PRICE_INR } from "./services/subscription";
+import { getOrCreateSubscription, canCreateCase, incrementCaseCount, activatePremium, activatePlan, cancelSubscription, deductAiCredit, FREE_CASE_LIMIT, PREMIUM_PRICE_INR } from "./services/subscription";
 import { createPaymentLink, verifyWebhookSignature } from "./services/razorpayService";
 import { PLAN_AMOUNTS_PAISE, CREDIT_PACKS } from "./config/pricing";
 import { getEMReferenceResponse, EM_TOPICS, type EMReferenceMessage } from "./services/emReference";
@@ -2484,10 +2484,14 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
   app.post("/api/ai/interpret-abg", async (req: Request, res: Response) => {
     try {
-      const { abg_values, patient_context } = req.body;
+      const { abg_values, patient_context, userId } = req.body;
       
       if (!abg_values) {
         return res.status(400).json({ error: "ABG values are required" });
+      }
+      if (userId) {
+        const credit = await deductAiCredit(userId);
+        if (!credit.ok) return res.status(402).json({ error: "No AI credits remaining. Upgrade to Pro for unlimited access.", code: "CREDITS_EXHAUSTED" });
       }
 
       const { interpretABG } = await import("./services/aiDiagnosis");
@@ -2502,10 +2506,14 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
   app.post("/api/ai/scan-abg", async (req: Request, res: Response) => {
     try {
-      const { imageBase64 } = req.body;
+      const { imageBase64, userId } = req.body;
       
       if (!imageBase64) {
         return res.status(400).json({ error: "Image data is required" });
+      }
+      if (userId) {
+        const credit = await deductAiCredit(userId);
+        if (!credit.ok) return res.status(402).json({ error: "No AI credits remaining. Upgrade to Pro for unlimited access.", code: "CREDITS_EXHAUSTED" });
       }
 
       const { extractABGFromImage } = await import("./services/aiDiagnosis");
@@ -2520,10 +2528,14 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
   app.post("/api/ai/extract-from-image", async (req: Request, res: Response) => {
     try {
-      const { imageBase64, patientContext } = req.body;
+      const { imageBase64, patientContext, userId } = req.body;
       
       if (!imageBase64) {
         return res.status(400).json({ error: "Image data is required" });
+      }
+      if (userId) {
+        const credit = await deductAiCredit(userId);
+        if (!credit.ok) return res.status(402).json({ error: "No AI credits remaining. Upgrade to Pro for unlimited access.", code: "CREDITS_EXHAUSTED" });
       }
 
       const { extractClinicalDataFromImage } = await import("./services/aiDiagnosis");
@@ -2538,10 +2550,14 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
   app.post("/api/ai/diagnose", async (req: Request, res: Response) => {
     try {
-      const { chiefComplaint, vitals, history, examination, age, gender, abgData, treatmentData } = req.body;
+      const { chiefComplaint, vitals, history, examination, age, gender, abgData, treatmentData, userId } = req.body;
       
       if (!chiefComplaint) {
         return res.status(400).json({ error: "Chief complaint is required" });
+      }
+      if (userId) {
+        const credit = await deductAiCredit(userId);
+        if (!credit.ok) return res.status(402).json({ error: "No AI credits remaining. Upgrade to Pro for unlimited access.", code: "CREDITS_EXHAUSTED" });
       }
 
       let enhancedHistory = history || "";
@@ -3712,6 +3728,12 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         return res.status(400).json({ error: "No document file provided" });
       }
 
+      const scanUserId = req.body.userId as string | undefined;
+      if (scanUserId) {
+        const credit = await deductAiCredit(scanUserId);
+        if (!credit.ok) return res.status(402).json({ error: "No AI credits remaining. Upgrade to Pro for unlimited access.", code: "CREDITS_EXHAUSTED" });
+      }
+
       let patientContext;
       if (req.body.patientContext) {
         try { patientContext = JSON.parse(req.body.patientContext); } catch { patientContext = undefined; }
@@ -4374,13 +4396,18 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
   app.post("/api/em-reference/chat", async (req: Request, res: Response) => {
     try {
-      const { messages, topic } = req.body as {
+      const { messages, topic, userId } = req.body as {
         messages: EMReferenceMessage[];
         topic?: string;
+        userId?: string;
       };
 
       if (!messages || !Array.isArray(messages) || messages.length === 0) {
         return res.status(400).json({ error: "messages array is required" });
+      }
+      if (userId) {
+        const credit = await deductAiCredit(userId);
+        if (!credit.ok) return res.status(402).json({ error: "No AI credits remaining. Upgrade to Pro for unlimited access.", code: "CREDITS_EXHAUSTED" });
       }
 
       const response = await getEMReferenceResponse(messages, topic);
@@ -4474,9 +4501,13 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
   app.post("/api/rounds/debrief", async (req: Request, res: Response) => {
     try {
-      const { caseData, mode } = req.body;
+      const { caseData, mode, userId } = req.body;
       if (!caseData || !mode) {
         return res.status(400).json({ error: "caseData and mode are required" });
+      }
+      if (userId) {
+        const credit = await deductAiCredit(userId);
+        if (!credit.ok) return res.status(402).json({ error: "No AI credits remaining. Upgrade to Pro for unlimited access.", code: "CREDITS_EXHAUSTED" });
       }
       const text = await generateRoundsDebrief(caseData, mode);
       res.json({ text });

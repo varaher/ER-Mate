@@ -18,6 +18,7 @@ import { Feather } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, TriageColors } from "@/constants/theme";
 import { getApiUrl } from "@/lib/query-client";
+import { useAuth } from "@/context/AuthContext";
 
 interface Message {
   id: string;
@@ -43,6 +44,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 export default function EMReferenceScreen() {
   const { theme } = useTheme();
+  const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const navigation = useNavigation();
@@ -135,8 +137,17 @@ export default function EMReferenceScreen() {
               content: m.content,
             })),
             topic: topic || activeTopic,
+            userId: user?.id,
           }),
         });
+
+        if (res.status === 402) {
+          const err = await res.json().catch(() => ({}));
+          const errorMsg: Message = { id: Date.now().toString(), role: "assistant", content: err.error || "No AI credits remaining. Upgrade to Pro for unlimited access." };
+          setMessages((prev) => [...prev, errorMsg]);
+          setLoading(false);
+          return;
+        }
 
         const data = await res.json();
         const assistantMsg: Message = {

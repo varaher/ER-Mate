@@ -789,7 +789,7 @@ export default function DashboardScreen() {
               styles.creditsWidget,
               {
                 backgroundColor: theme.card,
-                borderColor: aiCredits === 0 ? TriageColors.red : aiCredits <= 10 ? "#d97706" : theme.primary,
+                borderColor: aiCredits === 0 ? TriageColors.red : aiCredits <= 2 ? "#d97706" : theme.primary,
                 opacity: pressed ? 0.9 : 1,
               },
             ]}
@@ -801,7 +801,7 @@ export default function DashboardScreen() {
                 <Text style={[styles.creditsWidgetTitle, { color: theme.text }]}>AI Credits</Text>
                 {aiCredits === 0 ? (
                   <Text style={[styles.creditsWidgetStatus, { color: TriageColors.red }]}>Exhausted</Text>
-                ) : aiCredits <= 10 ? (
+                ) : aiCredits <= 2 ? (
                   <Text style={[styles.creditsWidgetStatus, { color: "#d97706" }]}>Low balance</Text>
                 ) : null}
               </View>
