@@ -22,7 +22,7 @@ import { getApiUrl } from "@/lib/query-client";
 
 type RouteProps = RouteProp<RootStackParamList, "Upgrade">;
 type BillingCycle = "monthly" | "annual";
-type PlanId = "free" | "base" | "pro";
+type PlanId = "free" | "pro";
 type ActiveTab = "individual" | "team";
 
 interface SubscriptionStatus {
@@ -34,7 +34,6 @@ interface SubscriptionStatus {
   currentPeriodEnd: string | null;
   priceInr: number;
   freeCaseLimit: number;
-  credits_balance?: number;
 }
 
 interface FeatureItem {
@@ -71,68 +70,48 @@ const PLANS: Plan[] = [
     monthlyPrice: "₹0", monthlyRaw: 0,
     annualPrice: "₹0", annualRaw: 0, annualEquiv: "₹0", annualSavings: "₹0",
     tag: null, tagColor: null,
-    description: "Try ErMate with your first 10 cases. No card needed.",
+    description: "10 cases to try. No card needed.",
     accent: "#9CA3AF", accentBg: "rgba(156,163,175,0.08)",
     isDark: false, ctaDisabled: true,
     icon: "clipboard",
     features: [
-      { text: "10 cases total", ok: true },
-      { text: "Smart Dictation", ok: true },
-      { text: "AI Discharge Summary", ok: true },
+      { text: "10 cases (lifetime)", ok: true },
+      { text: "Smart Dictation + Discharge Summary", ok: true },
+      { text: "ATLS + PALS frameworks", ok: true },
       { text: "PDF / WhatsApp export", ok: true },
       { text: "Trivia & EM Reference", ok: true },
       { text: "Unlimited cases", ok: false },
       { text: "Rounds & Clinical Memory", ok: false },
-    ],
-  },
-  {
-    id: "base",
-    name: "Base",
-    monthlyPrice: "₹799", monthlyRaw: 799,
-    annualPrice: "₹7,990", annualRaw: 7990, annualEquiv: "₹666", annualSavings: "₹1,598",
-    tag: "MOST POPULAR", tagColor: "#1DB870",
-    description: "Unlimited documentation. Dictation and discharge always free.",
-    accent: "#1DB870", accentBg: "rgba(30,184,112,0.08)",
-    isDark: false, ctaDisabled: false,
-    icon: "zap",
-    features: [
-      { text: "Unlimited case documentation", ok: true },
-      { text: "Smart Dictation — always free", ok: true, bold: true },
-      { text: "AI Discharge Summary — always free", ok: true, bold: true },
-      { text: "PDF / WhatsApp export", ok: true },
-      { text: "Clinical Decision Support (15/mo)", ok: true, credit: true },
-      { text: "Document Scanning (10/mo)", ok: true, credit: true },
-      { text: "Rounds — 10 free debriefs", ok: true },
-      { text: "Unlimited Rounds & Memory", ok: false },
+      { text: "All AI features", ok: false },
     ],
   },
   {
     id: "pro",
-    name: "Pro",
+    name: "Individual Pro",
     monthlyPrice: "₹1,199", monthlyRaw: 1199,
     annualPrice: "₹11,990", annualRaw: 11990, annualEquiv: "₹999", annualSavings: "₹2,398",
-    tag: "FOR GROWTH", tagColor: "#818CF8",
-    description: "Everything in Base plus unlimited Rounds and Clinical Memory.",
-    accent: "#818CF8", accentBg: "rgba(129,140,248,0.10)",
+    tag: "YOUR CAREER LAYER", tagColor: "#1DB870",
+    description: "Your account. Your career. Not your hospital's. Cases, Rounds, and Clinical Memory stay with you forever.",
+    accent: "#1DB870", accentBg: "rgba(30,184,112,0.08)",
     isDark: true, ctaDisabled: false,
     icon: "layers",
     features: [
-      { text: "Everything in Base", ok: true },
+      { text: "Unlimited case documentation", ok: true, bold: true },
+      { text: "Smart Dictation — always free, always unlimited", ok: true, bold: true },
+      { text: "AI Discharge Summary — always free, always unlimited", ok: true, bold: true },
+      { text: "ATLS adult + PALS paediatric frameworks", ok: true },
+      { text: "Document OCR scanning", ok: true },
+      { text: "ABG / VBG AI interpretation", ok: true },
+      { text: "Clinical Decision Support — unlimited", ok: true },
+      { text: "EM Reference Library — AI chat, unlimited", ok: true },
       { text: "Rounds — unlimited debriefs", ok: true, bold: true },
       { text: "All 7 thinking lenses", ok: true, bold: true },
-      { text: "Clinical Memory — full career", ok: true, bold: true },
-      { text: "Post-save learning nudge", ok: true },
-      { text: "Unlimited Decision Support", ok: true },
-      { text: "Unlimited Document Scanning", ok: true },
+      { text: "Clinical Memory — your full career", ok: true, bold: true },
+      { text: "No credits. No limits. No walls mid-shift.", ok: true, bold: true },
     ],
   },
 ];
 
-const CREDIT_PACKS_DISPLAY = [
-  { label: "50 Credits",  price: "₹499",   per: "₹10 / credit", popular: false },
-  { label: "100 Credits", price: "₹899",   per: "₹9 / credit",  popular: true  },
-  { label: "300 Credits", price: "₹2,499", per: "₹8.3 / credit",popular: false },
-];
 
 const TEAM_FEATURES = [
   { text: "Everything in Pro — for every doctor", bold: true },
@@ -153,14 +132,6 @@ const EXAMPLE_BILLS = [
   { type: "Large hospital dept", consultants: 15, residents: 50 },
 ];
 
-const ALWAYS_FREE = [
-  "Manual typing & editing",
-  "Case save & storage",
-  "View cases & dashboard",
-  "Export to PDF / DOCX",
-  "Browse EM Reference library",
-  "Simulation cases & Trivia",
-];
 
 export default function UpgradeScreen() {
   const navigation = useNavigation();
@@ -176,9 +147,8 @@ export default function UpgradeScreen() {
   const [loading, setLoading] = useState(true);
   const [ctaLoading, setCtaLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<ActiveTab>("individual");
-  const [selectedPlan, setSelectedPlan] = useState<PlanId>("base");
+  const [selectedPlan, setSelectedPlan] = useState<PlanId>("pro");
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("monthly");
-  const [selectedPack, setSelectedPack] = useState(1);
   const [teamConsultants, setTeamConsultants] = useState(2);
   const [teamResidents, setTeamResidents] = useState(6);
 
@@ -202,8 +172,7 @@ export default function UpgradeScreen() {
         data = { plan: "free", casesUsed: 0, casesLimit: 10, casesRemaining: 10, status: "active" };
       }
       setSubStatus(data);
-      if (data.plan === "pro") setSelectedPlan("pro");
-      else setSelectedPlan("base");
+      setSelectedPlan("pro");
     } catch { }
     finally { setLoading(false); }
   };
@@ -242,30 +211,6 @@ export default function UpgradeScreen() {
     }
   };
 
-  const handleBuyCredits = async () => {
-    setCtaLoading(true);
-    try {
-      const url = new URL("/api/subscription/create-credit-order", getApiUrl()).href;
-      const res = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ packIndex: selectedPack }),
-      });
-      const data = await res.json();
-      if (data.url) {
-        await WebBrowser.openBrowserAsync(data.url);
-      } else {
-        Alert.alert("Something went wrong", "Please try again or contact support@ermate.app");
-      }
-    } catch {
-      Alert.alert("Something went wrong", "Please try again or contact support@ermate.app");
-    } finally {
-      setCtaLoading(false);
-    }
-  };
 
   const handleTeamContact = () => {
     const monthly = (teamConsultants * 599) + (teamResidents * 399);
@@ -540,65 +485,12 @@ export default function UpgradeScreen() {
               );
             })}
 
-            {/* AI Credit Packs */}
+            {/* What happened to Base plan? */}
             <View style={[s.sectionCard, { backgroundColor: isDarkMode ? "#161B22" : "#FFFFFF", borderColor: isDarkMode ? "#2D333B" : "#F0F0F0" }]}>
-              <Text style={[s.sectionTitle, { color: isDarkMode ? "#FFFFFF" : "#0D1117" }]}>AI Credit Packs</Text>
-              <Text style={[s.sectionSub, { color: theme.textMuted }]}>Base plan only · Top up Clinical Intelligence · Never expire</Text>
-              {CREDIT_PACKS_DISPLAY.map((pack, i) => (
-                <Pressable
-                  key={i}
-                  onPress={() => setSelectedPack(i)}
-                  style={[s.packRow, {
-                    backgroundColor: selectedPack === i ? (isDarkMode ? "rgba(29,184,112,0.10)" : "#F0FDF6") : "transparent",
-                    borderColor: selectedPack === i ? "#1DB870" : (isDarkMode ? "#2D333B" : "#F0F0F0"),
-                  }]}
-                >
-                  <View style={s.packLeft}>
-                    <View style={[s.radio, {
-                      borderColor: selectedPack === i ? "#1DB870" : "#D1D5DB",
-                      backgroundColor: selectedPack === i ? "#1DB870" : "transparent",
-                    }]}>
-                      {selectedPack === i && <View style={s.radioDot} />}
-                    </View>
-                    <View>
-                      <Text style={[s.packLabel, { color: isDarkMode ? "#FFFFFF" : "#0D1117" }]}>{pack.label}</Text>
-                      <Text style={[s.packPer, { color: theme.textMuted }]}>{pack.per}</Text>
-                    </View>
-                  </View>
-                  <View style={s.packRight}>
-                    {pack.popular && (
-                      <View style={s.bestValueBadge}>
-                        <Text style={s.bestValueText}>BEST VALUE</Text>
-                      </View>
-                    )}
-                    <Text style={[s.packPrice, { color: isDarkMode ? "#FFFFFF" : "#0D1117" }]}>{pack.price}</Text>
-                  </View>
-                </Pressable>
-              ))}
-              <Pressable style={s.buyCreditsBtn} onPress={handleBuyCredits} disabled={ctaLoading}>
-                {ctaLoading ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <Feather name="zap" size={14} color="#FFFFFF" />
-                )}
-                <Text style={s.buyCreditsBtnText}>Buy {CREDIT_PACKS_DISPLAY[selectedPack].label}</Text>
-              </Pressable>
-              <View style={[s.creditNote, { backgroundColor: isDarkMode ? "#0D1117" : "#F9FAFB" }]}>
-                <Text style={[s.creditNoteText, { color: theme.textMuted }]}>
-                  Smart Dictation and Discharge Summary are always free — credits only for Decision Support, Document Scanning, and EM Reference.
-                </Text>
-              </View>
-            </View>
-
-            {/* Always Free */}
-            <View style={[s.sectionCard, { backgroundColor: isDarkMode ? "#161B22" : "#FFFFFF", borderColor: isDarkMode ? "#2D333B" : "#F0F0F0" }]}>
-              <Text style={[s.sectionCaption, { color: theme.textMuted }]}>ALWAYS FREE · NO PLAN NEEDED</Text>
-              {ALWAYS_FREE.map((f, i) => (
-                <View key={i} style={[s.alwaysFreeRow, i > 0 && { marginTop: 10 }]}>
-                  <Feather name="unlock" size={13} color="#C4C9D4" />
-                  <Text style={[s.alwaysFreeText, { color: theme.textSecondary }]}>{f}</Text>
-                </View>
-              ))}
+              <Text style={[s.sectionTitle, { color: isDarkMode ? "#FFFFFF" : "#0D1117" }]}>What happened to Base plan and credits?</Text>
+              <Text style={[s.creditNoteText, { color: theme.textSecondary, lineHeight: 20, marginTop: 4 }]}>
+                We simplified. Individual Pro is the only paid individual plan — no credit walls, no monthly limits, no anxiety mid-shift. One price, everything included.{"\n\n"}If you're part of a hospital team, ask your HOD about the Team plan.
+              </Text>
             </View>
           </>
         )}

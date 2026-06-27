@@ -84,6 +84,7 @@ export default function DashboardScreen() {
   const [exporting, setExporting] = useState(false);
   const [draftsMap, setDraftsMap] = useState<Record<string, DraftCase>>({});
   const [aiCredits, setAiCredits] = useState<number | null>(null);
+  const [localPlan, setLocalPlan] = useState<string | null>(null);
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialChecked, setTutorialChecked] = useState(false);
   const [showNewPatientModal, setShowNewPatientModal] = useState(false);
@@ -128,12 +129,17 @@ export default function DashboardScreen() {
         const text = await res.text();
         try {
           const data = JSON.parse(text);
-          setAiCredits(data.credits_balance ?? 20);
+          setLocalPlan(data.plan ?? "free");
+          if (data.plan === "base") {
+            setAiCredits(data.credits_balance ?? 0);
+          } else {
+            setAiCredits(null);
+          }
         } catch {
-          setAiCredits(20);
+          setAiCredits(null);
         }
       } catch {
-        setAiCredits(20);
+        setAiCredits(null);
       }
     };
     fetchCredits();

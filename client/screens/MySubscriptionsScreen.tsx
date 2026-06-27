@@ -51,7 +51,6 @@ interface SubStatus {
   currentPeriodEnd: string | null;
   priceInr: number;
   freeCaseLimit: number;
-  credits_balance: number;
 }
 
 type Scenario = "both" | "team_only" | "pro_only" | "free";
@@ -90,15 +89,17 @@ function StatusPill({ status }: { status: PillStatus }) {
 // ── Team plan card ───────────────────────────────────────────────────────────
 interface TeamCardProps {
   active: boolean;
+  hasPro?: boolean;
   deptName?: string;
   role?: string;
   shiftName?: string;
   renewDate?: string;
   onJoin?: () => void;
   onLeave?: () => void;
+  onAddPro?: () => void;
 }
 
-function TeamPlanCard({ active, deptName, role, shiftName, renewDate, onJoin, onLeave }: TeamCardProps) {
+function TeamPlanCard({ active, hasPro, deptName, role, shiftName, renewDate, onJoin, onLeave, onAddPro }: TeamCardProps) {
   const roleLabel = role === "hod" ? "HOD" : role === "consultant" ? "Consultant" : "Resident";
 
   if (!active) {
@@ -121,6 +122,14 @@ function TeamPlanCard({ active, deptName, role, shiftName, renewDate, onJoin, on
       </View>
     );
   }
+
+  const hospitalCanSee = hasPro
+    ? "Cases on shift · Handover records · Activity logs"
+    : "Cases on shift · Handover records · Activity logs · Rounds debriefs";
+
+  const hospitalCannotSee = hasPro
+    ? "Rounds debriefs · Clinical Memory · Personal stats · Off-shift cases"
+    : "Off-shift cases only";
 
   return (
     <View style={[styles.activeCard, { borderColor: C.greenBorder }]}>
@@ -155,18 +164,35 @@ function TeamPlanCard({ active, deptName, role, shiftName, renewDate, onJoin, on
         <View style={[styles.alertBox, { backgroundColor: C.orangeLight, borderColor: C.orangeBorder }]}>
           <Feather name="alert-triangle" size={14} color={C.orange} style={{ marginTop: 1 }} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.alertBoxTitle}>Your hospital can see</Text>
-            <Text style={styles.alertBoxBody}>Cases documented during shifts · Handover records · Activity logs</Text>
+            <Text style={styles.alertBoxTitle}>Hospital can see</Text>
+            <Text style={styles.alertBoxBody}>{hospitalCanSee}</Text>
           </View>
         </View>
 
         <View style={[styles.alertBox, { backgroundColor: C.greenLight, borderColor: C.greenBorder, marginTop: 8 }]}>
           <Feather name="shield" size={14} color={C.greenDark} style={{ marginTop: 1 }} />
           <View style={{ flex: 1 }}>
-            <Text style={[styles.alertBoxTitle, { color: C.greenDark }]}>Your hospital cannot see</Text>
-            <Text style={[styles.alertBoxBody, { color: C.muted }]}>Rounds debriefs · Clinical Memory · Personal stats · Cases outside shift</Text>
+            <Text style={[styles.alertBoxTitle, { color: C.greenDark }]}>Hospital cannot see</Text>
+            <Text style={[styles.alertBoxBody, { color: C.muted }]}>{hospitalCannotSee}</Text>
           </View>
         </View>
+
+        {!hasPro && (
+          <Pressable
+            style={[styles.alertBox, { backgroundColor: C.purpleLight, borderColor: C.purpleBorder, marginTop: 8, justifyContent: "space-between" }]}
+            onPress={onAddPro}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.alertBoxBody, { color: C.purple, lineHeight: 18 }]}>
+                Add Individual Pro for private Rounds + Clinical Memory
+              </Text>
+            </View>
+            <View style={[styles.smallBtn, { backgroundColor: C.white, borderColor: C.purpleBorder, marginLeft: 8 }]}>
+              <Text style={[styles.smallBtnText, { color: C.purple }]}>₹1,199/mo</Text>
+              <Feather name="arrow-right" size={11} color={C.purple} />
+            </View>
+          </Pressable>
+        )}
       </View>
 
       <View style={[styles.cardFooter, { borderTopColor: C.border }]}>
@@ -186,7 +212,6 @@ function TeamPlanCard({ active, deptName, role, shiftName, renewDate, onJoin, on
 interface ProCardProps {
   active: boolean;
   planName: string;
-  aiCredits: number;
   casesUsed: number;
   casesLimit: number;
   renewDate?: string;
@@ -201,7 +226,7 @@ const PRO_FEATURES: { icon: keyof typeof Feather.glyphMap; text: string; sub: st
   { icon: "lock", text: "Private to you forever", sub: "Your HOD cannot access this" },
 ];
 
-function IndividualProCard({ active, planName, aiCredits, casesUsed, casesLimit, renewDate, onUpgrade, onManage }: ProCardProps) {
+function IndividualProCard({ active, planName, casesUsed, casesLimit, renewDate, onUpgrade, onManage }: ProCardProps) {
   if (!active) {
     return (
       <View style={[styles.card, styles.dashedCard, { borderColor: C.purpleBorder, backgroundColor: C.purpleLight }]}>
@@ -209,20 +234,16 @@ function IndividualProCard({ active, planName, aiCredits, casesUsed, casesLimit,
           <Feather name="cpu" size={20} color={C.purple} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.inactiveTitle, { color: C.purple }]}>Individual Plan</Text>
-          <Text style={[styles.inactiveSub, { color: C.muted }]}>Rounds + Clinical Memory · Your personal career layer</Text>
-          <Text style={styles.inactiveNote}>Not subscribed — your hospital's Team plan doesn't include this</Text>
+          <Text style={[styles.inactiveTitle, { color: C.purple }]}>Individual Pro</Text>
+          <Text style={[styles.inactiveSub, { color: C.muted }]}>Private Rounds + Clinical Memory · Your career record</Text>
         </View>
         <Pressable style={styles.proUpgradeBtn} onPress={onUpgrade}>
-          <Text style={styles.proUpgradeBtnText}>Upgrade</Text>
+          <Text style={styles.proUpgradeBtnText}>₹1,199/mo</Text>
           <Feather name="arrow-right" size={12} color={C.white} />
         </Pressable>
       </View>
     );
   }
-
-  const creditsLow = aiCredits <= 5;
-  const creditsOut = aiCredits === 0;
 
   return (
     <View style={[styles.activeCard, { borderColor: C.purpleBorder }]}>
@@ -232,32 +253,16 @@ function IndividualProCard({ active, planName, aiCredits, casesUsed, casesLimit,
             <Feather name="cpu" size={16} color={C.purple} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.cardHeaderLabel}>INDIVIDUAL PLAN</Text>
-            <Text style={styles.cardHeaderTitle}>{planName}</Text>
+            <Text style={styles.cardHeaderLabel}>INDIVIDUAL PRO</Text>
+            <Text style={styles.cardHeaderTitle}>Your career layer</Text>
           </View>
         </View>
         <StatusPill status="active" />
       </View>
 
       <View style={styles.cardBody}>
-        {/* Cases + AI credits row */}
-        <View style={styles.metaGrid}>
-          <View style={[styles.metaCell, { backgroundColor: C.surface }]}>
-            <Text style={styles.metaCellLabel}>Cases documented</Text>
-            <Text style={[styles.metaCellValue, { color: C.inkSoft }]}>
-              {casesLimit >= 999000 ? "Unlimited" : `${casesUsed} / ${casesLimit}`}
-            </Text>
-          </View>
-          <View style={[styles.metaCell, { backgroundColor: creditsOut ? "rgba(239,68,68,0.06)" : creditsLow ? C.orangeLight : C.purpleLight }]}>
-            <Text style={styles.metaCellLabel}>AI credits left</Text>
-            <Text style={[styles.metaCellValue, { color: creditsOut ? "#DC2626" : creditsLow ? C.orange : C.purple }]}>
-              {aiCredits} {creditsOut ? "· Exhausted" : creditsLow ? "· Running low" : "remaining"}
-            </Text>
-          </View>
-        </View>
-
         <View style={[styles.proFeaturesBox, { backgroundColor: C.purpleLight, borderColor: C.purpleBorder }]}>
-          <Text style={[styles.proFeaturesLabel, { color: C.purple }]}>WHAT THIS PLAN GIVES YOU</Text>
+          <Text style={[styles.proFeaturesLabel, { color: C.purple }]}>WHAT INDIVIDUAL PRO GIVES YOU</Text>
           {PRO_FEATURES.map((item, i) => (
             <View key={i} style={[styles.proFeatureRow, i < PRO_FEATURES.length - 1 && { marginBottom: 10 }]}>
               <View style={[styles.proFeatureIconWrap, { backgroundColor: "rgba(124,106,246,0.12)" }]}>
@@ -276,7 +281,7 @@ function IndividualProCard({ active, planName, aiCredits, casesUsed, casesLimit,
           <View style={{ flex: 1 }}>
             <Text style={[styles.alertBoxBody, { color: C.greenDark, lineHeight: 18 }]}>
               <Text style={{ fontWeight: "700" }}>Fully private.</Text>
-              {" "}No hospital, no HOD, no employer has access to your Rounds debriefs or Clinical Memory — ever.
+              {" "}No hospital, no HOD, no employer has access to your Rounds or Clinical Memory — ever. This record is yours.
             </Text>
           </View>
         </View>
@@ -284,10 +289,11 @@ function IndividualProCard({ active, planName, aiCredits, casesUsed, casesLimit,
 
       <View style={[styles.cardFooter, { borderTopColor: C.border }]}>
         <View>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 }}>
+          <Text style={[styles.footerMeta, { fontSize: 13, fontWeight: "700", color: C.ink }]}>₹1,199/month</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 3 }}>
             <Feather name="clock" size={11} color={C.faint} />
             <Text style={styles.footerMeta}>
-              {renewDate ? `Renews ${renewDate}` : "Individual plan active"}
+              {renewDate ? `Renews ${renewDate}` : "Individual Pro active"}
             </Text>
           </View>
         </View>
@@ -331,49 +337,53 @@ function CombinedBanner({ deptName, planName }: { deptName?: string; planName?: 
   );
 }
 
-// ── "Who can see what" table ─────────────────────────────────────────────────
-const VISIBILITY_ROWS = [
-  { item: "Cases on shift",   team: true,  pro: true,  hospital: true  },
-  { item: "Handover records", team: true,  pro: false, hospital: true  },
-  { item: "Activity logs",    team: true,  pro: false, hospital: true  },
-  { item: "Rounds debriefs",  team: false, pro: true,  hospital: false },
-  { item: "Clinical Memory",  team: false, pro: true,  hospital: false },
-  { item: "Cases off-shift",  team: false, pro: true,  hospital: false },
-  { item: "Personal stats",   team: false, pro: true,  hospital: false },
+// ── "What you can access" summary ─────────────────────────────────────────────
+interface AccessRow {
+  label: string;
+  team: boolean;
+  pro: boolean;
+}
+
+const ACCESS_ROWS: AccessRow[] = [
+  { label: "Case documentation — unlimited", team: true,  pro: true  },
+  { label: "Smart Dictation",                team: true,  pro: true  },
+  { label: "AI Discharge Summary",           team: true,  pro: true  },
+  { label: "Clinical Decision Support",      team: true,  pro: true  },
+  { label: "Document Scanning",              team: true,  pro: true  },
+  { label: "Rounds debriefs",                team: true,  pro: true  },
+  { label: "Clinical Memory (private)",      team: false, pro: true  },
+  { label: "Shift management",               team: true,  pro: false },
+  { label: "Case handover system",           team: true,  pro: false },
 ];
 
-function VisibilityTable() {
+function AccessSummary({ showTeam, showPro }: { showTeam: boolean; showPro: boolean }) {
   return (
     <View style={[styles.tableCard, { backgroundColor: C.white, borderColor: C.border }]}>
-      <Text style={[styles.tableTitle, { color: C.ink }]}>Who can see what</Text>
+      <Text style={[styles.tableTitle, { color: C.ink }]}>What you can access</Text>
 
-      <View style={styles.tableHeaderRow}>
-        <Text style={[styles.tableHeaderCell, { flex: 1, color: C.faint }]}>Feature</Text>
-        <Text style={[styles.tableHeaderCell, { width: 48, textAlign: "center", color: C.greenDark }]}>Team</Text>
-        <Text style={[styles.tableHeaderCell, { width: 38, textAlign: "center", color: C.purple }]}>Indv.</Text>
-        <Text style={[styles.tableHeaderCell, { width: 82, textAlign: "right", color: C.faint }]}>Hospital</Text>
+      {ACCESS_ROWS.map((row, i) => {
+        const enabled = (row.team && showTeam) || (row.pro && showPro);
+        return (
+          <View
+            key={i}
+            style={[
+              styles.tableRow,
+              i < ACCESS_ROWS.length - 1 && { borderBottomWidth: 1, borderBottomColor: "#F5F6F8" },
+            ]}
+          >
+            <Text style={[styles.tableCell, { flex: 1, color: C.inkSoft }]}>{row.label}</Text>
+            <Text style={[styles.tableVisCell, { color: enabled ? C.greenDark : C.faint, fontWeight: "700" }]}>
+              {enabled ? "Unlimited" : "—"}
+            </Text>
+          </View>
+        );
+      })}
+
+      <View style={[styles.tableRow, { borderTopWidth: 1, borderTopColor: "#F0F1F3", marginTop: 4 }]}>
+        <Text style={[styles.tableCell, { flex: 1, color: C.faint, fontStyle: "italic", fontSize: 11 }]}>
+          No AI credits on your plan — all AI features run without limits.
+        </Text>
       </View>
-
-      {VISIBILITY_ROWS.map((row, i) => (
-        <View
-          key={i}
-          style={[
-            styles.tableRow,
-            i < VISIBILITY_ROWS.length - 1 && { borderBottomWidth: 1, borderBottomColor: "#F5F6F8" },
-          ]}
-        >
-          <Text style={[styles.tableCell, { flex: 1, color: C.inkSoft }]}>{row.item}</Text>
-          <Text style={[styles.tableCheckCell, { width: 48, color: row.team ? C.greenDark : C.faint }]}>
-            {row.team ? "✓" : "—"}
-          </Text>
-          <Text style={[styles.tableCheckCell, { width: 38, color: row.pro ? C.purple : C.faint }]}>
-            {row.pro ? "✓" : "—"}
-          </Text>
-          <Text style={[styles.tableVisCell, { width: 82, color: row.hospital ? "#B45309" : C.greenDark }]}>
-            {row.hospital ? "Yes" : "Private"}
-          </Text>
-        </View>
-      ))}
     </View>
   );
 }
@@ -417,7 +427,7 @@ function FreeState({ casesUsed, casesLimit, onUpgradePro, onJoinTeam }: FreeStat
       </View>
 
       <Text style={[styles.freeSub, { color: C.muted }]}>
-        Upgrade to document unlimited cases and get AI credits for Smart Dictation, Clinical Decision Support, and more.
+        Upgrade to Individual Pro for unlimited cases, Rounds, Clinical Memory, and all AI features — no credit limits.
       </Text>
       <View style={styles.freeBtns}>
         <Pressable
@@ -472,7 +482,7 @@ export default function MySubscriptionsScreen() {
   useFocusEffect(useCallback(() => { fetchSub(); }, [fetchSub]));
 
   // Derive scenario from real data
-  const hasPaidPlan = subStatus ? (subStatus.plan === "base" || subStatus.plan === "pro") : false;
+  const hasPaidPlan = subStatus ? (subStatus.plan === "pro") : false;
   const hasTeam = isInDepartment;
   const realScenario: Scenario =
     hasTeam && hasPaidPlan ? "both"
@@ -496,7 +506,6 @@ export default function MySubscriptionsScreen() {
   const renewDate = formatRenew(subStatus?.currentPeriodEnd);
   const doctorInitial = user?.name?.charAt(0)?.toUpperCase() ?? "D";
   const currentPlanLabel = planLabel(subStatus?.plan ?? "free");
-  const aiCredits = subStatus?.credits_balance ?? 0;
 
   const handleJoinTeam = () => (navigation as any).navigate("SetupDepartment");
   const handleUpgrade = () => (navigation as any).navigate("Upgrade", {});
@@ -606,12 +615,14 @@ export default function MySubscriptionsScreen() {
           </View>
           <TeamPlanCard
             active={showTeam}
+            hasPro={showPro}
             deptName={department?.name}
             role={membership?.role}
             shiftName={shiftSession && activeShift ? activeShift.name : undefined}
             renewDate={renewDate}
             onJoin={handleJoinTeam}
             onLeave={handleLeave}
+            onAddPro={handleUpgrade}
           />
         </View>
       )}
@@ -626,7 +637,6 @@ export default function MySubscriptionsScreen() {
           <IndividualProCard
             active={showPro}
             planName={currentPlanLabel}
-            aiCredits={aiCredits}
             casesUsed={subStatus?.casesUsed ?? 0}
             casesLimit={subStatus?.casesLimit ?? 10}
             renewDate={renewDate}
@@ -636,8 +646,8 @@ export default function MySubscriptionsScreen() {
         </View>
       )}
 
-      {/* Visibility table */}
-      {!showFree && <VisibilityTable />}
+      {/* Access summary */}
+      {!showFree && <AccessSummary showTeam={showTeam} showPro={showPro} />}
 
       {/* Help link */}
       <Pressable
