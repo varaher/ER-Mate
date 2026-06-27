@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -7,8 +7,6 @@ import {
   Pressable,
   Alert,
   ActivityIndicator,
-  Animated,
-  Linking,
 } from "react-native";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -22,172 +20,118 @@ import { getApiUrl } from "@/lib/query-client";
 
 type RouteProps = RouteProp<RootStackParamList, "Upgrade">;
 type BillingCycle = "monthly" | "annual";
-type PlanId = "free" | "pro";
 type ActiveTab = "individual" | "team";
+type TeamStep = "idle" | "confirm" | "paying" | "success";
 
-interface SubscriptionStatus {
+const C = {
+  green: "#1DB870",
+  greenDark: "#15924F",
+  greenLight: "rgba(29,184,112,0.09)",
+  greenBorder: "rgba(29,184,112,0.2)",
+  purple: "#7C6AF6",
+  purpleLight: "rgba(124,106,246,0.09)",
+  purpleBorder: "rgba(124,106,246,0.2)",
+  ink: "#0B0F14",
+  inkSoft: "#2E3440",
+  muted: "#6B7280",
+  faint: "#9CA3AF",
+  border: "#E8EAED",
+  surface: "#F7F8FA",
+  white: "#FFFFFF",
+  orange: "#F59E0B",
+  red: "#EF4444",
+  darkCard: "#071810",
+  proHeader: "#071810",
+};
+
+interface SubStatus {
   plan: string;
-  status: string;
   casesUsed: number;
   casesLimit: number;
-  casesRemaining: number | null;
-  currentPeriodEnd: string | null;
-  priceInr: number;
-  freeCaseLimit: number;
+  aiCredits?: number;
 }
 
-interface FeatureItem {
-  text: string;
-  ok: boolean;
-  bold?: boolean;
-  credit?: boolean;
+function FRow({ text, ok = true, bold = false, color = C.green, sub = "" }: {
+  text: string; ok?: boolean; bold?: boolean; color?: string; sub?: string;
+}) {
+  return (
+    <View style={s.frow}>
+      {ok ? (
+        <View style={[s.fcheckBg, { backgroundColor: color + "20" }]}>
+          <Feather name="check" size={9} color={color} />
+        </View>
+      ) : (
+        <View style={[s.fcheckBg, { backgroundColor: "rgba(0,0,0,0.04)" }]}>
+          <Feather name="x" size={9} color="#D1D5DB" />
+        </View>
+      )}
+      <View style={{ flex: 1 }}>
+        <Text style={[s.frowText, {
+          color: !ok ? "#C4C9D4" : bold ? C.inkSoft : C.muted,
+          fontWeight: bold ? "700" : "400",
+        }]}>{text}</Text>
+        {!!sub && <Text style={[s.frowSub, { color: C.faint }]}>{sub}</Text>}
+      </View>
+    </View>
+  );
 }
 
-interface Plan {
-  id: PlanId;
-  name: string;
-  monthlyPrice: string;
-  monthlyRaw: number;
-  annualPrice: string;
-  annualRaw: number;
-  annualEquiv: string;
-  annualSavings: string;
-  tag?: string | null;
-  tagColor?: string | null;
-  description: string;
-  accent: string;
-  accentBg: string;
-  isDark: boolean;
-  ctaDisabled: boolean;
-  icon: keyof typeof Feather.glyphMap;
-  features: FeatureItem[];
+function SecLabel({ text, color = C.faint }: { text: string; color?: string }) {
+  return <Text style={[s.secLabel, { color }]}>{text}</Text>;
 }
-
-const PLANS: Plan[] = [
-  {
-    id: "free",
-    name: "Free",
-    monthlyPrice: "₹0", monthlyRaw: 0,
-    annualPrice: "₹0", annualRaw: 0, annualEquiv: "₹0", annualSavings: "₹0",
-    tag: null, tagColor: null,
-    description: "10 cases to try. No card needed.",
-    accent: "#9CA3AF", accentBg: "rgba(156,163,175,0.08)",
-    isDark: false, ctaDisabled: true,
-    icon: "clipboard",
-    features: [
-      { text: "10 cases (lifetime)", ok: true },
-      { text: "Smart Dictation + Discharge Summary", ok: true },
-      { text: "ATLS + PALS frameworks", ok: true },
-      { text: "PDF / WhatsApp export", ok: true },
-      { text: "Trivia & EM Reference", ok: true },
-      { text: "Unlimited cases", ok: false },
-      { text: "Rounds & Clinical Memory", ok: false },
-      { text: "All AI features", ok: false },
-    ],
-  },
-  {
-    id: "pro",
-    name: "Individual Pro",
-    monthlyPrice: "₹1,199", monthlyRaw: 1199,
-    annualPrice: "₹11,990", annualRaw: 11990, annualEquiv: "₹999", annualSavings: "₹2,398",
-    tag: "YOUR CAREER LAYER", tagColor: "#1DB870",
-    description: "Your account. Your career. Not your hospital's. Cases, Rounds, and Clinical Memory stay with you forever.",
-    accent: "#1DB870", accentBg: "rgba(30,184,112,0.08)",
-    isDark: true, ctaDisabled: false,
-    icon: "layers",
-    features: [
-      { text: "Unlimited case documentation", ok: true, bold: true },
-      { text: "Smart Dictation — always free, always unlimited", ok: true, bold: true },
-      { text: "AI Discharge Summary — always free, always unlimited", ok: true, bold: true },
-      { text: "ATLS adult + PALS paediatric frameworks", ok: true },
-      { text: "Document OCR scanning", ok: true },
-      { text: "ABG / VBG AI interpretation", ok: true },
-      { text: "Clinical Decision Support — unlimited", ok: true },
-      { text: "EM Reference Library — AI chat, unlimited", ok: true },
-      { text: "Rounds — unlimited debriefs", ok: true, bold: true },
-      { text: "All 7 thinking lenses", ok: true, bold: true },
-      { text: "Clinical Memory — your full career", ok: true, bold: true },
-      { text: "No credits. No limits. No walls mid-shift.", ok: true, bold: true },
-    ],
-  },
-];
-
-
-const TEAM_FEATURES = [
-  { text: "Everything in Pro — for every doctor", bold: true },
-  { text: "Shift management — Morning / Evening / Night", bold: true },
-  { text: "Case handover between shifts", bold: false },
-  { text: "Auto handover sheet — PDF + WhatsApp", bold: false },
-  { text: "Consultant escalation module", bold: false },
-  { text: "HOD admin dashboard — full access", bold: false },
-  { text: "All active cases visible to HOD", bold: false },
-  { text: "Department analytics & reports", bold: false },
-  { text: "Custom hospital branding on exports", bold: false },
-  { text: "Priority WhatsApp support", bold: false },
-];
-
-const EXAMPLE_BILLS = [
-  { type: "Small clinic / nursing home", consultants: 2, residents: 6 },
-  { type: "Mid-size ER", consultants: 8, residents: 28 },
-  { type: "Large hospital dept", consultants: 15, residents: 50 },
-];
-
 
 export default function UpgradeScreen() {
   const navigation = useNavigation();
   const route = useRoute<RouteProps>();
-  const { theme, isDark: isDarkMode } = useTheme();
+  const { isDark: isDarkMode } = useTheme();
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const { user, token } = useAuth();
 
   const { lockReason, lockMessage } = route.params || {};
 
-  const [subStatus, setSubStatus] = useState<SubscriptionStatus | null>(null);
+  const [subStatus, setSubStatus] = useState<SubStatus | null>(null);
   const [loading, setLoading] = useState(true);
-  const [ctaLoading, setCtaLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<ActiveTab>("individual");
-  const [selectedPlan, setSelectedPlan] = useState<PlanId>("pro");
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("monthly");
   const [teamConsultants, setTeamConsultants] = useState(2);
   const [teamResidents, setTeamResidents] = useState(6);
-
-  const scaleAnims = useRef(PLANS.map(() => new Animated.Value(1))).current;
+  const [proLoading, setProLoading] = useState(false);
+  const [teamStep, setTeamStep] = useState<TeamStep>("idle");
+  const [teamLoading, setTeamLoading] = useState(false);
 
   useEffect(() => {
-    fetchSubscriptionStatus();
+    fetchStatus();
   }, []);
 
-  const fetchSubscriptionStatus = async () => {
+  const fetchStatus = async () => {
     if (!user?.id) { setLoading(false); return; }
     try {
-      const url = new URL(
-        `/api/subscription/status?userId=${encodeURIComponent(user.id)}&userEmail=${encodeURIComponent(user.email || "")}`,
-        getApiUrl()
-      ).href;
+      const url = new URL(`/api/subscription/status?userId=${encodeURIComponent(user.id)}&userEmail=${encodeURIComponent(user.email || "")}`, getApiUrl()).href;
       const res = await fetch(url);
-      const text = await res.text();
-      let data: any;
-      try { data = JSON.parse(text); } catch {
-        data = { plan: "free", casesUsed: 0, casesLimit: 10, casesRemaining: 10, status: "active" };
-      }
+      const data = await res.json();
       setSubStatus(data);
-      setSelectedPlan("pro");
     } catch { }
     finally { setLoading(false); }
   };
 
-  const handlePlanSelect = (planId: PlanId, index: number) => {
-    setSelectedPlan(planId);
-    Animated.sequence([
-      Animated.timing(scaleAnims[index], { toValue: 0.97, duration: 80, useNativeDriver: true }),
-      Animated.spring(scaleAnims[index], { toValue: 1, useNativeDriver: true, tension: 200, friction: 10 }),
-    ]).start();
-  };
+  const isAnnual = billingCycle === "annual";
+  const proMonthly = 1199;
+  const proAnnual = 11990;
+  const proAnnualEq = 999;
+  const proSave = 2398;
 
-  const handleSubscribe = async (plan: PlanId, cycle: BillingCycle) => {
-    if (plan === "free") return;
-    setCtaLoading(true);
+  const teamMonthly = (teamConsultants * 599) + (teamResidents * 399);
+  const teamAnnual = (teamConsultants * 5990) + (teamResidents * 3990);
+  const teamDisplay = isAnnual ? teamAnnual : teamMonthly;
+  const totalDrs = teamConsultants + teamResidents;
+
+  const userPlan = subStatus?.plan ?? "free";
+  const isProActive = userPlan === "pro";
+
+  const handleProCheckout = async () => {
+    if (isProActive) return;
+    setProLoading(true);
     try {
       const url = new URL("/api/subscription/create-checkout", getApiUrl()).href;
       const res = await fetch(url, {
@@ -196,62 +140,70 @@ export default function UpgradeScreen() {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ plan, billingCycle: cycle }),
+        body: JSON.stringify({ plan: "pro", billingCycle }),
       });
       const data = await res.json();
       if (data.url) {
         await WebBrowser.openBrowserAsync(data.url);
       } else {
-        Alert.alert("Something went wrong", "Please try again or contact support@ermate.app");
+        Alert.alert("Something went wrong", data.error || "Please try again or contact support@ermate.app");
       }
     } catch {
       Alert.alert("Something went wrong", "Please try again or contact support@ermate.app");
     } finally {
-      setCtaLoading(false);
+      setProLoading(false);
     }
   };
 
+  const handleTeamEnroll = () => {
+    if (totalDrs < 4) {
+      Alert.alert("Minimum 4 doctors required", "Please add at least 4 doctors to enroll in the Team plan.");
+      return;
+    }
+    setTeamStep("confirm");
+  };
 
-  const handleTeamContact = () => {
-    const monthly = (teamConsultants * 599) + (teamResidents * 399);
-    const annual = (teamConsultants * 5990) + (teamResidents * 3990);
-    const bill = billingCycle === "annual"
-      ? `₹${annual.toLocaleString("en-IN")}/year (₹${Math.round(annual / 12).toLocaleString("en-IN")}/month)`
-      : `₹${monthly.toLocaleString("en-IN")}/month`;
-    const subject = encodeURIComponent("ErMate Team Plan Setup");
-    const body = encodeURIComponent(
-      `Hi ErMate Team,\n\nI'd like to set up the Team Plan for our department.\n\nTeam size:\n- Consultants: ${teamConsultants}\n- Residents: ${teamResidents}\n- Total: ${teamConsultants + teamResidents} doctors\n\nBilling preference: ${billingCycle === "annual" ? "Annual" : "Monthly"}\nEstimated bill: ${bill}\n\nPlease get in touch to set up our account.\n\nThank you`
-    );
-    Linking.openURL(`mailto:support@ermate.app?subject=${subject}&body=${body}`);
+  const handleTeamPay = async () => {
+    setTeamLoading(true);
+    setTeamStep("paying");
+    try {
+      const url = new URL("/api/subscription/team/checkout", getApiUrl()).href;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ consultants: teamConsultants, residents: teamResidents, billingCycle }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        await WebBrowser.openBrowserAsync(data.url);
+        setTeamStep("idle");
+      } else {
+        Alert.alert("Something went wrong", data.error || "Please contact support@ermate.app");
+        setTeamStep("confirm");
+      }
+    } catch {
+      Alert.alert("Something went wrong", "Please contact support@ermate.app");
+      setTeamStep("confirm");
+    } finally {
+      setTeamLoading(false);
+    }
   };
 
   if (loading) {
     return (
-      <View style={[s.container, s.center, { backgroundColor: theme.backgroundDefault }]}>
-        <ActivityIndicator size="large" color="#1DB870" />
+      <View style={[s.container, s.center]}>
+        <ActivityIndicator size="large" color={C.green} />
       </View>
     );
   }
 
-  const casesUsed = subStatus?.casesUsed ?? 0;
-  const casesLimit = subStatus?.casesLimit ?? 10;
-  const usagePct = Math.min(1, casesUsed / Math.max(1, casesLimit));
-  const limitReached = casesUsed >= casesLimit;
-
-  const activePlan = PLANS.find(p => p.id === selectedPlan)!;
-  const isAnnual = billingCycle === "annual";
-  const userCurrentPlan = subStatus?.plan ?? "free";
-  const isPlanActive = (planId: PlanId) =>
-    planId === "free" ? true : userCurrentPlan === planId;
-  const activeCtaDisabled = activePlan.ctaDisabled || isPlanActive(activePlan.id as PlanId);
-
-  const teamMonthly = (teamConsultants * 599) + (teamResidents * 399);
-  const teamAnnual = (teamConsultants * 5990) + (teamResidents * 3990);
-  const teamDisplay = isAnnual ? Math.round(teamAnnual / 12) : teamMonthly;
-  const teamSavings = (teamMonthly * 12) - teamAnnual;
+  const bg = isDarkMode ? "#0D1117" : C.surface;
 
   return (
-    <View style={[s.container, { backgroundColor: isDarkMode ? "#0D1117" : "#F5F6F8" }]}>
+    <View style={[s.container, { backgroundColor: bg }]}>
       <ScrollView
         contentContainerStyle={{
           paddingTop: headerHeight + 12,
@@ -261,245 +213,221 @@ export default function UpgradeScreen() {
         showsVerticalScrollIndicator={false}
       >
         {lockReason ? (
-          <View style={[s.lockBanner, { backgroundColor: "#FEF2F2" }]}>
-            <Feather name="lock" size={18} color="#EF4444" />
+          <View style={s.lockBanner}>
+            <Feather name="lock" size={18} color={C.red} />
             <View style={{ flex: 1 }}>
-              <Text style={[s.lockTitle, { color: "#EF4444" }]}>{lockReason}</Text>
-              {lockMessage ? <Text style={[s.lockMsg, { color: theme.text }]}>{lockMessage}</Text> : null}
+              <Text style={[s.lockTitle, { color: C.red }]}>{lockReason}</Text>
+              {!!lockMessage && <Text style={s.lockMsg}>{lockMessage}</Text>}
             </View>
           </View>
         ) : null}
 
-        {/* Usage card */}
-        <View style={[s.usageCard, { backgroundColor: isDarkMode ? "#161B22" : "#FFFFFF" }]}>
-          <View style={s.usageRow}>
-            <Text style={[s.usageLabel, { color: theme.textSecondary }]}>Your usage</Text>
-            <Text style={[s.usageStatus, { color: limitReached ? "#EF4444" : "#1DB870" }]}>
-              {limitReached ? "Limit reached" : `${casesLimit - casesUsed} remaining`}
-            </Text>
-          </View>
-          <View style={s.barBg}>
-            <View style={[s.barFill, { width: `${usagePct * 100}%` as any, backgroundColor: limitReached ? "#EF4444" : "#1DB870" }]} />
-          </View>
-          <Text style={[s.usageText, { color: theme.textMuted }]}>{casesUsed} of {casesLimit} free cases used</Text>
-        </View>
-
         {/* Tab switcher */}
-        <View style={[s.tabContainer, { backgroundColor: isDarkMode ? "#161B22" : "#FFFFFF" }]}>
+        <View style={[s.tabRow, { backgroundColor: C.white, borderColor: C.border }]}>
           {([
             { id: "individual" as ActiveTab, label: "Individual" },
             { id: "team" as ActiveTab, label: "Team / Hospital" },
-          ]).map(tab => (
+          ]).map(t => (
             <Pressable
-              key={tab.id}
-              onPress={() => setActiveTab(tab.id)}
-              style={[
-                s.tab,
-                activeTab === tab.id && { backgroundColor: isDarkMode ? "#FFFFFF" : "#0D1117" },
-              ]}
+              key={t.id}
+              style={[s.tabBtn, activeTab === t.id && { backgroundColor: C.ink }]}
+              onPress={() => { setActiveTab(t.id); setTeamStep("idle"); }}
             >
-              <Feather
-                name={tab.id === "individual" ? "user" : "users"}
-                size={13}
-                color={activeTab === tab.id ? (isDarkMode ? "#0D1117" : "#FFFFFF") : theme.textMuted}
-                style={{ marginRight: 5 }}
-              />
-              <Text style={[
-                s.tabText,
-                { color: activeTab === tab.id ? (isDarkMode ? "#0D1117" : "#FFFFFF") : theme.textMuted },
-                activeTab === tab.id && { fontWeight: "700" },
-              ]}>{tab.label}</Text>
+              <Text style={[s.tabBtnText, { color: activeTab === t.id ? C.white : C.faint }]}>
+                {t.label}
+              </Text>
             </Pressable>
           ))}
         </View>
 
         {/* Billing toggle */}
-        <View style={[s.billingToggle, { backgroundColor: isDarkMode ? "#161B22" : "#EEF0F2" }]}>
-          {(["monthly", "annual"] as BillingCycle[]).map(cycle => (
+        <View style={[s.billingRow, { backgroundColor: "#ECEEF1" }]}>
+          {(["monthly", "annual"] as BillingCycle[]).map(b => (
             <Pressable
-              key={cycle}
-              onPress={() => setBillingCycle(cycle)}
-              style={[
-                s.billingTab,
-                billingCycle === cycle && { backgroundColor: isDarkMode ? "#2D333B" : "#FFFFFF" },
-              ]}
+              key={b}
+              style={[s.billingBtn, billingCycle === b && { backgroundColor: C.white }]}
+              onPress={() => setBillingCycle(b)}
             >
-              <Text style={[
-                s.billingTabText,
-                { color: billingCycle === cycle ? (isDarkMode ? "#FFFFFF" : "#0D1117") : theme.textMuted },
-                billingCycle === cycle && { fontWeight: "700" },
-              ]}>
-                {cycle === "monthly" ? "Monthly" : "Annual"}
+              <Text style={[s.billingBtnText, { color: billingCycle === b ? C.ink : C.faint }]}>
+                {b === "monthly" ? "Monthly" : "Annual"}
               </Text>
-              {cycle === "annual" && (
-                <View style={[s.saveBadge, {
-                  backgroundColor: billingCycle === "annual" ? "rgba(30,184,112,0.15)" : "rgba(156,163,175,0.12)",
-                }]}>
-                  <Text style={[s.saveBadgeText, {
-                    color: billingCycle === "annual" ? "#15924F" : theme.textMuted,
-                  }]}>SAVE 17%</Text>
+              {b === "annual" && (
+                <View style={[s.savePill, { backgroundColor: billingCycle === "annual" ? C.greenLight : "rgba(156,163,175,0.12)" }]}>
+                  <Text style={[s.savePillText, { color: billingCycle === "annual" ? C.greenDark : C.faint }]}>2 MONTHS FREE</Text>
                 </View>
               )}
             </Pressable>
           ))}
         </View>
 
-        {isAnnual ? (
-          <View style={s.annualBanner}>
-            <Feather name="gift" size={13} color="#15924F" />
-            <Text style={s.annualBannerText}>Annual billing — save 2 months on every plan</Text>
+        {isAnnual && (
+          <View style={[s.annualBanner, { backgroundColor: C.greenLight, borderColor: C.greenBorder }]}>
+            <Feather name="gift" size={13} color={C.greenDark} />
+            <Text style={[s.annualBannerText, { color: C.greenDark }]}>Annual plan — pay for 10 months, use for 12</Text>
           </View>
-        ) : null}
+        )}
 
         {/* ── INDIVIDUAL TAB ── */}
         {activeTab === "individual" && (
           <>
-            {PLANS.map((plan, pi) => {
-              const isSelected = selectedPlan === plan.id;
-              return (
-                <Animated.View key={plan.id} style={{ transform: [{ scale: scaleAnims[pi] }], marginBottom: 12 }}>
-                  <Pressable
-                    onPress={() => handlePlanSelect(plan.id, pi)}
-                    style={[
-                      s.planCard,
-                      {
-                        backgroundColor: plan.isDark ? "#0D1117" : (isDarkMode ? "#161B22" : "#FFFFFF"),
-                        borderColor: isSelected ? plan.accent : plan.isDark ? "rgba(129,140,248,0.20)" : (isDarkMode ? "#2D333B" : "#F0F0F0"),
-                        borderWidth: isSelected ? 2 : 1.5,
-                        shadowColor: plan.accent,
-                        shadowOpacity: isSelected ? 0.18 : 0,
-                        shadowRadius: 16,
-                        shadowOffset: { width: 0, height: 6 },
-                        elevation: isSelected ? 6 : 1,
-                      },
-                    ]}
-                  >
-                    {plan.tag ? (
-                      <View style={[s.tagRow, {
-                        backgroundColor: plan.isDark ? "rgba(129,140,248,0.08)" : `${plan.accent}12`,
-                        borderBottomColor: plan.isDark ? "rgba(129,140,248,0.10)" : `${plan.accent}18`,
-                      }]}>
-                        <Text style={[s.tagText, { color: plan.tagColor ?? plan.accent }]}>{plan.tag}</Text>
-                        {isSelected && (
-                          <View style={[s.selectedDot, { backgroundColor: plan.accent }]}>
-                            <Feather name="check" size={10} color="#FFFFFF" />
-                          </View>
-                        )}
+            {/* Free card */}
+            <View style={[s.card, { backgroundColor: C.white, borderColor: C.border, marginTop: 4 }]}>
+              <View style={s.cardTopRow}>
+                <View>
+                  <Text style={s.planTag}>Free</Text>
+                  <Text style={s.planPrice}>₹0</Text>
+                </View>
+                <View style={[s.activePill, { backgroundColor: C.greenLight }]}>
+                  <View style={[s.pillDot, { backgroundColor: C.green }]} />
+                  <Text style={[s.pillText, { color: C.greenDark }]}>Active</Text>
+                </View>
+              </View>
+              <Text style={[s.planDesc, { color: C.faint }]}>
+                10 cases to try ErMate. Includes 5 AI credits to experience Decision Support and Rounds before upgrading.
+              </Text>
+              <View style={[s.creditPreview, { backgroundColor: "#F0FDF6", borderColor: C.greenBorder }]}>
+                <Text style={[s.creditPreviewTitle, { color: C.greenDark }]}>5 free AI credits included</Text>
+                <View style={s.creditTrack}>
+                  <View style={[s.creditFill, { width: 0, backgroundColor: C.green }]} />
+                </View>
+                <Text style={[s.creditPreviewSub, { color: C.muted }]}>Try Decision Support, Rounds, OCR — 1 credit each</Text>
+              </View>
+              {[
+                { text: "10 cases (lifetime)", ok: true },
+                { text: "Smart Dictation — always free", ok: true },
+                { text: "AI Discharge Summary — always free", ok: true },
+                { text: "ATLS adult + PALS paediatric", ok: true },
+                { text: "PDF / WhatsApp export", ok: true },
+                { text: "5 AI credits (one-time)", ok: true },
+                { text: "Unlimited cases", ok: false },
+                { text: "Unlimited AI features", ok: false },
+                { text: "Rounds & Clinical Memory", ok: false },
+              ].map((f, i) => <FRow key={i} {...f} color={C.muted} />)}
+            </View>
+
+            {/* Pro card */}
+            <View style={[s.proCard, { borderColor: C.green }]}>
+              {/* Green tag bar */}
+              <View style={[s.proTagBar, { backgroundColor: C.green }]}>
+                <Text style={s.proTagLeft}>Individual Pro · Recommended</Text>
+                <Text style={s.proTagRight}>No credits · No limits</Text>
+              </View>
+
+              {/* Dark price header */}
+              <View style={[s.proPriceHeader, { backgroundColor: C.proHeader }]}>
+                <View style={s.proPriceRow}>
+                  <View style={{ flex: 1 }}>
+                    {isAnnual ? (
+                      <View style={s.priceDisplay}>
+                        <Text style={[s.priceMain, { color: C.green }]}>₹{proAnnualEq}</Text>
+                        <Text style={[s.pricePer, { color: "rgba(255,255,255,0.35)" }]}>/mo</Text>
                       </View>
-                    ) : null}
-
-                    <View style={s.planBody}>
-                      {/* Price header */}
-                      <View style={s.priceHeader}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[s.planNameLabel, { color: plan.isDark ? "rgba(255,255,255,0.35)" : theme.textMuted }]}>
-                            {plan.name.toUpperCase()}
-                          </Text>
-                          {plan.id === "free" ? (
-                            <Text style={[s.priceMain, { color: isDarkMode ? "#FFFFFF" : "#0D1117" }]}>₹0</Text>
-                          ) : (
-                            <>
-                              {isAnnual ? (
-                                <View style={s.priceRow}>
-                                  <Text style={[s.priceMain, { color: plan.isDark ? "#FFFFFF" : "#0D1117" }]}>
-                                    {plan.annualEquiv}
-                                  </Text>
-                                  <Text style={[s.pricePer, { color: plan.isDark ? "rgba(255,255,255,0.35)" : theme.textMuted }]}>/mo</Text>
-                                </View>
-                              ) : (
-                                <View style={s.priceRow}>
-                                  <Text style={[s.priceStrike, { color: plan.isDark ? "rgba(255,255,255,0.22)" : "#C4C9D4" }]}>
-                                    {plan.monthlyPrice}
-                                  </Text>
-                                  <Text style={[s.priceFree, { color: plan.accent }]}>FREE</Text>
-                                  <Text style={[s.pricePer, { color: plan.isDark ? "rgba(255,255,255,0.35)" : theme.textMuted }]}>
-                                    1st month
-                                  </Text>
-                                </View>
-                              )}
-                              <Text style={[s.priceAfter, { color: plan.isDark ? "rgba(255,255,255,0.28)" : theme.textMuted }]}>
-                                {isAnnual
-                                  ? `${plan.annualPrice}/year · Save ${plan.annualSavings}`
-                                  : `Then ${plan.monthlyPrice}/month · Cancel anytime`}
-                              </Text>
-                            </>
-                          )}
-                        </View>
-                        <View style={[s.iconBox, { backgroundColor: plan.accentBg, borderColor: `${plan.accent}30` }]}>
-                          <Feather name={plan.icon} size={20} color={plan.accent} />
-                        </View>
+                    ) : (
+                      <View style={s.priceDisplay}>
+                        <Text style={[s.priceStrike, { color: "rgba(255,255,255,0.2)" }]}>₹{proMonthly}</Text>
+                        <Text style={[s.priceFree, { color: C.green }]}>FREE</Text>
+                        <Text style={[s.pricePer, { color: "rgba(255,255,255,0.35)" }]}>1st month</Text>
                       </View>
-
-                      <Text style={[s.planDesc, { color: plan.isDark ? "rgba(255,255,255,0.40)" : theme.textSecondary }]}>
-                        {plan.description}
-                      </Text>
-
-                      <View style={[s.divider, { backgroundColor: plan.isDark ? "rgba(255,255,255,0.07)" : (isDarkMode ? "#2D333B" : "#F3F4F6") }]} />
-
-                      {/* Features */}
-                      {plan.features.map((item, ii) => (
-                        <View key={ii} style={[s.featureRow, ii > 0 && { marginTop: 9 }]}>
-                          {item.ok ? (
-                            <View style={[s.iconCircle, { backgroundColor: item.credit ? `${plan.accent}15` : `${plan.accent}18` }]}>
-                              <Feather name={item.credit ? "zap" : "check"} size={10} color={plan.accent} />
-                            </View>
-                          ) : (
-                            <View style={[s.iconCircle, { backgroundColor: "rgba(0,0,0,0.04)" }]}>
-                              <Feather name="x" size={10} color="#C4C9D4" />
-                            </View>
-                          )}
-                          <Text style={[
-                            s.featureText,
-                            {
-                              color: !item.ok
-                                ? "#C4C9D4"
-                                : plan.isDark
-                                ? (item.bold ? "#FFFFFF" : "rgba(255,255,255,0.55)")
-                                : (item.bold ? (isDarkMode ? "#FFFFFF" : "#0D1117") : theme.textSecondary),
-                              fontWeight: item.bold ? "600" : "400",
-                            },
-                          ]}>
-                            {item.text}
-                          </Text>
-                        </View>
-                      ))}
+                    )}
+                    <Text style={[s.priceSub, { color: "rgba(255,255,255,0.25)" }]}>
+                      {isAnnual ? `₹${proAnnual.toLocaleString("en-IN")}/year · Cancel anytime` : `Then ₹${proMonthly}/month · Cancel anytime`}
+                    </Text>
+                  </View>
+                  {isAnnual && (
+                    <View style={[s.saveBadge, { backgroundColor: C.greenLight, borderColor: C.greenBorder }]}>
+                      <Text style={[s.saveBadgeLabel, { color: C.green }]}>Save</Text>
+                      <Text style={[s.saveBadgeAmount, { color: C.green }]}>₹{proSave.toLocaleString("en-IN")}</Text>
                     </View>
+                  )}
+                </View>
+                <View style={[s.identityBox, { backgroundColor: "rgba(29,184,112,0.1)", borderColor: "rgba(29,184,112,0.18)" }]}>
+                  <Text style={[s.identityTitle, { color: C.green }]}>Your account. Your career. Not your hospital's.</Text>
+                  <Text style={[s.identitySub, { color: "rgba(255,255,255,0.4)" }]}>
+                    Cases, Rounds, and Clinical Memory stay with you at every hospital you ever work at.
+                  </Text>
+                </View>
+              </View>
 
-                    {!isPlanActive(plan.id as PlanId) && (
-                      <Pressable
-                        onPress={() => {
-                          handlePlanSelect(plan.id, pi);
-                          handleSubscribe(plan.id, billingCycle);
-                        }}
-                        style={[s.cardCTA, {
-                          backgroundColor: plan.isDark ? "#6366F1" : "#1DB870",
-                          shadowColor: plan.isDark ? "#6366F1" : "#1DB870",
-                          shadowOpacity: 0.3, shadowRadius: 10,
-                          shadowOffset: { width: 0, height: 4 },
-                        }]}
-                      >
-                        <Feather name="gift" size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
-                        <Text style={s.cardCTAText}>
-                          Start {plan.name} — Free for 1st Month
-                        </Text>
-                      </Pressable>
-                    )}
-                    {isPlanActive(plan.id as PlanId) && plan.id !== "free" && (
-                      <View style={[s.cardCTA, { backgroundColor: "transparent", borderWidth: 1, borderColor: plan.accent }]}>
-                        <Feather name="check-circle" size={14} color={plan.accent} style={{ marginRight: 6 }} />
-                        <Text style={[s.cardCTAText, { color: plan.accent }]}>Current Plan</Text>
-                      </View>
-                    )}
-                  </Pressable>
-                </Animated.View>
-              );
-            })}
+              <View style={{ padding: 16 }}>
+                <SecLabel text="Documentation — unlimited, no credits" color={C.greenDark} />
+                {[
+                  { text: "Unlimited cases", bold: true },
+                  { text: "Smart Dictation — always free, always unlimited", bold: true },
+                  { text: "AI Discharge Summary — always free, always unlimited", bold: true },
+                  { text: "ATLS adult + PALS paediatric frameworks" },
+                  { text: "Paediatric drug calculator" },
+                  { text: "Document OCR scanning" },
+                  { text: "ABG / VBG AI interpretation" },
+                  { text: "Clinical Decision Support — unlimited" },
+                  { text: "EM Reference Library — AI chat, unlimited" },
+                  { text: "PDF export + WhatsApp share" },
+                ].map((f, i) => <FRow key={i} ok bold={!!f.bold} text={f.text} color={C.green} />)}
 
-            {/* What happened to Base plan? */}
-            <View style={[s.sectionCard, { backgroundColor: isDarkMode ? "#161B22" : "#FFFFFF", borderColor: isDarkMode ? "#2D333B" : "#F0F0F0" }]}>
-              <Text style={[s.sectionTitle, { color: isDarkMode ? "#FFFFFF" : "#0D1117" }]}>What happened to Base plan and credits?</Text>
-              <Text style={[s.creditNoteText, { color: theme.textSecondary, lineHeight: 20, marginTop: 4 }]}>
-                We simplified. Individual Pro is the only paid individual plan — no credit walls, no monthly limits, no anxiety mid-shift. One price, everything included.{"\n\n"}If you're part of a hospital team, ask your HOD about the Team plan.
+                <View style={[s.divider, { backgroundColor: "#F0F0F0" }]} />
+
+                <SecLabel text="Rounds — clinical learning, unlimited" color={C.purple} />
+                {[
+                  { text: "Case debrief after every case — unlimited", bold: true },
+                  {
+                    text: "All 7 thinking lenses", bold: true,
+                    sub: "First Principles · Devil's Advocate · Pathophysiology · Rare but Real · Guidelines · Disease Snapshot · Full Debrief"
+                  },
+                  { text: "Post-save nudge — 3 quick lenses after saving" },
+                  { text: "Clinical Memory — your full career, private", bold: true },
+                ].map((f, i) => <FRow key={i} ok bold={!!f.bold} text={f.text} sub={f.sub} color={C.purple} />)}
+
+                <View style={[s.divider, { backgroundColor: "#F0F0F0" }]} />
+
+                <SecLabel text="Ownership" color={C.green} />
+                {[
+                  { text: "Your data — not your hospital's", bold: true },
+                  { text: "Rounds and Memory stay with you if you leave" },
+                  { text: "No shift restrictions — document any time" },
+                  { text: "HOD cannot see your Rounds or Memory" },
+                ].map((f, i) => <FRow key={i} ok bold={!!f.bold} text={f.text} color={C.green} />)}
+
+                <View style={[s.noCreditsNote, { backgroundColor: C.surface }]}>
+                  <Text style={[s.noCreditsText, { color: C.faint }]}>No credits on Pro. No limits. No walls. One price — everything works.</Text>
+                </View>
+
+                <Pressable
+                  style={({ pressed }) => [s.proCardCTA, {
+                    backgroundColor: isProActive ? "transparent" : C.green,
+                    borderWidth: isProActive ? 1 : 0,
+                    borderColor: isProActive ? C.green : "transparent",
+                    opacity: (pressed && !isProActive) || proLoading ? 0.85 : 1,
+                  }]}
+                  onPress={handleProCheckout}
+                  disabled={isProActive || proLoading}
+                >
+                  {proLoading ? (
+                    <ActivityIndicator size="small" color={C.white} />
+                  ) : isProActive ? (
+                    <>
+                      <Feather name="check-circle" size={15} color={C.green} />
+                      <Text style={[s.proCardCTAText, { color: C.green }]}>Current Plan</Text>
+                    </>
+                  ) : (
+                    <>
+                      <Feather name="gift" size={15} color={C.white} />
+                      <Text style={[s.proCardCTAText, { color: C.white }]}>Start Pro — Free for 1st Month</Text>
+                    </>
+                  )}
+                </Pressable>
+                {!isProActive && (
+                  <Text style={[s.proCardCTASub, { color: C.faint }]}>
+                    30-day free trial · ₹{proMonthly}/month after · Secured by Razorpay
+                  </Text>
+                )}
+              </View>
+            </View>
+
+            {/* No credits note */}
+            <View style={[s.card, { backgroundColor: C.white, borderColor: C.border }]}>
+              <Text style={[s.noCreditsCardTitle, { color: C.ink }]}>No AI credits on Pro?</Text>
+              <Text style={[s.noCreditsCardBody, { color: C.muted }]}>
+                Correct. On Pro, every AI feature just works — no counting, no topping up, no mid-shift surprises.
+                Credits only exist on the Free plan as a one-time taste before you decide to upgrade.
               </Text>
             </View>
           </>
@@ -508,221 +436,288 @@ export default function UpgradeScreen() {
         {/* ── TEAM TAB ── */}
         {activeTab === "team" && (
           <>
-            {/* Team Plan Card */}
-            <View style={s.teamCard}>
-              <View style={s.teamTagRow}>
-                <Text style={s.teamTagText}>TEAM PLAN · PER DOCTOR PRICING</Text>
-                <Text style={s.teamTagRight}>No feature holdbacks</Text>
+            {teamStep === "success" ? (
+              <View style={[s.successCard, { backgroundColor: "#F0FDF6", borderColor: C.green }]}>
+                <Feather name="check-circle" size={36} color={C.green} style={{ marginBottom: 10 }} />
+                <Text style={[s.successTitle, { color: C.greenDark }]}>Team plan activated!</Text>
+                <Text style={[s.successSub, { color: C.muted }]}>
+                  Go to your admin panel to add doctors by email. Each gets an invite and can join immediately.
+                </Text>
+                <Pressable
+                  style={[s.successBtn, { backgroundColor: C.green }]}
+                  onPress={() => { setTeamStep("idle"); (navigation as any).goBack(); }}
+                >
+                  <Text style={s.successBtnText}>Go to Dashboard</Text>
+                </Pressable>
               </View>
-
-              <View style={s.teamBody}>
-                <View style={s.teamHeader}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.teamPlanLabel}>TEAM PLAN</Text>
-                    <View style={s.teamPriceRow}>
-                      <Text style={s.teamPriceFrom}>from</Text>
-                      <Text style={s.teamPrice}>₹399</Text>
-                      <Text style={s.teamPricePer}>/doctor/month</Text>
-                    </View>
-                    <Text style={s.teamPriceSub}>Consultant ₹599 · Resident ₹399</Text>
-                  </View>
-                  <View style={s.teamIconBox}>
-                    <Feather name="users" size={22} color="#1DB870" />
-                  </View>
-                </View>
-
-                <View style={s.teamDivider} />
-
-                {/* Bill Calculator */}
-                <View style={s.calcBox}>
-                  <Text style={s.calcLabel}>YOUR BILL CALCULATOR</Text>
-
-                  {[
-                    { label: "Consultants", rate: "₹599/month each", val: teamConsultants, set: setTeamConsultants },
-                    { label: "Residents", rate: "₹399/month each", val: teamResidents, set: setTeamResidents },
-                  ].map((row, i) => (
-                    <View key={i} style={[s.calcRow, i > 0 && { marginTop: 12 }]}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={s.calcRowLabel}>{row.label}</Text>
-                        <Text style={s.calcRowRate}>{row.rate}</Text>
-                      </View>
-                      <View style={s.stepper}>
-                        <Pressable
-                          onPress={() => row.set(Math.max(0, row.val - 1))}
-                          style={s.stepBtn}
-                        >
-                          <Text style={s.stepBtnText}>−</Text>
-                        </Pressable>
-                        <Text style={s.stepVal}>{row.val}</Text>
-                        <Pressable
-                          onPress={() => row.set(row.val + 1)}
-                          style={s.stepBtn}
-                        >
-                          <Text style={s.stepBtnText}>+</Text>
-                        </Pressable>
-                      </View>
-                    </View>
-                  ))}
-
-                  <View style={s.calcDivider} />
-
-                  <View style={s.calcTotal}>
-                    <View>
-                      <Text style={s.calcTotalLabel}>
-                        {isAnnual ? "Effective monthly (annual)" : "Monthly total"}
-                      </Text>
-                      <View style={s.calcTotalRow}>
-                        <Text style={s.calcTotalAmount}>
-                          ₹{teamDisplay.toLocaleString("en-IN")}
-                        </Text>
-                        <Text style={s.calcTotalPer}>/month</Text>
-                      </View>
-                      {isAnnual && (
-                        <Text style={s.calcAnnualNote}>
-                          ₹{teamAnnual.toLocaleString("en-IN")} billed annually
-                        </Text>
-                      )}
-                    </View>
+            ) : teamStep === "confirm" ? (
+              <View style={[s.confirmCard, { backgroundColor: C.white, borderColor: C.green }]}>
+                <Text style={[s.confirmTitle, { color: C.ink }]}>Confirm your Team plan</Text>
+                <Text style={[s.confirmSub, { color: C.muted }]}>Review your roster and billing before paying.</Text>
+                {[
+                  { label: "Consultants", value: `${teamConsultants} × ₹${isAnnual ? Math.round(5990 / 12) : 599} = ₹${teamConsultants * (isAnnual ? Math.round(5990 / 12) : 599)}/mo` },
+                  { label: "Residents", value: `${teamResidents} × ₹${isAnnual ? Math.round(3990 / 12) : 399} = ₹${teamResidents * (isAnnual ? Math.round(3990 / 12) : 399)}/mo` },
+                  { label: "Billing", value: isAnnual ? "Annual (2 months free, paid upfront)" : "Monthly" },
+                  { label: "You pay now", value: `₹${teamDisplay.toLocaleString("en-IN")}`, bold: true, sub: isAnnual ? "Covers 12 months" : "First month" },
+                ].map((row, i) => (
+                  <View key={i} style={[s.confirmRow, { borderBottomColor: i < 3 ? C.surface : "transparent" }]}>
+                    <Text style={[s.confirmRowLabel, { color: C.muted }]}>{row.label}</Text>
                     <View style={{ alignItems: "flex-end" }}>
-                      <Text style={s.calcDoctorsCount}>{teamConsultants + teamResidents} doctors total</Text>
-                      {isAnnual && teamSavings > 0 && (
-                        <Text style={s.calcSavings}>
-                          Save ₹{teamSavings.toLocaleString("en-IN")}/yr
-                        </Text>
-                      )}
+                      <Text style={[s.confirmRowValue, { color: row.bold ? C.greenDark : C.ink, fontWeight: row.bold ? "800" : "600" }]}>{row.value}</Text>
+                      {!!row.sub && <Text style={[s.confirmRowSub, { color: C.faint }]}>{row.sub}</Text>}
                     </View>
-                  </View>
-                </View>
-
-                {/* Team Features */}
-                <Text style={s.teamFeaturesLabel}>EVERYTHING INCLUDED — NO HOLDBACKS</Text>
-                {TEAM_FEATURES.map((f, i) => (
-                  <View key={i} style={[s.featureRow, i > 0 && { marginTop: 9 }]}>
-                    <View style={[s.iconCircle, { backgroundColor: "rgba(30,184,112,0.15)" }]}>
-                      <Feather name="check" size={10} color="#1DB870" />
-                    </View>
-                    <Text style={[s.featureText, {
-                      color: f.bold ? "#FFFFFF" : "rgba(255,255,255,0.6)",
-                      fontWeight: f.bold ? "600" : "400",
-                    }]}>{f.text}</Text>
                   </View>
                 ))}
-              </View>
-
-              <Pressable style={s.teamCTA} onPress={handleTeamContact}>
-                <Feather name="mail" size={15} color="#FFFFFF" style={{ marginRight: 7 }} />
-                <Text style={s.teamCTAText}>Contact us to set up your team</Text>
-              </Pressable>
-              <Text style={s.teamCTANote}>Minimum 4 doctors · Bill adjusts as you add or remove doctors</Text>
-            </View>
-
-            {/* Why no holdbacks */}
-            <View style={[s.sectionCard, { backgroundColor: isDarkMode ? "#161B22" : "#FFFFFF", borderColor: isDarkMode ? "#2D333B" : "#F0F0F0", marginTop: 0 }]}>
-              <Text style={[s.sectionTitle, { color: isDarkMode ? "#FFFFFF" : "#0D1117" }]}>Why Team plan has no feature holdbacks</Text>
-              {[
-                "Per-doctor pricing already scales with your department size",
-                "A 50-doctor department pays 50× — no need to gate features",
-                "Every doctor gets full Pro features including Rounds and Memory",
-                "HOD gets the complete admin layer — analytics, reports, branding",
-              ].map((pt, i) => (
-                <View key={i} style={[s.whyRow, i > 0 && { marginTop: 8 }]}>
-                  <Text style={s.whyArrow}>→</Text>
-                  <Text style={[s.whyText, { color: theme.textSecondary }]}>{pt}</Text>
+                <View style={s.confirmBtns}>
+                  <Pressable style={[s.confirmCancel, { backgroundColor: C.surface, borderColor: C.border }]} onPress={() => setTeamStep("idle")}>
+                    <Text style={[s.confirmCancelText, { color: C.muted }]}>Cancel</Text>
+                  </Pressable>
+                  <Pressable style={[s.confirmPay, { backgroundColor: C.green }]} onPress={handleTeamPay} disabled={teamLoading}>
+                    {teamLoading ? <ActivityIndicator size="small" color={C.white} /> : (
+                      <Text style={s.confirmPayText}>Pay ₹{teamDisplay.toLocaleString("en-IN")} Now</Text>
+                    )}
+                  </Pressable>
                 </View>
-              ))}
-            </View>
+                <Text style={[s.confirmNote, { color: C.faint }]}>Secured by Razorpay · UPI · Cards · Net Banking</Text>
+              </View>
+            ) : teamStep === "paying" ? (
+              <View style={[s.payingCard, { backgroundColor: C.white, borderColor: C.border }]}>
+                <ActivityIndicator size="large" color={C.green} style={{ marginBottom: 12 }} />
+                <Text style={[s.payingTitle, { color: C.ink }]}>Opening Razorpay…</Text>
+                <Text style={[s.payingSub, { color: C.faint }]}>Secure payment powered by Razorpay</Text>
+              </View>
+            ) : (
+              <>
+                {/* Team plan card */}
+                <View style={[s.teamCard, { borderColor: C.greenBorder }]}>
+                  <View style={[s.teamCardTag, { backgroundColor: "rgba(29,184,112,0.1)", borderBottomColor: "rgba(29,184,112,0.1)" }]}>
+                    <Text style={[s.teamTagLeft, { color: C.green }]}>Team Plan · Dynamic pricing</Text>
+                    <Text style={[s.teamTagRight, { color: "rgba(255,255,255,0.3)" }]}>No credit walls. Ever.</Text>
+                  </View>
+                  <View style={{ padding: 18, paddingBottom: 0 }}>
+                    <View style={s.teamPriceRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[s.teamPriceFrom, { color: "rgba(255,255,255,0.3)" }]}>Team / Hospital</Text>
+                        <View style={s.teamPriceDisplay}>
+                          <Text style={[s.teamPriceFrom2, { color: "rgba(255,255,255,0.3)" }]}>from </Text>
+                          <Text style={[s.teamPriceMain, { color: C.green }]}>₹399</Text>
+                          <Text style={[s.teamPricePer, { color: "rgba(255,255,255,0.3)" }]}>/doctor/month</Text>
+                        </View>
+                        <Text style={[s.teamPriceSub, { color: "rgba(255,255,255,0.3)" }]}>Consultant ₹599 · Resident ₹399</Text>
+                      </View>
+                      <View style={[s.teamIcon, { backgroundColor: C.greenLight, borderColor: C.greenBorder }]}>
+                        <Feather name="users" size={18} color={C.green} />
+                      </View>
+                    </View>
 
-            {/* Example bills */}
-            <View style={[s.sectionCard, { backgroundColor: isDarkMode ? "#161B22" : "#FFFFFF", borderColor: isDarkMode ? "#2D333B" : "#F0F0F0", marginTop: 0 }]}>
-              <Text style={s.sectionCaption}>EXAMPLE BILLS</Text>
-              {EXAMPLE_BILLS.map((ex, i) => {
-                const monthly = (ex.consultants * 599) + (ex.residents * 399);
-                return (
-                  <View key={i} style={[
-                    s.exampleRow,
-                    i < EXAMPLE_BILLS.length - 1 && { borderBottomWidth: 1, borderBottomColor: isDarkMode ? "#2D333B" : "#F5F5F5" },
-                  ]}>
-                    <View>
-                      <Text style={[s.exampleType, { color: isDarkMode ? "#FFFFFF" : "#0D1117" }]}>{ex.type}</Text>
-                      <Text style={[s.exampleDoctors, { color: theme.textMuted }]}>
-                        {ex.consultants} consultants · {ex.residents} residents
+                    <View style={[s.divider, { backgroundColor: "rgba(255,255,255,0.08)" }]} />
+
+                    <SecLabel text="Your bill — select roster size" color="rgba(255,255,255,0.35)" />
+                    <View style={[s.billCalc, { backgroundColor: "rgba(255,255,255,0.04)", borderRadius: 13 }]}>
+                      {[
+                        { label: "Consultants", rate: 599, val: teamConsultants, set: setTeamConsultants },
+                        { label: "Residents", rate: 399, val: teamResidents, set: setTeamResidents },
+                      ].map((row, i) => (
+                        <View key={i} style={[s.billRow, i === 0 && { marginBottom: 12 }]}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[s.billRowLabel, { color: C.white }]}>{row.label}</Text>
+                            <Text style={[s.billRowRate, { color: "rgba(255,255,255,0.3)" }]}>₹{row.rate}/month each</Text>
+                          </View>
+                          <View style={s.billStepper}>
+                            <Pressable style={[s.stepperBtn, { backgroundColor: C.greenLight, borderColor: C.greenBorder }]} onPress={() => row.set(Math.max(0, row.val - 1))}>
+                              <Text style={[s.stepperBtnText, { color: C.green }]}>−</Text>
+                            </Pressable>
+                            <Text style={[s.stepperVal, { color: C.white }]}>{row.val}</Text>
+                            <Pressable style={[s.stepperBtn, { backgroundColor: C.greenLight, borderColor: C.greenBorder }]} onPress={() => row.set(row.val + 1)}>
+                              <Text style={[s.stepperBtnText, { color: C.green }]}>+</Text>
+                            </Pressable>
+                          </View>
+                        </View>
+                      ))}
+                      <View style={[s.divider, { backgroundColor: "rgba(255,255,255,0.08)" }]} />
+                      <View style={s.totalRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[s.totalLabel, { color: "rgba(255,255,255,0.3)" }]}>{isAnnual ? "You pay today" : "You pay monthly"}</Text>
+                          <View style={s.totalDisplay}>
+                            <Text style={[s.totalAmount, { color: C.green }]}>₹{teamDisplay.toLocaleString("en-IN")}</Text>
+                            <Text style={[s.totalPer, { color: "rgba(255,255,255,0.3)" }]}>{isAnnual ? "/year" : "/month"}</Text>
+                          </View>
+                          {isAnnual && (
+                            <Text style={[s.totalSavings, { color: C.green }]}>
+                              ₹{Math.round(teamAnnual / 12).toLocaleString("en-IN")}/mo effective · Save ₹{(teamMonthly * 12 - teamAnnual).toLocaleString("en-IN")}
+                            </Text>
+                          )}
+                        </View>
+                        <View style={{ alignItems: "flex-end" }}>
+                          <Text style={[s.totalDrs, { color: "rgba(255,255,255,0.3)" }]}>{totalDrs} doctors</Text>
+                          {totalDrs > 0 && (
+                            <Text style={[s.totalPerDoc, { color: "rgba(255,255,255,0.2)" }]}>₹{Math.round(teamMonthly / Math.max(1, totalDrs))}/doc/mo avg</Text>
+                          )}
+                        </View>
+                      </View>
+                      {totalDrs < 4 && (
+                        <Text style={[s.minDrsWarn, { color: C.orange }]}>Minimum 4 doctors required</Text>
+                      )}
+                    </View>
+
+                    <SecLabel text="Every doctor gets — Pro features included" color={C.green} />
+                    {[
+                      { text: "Everything in Individual Pro — for every doctor", bold: true },
+                      { text: "Unlimited cases, Dictation, Discharge Summary" },
+                      { text: "All AI — Decision Support, OCR, ABG, EM Reference" },
+                      { text: "Rounds with all 7 lenses, unlimited", bold: true },
+                      { text: "No credits. No limits. Ever.", bold: true },
+                    ].map((f, i) => (
+                      <View key={i} style={s.frow}>
+                        <View style={[s.fcheckBg, { backgroundColor: C.green + "20" }]}>
+                          <Feather name="check" size={9} color={C.green} />
+                        </View>
+                        <Text style={[s.frowText, {
+                          color: f.bold ? C.white : "rgba(255,255,255,0.5)",
+                          fontWeight: f.bold ? "700" : "400",
+                          flex: 1,
+                        }]}>{f.text}</Text>
+                      </View>
+                    ))}
+
+                    <View style={[s.divider, { backgroundColor: "rgba(255,255,255,0.08)" }]} />
+                    <SecLabel text="HOD gets — department layer" color="rgba(255,255,255,0.4)" />
+                    {[
+                      "Shift management — Morning, Evening, Night",
+                      "Case handover with pending notes",
+                      "Auto handover sheet — landscape PDF + WhatsApp",
+                      "Consultant escalation system",
+                      "Admin dashboard — all shifts, all cases, live",
+                      "Force logout any doctor, any device",
+                      "Department analytics + monthly reports",
+                      "Custom hospital branding on all exports",
+                    ].map((text, i) => (
+                      <View key={i} style={s.frow}>
+                        <View style={[s.fcheckBg, { backgroundColor: "rgba(29,184,112,0.15)" }]}>
+                          <Feather name="check" size={9} color="rgba(29,184,112,0.5)" />
+                        </View>
+                        <Text style={[s.frowText, { color: "rgba(255,255,255,0.4)", flex: 1 }]}>{text}</Text>
+                      </View>
+                    ))}
+
+                    <View style={[s.divider, { backgroundColor: "rgba(255,255,255,0.08)" }]} />
+                    <View style={[s.memoryNote, { backgroundColor: "rgba(124,106,246,0.1)", borderColor: "rgba(124,106,246,0.2)" }]}>
+                      <Text style={[s.memoryNoteTitle, { color: C.purple }]}>About Clinical Memory on Team plan</Text>
+                      <Text style={[s.memoryNoteSub, { color: "rgba(255,255,255,0.4)" }]}>
+                        Every doctor gets Rounds debriefs. But Clinical Memory (your private career record, visible only to you) requires Individual Pro separately.
+                        Team-only = HOD can see Rounds activity.
                       </Text>
                     </View>
-                    <View style={{ alignItems: "flex-end" }}>
-                      <Text style={s.exampleAmount}>₹{monthly.toLocaleString("en-IN")}</Text>
-                      <Text style={[s.examplePer, { color: theme.textMuted }]}>per month</Text>
-                    </View>
                   </View>
-                );
-              })}
-            </View>
+
+                  <View style={{ paddingHorizontal: 18, paddingBottom: 18, paddingTop: 0 }}>
+                    <Pressable
+                      style={({ pressed }) => [s.enrollBtn, {
+                        backgroundColor: totalDrs < 4 ? "rgba(29,184,112,0.3)" : C.green,
+                        opacity: pressed ? 0.88 : 1,
+                      }]}
+                      onPress={handleTeamEnroll}
+                      disabled={totalDrs < 4}
+                    >
+                      <Feather name="users" size={16} color={C.white} style={{ marginRight: 8 }} />
+                      <Text style={s.enrollBtnText}>
+                        {totalDrs < 4 ? "Add at least 4 doctors above" : `Enroll Now — ₹${teamMonthly.toLocaleString("en-IN")}/mo`}
+                      </Text>
+                    </Pressable>
+                    <Text style={[s.enrollNote, { color: "rgba(255,255,255,0.2)" }]}>
+                      Bill recalculates each cycle based on current roster · Secured by Razorpay
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Example bills */}
+                <View style={[s.card, { backgroundColor: C.white, borderColor: C.border }]}>
+                  <SecLabel text="Example bills" />
+                  {[
+                    { t: "Small clinic", c: 2, r: 6 },
+                    { t: "Mid-size ER", c: 8, r: 28 },
+                    { t: "Large hospital", c: 15, r: 50 },
+                  ].map((ex, i) => {
+                    const m = (ex.c * 599) + (ex.r * 399);
+                    const a = (ex.c * 5990) + (ex.r * 3990);
+                    return (
+                      <View key={i} style={[s.exampleRow, i < 2 && { borderBottomWidth: 1, borderBottomColor: C.surface }]}>
+                        <View>
+                          <Text style={[s.exampleType, { color: C.ink }]}>{ex.t}</Text>
+                          <Text style={[s.exampleDrs, { color: C.faint }]}>{ex.c}C · {ex.r}R</Text>
+                        </View>
+                        <View style={{ alignItems: "flex-end" }}>
+                          <Text style={[s.exampleAmount, { color: C.greenDark }]}>
+                            ₹{(isAnnual ? Math.round(a / 12) : m).toLocaleString("en-IN")}/mo
+                          </Text>
+                          {isAnnual && <Text style={[s.exampleYear, { color: C.faint }]}>₹{a.toLocaleString("en-IN")}/yr</Text>}
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+
+                {/* Team + Pro note */}
+                <View style={[s.card, { backgroundColor: C.purpleLight, borderColor: C.purpleBorder }]}>
+                  <Text style={[s.noCreditsCardTitle, { color: C.purple }]}>Team + Individual Pro</Text>
+                  <Text style={[s.noCreditsCardBody, { color: C.muted }]}>
+                    Team plan covers your hospital work. Individual Pro (₹1,199/mo, you pay personally) adds private Clinical Memory that your HOD cannot see — your career record across every hospital you've worked at.
+                  </Text>
+                </View>
+              </>
+            )}
           </>
         )}
       </ScrollView>
 
       {/* Sticky CTA */}
       <View style={[s.stickyBottom, {
-        backgroundColor: isDarkMode ? "rgba(13,17,23,0.96)" : "rgba(245,246,248,0.96)",
-        borderTopColor: isDarkMode ? "#2D333B" : "rgba(0,0,0,0.06)",
+        backgroundColor: isDarkMode ? "rgba(13,17,23,0.97)" : "rgba(247,248,250,0.97)",
+        borderTopColor: isDarkMode ? "#2D333B" : C.border,
         paddingBottom: Math.max(insets.bottom, 16),
       }]}>
         {activeTab === "individual" ? (
           <>
             <Pressable
-              style={({ pressed }) => [
-                s.stickyCTA,
-                {
-                  backgroundColor: activeCtaDisabled
-                    ? (isDarkMode ? "#2D333B" : "#E5E7EB")
-                    : activePlan.isDark ? "#6366F1" : "#1DB870",
-                  opacity: (pressed && !activeCtaDisabled) || ctaLoading ? 0.88 : 1,
-                  shadowColor: activeCtaDisabled ? "transparent" : activePlan.isDark ? "#6366F1" : "#1DB870",
-                  shadowOpacity: activeCtaDisabled ? 0 : 0.38,
-                  shadowRadius: 16, shadowOffset: { width: 0, height: 6 },
-                  elevation: activeCtaDisabled ? 0 : 8,
-                },
-              ]}
-              onPress={() => handleSubscribe(selectedPlan, billingCycle)}
-              disabled={activeCtaDisabled || ctaLoading}
+              style={({ pressed }) => [s.stickyCTA, {
+                backgroundColor: isProActive ? (isDarkMode ? "#2D333B" : "#E5E7EB") : C.green,
+                opacity: (pressed && !isProActive) || proLoading ? 0.88 : 1,
+              }]}
+              onPress={handleProCheckout}
+              disabled={isProActive || proLoading}
             >
-              {ctaLoading ? (
-                <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
-              ) : !activeCtaDisabled ? (
-                <Feather name="gift" size={16} color="#FFFFFF" style={{ marginRight: 8 }} />
+              {proLoading ? (
+                <ActivityIndicator size="small" color={C.white} style={{ marginRight: 8 }} />
+              ) : !isProActive ? (
+                <Feather name="gift" size={16} color={C.white} style={{ marginRight: 8 }} />
               ) : null}
-              <Text style={[s.stickyCTAText, {
-                color: activeCtaDisabled ? (isDarkMode ? "#6B7280" : "#9CA3AF") : "#FFFFFF",
-              }]}>
-                {ctaLoading ? "Setting up..." : activeCtaDisabled ? "Current Plan" : `Start ${activePlan.name} — Free for 1st Month`}
+              <Text style={[s.stickyCTAText, { color: isProActive ? (isDarkMode ? "#6B7280" : "#9CA3AF") : C.white }]}>
+                {proLoading ? "Opening Razorpay…" : isProActive ? "Current Plan" : "Start Pro — Free for 1st Month"}
               </Text>
             </Pressable>
-            {!activeCtaDisabled && (
-              <Text style={[s.stickySubtext, { color: theme.textMuted }]}>
-                {isAnnual
-                  ? `Free 30 days · Then ${activePlan.annualPrice}/year (${activePlan.annualEquiv}/mo) · Save ${activePlan.annualSavings}`
-                  : `Free for 30 days · Then ${activePlan.monthlyPrice}/month · Cancel anytime`}
+            {!isProActive && (
+              <Text style={[s.stickySubtext, { color: C.faint }]}>
+                {isAnnual ? `Free 30 days · Then ₹${proAnnual.toLocaleString("en-IN")}/year (₹${proAnnualEq}/mo) · Save ₹${proSave.toLocaleString("en-IN")}` : "Free for 30 days · Then ₹1,199/month · Cancel anytime"}
               </Text>
             )}
           </>
-        ) : (
+        ) : teamStep === "idle" ? (
           <>
             <Pressable
-              style={({ pressed }) => [
-                s.stickyCTA,
-                { backgroundColor: "#1DB870", opacity: pressed ? 0.88 : 1,
-                  shadowColor: "#1DB870", shadowOpacity: 0.38, shadowRadius: 16,
-                  shadowOffset: { width: 0, height: 6 }, elevation: 8 },
-              ]}
-              onPress={handleTeamContact}
+              style={({ pressed }) => [s.stickyCTA, {
+                backgroundColor: totalDrs < 4 ? "#E5E7EB" : C.green,
+                opacity: pressed ? 0.88 : 1,
+              }]}
+              onPress={handleTeamEnroll}
             >
-              <Feather name="users" size={16} color="#FFFFFF" style={{ marginRight: 8 }} />
-              <Text style={[s.stickyCTAText, { color: "#FFFFFF" }]}>Set Up Your Team</Text>
+              <Feather name="users" size={16} color={totalDrs < 4 ? C.faint : C.white} style={{ marginRight: 8 }} />
+              <Text style={[s.stickyCTAText, { color: totalDrs < 4 ? C.faint : C.white }]}>
+                {totalDrs < 4 ? "Minimum 4 doctors required" : `Enroll Now — ₹${teamMonthly.toLocaleString("en-IN")}/month`}
+              </Text>
             </Pressable>
-            <Text style={[s.stickySubtext, { color: theme.textMuted }]}>
-              Contact support@ermate.app · We'll set it up for you
-            </Text>
+            <Text style={[s.stickySubtext, { color: C.faint }]}>Bill updates automatically as roster changes</Text>
           </>
-        )}
+        ) : null}
       </View>
     </View>
   );
@@ -731,234 +726,140 @@ export default function UpgradeScreen() {
 const s = StyleSheet.create({
   container: { flex: 1 },
   center: { justifyContent: "center", alignItems: "center" },
-
-  lockBanner: {
-    flexDirection: "row", alignItems: "flex-start", gap: 10,
-    padding: 14, borderRadius: 14, marginBottom: 14,
-  },
+  lockBanner: { flexDirection: "row", gap: 10, backgroundColor: "#FEF2F2", borderRadius: 12, padding: 14, marginBottom: 14, alignItems: "flex-start" },
   lockTitle: { fontSize: 14, fontWeight: "700" },
-  lockMsg: { fontSize: 13, marginTop: 3 },
+  lockMsg: { fontSize: 13, marginTop: 2, color: "#374151" },
 
-  usageCard: {
-    borderRadius: 16, padding: 16, marginBottom: 12,
-    shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 }, elevation: 1,
-  },
-  usageRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 10 },
-  usageLabel: { fontSize: 13 },
-  usageStatus: { fontSize: 13, fontWeight: "700" },
-  barBg: { height: 6, borderRadius: 3, backgroundColor: "#F3F4F6", marginBottom: 8 },
-  barFill: { height: 6, borderRadius: 3 },
-  usageText: { fontSize: 12 },
+  tabRow: { flexDirection: "row", borderRadius: 14, padding: 4, borderWidth: 1.5, gap: 3, marginBottom: 12 },
+  tabBtn: { flex: 1, borderRadius: 10, paddingVertical: 11, alignItems: "center" },
+  tabBtnText: { fontSize: 13, fontWeight: "700" },
 
-  tabContainer: {
-    flexDirection: "row", borderRadius: 14, padding: 4,
-    marginBottom: 12, gap: 3,
-    borderWidth: 1.5, borderColor: "#F0F0F0",
-  },
-  tab: {
-    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
-    borderRadius: 10, paddingVertical: 10, paddingHorizontal: 8,
-  },
-  tabText: { fontSize: 13 },
+  billingRow: { flexDirection: "row", borderRadius: 13, padding: 3, gap: 2, marginBottom: 10 },
+  billingBtn: { flex: 1, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
+  billingBtnText: { fontSize: 13, fontWeight: "700" },
+  savePill: { borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2 },
+  savePillText: { fontSize: 9, fontWeight: "800" },
 
-  billingToggle: {
-    flexDirection: "row", borderRadius: 14, padding: 4,
-    marginBottom: 12, gap: 3,
-  },
-  billingTab: {
-    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
-    borderRadius: 11, paddingVertical: 10, gap: 6,
-  },
-  billingTabText: { fontSize: 13 },
-  saveBadge: { borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2 },
-  saveBadgeText: { fontSize: 9, fontWeight: "800", letterSpacing: 0.3 },
+  annualBanner: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, marginBottom: 10 },
+  annualBannerText: { fontSize: 12.5, fontWeight: "600" },
 
-  annualBanner: {
-    flexDirection: "row", alignItems: "center", gap: 7,
-    backgroundColor: "rgba(30,184,112,0.08)",
-    borderWidth: 1, borderColor: "rgba(30,184,112,0.2)",
-    borderRadius: 12, padding: 10, marginBottom: 12,
-  },
-  annualBannerText: { fontSize: 12.5, color: "#15924F", fontWeight: "500", flex: 1 },
-
-  planCard: {
-    borderRadius: 20, overflow: "hidden",
-  },
-  tagRow: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingHorizontal: 18, paddingVertical: 8,
-    borderBottomWidth: 1,
-  },
-  tagText: { fontSize: 9, fontWeight: "800", letterSpacing: 1.4, textTransform: "uppercase" },
-  selectedDot: {
-    width: 18, height: 18, borderRadius: 9,
-    alignItems: "center", justifyContent: "center",
-  },
-  planBody: { padding: 18 },
-  priceHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 8 },
-  planNameLabel: { fontSize: 10, fontWeight: "700", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 4 },
-  priceMain: { fontSize: 28, fontWeight: "900", letterSpacing: -1, lineHeight: 32 },
-  priceRow: { flexDirection: "row", alignItems: "baseline", gap: 5, flexWrap: "wrap" },
-  priceStrike: { fontSize: 12, textDecorationLine: "line-through" },
-  priceFree: { fontSize: 28, fontWeight: "900", letterSpacing: -1, lineHeight: 32 },
-  pricePer: { fontSize: 12 },
-  priceAfter: { fontSize: 11, marginTop: 3 },
-  iconBox: {
-    width: 38, height: 38, borderRadius: 11, borderWidth: 1.5,
-    alignItems: "center", justifyContent: "center",
-  },
+  card: { borderRadius: 18, padding: 16, borderWidth: 1.5, marginBottom: 14 },
+  cardTopRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 },
+  planTag: { fontSize: 10, fontWeight: "700", letterSpacing: 1.2, textTransform: "uppercase", color: C.faint, marginBottom: 3 },
+  planPrice: { fontSize: 26, fontWeight: "900", color: C.ink, letterSpacing: -0.8 },
   planDesc: { fontSize: 12, lineHeight: 18, marginBottom: 12 },
-  divider: { height: 1, marginBottom: 14 },
-  featureRow: { flexDirection: "row", alignItems: "center", gap: 9 },
-  iconCircle: {
-    width: 18, height: 18, borderRadius: 9,
-    alignItems: "center", justifyContent: "center",
-  },
-  featureText: { fontSize: 12.5, flex: 1 },
-  cardCTA: {
-    margin: 18, marginTop: 14, borderRadius: 11, paddingVertical: 13,
-    flexDirection: "row", alignItems: "center", justifyContent: "center",
-  },
-  cardCTAText: { color: "#FFFFFF", fontSize: 13, fontWeight: "700" },
+  activePill: { flexDirection: "row", alignItems: "center", gap: 5, borderRadius: 99, paddingHorizontal: 10, paddingVertical: 4 },
+  pillDot: { width: 6, height: 6, borderRadius: 3 },
+  pillText: { fontSize: 10, fontWeight: "700" },
 
-  sectionCard: {
-    borderRadius: 20, padding: 18, marginBottom: 12,
-    borderWidth: 1.5,
-  },
-  sectionTitle: { fontSize: 15, fontWeight: "800", letterSpacing: -0.3, marginBottom: 3 },
-  sectionSub: { fontSize: 12, marginBottom: 14 },
-  sectionCaption: {
-    fontSize: 10, fontWeight: "700", color: "#9CA3AF",
-    letterSpacing: 1, textTransform: "uppercase", marginBottom: 12,
-  },
+  creditPreview: { borderRadius: 11, padding: 12, marginBottom: 12, borderWidth: 1 },
+  creditPreviewTitle: { fontSize: 11, fontWeight: "700", marginBottom: 6 },
+  creditTrack: { height: 5, backgroundColor: "rgba(0,0,0,0.06)", borderRadius: 99, overflow: "hidden", marginBottom: 6 },
+  creditFill: { height: "100%", borderRadius: 99 },
+  creditPreviewSub: { fontSize: 11 },
 
-  packRow: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    borderWidth: 1.5, borderRadius: 12, padding: 12, marginBottom: 8,
-  },
-  packLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
-  packRight: { flexDirection: "row", alignItems: "center", gap: 8 },
-  radio: {
-    width: 17, height: 17, borderRadius: 8.5, borderWidth: 2,
-    alignItems: "center", justifyContent: "center",
-  },
-  radioDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#FFFFFF" },
-  packLabel: { fontSize: 13, fontWeight: "600" },
-  packPer: { fontSize: 10, marginTop: 1 },
-  packPrice: { fontSize: 14, fontWeight: "800" },
-  bestValueBadge: {
-    backgroundColor: "rgba(30,184,112,0.10)", borderRadius: 4,
-    paddingHorizontal: 6, paddingVertical: 2,
-  },
-  bestValueText: { fontSize: 8, fontWeight: "800", color: "#1DB870", textTransform: "uppercase" },
-  buyCreditsBtn: {
-    backgroundColor: "#1DB870", borderRadius: 11, paddingVertical: 13,
-    flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 7, marginTop: 4, marginBottom: 12,
-  },
-  buyCreditsBtnText: { color: "#FFFFFF", fontSize: 13, fontWeight: "700" },
-  creditNote: { borderRadius: 10, padding: 10 },
-  creditNoteText: { fontSize: 11, lineHeight: 17 },
+  frow: { flexDirection: "row", alignItems: "flex-start", gap: 9, marginBottom: 9 },
+  fcheckBg: { width: 15, height: 15, borderRadius: 7.5, alignItems: "center", justifyContent: "center", marginTop: 1, flexShrink: 0 },
+  frowText: { fontSize: 13, lineHeight: 19 },
+  frowSub: { fontSize: 11, marginTop: 2, lineHeight: 15 },
 
-  alwaysFreeRow: { flexDirection: "row", alignItems: "center", gap: 9 },
-  alwaysFreeText: { fontSize: 12.5 },
+  secLabel: { fontSize: 9, fontWeight: "800", letterSpacing: 1.3, textTransform: "uppercase", marginBottom: 10 },
+  divider: { height: 1, marginVertical: 14 },
 
-  // Team card
-  teamCard: {
-    backgroundColor: "#0D1117",
-    borderWidth: 2, borderColor: "rgba(30,184,112,0.3)",
-    borderRadius: 20, overflow: "hidden", marginBottom: 12,
-    shadowColor: "#1DB870", shadowOpacity: 0.15, shadowRadius: 20,
-    shadowOffset: { width: 0, height: 8 }, elevation: 6,
-  },
-  teamTagRow: {
-    backgroundColor: "rgba(30,184,112,0.12)", paddingHorizontal: 18, paddingVertical: 8,
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-  },
-  teamTagText: { fontSize: 9, fontWeight: "800", letterSpacing: 1.4, color: "#1DB870", textTransform: "uppercase" },
-  teamTagRight: { fontSize: 9, fontWeight: "700", color: "rgba(30,184,112,0.6)", letterSpacing: 0.8 },
-  teamBody: { padding: 18 },
-  teamHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16 },
-  teamPlanLabel: { fontSize: 10, fontWeight: "700", letterSpacing: 1.2, color: "rgba(255,255,255,0.35)", marginBottom: 4, textTransform: "uppercase" },
-  teamPriceRow: { flexDirection: "row", alignItems: "baseline", gap: 5 },
-  teamPriceFrom: { fontSize: 11, color: "rgba(255,255,255,0.3)" },
-  teamPrice: { fontSize: 28, fontWeight: "900", color: "#1DB870", letterSpacing: -1, lineHeight: 32 },
-  teamPricePer: { fontSize: 12, color: "rgba(255,255,255,0.35)" },
-  teamPriceSub: { fontSize: 11, color: "rgba(255,255,255,0.3)", marginTop: 2 },
-  teamIconBox: {
-    width: 42, height: 42, borderRadius: 12,
-    backgroundColor: "rgba(30,184,112,0.12)", borderWidth: 1.5,
-    borderColor: "rgba(30,184,112,0.25)", alignItems: "center", justifyContent: "center",
-  },
-  teamDivider: { height: 1, backgroundColor: "rgba(255,255,255,0.06)", marginBottom: 16 },
+  proCard: { borderRadius: 20, overflow: "hidden", borderWidth: 2, marginBottom: 14, backgroundColor: C.white },
+  proTagBar: { paddingVertical: 7, paddingHorizontal: 18, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  proTagLeft: { fontSize: 9, fontWeight: "800", letterSpacing: 1.5, color: C.white, textTransform: "uppercase" },
+  proTagRight: { fontSize: 9, fontWeight: "600", color: "rgba(255,255,255,0.7)" },
+  proPriceHeader: { padding: 16 },
+  proPriceRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 },
+  priceDisplay: { flexDirection: "row", alignItems: "baseline", gap: 5 },
+  priceStrike: { fontSize: 12, textDecorationLine: "line-through" },
+  priceFree: { fontSize: 30, fontWeight: "900", letterSpacing: -1 },
+  priceMain: { fontSize: 30, fontWeight: "900", letterSpacing: -1 },
+  pricePer: { fontSize: 12 },
+  priceSub: { fontSize: 11, marginTop: 2 },
+  saveBadge: { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, alignItems: "center" },
+  saveBadgeLabel: { fontSize: 10, fontWeight: "700" },
+  saveBadgeAmount: { fontSize: 13, fontWeight: "900" },
+  identityBox: { borderRadius: 11, padding: 12, borderWidth: 1 },
+  identityTitle: { fontSize: 12, fontWeight: "700", marginBottom: 2 },
+  identitySub: { fontSize: 11, lineHeight: 17 },
+  proCardCTA: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, borderRadius: 12, paddingVertical: 14, marginBottom: 6 },
+  proCardCTAText: { fontSize: 14, fontWeight: "700" },
+  proCardCTASub: { fontSize: 10, textAlign: "center" },
+  noCreditsNote: { borderRadius: 10, padding: 12, marginBottom: 14 },
+  noCreditsText: { fontSize: 12, lineHeight: 18 },
+  noCreditsCardTitle: { fontSize: 12, fontWeight: "700", marginBottom: 6 },
+  noCreditsCardBody: { fontSize: 12.5, lineHeight: 20 },
 
-  calcBox: {
-    backgroundColor: "rgba(255,255,255,0.04)", borderRadius: 14,
-    padding: 14, marginBottom: 16,
-  },
-  calcLabel: {
-    fontSize: 10, fontWeight: "700", color: "rgba(255,255,255,0.3)",
-    letterSpacing: 1, textTransform: "uppercase", marginBottom: 12,
-  },
-  calcRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  calcRowLabel: { fontSize: 13, fontWeight: "600", color: "#FFFFFF" },
-  calcRowRate: { fontSize: 10, color: "rgba(255,255,255,0.3)", marginTop: 1 },
-  stepper: { flexDirection: "row", alignItems: "center", gap: 10 },
-  stepBtn: {
-    width: 28, height: 28, borderRadius: 8,
-    backgroundColor: "rgba(30,184,112,0.10)",
-    borderWidth: 1.5, borderColor: "rgba(30,184,112,0.2)",
-    alignItems: "center", justifyContent: "center",
-  },
-  stepBtnText: { color: "#1DB870", fontSize: 16, fontWeight: "700", lineHeight: 20 },
-  stepVal: { fontSize: 18, fontWeight: "800", color: "#FFFFFF", minWidth: 24, textAlign: "center" },
-  calcDivider: { height: 1, backgroundColor: "rgba(255,255,255,0.08)", marginVertical: 14 },
-  calcTotal: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between" },
-  calcTotalLabel: { fontSize: 10, color: "rgba(255,255,255,0.3)", marginBottom: 2 },
-  calcTotalRow: { flexDirection: "row", alignItems: "baseline", gap: 3 },
-  calcTotalAmount: { fontSize: 26, fontWeight: "900", color: "#1DB870", letterSpacing: -0.5 },
-  calcTotalPer: { fontSize: 12, color: "rgba(255,255,255,0.3)" },
-  calcAnnualNote: { fontSize: 10, color: "rgba(255,255,255,0.3)", marginTop: 2 },
-  calcDoctorsCount: { fontSize: 10, color: "rgba(255,255,255,0.3)" },
-  calcSavings: { fontSize: 10, color: "#1DB870", fontWeight: "600", marginTop: 2 },
+  teamCard: { borderRadius: 20, overflow: "hidden", borderWidth: 2, marginBottom: 14, backgroundColor: "#071810" },
+  teamCardTag: { paddingVertical: 8, paddingHorizontal: 18, flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderBottomWidth: 1 },
+  teamTagLeft: { fontSize: 9, fontWeight: "800", letterSpacing: 1.4, textTransform: "uppercase" },
+  teamTagRight: { fontSize: 9, fontWeight: "600" },
+  teamPriceRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 },
+  teamPriceFrom: { fontSize: 10, fontWeight: "700", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 4 },
+  teamPriceDisplay: { flexDirection: "row", alignItems: "baseline", gap: 3 },
+  teamPriceFrom2: { fontSize: 11 },
+  teamPriceMain: { fontSize: 30, fontWeight: "900", letterSpacing: -1 },
+  teamPricePer: { fontSize: 12 },
+  teamPriceSub: { fontSize: 11, marginTop: 2 },
+  teamIcon: { width: 40, height: 40, borderRadius: 11, alignItems: "center", justifyContent: "center", borderWidth: 1.5 },
+  billCalc: { padding: 14, marginBottom: 16 },
+  billRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  billRowLabel: { fontSize: 13, fontWeight: "600" },
+  billRowRate: { fontSize: 10, marginTop: 1 },
+  billStepper: { flexDirection: "row", alignItems: "center", gap: 10 },
+  stepperBtn: { width: 28, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center", borderWidth: 1.5 },
+  stepperBtnText: { fontSize: 16, fontWeight: "700" },
+  stepperVal: { fontSize: 18, fontWeight: "800", minWidth: 24, textAlign: "center" },
+  totalRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" },
+  totalLabel: { fontSize: 10, marginBottom: 2 },
+  totalDisplay: { flexDirection: "row", alignItems: "baseline", gap: 2 },
+  totalAmount: { fontSize: 28, fontWeight: "900", letterSpacing: -0.5 },
+  totalPer: { fontSize: 12, fontWeight: "400" },
+  totalSavings: { fontSize: 10, fontWeight: "600", marginTop: 2 },
+  totalDrs: { fontSize: 11 },
+  totalPerDoc: { fontSize: 10, marginTop: 2 },
+  minDrsWarn: { fontSize: 11, fontWeight: "600", textAlign: "center", marginTop: 10 },
+  enrollBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", borderRadius: 12, paddingVertical: 15, marginTop: 16, marginBottom: 8 },
+  enrollBtnText: { fontSize: 14, fontWeight: "700", color: C.white },
+  enrollNote: { fontSize: 10, textAlign: "center" },
+  memoryNote: { borderRadius: 12, padding: 13, marginBottom: 16, borderWidth: 1 },
+  memoryNoteTitle: { fontSize: 11, fontWeight: "700", marginBottom: 4 },
+  memoryNoteSub: { fontSize: 12, lineHeight: 19 },
 
-  teamFeaturesLabel: {
-    fontSize: 10, fontWeight: "700", color: "rgba(255,255,255,0.3)",
-    letterSpacing: 1, textTransform: "uppercase", marginBottom: 12,
-  },
-  teamCTA: {
-    margin: 18, marginTop: 4, backgroundColor: "#1DB870",
-    borderRadius: 11, paddingVertical: 14,
-    flexDirection: "row", alignItems: "center", justifyContent: "center",
-    shadowColor: "#1DB870", shadowOpacity: 0.35, shadowRadius: 16,
-    shadowOffset: { width: 0, height: 4 }, elevation: 6,
-  },
-  teamCTAText: { color: "#FFFFFF", fontSize: 14, fontWeight: "700" },
-  teamCTANote: {
-    textAlign: "center", fontSize: 10, color: "rgba(255,255,255,0.25)",
-    marginBottom: 16, paddingHorizontal: 18,
-  },
+  successCard: { borderRadius: 18, padding: 24, alignItems: "center", borderWidth: 2, marginBottom: 14 },
+  successTitle: { fontSize: 16, fontWeight: "800", marginBottom: 6 },
+  successSub: { fontSize: 13, lineHeight: 20, textAlign: "center", marginBottom: 14 },
+  successBtn: { width: "100%", borderRadius: 11, paddingVertical: 12, alignItems: "center" },
+  successBtnText: { fontSize: 13, fontWeight: "700", color: C.white },
 
-  whyRow: { flexDirection: "row", gap: 8 },
-  whyArrow: { color: "#1DB870", fontSize: 13, flexShrink: 0 },
-  whyText: { fontSize: 12.5, lineHeight: 20, flex: 1 },
+  confirmCard: { borderRadius: 18, padding: 18, borderWidth: 2, marginBottom: 14, backgroundColor: C.white },
+  confirmTitle: { fontSize: 15, fontWeight: "800", marginBottom: 4, letterSpacing: -0.3 },
+  confirmSub: { fontSize: 12, marginBottom: 14 },
+  confirmRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", paddingVertical: 9, borderBottomWidth: 1 },
+  confirmRowLabel: { fontSize: 13 },
+  confirmRowValue: { fontSize: 13 },
+  confirmRowSub: { fontSize: 10, marginTop: 2 },
+  confirmBtns: { flexDirection: "row", gap: 10, marginTop: 14 },
+  confirmCancel: { flex: 1, borderRadius: 11, paddingVertical: 12, alignItems: "center", borderWidth: 1 },
+  confirmCancelText: { fontSize: 13, fontWeight: "600" },
+  confirmPay: { flex: 2, borderRadius: 11, paddingVertical: 12, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 7 },
+  confirmPayText: { fontSize: 13, fontWeight: "700", color: C.white },
+  confirmNote: { fontSize: 10, textAlign: "center", marginTop: 8 },
 
-  exampleRow: { paddingVertical: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  payingCard: { borderRadius: 18, padding: 32, alignItems: "center", borderWidth: 1.5, marginBottom: 14, backgroundColor: C.white },
+  payingTitle: { fontSize: 14, fontWeight: "700" },
+  payingSub: { fontSize: 12, marginTop: 6 },
+
+  exampleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 9 },
   exampleType: { fontSize: 13, fontWeight: "600" },
-  exampleDoctors: { fontSize: 11, marginTop: 2 },
-  exampleAmount: { fontSize: 14, fontWeight: "800", color: "#1DB870" },
-  examplePer: { fontSize: 10, marginTop: 2 },
+  exampleDrs: { fontSize: 11, marginTop: 1 },
+  exampleAmount: { fontSize: 14, fontWeight: "800" },
+  exampleYear: { fontSize: 10, marginTop: 1 },
 
-  stickyBottom: {
-    position: "absolute", bottom: 0, left: 0, right: 0,
-    paddingTop: 12, paddingHorizontal: 16,
-    borderTopWidth: 1,
-  },
-  stickyCTA: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center",
-    borderRadius: 14, paddingVertical: 15, marginBottom: 8,
-  },
+  stickyBottom: { borderTopWidth: 1, paddingTop: 12, paddingHorizontal: 16 },
+  stickyCTA: { flexDirection: "row", alignItems: "center", justifyContent: "center", borderRadius: 14, paddingVertical: 15, marginBottom: 8 },
   stickyCTAText: { fontSize: 15, fontWeight: "700" },
   stickySubtext: { fontSize: 11, textAlign: "center", marginBottom: 4 },
 });

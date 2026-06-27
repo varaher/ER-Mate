@@ -1,0 +1,1509 @@
+import { useState } from "react";
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ERMATE SUBSCRIPTION SYSTEM — FINAL DEFINITIVE VERSION
+// Last updated: June 2026
+//
+// ── PLAN STRUCTURE (LOCKED) ──────────────────────────────────────────────
+//
+//  FREE
+//    Cases:    10 (lifetime, not monthly)
+//    Credits:  5 AI credits (one-time, never resets, never tops up)
+//    Payment:  None
+//    Purpose:  Try ErMate, taste AI features, then upgrade
+//
+//  INDIVIDUAL PRO  ₹1,199/month or ₹11,990/year
+//    Cases:    Unlimited
+//    Credits:  None — all AI features unlimited
+//    Payment:  Razorpay SUBSCRIPTION (fixed recurring)
+//    Plans to create in Razorpay dashboard:
+//              plan_pro_monthly → ₹1,199 / month
+//              plan_pro_annual  → ₹11,990 / year
+//    Purpose:  Solo doctor, personal ownership, clinical career record
+//
+//  TEAM PLAN  ₹599/consultant + ₹399/resident per month
+//    Cases:    Unlimited for all
+//    Credits:  None — all AI features unlimited
+//    Payment:  Razorpay ORDER (dynamic, calculated per billing cycle)
+//              No pre-created plans — amount computed at checkout
+//              Like Amazon: select roster → see total → pay
+//    Purpose:  Hospital departments with shifts, handover, HOD management
+//
+// ── CREDIT RULES (LOCKED) ───────────────────────────────────────────────
+//
+//  Free:   5 credits, one-time on signup. Deducted per AI action.
+//          When 0 → show upgrade prompt. Never show "buy credits".
+//  Pro:    No credits. Zero mentions. Everything just works.
+//  Team:   No credits. Zero mentions. Everything just works.
+//
+// ── WHAT USES A CREDIT (Free users only) ─────────────────────────────────
+//  Clinical Decision Support     1 credit
+//  Document OCR Scanning         1 credit
+//  ABG / VBG Interpretation      1 credit
+//  EM Reference AI query         1 credit
+//  Rounds debrief                1 credit
+//
+// ── NEVER USES CREDITS (any plan) ────────────────────────────────────────
+//  Smart Dictation               Always free
+//  AI Discharge Summary          Always free
+//  Manual documentation          Always free
+//
+// ── RAZORPAY SETUP INSTRUCTIONS FOR DEVELOPER ───────────────────────────
+//
+//  STEP 1: Create 2 plans in Razorpay Dashboard → Subscriptions → Plans:
+//    Plan 1: "ErMate Pro Monthly"
+//            Amount: 119900 paise (₹1,199)
+//            Billing: monthly, interval 1
+//            → Copy plan ID into RAZORPAY_PLAN_IDS.pro.monthly
+//
+//    Plan 2: "ErMate Pro Annual"
+//            Amount: 1199000 paise (₹11,990)
+//            Billing: yearly, interval 1
+//            → Copy plan ID into RAZORPAY_PLAN_IDS.pro.annual
+//
+//  STEP 2: Team plan uses Orders, not Subscriptions.
+//    POST /api/subscription/team/checkout
+//    Amount = (consultants × 59900) + (residents × 39900) paise
+//    Annual = monthly × 10 (2 months free)
+//    razorpay.orders.create({ amount, currency: "INR", notes: {...} })
+//
+//  STEP 3: Webhooks to handle:
+//    subscription.activated → activate Pro plan in DB
+//    subscription.charged   → extend Pro period
+//    subscription.cancelled → revert to Free
+//    payment.captured       → activate Team plan for that billing cycle
+//
+//  STEP 4: On user signup → INSERT subscriptions row:
+//    { plan: "free", aiCredits: 5, teamActive: false }
+//
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── Design tokens ──────────────────────────────────────────────────────────
+const C = {
+  green:       "#1DB870",
+  greenDark:   "#15924F",
+  greenLight:  "rgba(29,184,112,0.09)",
+  greenBorder: "rgba(29,184,112,0.2)",
+  purple:      "#7C6AF6",
+  purpleLight: "rgba(124,106,246,0.09)",
+  purpleBorder:"rgba(124,106,246,0.2)",
+  ink:         "#0B0F14",
+  inkSoft:     "#2E3440",
+  muted:       "#6B7280",
+  faint:       "#9CA3AF",
+  border:      "#E8EAED",
+  surface:     "#F7F8FA",
+  white:       "#FFFFFF",
+  orange:      "#F59E0B",
+  orangeLight: "rgba(245,158,11,0.09)",
+  red:         "#EF4444",
+};
+
+// ── Single source of truth — feature access ────────────────────────────────
+function getAccess(sub) {
+  const unlimited = sub.teamActive || sub.plan === "pro";
+  const isFree = !unlimited;
+  return {
+    unlimited,
+    isFree,
+    cases:           unlimited ? "unlimited" : `${sub.casesUsed || 0} of 10`,
+    smartDictation:  true,   // always free on any plan
+    discharge:       true,   // always free on any plan
+    aiFeatures:      unlimited ? "unlimited" : (sub.aiCredits > 0 ? "credits" : "blocked"),
+    aiCredits:       sub.aiCredits || 0,
+    rounds:          unlimited ? "unlimited" : (sub.aiCredits > 0 ? "credits" : "blocked"),
+    clinicalMemory:  sub.plan === "pro", // private only with Pro
+    handover:        sub.teamActive,
+    shiftMgmt:       sub.teamActive,
+    hod:             sub.teamActive && sub.teamRole === "hod",
+    showCreditBar:   isFree,
+    showUpgrade:     isFree,
+  };
+}
+
+// ── Icons ──────────────────────────────────────────────────────────────────
+const Back = () => (
+  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+    <path d="M13 4L7 10L13 16" stroke={C.ink} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+const CheckIc = ({ color = C.green }) => (
+  <svg width="15" height="15" viewBox="0 0 16 16" fill="none" style={{ flexShrink:0, marginTop:1 }}>
+    <circle cx="8" cy="8" r="7.5" fill={color} fillOpacity="0.12"/>
+    <path d="M4.5 8.5L6.5 10.5L11.5 5.5" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+const CrossIc = () => (
+  <svg width="15" height="15" viewBox="0 0 16 16" fill="none" style={{ flexShrink:0, marginTop:1 }}>
+    <circle cx="8" cy="8" r="7.5" fill="rgba(0,0,0,0.04)"/>
+    <path d="M5.5 5.5L10.5 10.5M10.5 5.5L5.5 10.5" stroke="#D1D5DB" strokeWidth="1.5" strokeLinecap="round"/>
+  </svg>
+);
+const GiftIc = ({ size=16 }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
+    <rect x="2" y="7" width="12" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
+    <path d="M2 10h12M8 7v7" stroke="currentColor" strokeWidth="1.3"/>
+    <path d="M8 7C8 7 5.5 7 5.5 4.5C5.5 3.1 6.5 2 7.7 2C9 2 8 5 8 7Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
+    <path d="M8 7C8 7 10.5 7 10.5 4.5C10.5 3.1 9.5 2 8.3 2C7 2 8 5 8 7Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
+  </svg>
+);
+const ShieldIc = ({ color=C.greenDark, size=14 }) => (
+  <svg width={size} height={size} viewBox="0 0 14 14" fill="none" style={{ flexShrink:0 }}>
+    <path d="M7 1.5L2 3.5V7C2 9.8 4.2 12.3 7 13C9.8 12.3 12 9.8 12 7V3.5L7 1.5Z" stroke={color} strokeWidth="1.2" strokeLinejoin="round"/>
+    <path d="M4.5 7L6 8.5L9.5 5" stroke={color} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+const PeopleIc = ({ color="white", size=16 }) => (
+  <svg width={size} height={size} viewBox="0 0 20 20" fill="none">
+    <circle cx="7" cy="6" r="3" stroke={color} strokeWidth="1.4"/>
+    <circle cx="14" cy="6" r="2.5" stroke={color} strokeWidth="1.3"/>
+    <path d="M1 17c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke={color} strokeWidth="1.4" strokeLinecap="round"/>
+    <path d="M14 11c2.2 0 4 1.8 4 4" stroke={color} strokeWidth="1.3" strokeLinecap="round"/>
+  </svg>
+);
+const BrainIc = ({ color=C.purple, size=16 }) => (
+  <svg width={size} height={size} viewBox="0 0 20 20" fill="none">
+    <path d="M10 3C8.3 3 7 4.3 7 6C5.3 6 4 7.3 4 9C4 10.2 4.7 11.3 5.7 11.8C5.3 12.3 5 13 5 13.7C5 15.5 6.3 17 8 17V17.5H12V17C13.7 17 15 15.5 15 13.7C15 13 14.7 12.3 14.3 11.8C15.3 11.3 16 10.2 16 9C16 7.3 14.7 6 13 6C13 4.3 11.7 3 10 3Z" stroke={color} strokeWidth="1.3" strokeLinejoin="round"/>
+  </svg>
+);
+const WarnIc = ({ color=C.orange }) => (
+  <svg width="15" height="15" viewBox="0 0 16 16" fill="none" style={{ flexShrink:0 }}>
+    <path d="M8 2L14.5 13H1.5L8 2Z" stroke={color} strokeWidth="1.3" strokeLinejoin="round"/>
+    <path d="M8 6v3M8 11v.5" stroke={color} strokeWidth="1.3" strokeLinecap="round"/>
+  </svg>
+);
+const ClockIc = ({ color=C.faint }) => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+    <circle cx="6" cy="6" r="5" stroke={color} strokeWidth="1.2"/>
+    <path d="M6 3.5V6L7.5 7.5" stroke={color} strokeWidth="1.2" strokeLinecap="round"/>
+  </svg>
+);
+
+// ── Small reusable components ──────────────────────────────────────────────
+const Divider = ({ dark=false }) => (
+  <div style={{ height:1, background: dark ? "rgba(255,255,255,0.07)" : "#F0F0F0", margin:"14px 0" }}/>
+);
+const SecLabel = ({ text, color=C.faint }) => (
+  <div style={{ fontSize:9, fontWeight:800, letterSpacing:1.3, textTransform:"uppercase",
+    color, marginBottom:10 }}>{text}</div>
+);
+const Pill = ({ status }) => {
+  const m = {
+    active: { label:"Active",   bg:C.greenLight,  c:C.greenDark, dot:C.green },
+    trial:  { label:"Trial",    bg:C.orangeLight, c:"#92400E",   dot:C.orange },
+    none:   { label:"Inactive", bg:"#F3F4F6",     c:C.faint,     dot:"#D1D5DB" },
+  }[status] || { label:status, bg:C.greenLight, c:C.greenDark, dot:C.green };
+  return (
+    <div style={{ display:"inline-flex", alignItems:"center", gap:5,
+      background:m.bg, borderRadius:99, padding:"4px 10px" }}>
+      <div style={{ width:6, height:6, borderRadius:"50%", background:m.dot }}/>
+      <span style={{ fontSize:10, fontWeight:700, color:m.c }}>{m.label}</span>
+    </div>
+  );
+};
+const FRow = ({ text, ok=true, bold=false, color=C.green, sub=null }) => (
+  <div style={{ display:"flex", alignItems:"flex-start", gap:9, marginBottom:9 }}>
+    {ok ? <CheckIc color={color}/> : <CrossIc/>}
+    <div>
+      <div style={{ fontSize:13, lineHeight:1.5, fontWeight:bold?700:400,
+        color: !ok?"#C4C9D4": bold?C.inkSoft:C.muted }}>{text}</div>
+      {sub && <div style={{ fontSize:11, color:C.faint, marginTop:1, lineHeight:1.5 }}>{sub}</div>}
+    </div>
+  </div>
+);
+
+// ── Billing toggle ─────────────────────────────────────────────────────────
+function BillingToggle({ value, onChange }) {
+  return (
+    <div style={{ display:"flex", background:"#ECEEF1", borderRadius:13, padding:3, gap:2 }}>
+      {["monthly","annual"].map(b => (
+        <button key={b} onClick={() => onChange(b)} style={{
+          flex:1, border:"none", cursor:"pointer", fontFamily:"inherit",
+          background:value===b ? C.white : "transparent",
+          borderRadius:10, padding:"10px 12px", fontSize:13, fontWeight:700,
+          color:value===b ? C.ink : C.faint,
+          boxShadow:value===b ? "0 1px 6px rgba(0,0,0,0.1)" : "none",
+          transition:"all 0.2s",
+          display:"flex", alignItems:"center", justifyContent:"center", gap:6,
+        }}>
+          {b === "monthly" ? "Monthly" : "Annual"}
+          {b === "annual" && (
+            <span style={{
+              fontSize:9, fontWeight:800,
+              background:value==="annual" ? C.greenLight : "rgba(156,163,175,0.12)",
+              color:value==="annual" ? C.greenDark : C.faint,
+              borderRadius:5, padding:"2px 6px",
+            }}>2 MONTHS FREE</span>
+          )}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ── Credit bar — Free users only ───────────────────────────────────────────
+function CreditBar({ credits, maxCredits=5, onUpgrade }) {
+  const used = maxCredits - credits;
+  const pct  = (used / maxCredits) * 100;
+  const low  = credits <= 2;
+  const gone = credits === 0;
+
+  return (
+    <div style={{
+      background: gone ? "#FEF2F2" : low ? C.orangeLight : C.greenLight,
+      border: `1px solid ${gone ? "#FECACA" : low ? "rgba(245,158,11,0.2)" : C.greenBorder}`,
+      borderRadius:14, padding:"13px 14px",
+    }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
+        <div style={{ fontSize:12, fontWeight:700,
+          color:gone ? C.red : low ? "#92400E" : C.greenDark }}>
+          {gone ? "AI credits used up" : `${credits} AI credit${credits===1?"":"s"} remaining`}
+        </div>
+        <div style={{ fontSize:11, color:C.faint }}>{used}/{maxCredits} used</div>
+      </div>
+      <div style={{ height:6, background:"rgba(0,0,0,0.06)", borderRadius:99, overflow:"hidden", marginBottom:10 }}>
+        <div style={{
+          height:"100%", borderRadius:99,
+          width:`${pct}%`,
+          background: gone ? C.red : low ? C.orange : C.green,
+          transition:"width 0.5s ease",
+        }}/>
+      </div>
+      <div style={{ fontSize:11, color:C.muted, lineHeight:1.5, marginBottom:gone||low?10:0 }}>
+        {gone
+          ? "Upgrade to Pro for unlimited AI — Decision Support, Rounds, OCR, and more."
+          : low
+          ? `${credits} credit${credits===1?"":"s"} left. Each AI action uses 1 credit.`
+          : "Each AI action (Decision Support, Rounds, OCR) uses 1 credit."}
+      </div>
+      {(gone || low) && (
+        <button onClick={onUpgrade} style={{
+          width:"100%", background:`linear-gradient(135deg,${C.green},${C.greenDark})`,
+          border:"none", borderRadius:10, padding:"10px",
+          fontSize:13, fontWeight:700, color:"white", cursor:"pointer",
+          fontFamily:"inherit", marginTop:2,
+        }}>
+          Upgrade to Pro — Unlimited →
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SCREEN 1 — UPGRADE SCREEN
+// ═══════════════════════════════════════════════════════════════════════════
+function UpgradeScreen({ onClose }) {
+  const [billing, setBilling]     = useState("monthly");
+  const [tab, setTab]             = useState("individual");
+  const [consultants, setC]       = useState(2);
+  const [residents, setR]         = useState(6);
+  const [checkoutStep, setStep]   = useState("idle");
+  const [proLoading, setProLoad]  = useState(false);
+
+  const proP = { monthly:1199, annual:11990, annualEq:999, save:2398 };
+  const teamMonthly = (consultants*599)+(residents*399);
+  const teamAnnual  = (consultants*5990)+(residents*3990);
+  const teamDisplay = billing==="annual" ? teamAnnual : teamMonthly;
+  const totalDrs    = consultants + residents;
+
+  // ── Individual Pro checkout ──────────────────────────────────────────
+  const handleProCheckout = async () => {
+    setProLoad(true);
+    try {
+      // 1. Call backend: POST /api/subscription/pro/create
+      //    Returns: { subscriptionId, keyId }
+      //    Backend creates Razorpay subscription using plan ID:
+      //      billing==="monthly" → RAZORPAY_PLAN_IDS.pro.monthly
+      //      billing==="annual"  → RAZORPAY_PLAN_IDS.pro.annual
+      //    With trial_period_days: 30 (first month free)
+
+      // Demo:
+      alert("Opening Razorpay for Individual Pro...\n\nSubscription: sub_pro_demo\nPlan: " +
+        (billing==="annual" ? "₹11,990/year" : "₹1,199/month") +
+        "\nTrial: 30 days free\n\nIn production: Razorpay checkout opens here.");
+    } finally {
+      setProLoad(false);
+    }
+  };
+
+  // ── Team checkout ────────────────────────────────────────────────────
+  const handleTeamCheckout = async () => {
+    if (totalDrs < 4) {
+      alert("Minimum 4 doctors required to activate a Team plan.");
+      return;
+    }
+    setStep("confirm");
+  };
+
+  const handleTeamPay = async () => {
+    setStep("paying");
+    try {
+      // 1. Call backend: POST /api/subscription/team/checkout
+      //    Body: { consultants, residents, billingCycle: billing }
+      //    Returns: { orderId, amount, keyId }
+      //    Backend: razorpay.orders.create({ amount, currency:"INR", notes:{...} })
+
+      // 2. Open Razorpay with order_id (NOT subscription_id for team)
+      //    RazorpayCheckout.open({ key, order_id, amount, ... })
+
+      // Demo:
+      setTimeout(() => {
+        setStep("success");
+      }, 1500);
+    } catch {
+      setStep("confirm");
+    }
+  };
+
+  return (
+    <div style={{ fontFamily:"'DM Sans','Helvetica Neue',sans-serif",
+      background:C.surface, minHeight:"100vh", maxWidth:430,
+      margin:"0 auto", paddingBottom:110 }}>
+
+      {/* Header */}
+      <div style={{ position:"sticky", top:0, zIndex:20,
+        background:"rgba(247,248,250,0.95)", backdropFilter:"blur(14px)",
+        padding:"16px 20px 14px", borderBottom:`1px solid ${C.border}`,
+        display:"flex", alignItems:"center", gap:12 }}>
+        <button onClick={onClose} style={{ background:"none", border:"none",
+          cursor:"pointer", padding:0, display:"flex" }}><Back/></button>
+        <span style={{ fontSize:17, fontWeight:800, color:C.ink, letterSpacing:-0.4 }}>
+          Choose your plan
+        </span>
+        <span style={{ marginLeft:"auto", fontSize:11, fontWeight:600, color:C.faint }}>
+          IN · INR
+        </span>
+      </div>
+
+      <div style={{ padding:"16px 16px 0", display:"flex", flexDirection:"column", gap:14 }}>
+
+        {/* Tab switcher */}
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr",
+          background:C.white, borderRadius:14, padding:4,
+          border:`1.5px solid ${C.border}`, gap:3 }}>
+          {[{id:"individual",label:"👤  Individual"},{id:"team",label:"👥  Team / Hospital"}]
+            .map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)} style={{
+              border:"none", cursor:"pointer", fontFamily:"inherit",
+              background:tab===t.id ? C.ink : "transparent",
+              color:tab===t.id ? C.white : C.faint,
+              borderRadius:10, padding:"11px", fontSize:13, fontWeight:700,
+              transition:"all 0.2s",
+            }}>{t.label}</button>
+          ))}
+        </div>
+
+        <BillingToggle value={billing} onChange={setBilling}/>
+
+        {billing==="annual" && (
+          <div style={{ background:C.greenLight, border:`1px solid ${C.greenBorder}`,
+            borderRadius:12, padding:"10px 14px",
+            fontSize:12.5, color:C.greenDark, fontWeight:600,
+            display:"flex", alignItems:"center", gap:8 }}>
+            🎉  Annual plan — pay for 10 months, use for 12
+          </div>
+        )}
+
+        {/* ════════════════════════════════════════════
+            INDIVIDUAL TAB
+        ════════════════════════════════════════════ */}
+        {tab === "individual" && (<>
+
+          {/* FREE card */}
+          <div style={{ background:C.white, border:`1.5px solid ${C.border}`,
+            borderRadius:18, padding:"16px 18px" }}>
+            <div style={{ display:"flex", alignItems:"center",
+              justifyContent:"space-between", marginBottom:10 }}>
+              <div>
+                <div style={{ fontSize:10, fontWeight:700, letterSpacing:1.2,
+                  textTransform:"uppercase", color:C.faint, marginBottom:3 }}>Free</div>
+                <div style={{ fontSize:26, fontWeight:900, color:C.ink,
+                  letterSpacing:-0.8, lineHeight:1 }}>₹0</div>
+              </div>
+              <Pill status="active"/>
+            </div>
+            <div style={{ fontSize:12, color:C.faint, marginBottom:12, lineHeight:1.5 }}>
+              10 cases to try ErMate. Includes 5 AI credits to experience
+              Decision Support and Rounds before upgrading.
+            </div>
+
+            {/* Credit preview for Free */}
+            <div style={{ background:"#F0FDF6", border:`1px solid ${C.greenBorder}`,
+              borderRadius:11, padding:"10px 12px", marginBottom:12 }}>
+              <div style={{ fontSize:11, fontWeight:700, color:C.greenDark, marginBottom:6 }}>
+                5 free AI credits included
+              </div>
+              <div style={{ height:5, background:"rgba(0,0,0,0.06)", borderRadius:99,
+                overflow:"hidden", marginBottom:6 }}>
+                <div style={{ height:"100%", width:"0%", background:C.green, borderRadius:99 }}/>
+              </div>
+              <div style={{ fontSize:11, color:C.muted }}>
+                Try Decision Support, Rounds, OCR — 1 credit each
+              </div>
+            </div>
+
+            {[
+              { text:"10 cases (lifetime)", ok:true },
+              { text:"Smart Dictation — always free", ok:true },
+              { text:"AI Discharge Summary — always free", ok:true },
+              { text:"ATLS adult + PALS paediatric", ok:true },
+              { text:"PDF / WhatsApp export", ok:true },
+              { text:"5 AI credits (one-time)", ok:true },
+              { text:"Unlimited cases", ok:false },
+              { text:"Unlimited AI features", ok:false },
+              { text:"Rounds & Clinical Memory", ok:false },
+            ].map((f,i) => <FRow key={i} {...f} color={C.muted}/>)}
+          </div>
+
+          {/* PRO card */}
+          <div style={{ background:C.white, border:`2px solid ${C.green}`,
+            borderRadius:20, overflow:"hidden",
+            boxShadow:`0 8px 32px rgba(29,184,112,0.12)` }}>
+
+            {/* Tag */}
+            <div style={{ background:C.green, padding:"7px 18px",
+              display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+              <span style={{ fontSize:9, fontWeight:800, letterSpacing:1.5,
+                color:"white", textTransform:"uppercase" }}>Individual Pro · Recommended</span>
+              <span style={{ fontSize:9, fontWeight:600, color:"rgba(255,255,255,0.7)" }}>
+                No credits · No limits
+              </span>
+            </div>
+
+            {/* Dark price header */}
+            <div style={{ background:"#071810", padding:"16px 18px" }}>
+              <div style={{ display:"flex", justifyContent:"space-between",
+                alignItems:"flex-start", marginBottom:12 }}>
+                <div>
+                  {billing==="monthly" ? (
+                    <div style={{ display:"flex", alignItems:"baseline", gap:5 }}>
+                      <span style={{ fontSize:12, color:"rgba(255,255,255,0.2)",
+                        textDecoration:"line-through" }}>₹{proP.monthly}</span>
+                      <span style={{ fontSize:30, fontWeight:900, color:C.green,
+                        letterSpacing:-1, lineHeight:1 }}>FREE</span>
+                      <span style={{ fontSize:12, color:"rgba(255,255,255,0.35)" }}>1st month</span>
+                    </div>
+                  ) : (
+                    <div style={{ display:"flex", alignItems:"baseline", gap:5 }}>
+                      <span style={{ fontSize:30, fontWeight:900, color:C.green,
+                        letterSpacing:-1, lineHeight:1 }}>₹{proP.annualEq}</span>
+                      <span style={{ fontSize:12, color:"rgba(255,255,255,0.35)" }}>/mo</span>
+                    </div>
+                  )}
+                  <div style={{ fontSize:11, color:"rgba(255,255,255,0.25)", marginTop:2 }}>
+                    {billing==="monthly"
+                      ? `Then ₹${proP.monthly}/month · Cancel anytime`
+                      : `₹${proP.annual.toLocaleString("en-IN")}/year · Cancel anytime`}
+                  </div>
+                </div>
+                {billing==="annual" && (
+                  <div style={{ background:C.greenLight,
+                    border:`1px solid ${C.greenBorder}`,
+                    borderRadius:10, padding:"6px 10px", textAlign:"center" }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:C.green }}>Save</div>
+                    <div style={{ fontSize:13, fontWeight:900, color:C.green }}>
+                      ₹{proP.save.toLocaleString("en-IN")}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Identity */}
+              <div style={{ background:"rgba(29,184,112,0.1)",
+                border:`1px solid rgba(29,184,112,0.18)`,
+                borderRadius:11, padding:"10px 12px" }}>
+                <div style={{ fontSize:12, fontWeight:700, color:C.green, marginBottom:2 }}>
+                  Your account. Your career. Not your hospital's.
+                </div>
+                <div style={{ fontSize:11, color:"rgba(255,255,255,0.4)", lineHeight:1.6 }}>
+                  Cases, Rounds, and Clinical Memory stay with you
+                  at every hospital you ever work at.
+                </div>
+              </div>
+            </div>
+
+            <div style={{ padding:"16px 18px 0" }}>
+              <SecLabel text="Documentation — unlimited, no credits" color={C.greenDark}/>
+              {[
+                { text:"Unlimited cases", bold:true },
+                { text:"Smart Dictation — always free, always unlimited", bold:true },
+                { text:"AI Discharge Summary — always free, always unlimited", bold:true },
+                { text:"ATLS adult + PALS paediatric frameworks" },
+                { text:"Paediatric drug calculator" },
+                { text:"Document OCR scanning" },
+                { text:"ABG / VBG AI interpretation" },
+                { text:"Clinical Decision Support — unlimited" },
+                { text:"EM Reference Library — AI chat, unlimited" },
+                { text:"PDF export + WhatsApp share" },
+              ].map((f,i) => <FRow key={i} ok {...f} color={C.green}/>)}
+
+              <Divider/>
+
+              <SecLabel text="Rounds — clinical learning, unlimited" color={C.purple}/>
+              {[
+                { text:"Case debrief after every case — unlimited", bold:true },
+                { text:"All 7 thinking lenses", bold:true,
+                  sub:"First Principles · Devil's Advocate · Pathophysiology · Rare but Real · Guidelines · Disease Snapshot · Full Debrief" },
+                { text:"Post-save nudge — 3 quick lenses after saving" },
+                { text:"Clinical Memory — your full career, private", bold:true },
+              ].map((f,i) => <FRow key={i} ok {...f} color={C.purple}/>)}
+
+              <Divider/>
+
+              <SecLabel text="Ownership" color={C.green}/>
+              {[
+                { text:"Your data — not your hospital's", bold:true },
+                { text:"Rounds and Memory stay with you if you leave" },
+                { text:"No shift restrictions — document any time" },
+                { text:"HOD cannot see your Rounds or Memory" },
+              ].map((f,i) => <FRow key={i} ok {...f} color={C.green}/>)}
+
+              <div style={{ background:C.surface, borderRadius:10,
+                padding:"10px 12px", marginBottom:16,
+                fontSize:12, color:C.faint, lineHeight:1.6 }}>
+                No credits on Pro. No limits. No walls. One price — everything works.
+              </div>
+            </div>
+
+            <div style={{ padding:"0 18px 18px" }}>
+              <button onClick={handleProCheckout} disabled={proLoading} style={{
+                width:"100%",
+                background: proLoading ? "rgba(29,184,112,0.5)"
+                  : `linear-gradient(135deg,${C.green},${C.greenDark})`,
+                color:"white", border:"none", borderRadius:12, padding:"14px",
+                fontSize:14, fontWeight:700, cursor: proLoading?"default":"pointer",
+                fontFamily:"inherit",
+                display:"flex", alignItems:"center", justifyContent:"center", gap:8,
+                boxShadow:"0 4px 16px rgba(29,184,112,0.3)",
+              }}>
+                {proLoading ? "Opening Razorpay…" : <><GiftIc/> Start Pro — Free for 1st Month</>}
+              </button>
+              <div style={{ textAlign:"center", fontSize:10, color:C.faint, marginTop:6 }}>
+                30-day free trial · Then ₹{proP.monthly}/month · Secured by Razorpay
+              </div>
+            </div>
+          </div>
+
+          {/* What happened to credits for individuals */}
+          <div style={{ background:C.white, borderRadius:14, padding:"14px 16px",
+            border:`1.5px solid ${C.border}` }}>
+            <div style={{ fontSize:12, fontWeight:700, color:C.ink, marginBottom:6 }}>
+              No AI credits on Pro?
+            </div>
+            <div style={{ fontSize:12.5, color:C.muted, lineHeight:1.7 }}>
+              Correct. On Pro, every AI feature just works — no counting, no topping up,
+              no mid-shift surprises. Credits only exist on the Free plan as a one-time
+              taste before you decide to upgrade.
+            </div>
+          </div>
+
+        </>)}
+
+        {/* ════════════════════════════════════════════
+            TEAM TAB
+        ════════════════════════════════════════════ */}
+        {tab === "team" && (<>
+
+          {/* Checkout confirmation modal */}
+          {checkoutStep === "confirm" && (
+            <div style={{ background:C.white, border:`2px solid ${C.green}`,
+              borderRadius:18, padding:"18px",
+              boxShadow:`0 8px 32px rgba(29,184,112,0.15)` }}>
+              <div style={{ fontSize:15, fontWeight:800, color:C.ink,
+                marginBottom:4, letterSpacing:-0.3 }}>Confirm your Team plan</div>
+              <div style={{ fontSize:12, color:C.muted, marginBottom:14 }}>
+                Review your roster and billing before paying.
+              </div>
+              {[
+                { label:"Consultants", value:`${consultants} × ₹${billing==="annual"?5990/12|0:599} = ₹${consultants*(billing==="annual"?Math.round(5990/12):599)}/mo` },
+                { label:"Residents",   value:`${residents} × ₹${billing==="annual"?3990/12|0:399} = ₹${residents*(billing==="annual"?Math.round(3990/12):399)}/mo` },
+                { label:"Billing",     value:billing==="annual" ? "Annual (17% off, paid upfront)" : "Monthly" },
+                { label:"You pay now", value:`₹${teamDisplay.toLocaleString("en-IN")}`, bold:true,
+                  sub: billing==="annual" ? "Covers 12 months" : "First month" },
+              ].map((row,i) => (
+                <div key={i} style={{ display:"flex", justifyContent:"space-between",
+                  alignItems:"flex-start", padding:"9px 0",
+                  borderBottom: i<3 ? `1px solid ${C.surface}` : "none" }}>
+                  <span style={{ fontSize:13, color:C.muted }}>{row.label}</span>
+                  <div style={{ textAlign:"right" }}>
+                    <div style={{ fontSize:13, fontWeight:row.bold?800:600,
+                      color:row.bold?C.greenDark:C.ink }}>{row.value}</div>
+                    {row.sub && <div style={{ fontSize:10, color:C.faint }}>{row.sub}</div>}
+                  </div>
+                </div>
+              ))}
+              <div style={{ marginTop:14, display:"flex", gap:10 }}>
+                <button onClick={() => setStep("idle")} style={{
+                  flex:1, background:C.surface, border:`1px solid ${C.border}`,
+                  borderRadius:11, padding:"12px", fontSize:13, fontWeight:600,
+                  color:C.muted, cursor:"pointer", fontFamily:"inherit",
+                }}>Cancel</button>
+                <button onClick={handleTeamPay} style={{
+                  flex:2, background:`linear-gradient(135deg,${C.green},${C.greenDark})`,
+                  border:"none", borderRadius:11, padding:"12px",
+                  fontSize:13, fontWeight:700, color:"white",
+                  cursor:"pointer", fontFamily:"inherit",
+                  display:"flex", alignItems:"center", justifyContent:"center", gap:7,
+                  boxShadow:"0 3px 12px rgba(29,184,112,0.3)",
+                }}>
+                  <PeopleIc size={14}/>
+                  Pay ₹{teamDisplay.toLocaleString("en-IN")} Now
+                </button>
+              </div>
+              <div style={{ textAlign:"center", fontSize:10, color:C.faint, marginTop:8 }}>
+                Secured by Razorpay · UPI · Cards · Net Banking
+              </div>
+            </div>
+          )}
+
+          {/* Paying state */}
+          {checkoutStep === "paying" && (
+            <div style={{ background:C.white, borderRadius:18, padding:"32px 18px",
+              textAlign:"center", border:`1.5px solid ${C.border}` }}>
+              <div style={{ fontSize:24, marginBottom:12 }}>⏳</div>
+              <div style={{ fontSize:14, fontWeight:700, color:C.ink }}>
+                Opening Razorpay…
+              </div>
+              <div style={{ fontSize:12, color:C.faint, marginTop:6 }}>
+                Secure payment powered by Razorpay
+              </div>
+            </div>
+          )}
+
+          {/* Success state */}
+          {checkoutStep === "success" && (
+            <div style={{ background:"#F0FDF6", border:`2px solid ${C.green}`,
+              borderRadius:18, padding:"24px 18px", textAlign:"center" }}>
+              <div style={{ fontSize:32, marginBottom:10 }}>✅</div>
+              <div style={{ fontSize:16, fontWeight:800, color:C.greenDark, marginBottom:6 }}>
+                Team plan activated!
+              </div>
+              <div style={{ fontSize:13, color:C.muted, lineHeight:1.6, marginBottom:14 }}>
+                Go to your admin panel to add doctors by email.
+                Each gets an invite and can join immediately.
+              </div>
+              <button style={{
+                width:"100%", background:`linear-gradient(135deg,${C.green},${C.greenDark})`,
+                border:"none", borderRadius:11, padding:"12px",
+                fontSize:13, fontWeight:700, color:"white",
+                cursor:"pointer", fontFamily:"inherit",
+              }}>
+                Go to Admin Panel →
+              </button>
+            </div>
+          )}
+
+          {/* Team plan card */}
+          {checkoutStep === "idle" && (
+            <div style={{ background:"linear-gradient(160deg,#071810,#0c0e18)",
+              border:`2px solid ${C.greenBorder}`, borderRadius:20, overflow:"hidden",
+              boxShadow:"0 8px 40px rgba(29,184,112,0.15)" }}>
+
+              {/* Tag */}
+              <div style={{ background:"rgba(29,184,112,0.1)", padding:"8px 18px",
+                display:"flex", alignItems:"center", justifyContent:"space-between",
+                borderBottom:`1px solid rgba(29,184,112,0.1)` }}>
+                <span style={{ fontSize:9, fontWeight:800, letterSpacing:1.4,
+                  color:C.green, textTransform:"uppercase" }}>
+                  Team Plan · Dynamic pricing
+                </span>
+                <span style={{ fontSize:9, fontWeight:600,
+                  color:"rgba(255,255,255,0.3)" }}>No credit walls. Ever.</span>
+              </div>
+
+              <div style={{ padding:"18px 18px 0" }}>
+                {/* Price display */}
+                <div style={{ display:"flex", justifyContent:"space-between",
+                  alignItems:"flex-start", marginBottom:14 }}>
+                  <div>
+                    <div style={{ fontSize:10, fontWeight:700, letterSpacing:1.2,
+                      textTransform:"uppercase", color:"rgba(255,255,255,0.3)", marginBottom:4 }}>
+                      Team / Hospital
+                    </div>
+                    <div style={{ display:"flex", alignItems:"baseline", gap:5 }}>
+                      <span style={{ fontSize:11, color:"rgba(255,255,255,0.3)" }}>from</span>
+                      <span style={{ fontSize:30, fontWeight:900, color:C.green,
+                        letterSpacing:-1, lineHeight:1 }}>₹399</span>
+                      <span style={{ fontSize:12, color:"rgba(255,255,255,0.3)" }}>/doctor/month</span>
+                    </div>
+                    <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginTop:2 }}>
+                      Consultant ₹599 · Resident ₹399
+                    </div>
+                  </div>
+                  <div style={{ width:40, height:40, borderRadius:11,
+                    background:C.greenLight, border:`1.5px solid ${C.greenBorder}`,
+                    display:"flex", alignItems:"center", justifyContent:"center" }}>
+                    <PeopleIc color={C.green}/>
+                  </div>
+                </div>
+
+                <Divider dark/>
+
+                {/* Live bill calculator */}
+                <SecLabel text="Your bill — select roster size" color="rgba(255,255,255,0.35)"/>
+                <div style={{ background:"rgba(255,255,255,0.04)", borderRadius:13,
+                  padding:"14px 14px", marginBottom:16 }}>
+                  {[
+                    { label:"Consultants", rate:599, val:consultants, set:setC },
+                    { label:"Residents",   rate:399, val:residents,   set:setR },
+                  ].map((row,i) => (
+                    <div key={i} style={{ display:"flex", alignItems:"center",
+                      justifyContent:"space-between", marginBottom:i===0?12:0 }}>
+                      <div>
+                        <div style={{ fontSize:13, fontWeight:600, color:"white" }}>{row.label}</div>
+                        <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)" }}>
+                          ₹{row.rate}/month each
+                        </div>
+                      </div>
+                      <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                        {["-",null,"+"].map((btn,j) => btn ? (
+                          <button key={j}
+                            onClick={() => row.set(Math.max(0,row.val+(btn==="-"?-1:1)))}
+                            style={{ width:28, height:28, borderRadius:8,
+                              background:C.greenLight, border:`1.5px solid ${C.greenBorder}`,
+                              color:C.green, fontSize:16, fontWeight:700,
+                              cursor:"pointer", display:"flex", alignItems:"center",
+                              justifyContent:"center", fontFamily:"inherit" }}>{btn}</button>
+                        ) : (
+                          <span key={j} style={{ fontSize:18, fontWeight:800, color:"white",
+                            minWidth:24, textAlign:"center" }}>{row.val}</span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+
+                  <div style={{ height:1, background:"rgba(255,255,255,0.08)", margin:"12px 0" }}/>
+
+                  {/* Total */}
+                  <div style={{ display:"flex", justifyContent:"space-between",
+                    alignItems:"flex-end" }}>
+                    <div>
+                      <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", marginBottom:2 }}>
+                        {billing==="annual" ? "You pay today" : "You pay monthly"}
+                      </div>
+                      <div style={{ fontSize:28, fontWeight:900, color:C.green,
+                        letterSpacing:-0.5, lineHeight:1 }}>
+                        ₹{teamDisplay.toLocaleString("en-IN")}
+                        <span style={{ fontSize:12, fontWeight:400,
+                          color:"rgba(255,255,255,0.3)" }}>
+                          {billing==="annual"?"/year":"/month"}
+                        </span>
+                      </div>
+                      {billing==="annual" && (
+                        <div style={{ fontSize:10, color:C.green, fontWeight:600, marginTop:2 }}>
+                          ₹{Math.round(teamAnnual/12).toLocaleString("en-IN")}/month effective ·
+                          Save ₹{(teamMonthly*12-teamAnnual).toLocaleString("en-IN")}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ textAlign:"right" }}>
+                      <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)" }}>
+                        {totalDrs} doctors
+                      </div>
+                      {totalDrs > 0 && (
+                        <div style={{ fontSize:10, color:"rgba(255,255,255,0.2)", marginTop:2 }}>
+                          ₹{Math.round(teamMonthly/totalDrs)}/doc/mo avg
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {totalDrs < 4 && (
+                    <div style={{ marginTop:10, fontSize:11, color:C.orange,
+                      fontWeight:600, textAlign:"center" }}>
+                      ⚠ Minimum 4 doctors required
+                    </div>
+                  )}
+                </div>
+
+                {/* Every doctor gets */}
+                <SecLabel text="Every doctor gets — Pro features included" color={C.green}/>
+                {[
+                  { text:"Everything in Individual Pro — for every doctor", bold:true },
+                  { text:"Unlimited cases, Dictation, Discharge Summary" },
+                  { text:"All AI — Decision Support, OCR, ABG, EM Reference" },
+                  { text:"Rounds with all 7 lenses, unlimited", bold:true },
+                  { text:"No credits. No limits. Ever.", bold:true },
+                ].map((f,i) => (
+                  <div key={i} style={{ display:"flex", alignItems:"flex-start",
+                    gap:9, marginBottom:9 }}>
+                    <CheckIc color={C.green}/>
+                    <span style={{ fontSize:13, lineHeight:1.5,
+                      fontWeight:f.bold?700:400,
+                      color:f.bold?"white":"rgba(255,255,255,0.5)" }}>{f.text}</span>
+                  </div>
+                ))}
+
+                <Divider dark/>
+
+                {/* HOD gets */}
+                <SecLabel text="HOD gets — department layer" color="rgba(255,255,255,0.4)"/>
+                {[
+                  "Shift management — Morning, Evening, Night",
+                  "Case handover with pending notes",
+                  "Auto handover sheet — landscape PDF + WhatsApp",
+                  "Consultant escalation system",
+                  "Admin dashboard — all shifts, all cases, live",
+                  "Force logout any doctor, any device",
+                  "6 concurrent phones + 2 desktops",
+                  "Department analytics + monthly reports",
+                  "Custom hospital branding on all exports",
+                ].map((text,i) => (
+                  <div key={i} style={{ display:"flex", alignItems:"center",
+                    gap:9, marginBottom:8 }}>
+                    <CheckIc color="rgba(29,184,112,0.5)"/>
+                    <span style={{ fontSize:12.5, color:"rgba(255,255,255,0.4)" }}>{text}</span>
+                  </div>
+                ))}
+
+                <Divider dark/>
+
+                {/* Clinical Memory note */}
+                <div style={{ background:"rgba(124,106,246,0.1)",
+                  border:`1px solid rgba(124,106,246,0.2)`,
+                  borderRadius:12, padding:"11px 13px", marginBottom:16 }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:C.purple, marginBottom:4 }}>
+                    💡 About Clinical Memory on Team plan
+                  </div>
+                  <div style={{ fontSize:12, color:"rgba(255,255,255,0.4)", lineHeight:1.6 }}>
+                    Every doctor gets Rounds debriefs. But Clinical Memory (your private
+                    career record, visible only to you) requires Individual Pro separately.
+                    Team-only = HOD can see Rounds activity.
+                  </div>
+                </div>
+              </div>
+
+              {/* Enroll button */}
+              <div style={{ padding:"0 18px 18px" }}>
+                <button onClick={handleTeamCheckout}
+                  disabled={totalDrs < 4}
+                  style={{
+                    width:"100%",
+                    background: totalDrs < 4 ? "rgba(29,184,112,0.3)"
+                      : `linear-gradient(135deg,${C.green},${C.greenDark})`,
+                    color:"white", border:"none", borderRadius:12, padding:"15px",
+                    fontSize:14, fontWeight:700,
+                    cursor:totalDrs < 4 ? "not-allowed" : "pointer",
+                    fontFamily:"inherit",
+                    display:"flex", alignItems:"center", justifyContent:"center", gap:8,
+                    boxShadow: totalDrs < 4 ? "none" : "0 4px 16px rgba(29,184,112,0.32)",
+                    transition:"all 0.2s",
+                  }}>
+                  <PeopleIc size={16}/>
+                  {totalDrs < 4 ? "Add at least 4 doctors above" : (
+                    <>
+                      Enroll Now
+                      <span style={{ background:"rgba(255,255,255,0.2)",
+                        borderRadius:6, padding:"2px 8px", fontSize:12, fontWeight:700 }}>
+                        {totalDrs} doctors · ₹{teamMonthly.toLocaleString("en-IN")}/mo
+                      </span>
+                    </>
+                  )}
+                </button>
+                <div style={{ textAlign:"center", fontSize:10,
+                  color:"rgba(255,255,255,0.2)", marginTop:7 }}>
+                  Bill recalculates each cycle based on current roster ·
+                  Secured by Razorpay
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Pricing examples */}
+          <div style={{ background:C.white, borderRadius:16, padding:"16px 18px",
+            border:`1.5px solid ${C.border}` }}>
+            <SecLabel text="Example bills"/>
+            {[{t:"Small clinic",c:2,r:6},{t:"Mid-size ER",c:8,r:28},{t:"Large hospital",c:15,r:50}]
+              .map((ex,i) => {
+                const m = (ex.c*599)+(ex.r*399);
+                const a = (ex.c*5990)+(ex.r*3990);
+                return (
+                  <div key={i} style={{ display:"flex", justifyContent:"space-between",
+                    alignItems:"center", padding:"9px 0",
+                    borderBottom: i<2 ? `1px solid ${C.surface}` : "none" }}>
+                    <div>
+                      <div style={{ fontSize:13, fontWeight:600, color:C.ink }}>{ex.t}</div>
+                      <div style={{ fontSize:11, color:C.faint }}>{ex.c}C · {ex.r}R</div>
+                    </div>
+                    <div style={{ textAlign:"right" }}>
+                      <div style={{ fontSize:14, fontWeight:800, color:C.greenDark }}>
+                        ₹{(billing==="annual"?Math.round(a/12):m).toLocaleString("en-IN")}/mo
+                      </div>
+                      {billing==="annual" && (
+                        <div style={{ fontSize:10, color:C.faint }}>
+                          ₹{a.toLocaleString("en-IN")}/yr
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+
+          {/* Team + Pro note */}
+          <div style={{ background:C.purpleLight, border:`1.5px solid ${C.purpleBorder}`,
+            borderRadius:16, padding:"14px 16px" }}>
+            <div style={{ fontSize:12, fontWeight:700, color:C.purple, marginBottom:6 }}>
+              Team + Individual Pro
+            </div>
+            <div style={{ fontSize:12.5, color:C.muted, lineHeight:1.7 }}>
+              Team plan covers your hospital work. Individual Pro (₹1,199/mo, you pay
+              personally) adds private Clinical Memory that your HOD cannot see — your
+              career record across every hospital you've worked at.
+            </div>
+          </div>
+
+        </>)}
+      </div>
+
+      {/* Sticky CTA */}
+      <div style={{ position:"fixed", bottom:0, left:"50%", transform:"translateX(-50%)",
+        width:"100%", maxWidth:430,
+        background:"rgba(247,248,250,0.97)", backdropFilter:"blur(14px)",
+        borderTop:`1px solid ${C.border}`, padding:"12px 16px 32px" }}>
+        {tab === "team" ? (
+          checkoutStep === "idle" ? (
+            <>
+              <button onClick={handleTeamCheckout}
+                disabled={totalDrs < 4}
+                style={{
+                  width:"100%",
+                  background: totalDrs < 4 ? "#E5E7EB"
+                    : `linear-gradient(135deg,${C.green},${C.greenDark})`,
+                  color: totalDrs < 4 ? C.faint : "white",
+                  border:"none", borderRadius:14, padding:"15px",
+                  fontSize:15, fontWeight:700,
+                  cursor:totalDrs < 4 ? "not-allowed" : "pointer",
+                  fontFamily:"inherit",
+                  display:"flex", alignItems:"center", justifyContent:"center", gap:8,
+                  boxShadow: totalDrs < 4 ? "none" : "0 6px 22px rgba(29,184,112,0.35)",
+                }}>
+                <PeopleIc size={16}/>
+                {totalDrs < 4 ? "Minimum 4 doctors required"
+                  : `Enroll Now — ₹${teamMonthly.toLocaleString("en-IN")}/month`}
+              </button>
+              <div style={{ textAlign:"center", fontSize:11, color:C.faint, marginTop:8 }}>
+                Bill updates automatically as roster changes
+              </div>
+            </>
+          ) : null
+        ) : (
+          <>
+            <button onClick={handleProCheckout} disabled={proLoading} style={{
+              width:"100%",
+              background: proLoading ? "rgba(29,184,112,0.5)"
+                : `linear-gradient(135deg,${C.green},${C.greenDark})`,
+              color:"white", border:"none", borderRadius:14, padding:"15px",
+              fontSize:15, fontWeight:700, cursor:proLoading?"default":"pointer",
+              fontFamily:"inherit",
+              display:"flex", alignItems:"center", justifyContent:"center", gap:8,
+              boxShadow:"0 6px 22px rgba(29,184,112,0.35)",
+            }}>
+              {proLoading ? "Opening Razorpay…" : <><GiftIc size={18}/> Start Pro — Free for 1st Month</>}
+            </button>
+            <div style={{ textAlign:"center", fontSize:11, color:C.faint, marginTop:8 }}>
+              30-day free trial · ₹{proP.monthly}/month after · Cancel anytime
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SCREEN 2 — MY SUBSCRIPTIONS
+// ═══════════════════════════════════════════════════════════════════════════
+function MySubscriptionsScreen({ onClose }) {
+  const [scenario, setScenario] = useState("both");
+
+  const SUBS = {
+    both:      { plan:"pro",  aiCredits:5, casesUsed:0, teamActive:true,  teamRole:"resident", teamDept:"City Emergency" },
+    team_only: { plan:"free", aiCredits:5, casesUsed:3, teamActive:true,  teamRole:"resident", teamDept:"City Emergency" },
+    pro_only:  { plan:"pro",  aiCredits:0, casesUsed:0, teamActive:false, teamRole:null,       teamDept:null },
+    free_low:  { plan:"free", aiCredits:2, casesUsed:6, teamActive:false, teamRole:null,       teamDept:null },
+    free_gone: { plan:"free", aiCredits:0, casesUsed:9, teamActive:false, teamRole:null,       teamDept:null },
+  }[scenario];
+
+  const access = getAccess(SUBS);
+  const hasPro  = SUBS.plan === "pro";
+  const hasTeam = SUBS.teamActive;
+  const isFree  = !hasPro && !hasTeam;
+
+  return (
+    <div style={{ fontFamily:"'DM Sans','Helvetica Neue',sans-serif",
+      background:C.surface, minHeight:"100vh", maxWidth:430,
+      margin:"0 auto", paddingBottom:40 }}>
+
+      {/* Header */}
+      <div style={{ background:"rgba(247,248,250,0.96)", backdropFilter:"blur(14px)",
+        padding:"16px 20px 14px", borderBottom:`1px solid ${C.border}`,
+        display:"flex", alignItems:"center", gap:12,
+        position:"sticky", top:0, zIndex:20 }}>
+        <button onClick={onClose} style={{ background:"none", border:"none",
+          cursor:"pointer", padding:0, display:"flex" }}><Back/></button>
+        <span style={{ fontSize:17, fontWeight:800, color:C.ink, letterSpacing:-0.4 }}>
+          My Subscriptions
+        </span>
+      </div>
+
+      {/* State switcher */}
+      <div style={{ padding:"12px 16px 0" }}>
+        <div style={{ fontSize:9, fontWeight:700, color:C.faint, letterSpacing:1.2,
+          textTransform:"uppercase", marginBottom:7 }}>Preview states</div>
+        <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+          {[
+            {id:"both",      label:"Both active"},
+            {id:"team_only", label:"Team only"},
+            {id:"pro_only",  label:"Pro only"},
+            {id:"free_low",  label:"Free (2 credits)"},
+            {id:"free_gone", label:"Free (0 credits)"},
+          ].map(s => (
+            <button key={s.id} onClick={() => setScenario(s.id)} style={{
+              background:scenario===s.id ? C.ink : C.white,
+              color:scenario===s.id ? "white" : C.muted,
+              border:`1.5px solid ${scenario===s.id ? C.ink : C.border}`,
+              borderRadius:99, padding:"5px 11px",
+              fontSize:10, fontWeight:600, cursor:"pointer", fontFamily:"inherit",
+              transition:"all 0.15s",
+            }}>{s.label}</button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ padding:"14px 16px 0", display:"flex", flexDirection:"column", gap:12 }}>
+
+        {/* Identity */}
+        <div style={{ background:C.white, borderRadius:16, padding:"14px 16px",
+          border:`1.5px solid ${C.border}`, display:"flex", alignItems:"center", gap:12 }}>
+          <div style={{ width:44, height:44, borderRadius:"50%",
+            background:`linear-gradient(135deg,${C.green},${C.greenDark})`,
+            display:"flex", alignItems:"center", justifyContent:"center",
+            fontSize:17, fontWeight:800, color:"white", flexShrink:0 }}>N</div>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:15, fontWeight:800, color:C.ink, letterSpacing:-0.3 }}>
+              Dr. Neeraj
+            </div>
+            <div style={{ fontSize:12, color:C.faint, marginTop:1 }}>neeraj@ermate.in</div>
+          </div>
+          <div style={{ textAlign:"right" }}>
+            {hasPro  && <div style={{ fontSize:11, fontWeight:700, color:C.green, marginBottom:hasTeam?2:0 }}>Pro · Active</div>}
+            {hasTeam && <div style={{ fontSize:11, fontWeight:700, color:C.greenDark }}>Team · Active</div>}
+            {isFree  && <div style={{ fontSize:12, color:C.faint }}>Free</div>}
+          </div>
+        </div>
+
+        {/* Credit bar — Free users only */}
+        {access.showCreditBar && (
+          <CreditBar credits={SUBS.aiCredits} onUpgrade={() => {}}/>
+        )}
+
+        {/* Combined banner */}
+        {hasPro && hasTeam && (
+          <div style={{ background:"linear-gradient(135deg,#071810,#0c0e18)",
+            borderRadius:16, padding:"16px 16px",
+            border:`1px solid rgba(255,255,255,0.06)` }}>
+            <div style={{ fontSize:10, fontWeight:700, color:"rgba(255,255,255,0.35)",
+              letterSpacing:1, textTransform:"uppercase", marginBottom:6 }}>Both plans active</div>
+            <div style={{ fontSize:14, fontWeight:800, color:"white",
+              marginBottom:12, letterSpacing:-0.3 }}>
+              Full ErMate — shift work and career growth
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+              {[
+                { ic:<PeopleIc color={C.green} size={13}/>, label:"TEAM PLAN",
+                  bg:"rgba(29,184,112,0.1)", border:"rgba(29,184,112,0.18)",
+                  color:C.green, desc:"Shift · Dept · Hospital pays" },
+                { ic:<BrainIc color={C.purple} size={13}/>, label:"INDIVIDUAL PRO",
+                  bg:"rgba(124,106,246,0.1)", border:"rgba(124,106,246,0.18)",
+                  color:C.purple, desc:"Rounds · Memory · You pay" },
+              ].map((card,i) => (
+                <div key={i} style={{ background:card.bg, border:`1px solid ${card.border}`,
+                  borderRadius:11, padding:"10px 11px" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:5, marginBottom:4 }}>
+                    {card.ic}
+                    <span style={{ fontSize:8, fontWeight:800,
+                      color:card.color, letterSpacing:0.5 }}>{card.label}</span>
+                  </div>
+                  <div style={{ fontSize:11, color:"rgba(255,255,255,0.45)",
+                    lineHeight:1.5 }}>{card.desc}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop:10, fontSize:11, color:"rgba(255,255,255,0.3)",
+              lineHeight:1.6 }}>
+              Cases on shift → department. Rounds + Memory → yours, private, always.
+            </div>
+          </div>
+        )}
+
+        {/* Free state */}
+        {isFree && (
+          <div style={{ background:C.white, border:`1.5px solid ${C.border}`,
+            borderRadius:16, padding:"16px 18px" }}>
+            <div style={{ fontSize:14, fontWeight:700, color:C.ink, marginBottom:8 }}>
+              Free plan — {10-SUBS.casesUsed} cases remaining
+            </div>
+            <div style={{ height:6, background:C.surface, borderRadius:99,
+              overflow:"hidden", marginBottom:14 }}>
+              <div style={{ height:"100%", borderRadius:99,
+                width:`${(SUBS.casesUsed/10)*100}%`,
+                background:`linear-gradient(90deg,${C.green},${C.greenDark})` }}/>
+            </div>
+            <div style={{ display:"flex", gap:10 }}>
+              <button style={{ flex:1, background:C.greenLight,
+                border:`1px solid ${C.greenBorder}`, borderRadius:11, padding:"11px",
+                fontSize:13, fontWeight:700, color:C.greenDark,
+                cursor:"pointer", fontFamily:"inherit" }}>
+                Individual Pro →
+              </button>
+              <button style={{ flex:1, background:C.purpleLight,
+                border:`1px solid ${C.purpleBorder}`, borderRadius:11, padding:"11px",
+                fontSize:13, fontWeight:700, color:C.purple,
+                cursor:"pointer", fontFamily:"inherit" }}>
+                Join a team →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Team card */}
+        {!isFree && (
+          <div>
+            <div style={{ fontSize:10, fontWeight:700, color:C.faint, letterSpacing:1,
+              textTransform:"uppercase", marginBottom:7, paddingLeft:2 }}>🏥  Department</div>
+
+            {hasTeam ? (
+              <div style={{ background:C.white, border:`2px solid ${C.greenBorder}`,
+                borderRadius:16, overflow:"hidden",
+                boxShadow:`0 4px 16px rgba(29,184,112,0.08)` }}>
+                <div style={{ background:"#071810", padding:"13px 16px",
+                  display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                    <div style={{ width:34, height:34, borderRadius:9, background:C.greenLight,
+                      border:`1.5px solid ${C.greenBorder}`,
+                      display:"flex", alignItems:"center", justifyContent:"center" }}>
+                      <PeopleIc color={C.green} size={16}/>
+                    </div>
+                    <div>
+                      <div style={{ fontSize:10, fontWeight:700,
+                        color:"rgba(255,255,255,0.35)", letterSpacing:0.8,
+                        textTransform:"uppercase" }}>Team Plan</div>
+                      <div style={{ fontSize:14, fontWeight:800, color:"white",
+                        letterSpacing:-0.3 }}>{SUBS.teamDept}</div>
+                    </div>
+                  </div>
+                  <Pill status="active"/>
+                </div>
+                <div style={{ padding:"14px 16px" }}>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr",
+                    gap:8, marginBottom:12 }}>
+                    {[
+                      {label:"Your role", value:"Resident",     c:C.greenDark},
+                      {label:"Shift",     value:"Evening · On", c:C.green},
+                      {label:"HOD",       value:"Dr. Neeraj",   c:C.inkSoft},
+                      {label:"Paid by",   value:"Hospital",     c:C.inkSoft},
+                    ].map((item,i) => (
+                      <div key={i} style={{ background:C.surface, borderRadius:9,
+                        padding:"9px 11px" }}>
+                        <div style={{ fontSize:9, color:C.faint, fontWeight:600,
+                          letterSpacing:0.5, textTransform:"uppercase", marginBottom:3 }}>
+                          {item.label}
+                        </div>
+                        <div style={{ fontSize:13, fontWeight:700, color:item.c }}>
+                          {item.value}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ background:C.orangeLight,
+                    border:`1px solid rgba(245,158,11,0.2)`,
+                    borderRadius:10, padding:"9px 12px",
+                    display:"flex", gap:8, marginBottom:8 }}>
+                    <WarnIc/>
+                    <div>
+                      <div style={{ fontSize:11, fontWeight:700,
+                        color:"#92400E", marginBottom:2 }}>Hospital can see</div>
+                      <div style={{ fontSize:11, color:"#B45309", lineHeight:1.5 }}>
+                        Cases on shift · Handover records · Activity logs
+                        {!hasPro && " · Rounds activity"}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ background:C.greenLight, border:`1px solid ${C.greenBorder}`,
+                    borderRadius:10, padding:"9px 12px",
+                    display:"flex", gap:8, alignItems:"flex-start" }}>
+                    <ShieldIc/>
+                    <div>
+                      <div style={{ fontSize:11, fontWeight:700,
+                        color:C.greenDark, marginBottom:2 }}>Hospital cannot see</div>
+                      <div style={{ fontSize:11, color:C.muted, lineHeight:1.5 }}>
+                        {hasPro
+                          ? "Rounds debriefs · Clinical Memory · Off-shift cases"
+                          : "Off-shift cases only — add Pro for private Rounds"}
+                      </div>
+                    </div>
+                  </div>
+                  {!hasPro && (
+                    <div style={{ marginTop:10, background:C.purpleLight,
+                      border:`1px solid ${C.purpleBorder}`,
+                      borderRadius:10, padding:"10px 12px",
+                      display:"flex", alignItems:"center",
+                      justifyContent:"space-between" }}>
+                      <div style={{ fontSize:12, color:C.purple, flex:1, marginRight:10 }}>
+                        Add Individual Pro for private Rounds + Memory
+                      </div>
+                      <div style={{ fontSize:12, fontWeight:700, color:C.purple,
+                        background:"white", borderRadius:7, padding:"5px 10px",
+                        border:`1px solid ${C.purpleBorder}`,
+                        cursor:"pointer", whiteSpace:"nowrap", flexShrink:0 }}>
+                        ₹1,199/mo →
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div style={{ borderTop:`1px solid ${C.border}`, padding:"11px 16px",
+                  display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                    <ClockIc/>
+                    <span style={{ fontSize:11, color:C.faint }}>Next bill: 1 Aug 2026</span>
+                  </div>
+                  <button style={{ background:"none", border:"none", cursor:"pointer",
+                    fontSize:12, fontWeight:600, color:C.faint, fontFamily:"inherit" }}>
+                    Leave department
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ background:C.white, border:`1.5px solid ${C.border}`,
+                borderRadius:16, padding:"16px",
+                display:"flex", alignItems:"center", gap:12 }}>
+                <div style={{ width:40, height:40, borderRadius:11,
+                  background:C.surface, border:`1.5px solid ${C.border}`,
+                  display:"flex", alignItems:"center", justifyContent:"center" }}>
+                  <PeopleIc color={C.faint}/>
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:C.faint }}>Team Plan</div>
+                  <div style={{ fontSize:12, color:C.faint, marginTop:2 }}>
+                    Not part of any department
+                  </div>
+                </div>
+                <div style={{ background:C.greenLight, border:`1px solid ${C.greenBorder}`,
+                  borderRadius:9, padding:"6px 12px", fontSize:12, fontWeight:700,
+                  color:C.greenDark, cursor:"pointer", whiteSpace:"nowrap" }}>
+                  Join team →
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Individual Pro card */}
+        {!isFree && (
+          <div>
+            <div style={{ fontSize:10, fontWeight:700, color:C.faint, letterSpacing:1,
+              textTransform:"uppercase", marginBottom:7, paddingLeft:2 }}>🧠  Personal plan</div>
+
+            {hasPro ? (
+              <div style={{ background:C.white, border:`2px solid ${C.purpleBorder}`,
+                borderRadius:16, overflow:"hidden",
+                boxShadow:`0 4px 16px rgba(124,106,246,0.08)` }}>
+                <div style={{ background:"#0e0b1c", padding:"13px 16px",
+                  display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                    <div style={{ width:34, height:34, borderRadius:9,
+                      background:C.purpleLight, border:`1.5px solid ${C.purpleBorder}`,
+                      display:"flex", alignItems:"center", justifyContent:"center" }}>
+                      <BrainIc color={C.purple}/>
+                    </div>
+                    <div>
+                      <div style={{ fontSize:10, fontWeight:700,
+                        color:"rgba(255,255,255,0.35)", letterSpacing:0.8,
+                        textTransform:"uppercase" }}>Individual Pro</div>
+                      <div style={{ fontSize:14, fontWeight:800, color:"white",
+                        letterSpacing:-0.3 }}>Your career layer</div>
+                    </div>
+                  </div>
+                  <Pill status="active"/>
+                </div>
+                <div style={{ padding:"14px 16px" }}>
+                  <div style={{ background:C.purpleLight, border:`1px solid ${C.purpleBorder}`,
+                    borderRadius:11, padding:"12px 13px", marginBottom:12 }}>
+                    <SecLabel text="What Individual Pro gives you" color={C.purple}/>
+                    {[
+                      {icon:"🧠", text:"Rounds — unlimited debriefs",
+                       sub:"After every case, at any hospital"},
+                      {icon:"📚", text:"All 7 thinking lenses",
+                       sub:"First Principles to Full Debrief"},
+                      {icon:"💾", text:"Clinical Memory — full career",
+                       sub:"Every hospital you've ever worked at"},
+                      {icon:"🔒", text:"Fully private — HOD cannot see",
+                       sub:"This record belongs only to you"},
+                    ].map((item,i) => (
+                      <div key={i} style={{ display:"flex", gap:10,
+                        marginBottom:i<3?10:0, alignItems:"flex-start" }}>
+                        <span style={{ fontSize:16, flexShrink:0, marginTop:1 }}>{item.icon}</span>
+                        <div>
+                          <div style={{ fontSize:13, fontWeight:600, color:C.inkSoft }}>
+                            {item.text}
+                          </div>
+                          <div style={{ fontSize:11, color:C.faint, marginTop:1 }}>
+                            {item.sub}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ background:C.greenLight, border:`1px solid ${C.greenBorder}`,
+                    borderRadius:10, padding:"9px 12px",
+                    display:"flex", gap:8, alignItems:"flex-start" }}>
+                    <ShieldIc/>
+                    <div style={{ fontSize:12, color:C.greenDark, lineHeight:1.6 }}>
+                      <strong>Fully private.</strong> No hospital or HOD can access your Rounds
+                      or Clinical Memory — ever. This is your record.
+                    </div>
+                  </div>
+                </div>
+                <div style={{ borderTop:`1px solid ${C.border}`, padding:"11px 16px",
+                  display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                  <div>
+                    <div style={{ fontSize:13, fontWeight:700, color:C.ink }}>
+                      ₹1,199/month
+                    </div>
+                    <div style={{ display:"flex", alignItems:"center", gap:4, marginTop:2 }}>
+                      <ClockIc/>
+                      <span style={{ fontSize:11, color:C.faint }}>Renews 1 Aug 2026</span>
+                    </div>
+                  </div>
+                  <button style={{ background:"none", border:`1px solid ${C.border}`,
+                    borderRadius:8, padding:"6px 12px", cursor:"pointer",
+                    fontSize:12, fontWeight:600, color:C.faint, fontFamily:"inherit" }}>
+                    Manage
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ background:C.purpleLight,
+                border:`1.5px dashed ${C.purpleBorder}`,
+                borderRadius:16, padding:"16px",
+                display:"flex", alignItems:"center", gap:12 }}>
+                <div style={{ width:40, height:40, borderRadius:11,
+                  background:"rgba(124,106,246,0.08)",
+                  border:`1.5px solid ${C.purpleBorder}`,
+                  display:"flex", alignItems:"center", justifyContent:"center" }}>
+                  <BrainIc color={C.purple}/>
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:C.purple }}>
+                    Individual Pro
+                  </div>
+                  <div style={{ fontSize:11, color:C.muted, marginTop:2, lineHeight:1.5 }}>
+                    Private Rounds + Clinical Memory
+                    {hasTeam ? " · HOD cannot see it" : " · Your career record"}
+                  </div>
+                </div>
+                <div style={{ background:`linear-gradient(135deg,${C.purple},#5B4FD4)`,
+                  borderRadius:9, padding:"8px 13px", fontSize:12, fontWeight:700,
+                  color:"white", cursor:"pointer",
+                  boxShadow:"0 3px 10px rgba(124,106,246,0.3)",
+                  whiteSpace:"nowrap", flexShrink:0 }}>
+                  ₹1,199/mo →
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Access table */}
+        {!isFree && (
+          <div style={{ background:C.white, borderRadius:16, padding:"14px 16px",
+            border:`1.5px solid ${C.border}` }}>
+            <div style={{ fontSize:13, fontWeight:700, color:C.ink, marginBottom:12 }}>
+              Your access
+            </div>
+            {[
+              {label:"Case documentation",     val: access.unlimited ? "Unlimited" : "10 cases"},
+              {label:"Smart Dictation",        val: "Always free"},
+              {label:"AI Discharge Summary",   val: "Always free"},
+              {label:"Decision Support",       val: access.unlimited ? "Unlimited" : access.aiCredits > 0 ? `${SUBS.aiCredits} credits left` : "Upgrade to unlock"},
+              {label:"Rounds debriefs",        val: access.unlimited ? "Unlimited" : access.aiCredits > 0 ? `${SUBS.aiCredits} credits left` : "Upgrade to unlock"},
+              {label:"Clinical Memory",        val: access.clinicalMemory ? "Private ✓" : "Add Pro"},
+              {label:"Shift management",       val: access.shiftMgmt ? "Active ✓" : "—"},
+              {label:"Case handover",          val: access.handover ? "Active ✓" : "—"},
+            ].map((item,i) => (
+              <div key={i} style={{ display:"flex", alignItems:"center",
+                justifyContent:"space-between", padding:"7px 0",
+                borderBottom: i<7 ? `1px solid ${C.surface}` : "none" }}>
+                <span style={{ fontSize:12.5, color:C.inkSoft }}>{item.label}</span>
+                <span style={{ fontSize:12, fontWeight:600,
+                  color: item.val.includes("Unlimited")||item.val.includes("✓")||item.val.includes("free") ? C.greenDark
+                    : item.val.includes("credits") ? C.orange
+                    : item.val.includes("Upgrade")||item.val.includes("Add") ? C.red
+                    : C.faint }}>
+                  {item.val}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <button style={{ background:"none", border:"none", cursor:"pointer",
+          fontFamily:"inherit", padding:"8px",
+          display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
+          <span style={{ fontSize:13, color:C.faint }}>Questions?</span>
+          <span style={{ fontSize:13, color:C.green, fontWeight:600 }}>
+            support@ermate.app →
+          </span>
+        </button>
+
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MAIN SHELL
+// ═══════════════════════════════════════════════════════════════════════════
+export default function ErMateSubscriptionFinal() {
+  const [screen, setScreen] = useState("upgrade");
+
+  return (
+    <div style={{ fontFamily:"'DM Sans','Helvetica Neue',sans-serif",
+      background:"#D8DBD8", minHeight:"100vh",
+      padding:"20px 0 48px",
+      display:"flex", flexDirection:"column", alignItems:"center", gap:16 }}>
+
+      <div style={{ display:"flex", gap:8, flexWrap:"wrap",
+        justifyContent:"center", paddingTop:6 }}>
+        <span style={{ fontSize:10, fontWeight:700, color:"#6B7280",
+          letterSpacing:1, textTransform:"uppercase", alignSelf:"center" }}>View:</span>
+        {[
+          {id:"upgrade", label:"Upgrade Screen"},
+          {id:"profile", label:"My Subscriptions"},
+        ].map(s => (
+          <button key={s.id} onClick={() => setScreen(s.id)} style={{
+            background:screen===s.id ? "#0B0F14" : "white",
+            color:screen===s.id ? "white" : "#6B7280",
+            border:`1.5px solid ${screen===s.id ? "#0B0F14" : "#E8EAED"}`,
+            borderRadius:99, padding:"7px 16px",
+            fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"inherit",
+          }}>{s.label}</button>
+        ))}
+      </div>
+
+      <div style={{ width:390, background:"#0B0F14", borderRadius:48, padding:12,
+        boxShadow:"0 40px 80px rgba(0,0,0,0.3),0 0 0 1px rgba(255,255,255,0.06)",
+        flexShrink:0 }}>
+        <div style={{ background:"#F7F8FA", borderRadius:38,
+          overflow:"hidden", minHeight:720, maxHeight:820, overflowY:"auto" }}>
+          {screen === "upgrade"
+            ? <UpgradeScreen onClose={() => {}}/>
+            : <MySubscriptionsScreen onClose={() => setScreen("upgrade")}/>}
+        </div>
+      </div>
+
+    </div>
+  );
+}

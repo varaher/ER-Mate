@@ -130,7 +130,7 @@ export default function DashboardScreen() {
         try {
           const data = JSON.parse(text);
           setLocalPlan(data.plan ?? "free");
-          if (data.plan === "base") {
+          if (data.plan === "free" || data.plan === "base") {
             setAiCredits(data.credits_balance ?? 0);
           } else {
             setAiCredits(null);

@@ -4120,6 +4120,70 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  app.post("/api/subscription/team/checkout", async (req: Request, res: Response) => {
+    try {
+      const { consultants = 0, residents = 0, billingCycle = "monthly" } = req.body as {
+        consultants: number; residents: number; billingCycle: string;
+      };
+      const totalDrs = consultants + residents;
+      if (totalDrs < 4) return res.status(400).json({ error: "Minimum 4 doctors required" });
+
+      const authHeader = req.headers.authorization;
+      const token = authHeader?.replace("Bearer ", "") || "";
+      let userId = "";
+      let userEmail = "";
+      let userName = "";
+      try {
+        const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString());
+        userId = payload.sub || payload.id || "";
+        userEmail = payload.email || "";
+        userName = payload.name || payload.fullName || "";
+      } catch { /* non-fatal */ }
+
+      // Calculate amount in paise
+      const consultantRateMonthly = 59900;  // ₹599 in paise
+      const residentRateMonthly   = 39900;  // ₹399 in paise
+      const consultantRateAnnual  = 599000; // ₹5990 in paise
+      const residentRateAnnual    = 399000; // ₹3990 in paise
+
+      const amountPaise = billingCycle === "annual"
+        ? (consultants * consultantRateAnnual) + (residents * residentRateAnnual)
+        : (consultants * consultantRateMonthly) + (residents * residentRateMonthly);
+
+      const amountRs = Math.round(amountPaise / 100);
+      const cycleLabel = billingCycle === "annual" ? "Annual" : "Monthly";
+      const description = `ErMate Team Plan — ${consultants}C + ${residents}R · ${cycleLabel} · ₹${amountRs.toLocaleString("en-IN")}`;
+
+      const domain = process.env.REPLIT_DOMAINS?.split(",")[0] || "er-mate.replit.app";
+      const callbackUrl = `https://${domain}/payment-callback?plan=team&cycle=${billingCycle}`;
+      const referenceId = `team_${userId || "anon"}_${consultants}c${residents}r_${Date.now()}`;
+
+      const { url, id } = await createPaymentLink({
+        amountPaise,
+        description,
+        customerEmail: userEmail || undefined,
+        customerName: userName || undefined,
+        referenceId,
+        callbackUrl,
+        notes: {
+          userId,
+          type: "team",
+          plan: "team",
+          cycle: billingCycle,
+          consultants: String(consultants),
+          residents: String(residents),
+          userEmail,
+        },
+      });
+
+      console.log(`[Razorpay] Team link created: ${id} user=${userId} ${consultants}C+${residents}R ${billingCycle}`);
+      return res.json({ url });
+    } catch (error) {
+      console.error("[Razorpay] Team checkout error:", error);
+      res.status(500).json({ error: "Failed to create team checkout" });
+    }
+  });
+
   app.post("/api/subscription/create-credit-order", async (req: Request, res: Response) => {
     try {
       const { packIndex } = req.body as { packIndex: number };
@@ -4208,6 +4272,32 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         if (userId) {
           await activatePlan(userId, plan, cycle);
           console.log(`[Razorpay] Subscription activated: userId=${userId}`);
+        }
+      }
+
+      if (event === "subscription.charged") {
+        // Razorpay fires this each billing cycle for active subscriptions — extend Pro by one period
+        const subEntity = payload?.subscription?.entity;
+        const notes = subEntity?.notes as Record<string, string> | undefined;
+        const userId = notes?.userId;
+        const cycle = (notes?.cycle || "monthly") as "monthly" | "annual";
+        const plan = (notes?.plan || "pro") as "base" | "pro";
+        if (userId) {
+          await activatePlan(userId, plan, cycle);
+          console.log(`[Razorpay] subscription.charged — extended: userId=${userId} plan=${plan}`);
+        }
+      }
+
+      if (event === "payment.captured") {
+        // Handle team plan payment captured via payment link
+        const paymentEntity = payload?.payment?.entity;
+        const notes = paymentEntity?.notes as Record<string, string> | undefined;
+        const type = notes?.type;
+        const userId = notes?.userId;
+        if (type === "team" && userId) {
+          // Team activation goes through the department setup flow in the app.
+          // Log here so support can manually activate if webhook is missed.
+          console.log(`[Razorpay] Team payment captured: userId=${userId} consultants=${notes?.consultants} residents=${notes?.residents} cycle=${notes?.cycle}`);
         }
       }
 

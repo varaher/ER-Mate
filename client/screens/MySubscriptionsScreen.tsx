@@ -18,7 +18,6 @@ import { useAuth } from "@/context/AuthContext";
 import { useDepartment } from "@/context/DepartmentContext";
 import { getApiUrl } from "@/lib/query-client";
 
-// ── Color tokens ─────────────────────────────────────────────────────────────
 const C = {
   green: "#1DB870",
   greenDark: "#15924F",
@@ -38,9 +37,7 @@ const C = {
   orange: "#F59E0B",
   orangeLight: "rgba(245,158,11,0.09)",
   orangeBorder: "rgba(245,158,11,0.2)",
-  teamHeaderBg: "#0D1F14",
-  proHeaderBg: "#130F26",
-  combinedBg: "#0D1520",
+  red: "#EF4444",
 };
 
 interface SubStatus {
@@ -50,35 +47,74 @@ interface SubStatus {
   casesLimit: number;
   casesRemaining: number | null;
   currentPeriodEnd: string | null;
-  priceInr: number;
-  freeCaseLimit: number;
+  credits_balance: number;
 }
 
-type Scenario = "both" | "team_only" | "pro_only" | "free";
-type PillStatus = "active" | "trial" | "inactive" | "grace";
-
-const SCENARIOS: { id: Scenario; label: string }[] = [
-  { id: "both", label: "Both active" },
-  { id: "team_only", label: "Team only" },
-  { id: "pro_only", label: "Pro only" },
-  { id: "free", label: "Free" },
-];
-
-function planLabel(plan: string) {
-  if (plan === "pro") return "Pro Plan";
-  if (plan === "base") return "Base Plan";
-  return "Free Plan";
+function getAccess(sub: { plan: string; teamActive: boolean; casesUsed: number; aiCredits: number }) {
+  const unlimited = sub.teamActive || sub.plan === "pro";
+  const isFree = !unlimited;
+  return {
+    unlimited,
+    isFree,
+    cases: unlimited ? "unlimited" : `${sub.casesUsed || 0} of 10`,
+    smartDictation: true,
+    discharge: true,
+    aiFeatures: unlimited ? "unlimited" : (sub.aiCredits > 0 ? "credits" : "blocked"),
+    aiCredits: sub.aiCredits || 0,
+    rounds: unlimited ? "unlimited" : (sub.aiCredits > 0 ? "credits" : "blocked"),
+    clinicalMemory: sub.plan === "pro",
+    handover: sub.teamActive,
+    shiftMgmt: sub.teamActive,
+    showCreditBar: isFree,
+    showUpgrade: isFree,
+  };
 }
 
-// ── Status pill ──────────────────────────────────────────────────────────────
-function StatusPill({ status }: { status: PillStatus }) {
-  const map: Record<PillStatus, { label: string; bg: string; color: string; dot: string }> = {
+function CreditBar({ credits, maxCredits = 5, onUpgrade }: { credits: number; maxCredits?: number; onUpgrade: () => void }) {
+  const used = maxCredits - credits;
+  const pct = Math.min(100, (used / Math.max(1, maxCredits)) * 100);
+  const low = credits <= 2 && credits > 0;
+  const gone = credits === 0;
+  const barColor = gone ? C.red : low ? C.orange : C.green;
+  const bgColor = gone ? "#FEF2F2" : low ? C.orangeLight : C.greenLight;
+  const borderColor = gone ? "#FECACA" : low ? C.orangeBorder : C.greenBorder;
+  const titleColor = gone ? C.red : low ? "#92400E" : C.greenDark;
+
+  return (
+    <View style={[styles.creditBar, { backgroundColor: bgColor, borderColor }]}>
+      <View style={styles.creditBarTop}>
+        <Text style={[styles.creditBarTitle, { color: titleColor }]}>
+          {gone ? "AI credits used up" : `${credits} AI credit${credits === 1 ? "" : "s"} remaining`}
+        </Text>
+        <Text style={[styles.creditBarUsed, { color: C.faint }]}>{used}/{maxCredits} used</Text>
+      </View>
+      <View style={styles.creditTrack}>
+        <View style={[styles.creditFill, { width: `${pct}%` as any, backgroundColor: barColor }]} />
+      </View>
+      <Text style={[styles.creditBarDesc, { color: C.muted }]}>
+        {gone
+          ? "Upgrade to Pro for unlimited AI — Decision Support, Rounds, OCR, and more."
+          : low
+          ? `${credits} credit${credits === 1 ? "" : "s"} left. Each AI action uses 1 credit.`
+          : "Each AI action (Decision Support, Rounds, OCR) uses 1 credit."}
+      </Text>
+      {(gone || low) && (
+        <Pressable style={[styles.creditUpgradeBtn, { backgroundColor: C.green }]} onPress={onUpgrade}>
+          <Text style={styles.creditUpgradeBtnText}>Upgrade to Pro — Unlimited</Text>
+          <Feather name="arrow-right" size={14} color={C.white} />
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
+function StatusPill({ status }: { status: "active" | "inactive" | "trial" }) {
+  const map = {
     active: { label: "Active", bg: C.greenLight, color: C.greenDark, dot: C.green },
     trial: { label: "Trial", bg: C.orangeLight, color: "#92400E", dot: C.orange },
     inactive: { label: "Inactive", bg: "#F3F4F6", color: C.faint, dot: "#D1D5DB" },
-    grace: { label: "Grace period", bg: C.orangeLight, color: "#92400E", dot: C.orange },
   };
-  const s = map[status] ?? map.inactive;
+  const s = map[status];
   return (
     <View style={[styles.pill, { backgroundColor: s.bg }]}>
       <View style={[styles.pillDot, { backgroundColor: s.dot }]} />
@@ -87,426 +123,57 @@ function StatusPill({ status }: { status: PillStatus }) {
   );
 }
 
-// ── Team plan card ───────────────────────────────────────────────────────────
-interface TeamCardProps {
-  active: boolean;
-  hasPro?: boolean;
-  deptName?: string;
-  role?: string;
-  shiftName?: string;
-  renewDate?: string;
-  onJoin?: () => void;
-  onLeave?: () => void;
-  onAddPro?: () => void;
-}
-
-function TeamPlanCard({ active, hasPro, deptName, role, shiftName, renewDate, onJoin, onLeave, onAddPro }: TeamCardProps) {
-  const roleLabel = role === "hod" ? "HOD" : role === "consultant" ? "Consultant" : "Resident";
-
-  if (!active) {
-    return (
-      <View style={[styles.card, styles.cardBorder]}>
-        <View style={[styles.inactiveIcon, { backgroundColor: C.surface, borderColor: C.border }]}>
-          <Feather name="home" size={20} color={C.faint} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.inactiveTitle, { color: C.faint }]}>Team Plan</Text>
-          <Text style={[styles.inactiveSub, { color: C.faint }]}>Not part of any department</Text>
-        </View>
-        <Pressable
-          style={[styles.smallBtn, { backgroundColor: C.greenLight, borderColor: C.greenBorder }]}
-          onPress={onJoin}
-        >
-          <Text style={[styles.smallBtnText, { color: C.greenDark }]}>Join team</Text>
-          <Feather name="arrow-right" size={12} color={C.greenDark} />
-        </Pressable>
-      </View>
-    );
-  }
-
-  const hospitalCanSee = hasPro
-    ? "Cases on shift · Handover records · Activity logs"
-    : "Cases on shift · Handover records · Activity logs · Rounds debriefs";
-
-  const hospitalCannotSee = hasPro
-    ? "Rounds debriefs · Clinical Memory · Personal stats · Off-shift cases"
-    : "Off-shift cases only";
-
-  return (
-    <View style={[styles.activeCard, { borderColor: C.greenBorder }]}>
-      <View style={[styles.cardHeader, { backgroundColor: C.teamHeaderBg }]}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
-          <View style={[styles.cardHeaderIcon, { backgroundColor: C.greenLight, borderColor: C.greenBorder }]}>
-            <Feather name="home" size={16} color={C.green} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.cardHeaderLabel}>TEAM PLAN</Text>
-            <Text style={styles.cardHeaderTitle} numberOfLines={1}>{deptName || "My Department"}</Text>
-          </View>
-        </View>
-        <StatusPill status="active" />
-      </View>
-
-      <View style={styles.cardBody}>
-        <View style={styles.metaGrid}>
-          {[
-            { label: "Your role", value: roleLabel, color: C.greenDark },
-            { label: "Current shift", value: shiftName ? `${shiftName} · Active` : "Off shift", color: shiftName ? C.green : C.faint },
-            { label: "Department", value: deptName || "—", color: C.inkSoft },
-            { label: "Paid by", value: "Hospital", color: C.inkSoft },
-          ].map((item, i) => (
-            <View key={i} style={[styles.metaCell, { backgroundColor: C.surface }]}>
-              <Text style={styles.metaCellLabel}>{item.label}</Text>
-              <Text style={[styles.metaCellValue, { color: item.color }]} numberOfLines={1}>{item.value}</Text>
-            </View>
-          ))}
-        </View>
-
-        <View style={[styles.alertBox, { backgroundColor: C.orangeLight, borderColor: C.orangeBorder }]}>
-          <Feather name="alert-triangle" size={14} color={C.orange} style={{ marginTop: 1 }} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.alertBoxTitle}>Hospital can see</Text>
-            <Text style={styles.alertBoxBody}>{hospitalCanSee}</Text>
-          </View>
-        </View>
-
-        <View style={[styles.alertBox, { backgroundColor: C.greenLight, borderColor: C.greenBorder, marginTop: 8 }]}>
-          <Feather name="shield" size={14} color={C.greenDark} style={{ marginTop: 1 }} />
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.alertBoxTitle, { color: C.greenDark }]}>Hospital cannot see</Text>
-            <Text style={[styles.alertBoxBody, { color: C.muted }]}>{hospitalCannotSee}</Text>
-          </View>
-        </View>
-
-        {!hasPro && (
-          <Pressable
-            style={[styles.alertBox, { backgroundColor: C.purpleLight, borderColor: C.purpleBorder, marginTop: 8, justifyContent: "space-between" }]}
-            onPress={onAddPro}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.alertBoxBody, { color: C.purple, lineHeight: 18 }]}>
-                Add Individual Pro for private Rounds + Clinical Memory
-              </Text>
-            </View>
-            <View style={[styles.smallBtn, { backgroundColor: C.white, borderColor: C.purpleBorder, marginLeft: 8 }]}>
-              <Text style={[styles.smallBtnText, { color: C.purple }]}>₹1,199/mo</Text>
-              <Feather name="arrow-right" size={11} color={C.purple} />
-            </View>
-          </Pressable>
-        )}
-      </View>
-
-      <View style={[styles.cardFooter, { borderTopColor: C.border }]}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-          <Feather name="clock" size={11} color={C.faint} />
-          <Text style={styles.footerMeta}>{renewDate ? `Renews ${renewDate}` : "Team plan active"}</Text>
-        </View>
-        <Pressable onPress={onLeave}>
-          <Text style={styles.footerAction}>Leave department</Text>
-        </Pressable>
-      </View>
-    </View>
-  );
-}
-
-// ── Individual plan card ─────────────────────────────────────────────────────
-interface ProCardProps {
-  active: boolean;
-  planName: string;
-  casesUsed: number;
-  casesLimit: number;
-  renewDate?: string;
-  onUpgrade?: () => void;
-  onManage?: () => void;
-}
-
-const PRO_FEATURES: { icon: keyof typeof Feather.glyphMap; text: string; sub: string }[] = [
-  { icon: "refresh-cw", text: "Rounds — unlimited case debriefs", sub: "After every case, on any shift" },
-  { icon: "layers", text: "All 7 thinking lenses", sub: "First Principles to Full Debrief" },
-  { icon: "database", text: "Clinical Memory", sub: "Your full career — every hospital you've worked at" },
-  { icon: "lock", text: "Private to you forever", sub: "Your HOD cannot access this" },
-];
-
-function IndividualProCard({ active, planName, casesUsed, casesLimit, renewDate, onUpgrade, onManage }: ProCardProps) {
-  if (!active) {
-    return (
-      <View style={[styles.card, styles.dashedCard, { borderColor: C.purpleBorder, backgroundColor: C.purpleLight }]}>
-        <View style={[styles.inactiveIcon, { backgroundColor: "rgba(124,106,246,0.08)", borderColor: C.purpleBorder }]}>
-          <Feather name="cpu" size={20} color={C.purple} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.inactiveTitle, { color: C.purple }]}>Individual Pro</Text>
-          <Text style={[styles.inactiveSub, { color: C.muted }]}>Private Rounds + Clinical Memory · Your career record</Text>
-        </View>
-        <Pressable style={styles.proUpgradeBtn} onPress={onUpgrade}>
-          <Text style={styles.proUpgradeBtnText}>₹1,199/mo</Text>
-          <Feather name="arrow-right" size={12} color={C.white} />
-        </Pressable>
-      </View>
-    );
-  }
-
-  return (
-    <View style={[styles.activeCard, { borderColor: C.purpleBorder }]}>
-      <View style={[styles.cardHeader, { backgroundColor: C.proHeaderBg }]}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
-          <View style={[styles.cardHeaderIcon, { backgroundColor: C.purpleLight, borderColor: C.purpleBorder }]}>
-            <Feather name="cpu" size={16} color={C.purple} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.cardHeaderLabel}>INDIVIDUAL PRO</Text>
-            <Text style={styles.cardHeaderTitle}>Your career layer</Text>
-          </View>
-        </View>
-        <StatusPill status="active" />
-      </View>
-
-      <View style={styles.cardBody}>
-        <View style={[styles.proFeaturesBox, { backgroundColor: C.purpleLight, borderColor: C.purpleBorder }]}>
-          <Text style={[styles.proFeaturesLabel, { color: C.purple }]}>WHAT INDIVIDUAL PRO GIVES YOU</Text>
-          {PRO_FEATURES.map((item, i) => (
-            <View key={i} style={[styles.proFeatureRow, i < PRO_FEATURES.length - 1 && { marginBottom: 10 }]}>
-              <View style={[styles.proFeatureIconWrap, { backgroundColor: "rgba(124,106,246,0.12)" }]}>
-                <Feather name={item.icon} size={13} color={C.purple} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.proFeatureText, { color: C.inkSoft }]}>{item.text}</Text>
-                <Text style={[styles.proFeatureSub, { color: C.faint }]}>{item.sub}</Text>
-              </View>
-            </View>
-          ))}
-        </View>
-
-        <View style={[styles.alertBox, { backgroundColor: C.greenLight, borderColor: C.greenBorder }]}>
-          <Feather name="shield" size={14} color={C.greenDark} style={{ marginTop: 1 }} />
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.alertBoxBody, { color: C.greenDark, lineHeight: 18 }]}>
-              <Text style={{ fontWeight: "700" }}>Fully private.</Text>
-              {" "}No hospital, no HOD, no employer has access to your Rounds or Clinical Memory — ever. This record is yours.
-            </Text>
-          </View>
-        </View>
-      </View>
-
-      <View style={[styles.cardFooter, { borderTopColor: C.border }]}>
-        <View>
-          <Text style={[styles.footerMeta, { fontSize: 13, fontWeight: "700", color: C.ink }]}>₹1,199/month</Text>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 3 }}>
-            <Feather name="clock" size={11} color={C.faint} />
-            <Text style={styles.footerMeta}>
-              {renewDate ? `Renews ${renewDate}` : "Individual Pro active"}
-            </Text>
-          </View>
-        </View>
-        <Pressable style={[styles.manageBtn, { borderColor: C.border }]} onPress={onManage}>
-          <Text style={styles.manageBtnText}>Manage</Text>
-        </Pressable>
-      </View>
-    </View>
-  );
-}
-
-// ── Combined banner ──────────────────────────────────────────────────────────
-function CombinedBanner({ deptName, planName }: { deptName?: string; planName?: string }) {
-  return (
-    <View style={[styles.combinedBanner, { backgroundColor: C.combinedBg }]}>
-      <Text style={styles.combinedLabel}>BOTH PLANS ACTIVE</Text>
-      <Text style={styles.combinedTitle}>Full ErMate — shift work and career growth</Text>
-
-      <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
-        <View style={[styles.combinedPill, { backgroundColor: "rgba(29,184,112,0.1)", borderColor: "rgba(29,184,112,0.18)" }]}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
-            <Feather name="home" size={12} color={C.green} />
-            <Text style={[styles.combinedPillLabel, { color: C.green }]}>TEAM PLAN</Text>
-          </View>
-          <Text style={styles.combinedPillBody}>{deptName || "Your department"} · Hospital pays</Text>
-        </View>
-        <View style={[styles.combinedPill, { backgroundColor: "rgba(124,106,246,0.1)", borderColor: "rgba(124,106,246,0.18)" }]}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
-            <Feather name="cpu" size={12} color={C.purple} />
-            <Text style={[styles.combinedPillLabel, { color: C.purple }]}>{planName?.toUpperCase() || "INDIVIDUAL"}</Text>
-          </View>
-          <Text style={styles.combinedPillBody}>Your Rounds · Your Memory · You pay</Text>
-        </View>
-      </View>
-
-      <Text style={styles.combinedFootnote}>
-        Cases documented during shifts belong to your department.{"\n"}
-        Your Rounds debriefs and Clinical Memory belong to you — always.
-      </Text>
-    </View>
-  );
-}
-
-// ── "What you can access" summary ─────────────────────────────────────────────
-interface AccessRow {
-  label: string;
-  team: boolean;
-  pro: boolean;
-}
-
-const ACCESS_ROWS: AccessRow[] = [
-  { label: "Case documentation — unlimited", team: true,  pro: true  },
-  { label: "Smart Dictation",                team: true,  pro: true  },
-  { label: "AI Discharge Summary",           team: true,  pro: true  },
-  { label: "Clinical Decision Support",      team: true,  pro: true  },
-  { label: "Document Scanning",              team: true,  pro: true  },
-  { label: "Rounds debriefs",                team: true,  pro: true  },
-  { label: "Clinical Memory (private)",      team: false, pro: true  },
-  { label: "Shift management",               team: true,  pro: false },
-  { label: "Case handover system",           team: true,  pro: false },
-];
-
-function AccessSummary({ showTeam, showPro }: { showTeam: boolean; showPro: boolean }) {
-  return (
-    <View style={[styles.tableCard, { backgroundColor: C.white, borderColor: C.border }]}>
-      <Text style={[styles.tableTitle, { color: C.ink }]}>What you can access</Text>
-
-      {ACCESS_ROWS.map((row, i) => {
-        const enabled = (row.team && showTeam) || (row.pro && showPro);
-        return (
-          <View
-            key={i}
-            style={[
-              styles.tableRow,
-              i < ACCESS_ROWS.length - 1 && { borderBottomWidth: 1, borderBottomColor: "#F5F6F8" },
-            ]}
-          >
-            <Text style={[styles.tableCell, { flex: 1, color: C.inkSoft }]}>{row.label}</Text>
-            <Text style={[styles.tableVisCell, { color: enabled ? C.greenDark : C.faint, fontWeight: "700" }]}>
-              {enabled ? "Unlimited" : "—"}
-            </Text>
-          </View>
-        );
-      })}
-
-      <View style={[styles.tableRow, { borderTopWidth: 1, borderTopColor: "#F0F1F3", marginTop: 4 }]}>
-        <Text style={[styles.tableCell, { flex: 1, color: C.faint, fontStyle: "italic", fontSize: 11 }]}>
-          No AI credits on your plan — all AI features run without limits.
-        </Text>
-      </View>
-    </View>
-  );
-}
-
-// ── Free state ───────────────────────────────────────────────────────────────
-interface FreeStateProps {
-  casesUsed: number;
-  casesLimit: number;
-  onUpgradePro: () => void;
-  onJoinTeam: () => void;
-}
-
-function FreeState({ casesUsed, casesLimit, onUpgradePro, onJoinTeam }: FreeStateProps) {
-  const pct = casesLimit > 0 ? Math.min(1, casesUsed / casesLimit) : 0;
-  return (
-    <View style={[styles.freeCard, { backgroundColor: C.white, borderColor: C.border }]}>
-      <View style={[styles.freeIconWrap, { backgroundColor: C.surface }]}>
-        <Feather name="clipboard" size={28} color={C.faint} />
-      </View>
-      <Text style={[styles.freeTitle, { color: C.ink }]}>Free plan</Text>
-
-      {/* Progress bar */}
-      <View style={{ width: "100%", marginBottom: 6 }}>
-        <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 6 }}>
-          <Text style={[styles.freeMeta, { color: C.muted }]}>Cases used</Text>
-          <Text style={[styles.freeMeta, { color: pct >= 1 ? "#DC2626" : C.inkSoft, fontWeight: "700" }]}>
-            {casesUsed} / {casesLimit}
-          </Text>
-        </View>
-        <View style={[styles.progressTrack, { backgroundColor: "#F0F1F3" }]}>
-          <View style={[styles.progressFill, {
-            width: `${Math.round(pct * 100)}%` as any,
-            backgroundColor: pct >= 1 ? "#DC2626" : pct >= 0.7 ? C.orange : C.green,
-          }]} />
-        </View>
-        {pct >= 1 ? (
-          <Text style={[styles.freeMeta, { color: "#DC2626", marginTop: 4 }]}>
-            Case limit reached — upgrade to keep documenting
-          </Text>
-        ) : null}
-      </View>
-
-      <Text style={[styles.freeSub, { color: C.muted }]}>
-        Upgrade to Individual Pro for unlimited cases, Rounds, Clinical Memory, and all AI features — no credit limits.
-      </Text>
-      <View style={styles.freeBtns}>
-        <Pressable
-          style={[styles.freeBtn, { backgroundColor: C.greenLight, borderColor: C.greenBorder }]}
-          onPress={onUpgradePro}
-        >
-          <Text style={[styles.freeBtnText, { color: C.greenDark }]}>Upgrade plan</Text>
-          <Feather name="arrow-right" size={13} color={C.greenDark} />
-        </Pressable>
-        <Pressable
-          style={[styles.freeBtn, { backgroundColor: C.purpleLight, borderColor: C.purpleBorder }]}
-          onPress={onJoinTeam}
-        >
-          <Text style={[styles.freeBtnText, { color: C.purple }]}>Join a team</Text>
-          <Feather name="arrow-right" size={13} color={C.purple} />
-        </Pressable>
-      </View>
-    </View>
-  );
-}
-
-// ── Main screen ──────────────────────────────────────────────────────────────
 export default function MySubscriptionsScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const { user, token } = useAuth();
-  const { department, membership, shiftSession, activeShift, isInDepartment } = useDepartment();
+  const { department, membership, isInDepartment, activeShift, shiftSession } = useDepartment();
 
   const [subStatus, setSubStatus] = useState<SubStatus | null>(null);
   const [loadingSub, setLoadingSub] = useState(true);
-  const [scenario, setScenario] = useState<Scenario | null>(null);
 
   const fetchSub = useCallback(async () => {
     if (!user?.id) { setLoadingSub(false); return; }
     try {
-      const url = new URL(
-        `/api/subscription/status?userId=${encodeURIComponent(user.id)}&userEmail=${encodeURIComponent(user.email || "")}`,
-        getApiUrl()
-      ).href;
-      const headers: Record<string, string> = {};
-      if (token) headers["Authorization"] = `Bearer ${token}`;
-      const res = await fetch(url, { headers });
-      if (res.ok) {
-        const data = await res.json();
-        setSubStatus(data);
-      }
-    } catch { }
-    setLoadingSub(false);
+      const baseUrl = getApiUrl();
+      const url = new URL(`/api/subscription/status?userId=${encodeURIComponent(user.id)}&userEmail=${encodeURIComponent(user.email || "")}`, baseUrl).href;
+      const res = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      if (!res.ok) throw new Error("status error");
+      const data = await res.json();
+      setSubStatus(data);
+    } catch {
+      setSubStatus(null);
+    } finally {
+      setLoadingSub(false);
+    }
   }, [user?.id, user?.email, token]);
 
   useFocusEffect(useCallback(() => { fetchSub(); }, [fetchSub]));
 
-  // Derive scenario from real data
-  const hasPaidPlan = subStatus ? (subStatus.plan === "pro") : false;
-  const hasTeam = isInDepartment;
-  const realScenario: Scenario =
-    hasTeam && hasPaidPlan ? "both"
-    : hasTeam ? "team_only"
-    : hasPaidPlan ? "pro_only"
-    : "free";
+  const showTeam = isInDepartment;
+  const plan = subStatus?.plan ?? "free";
+  const showPro = plan === "pro";
+  const aiCredits = subStatus?.credits_balance ?? 0;
 
-  const activeScenario: Scenario = scenario ?? realScenario;
-  const showTeam = activeScenario === "both" || activeScenario === "team_only";
-  const showPro = activeScenario === "both" || activeScenario === "pro_only";
-  const showBoth = activeScenario === "both";
-  const showFree = activeScenario === "free";
+  const access = getAccess({
+    plan,
+    teamActive: showTeam,
+    casesUsed: subStatus?.casesUsed ?? 0,
+    aiCredits,
+  });
+
+  const showFree = access.isFree;
+  const showBoth = showTeam && showPro;
 
   const formatRenew = (iso: string | null | undefined) => {
     if (!iso) return undefined;
-    try {
-      return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
-    } catch { return undefined; }
+    try { return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }); }
+    catch { return undefined; }
   };
 
   const renewDate = formatRenew(subStatus?.currentPeriodEnd);
   const doctorInitial = user?.name?.charAt(0)?.toUpperCase() ?? "D";
-  const currentPlanLabel = planLabel(subStatus?.plan ?? "free");
 
   const handleJoinTeam = () => (navigation as any).navigate("SetupDepartment");
   const handleUpgrade = () => (navigation as any).navigate("Upgrade", {});
@@ -524,12 +191,7 @@ export default function MySubscriptionsScreen() {
       "Manage Individual Pro",
       "To cancel or change your subscription, contact our support team.",
       [
-        {
-          text: "Email Support",
-          onPress: () => Linking.openURL(
-            "mailto:support@ermate.app?subject=Manage%20my%20Individual%20Pro%20subscription"
-          ),
-        },
+        { text: "Email Support", onPress: () => Linking.openURL("mailto:support@ermate.app?subject=Manage%20my%20Individual%20Pro%20subscription") },
         { text: "Close", style: "cancel" },
       ]
     );
@@ -542,243 +204,441 @@ export default function MySubscriptionsScreen() {
     );
   }
 
+  const roleLabel = membership?.role === "hod" ? "HOD" : membership?.role === "consultant" ? "Consultant" : "Resident";
+  const hospitalCanSee = showPro
+    ? "Cases on shift · Handover records · Activity logs"
+    : "Cases on shift · Handover records · Activity logs · Rounds activity";
+  const hospitalCannotSee = showPro
+    ? "Rounds debriefs · Clinical Memory · Off-shift cases"
+    : "Off-shift cases only — add Pro for private Rounds";
+
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: C.surface }}
       contentContainerStyle={{
-        paddingTop: headerHeight + 8,
+        paddingTop: headerHeight + 14,
         paddingHorizontal: 16,
         paddingBottom: insets.bottom + 40,
-        gap: 14,
       }}
       showsVerticalScrollIndicator={false}
     >
-      {/* Doctor identity card */}
-      <View style={[styles.identityCard, { backgroundColor: C.white, borderColor: C.border }]}>
-        <View style={[styles.avatarCircle, { backgroundColor: C.green }]}>
+      {/* Identity row */}
+      <View style={[styles.identityRow, { backgroundColor: C.white, borderColor: C.border }]}>
+        <View style={styles.avatarCircle}>
           <Text style={styles.avatarText}>{doctorInitial}</Text>
         </View>
         <View style={{ flex: 1 }}>
           <Text style={[styles.identityName, { color: C.ink }]} numberOfLines={1}>{user?.name || "Doctor"}</Text>
           <Text style={[styles.identityEmail, { color: C.faint }]} numberOfLines={1}>{user?.email || ""}</Text>
         </View>
-        <View style={{ alignItems: "flex-end", gap: 2 }}>
-          {showFree ? (
-            <View style={[styles.planTag, { backgroundColor: "#F3F4F6" }]}>
-              <Text style={[styles.planTagText, { color: C.faint }]}>Free plan</Text>
-            </View>
-          ) : showBoth ? (
-            <>
-              <View style={[styles.planTag, { backgroundColor: C.greenLight }]}>
-                <Text style={[styles.planTagText, { color: C.greenDark }]}>Team · Active</Text>
-              </View>
-              <View style={[styles.planTag, { backgroundColor: C.purpleLight }]}>
-                <Text style={[styles.planTagText, { color: C.purple }]}>{currentPlanLabel} · Active</Text>
-              </View>
-            </>
-          ) : showTeam ? (
-            <View style={[styles.planTag, { backgroundColor: C.greenLight }]}>
-              <Text style={[styles.planTagText, { color: C.greenDark }]}>Team · Active</Text>
-            </View>
-          ) : (
-            <View style={[styles.planTag, { backgroundColor: C.purpleLight }]}>
-              <Text style={[styles.planTagText, { color: C.purple }]}>{currentPlanLabel} · Active</Text>
-            </View>
-          )}
+        <View style={{ alignItems: "flex-end" }}>
+          {showPro && <Text style={[styles.planBadge, { color: C.green }]}>Pro · Active</Text>}
+          {showTeam && <Text style={[styles.planBadge, { color: C.greenDark, marginTop: showPro ? 2 : 0 }]}>Team · Active</Text>}
+          {showFree && <Text style={[styles.planBadge, { color: C.faint }]}>Free</Text>}
         </View>
       </View>
 
-      {/* Scenario switcher — dev/preview tool */}
-      <View style={styles.switcherWrap}>
-        <Text style={[styles.switcherLabel, { color: C.faint }]}>PREVIEW STATES</Text>
-        <View style={styles.switcherRow}>
-          <Pressable
-            style={[styles.switcherBtn, { borderColor: scenario === null ? C.ink : C.border, backgroundColor: scenario === null ? C.ink : C.white }]}
-            onPress={() => setScenario(null)}
-          >
-            <Text style={[styles.switcherBtnText, { color: scenario === null ? C.white : C.muted }]}>Live</Text>
-          </Pressable>
-          {SCENARIOS.map((s) => (
-            <Pressable
-              key={s.id}
-              style={[styles.switcherBtn, { borderColor: scenario === s.id ? C.ink : C.border, backgroundColor: scenario === s.id ? C.ink : C.white }]}
-              onPress={() => setScenario(s.id)}
-            >
-              <Text style={[styles.switcherBtnText, { color: scenario === s.id ? C.white : C.muted }]}>{s.label}</Text>
-            </Pressable>
-          ))}
-        </View>
-      </View>
+      {/* Credit bar — Free users only */}
+      {access.showCreditBar && (
+        <CreditBar credits={aiCredits} onUpgrade={handleUpgrade} />
+      )}
 
-      {/* Combined banner */}
+      {/* Combined banner — both plans active */}
       {showBoth && (
-        <CombinedBanner
-          deptName={department?.name}
-          planName={currentPlanLabel}
-        />
+        <View style={[styles.combinedBanner, { backgroundColor: "#071810", borderColor: "rgba(255,255,255,0.06)" }]}>
+          <Text style={[styles.combinedLabel, { color: "rgba(255,255,255,0.35)" }]}>BOTH PLANS ACTIVE</Text>
+          <Text style={[styles.combinedTitle, { color: C.white }]}>Full ErMate — shift work and career growth</Text>
+          <View style={styles.combinedCards}>
+            <View style={[styles.combinedCard, { backgroundColor: "rgba(29,184,112,0.1)", borderColor: "rgba(29,184,112,0.18)" }]}>
+              <View style={styles.combinedCardHeader}>
+                <Feather name="users" size={13} color={C.green} />
+                <Text style={[styles.combinedCardLabel, { color: C.green }]}>TEAM PLAN</Text>
+              </View>
+              <Text style={[styles.combinedCardDesc, { color: "rgba(255,255,255,0.45)" }]}>Shift · Dept · Hospital pays</Text>
+            </View>
+            <View style={[styles.combinedCard, { backgroundColor: "rgba(124,106,246,0.1)", borderColor: "rgba(124,106,246,0.18)" }]}>
+              <View style={styles.combinedCardHeader}>
+                <Feather name="cpu" size={13} color={C.purple} />
+                <Text style={[styles.combinedCardLabel, { color: C.purple }]}>INDIVIDUAL PRO</Text>
+              </View>
+              <Text style={[styles.combinedCardDesc, { color: "rgba(255,255,255,0.45)" }]}>Rounds · Memory · You pay</Text>
+            </View>
+          </View>
+          <Text style={[styles.combinedNote, { color: "rgba(255,255,255,0.3)" }]}>
+            Cases on shift → department. Rounds + Memory → yours, private, always.
+          </Text>
+        </View>
       )}
 
-      {/* Free state */}
+      {/* Free state card */}
       {showFree && (
-        <FreeState
-          casesUsed={subStatus?.casesUsed ?? 0}
-          casesLimit={subStatus?.casesLimit ?? 10}
-          onUpgradePro={handleUpgrade}
-          onJoinTeam={handleJoinTeam}
-        />
+        <View style={[styles.card, { backgroundColor: C.white, borderColor: C.border }]}>
+          <Text style={[styles.freeTitle, { color: C.ink }]}>
+            Free plan — {Math.max(0, 10 - (subStatus?.casesUsed ?? 0))} cases remaining
+          </Text>
+          <View style={[styles.caseTrack, { backgroundColor: C.surface }]}>
+            <View style={[styles.caseFill, {
+              width: `${Math.min(100, ((subStatus?.casesUsed ?? 0) / 10) * 100)}%` as any,
+              backgroundColor: C.green,
+            }]} />
+          </View>
+          <View style={styles.freeBtns}>
+            <Pressable
+              style={[styles.freeBtn, { backgroundColor: C.greenLight, borderColor: C.greenBorder }]}
+              onPress={handleUpgrade}
+            >
+              <Text style={[styles.freeBtnText, { color: C.greenDark }]}>Individual Pro</Text>
+              <Feather name="arrow-right" size={13} color={C.greenDark} />
+            </Pressable>
+            <Pressable
+              style={[styles.freeBtn, { backgroundColor: C.purpleLight, borderColor: C.purpleBorder }]}
+              onPress={handleJoinTeam}
+            >
+              <Text style={[styles.freeBtnText, { color: C.purple }]}>Join a team</Text>
+              <Feather name="arrow-right" size={13} color={C.purple} />
+            </Pressable>
+          </View>
+        </View>
       )}
 
-      {/* Team plan */}
+      {/* ── TEAM SECTION ── */}
       {!showFree && (
-        <View style={{ gap: 8 }}>
+        <View style={{ marginBottom: 12 }}>
           <View style={styles.sectionHeader}>
             <Feather name="home" size={12} color={C.faint} />
             <Text style={[styles.sectionHeaderText, { color: C.faint }]}>DEPARTMENT</Text>
           </View>
-          <TeamPlanCard
-            active={showTeam}
-            hasPro={showPro}
-            deptName={department?.name}
-            role={membership?.role}
-            shiftName={shiftSession && activeShift ? activeShift.name : undefined}
-            renewDate={renewDate}
-            onJoin={handleJoinTeam}
-            onLeave={handleLeave}
-            onAddPro={handleUpgrade}
-          />
+
+          {showTeam ? (
+            <View style={[styles.activeCard, { borderColor: C.greenBorder }]}>
+              {/* Dark header */}
+              <View style={[styles.cardHeader, { backgroundColor: "#071810" }]}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
+                  <View style={[styles.cardHeaderIcon, { backgroundColor: C.greenLight, borderColor: C.greenBorder }]}>
+                    <Feather name="users" size={16} color={C.green} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.cardHeaderLabel}>TEAM PLAN</Text>
+                    <Text style={styles.cardHeaderTitle} numberOfLines={1}>{department?.name || "My Department"}</Text>
+                  </View>
+                </View>
+                <StatusPill status="active" />
+              </View>
+
+              <View style={styles.cardBody}>
+                {/* Meta grid */}
+                <View style={styles.metaGrid}>
+                  {[
+                    { label: "Your role", value: roleLabel, color: C.greenDark },
+                    { label: "Shift", value: shiftSession && activeShift ? `${activeShift.name} · On` : "Off shift", color: shiftSession && activeShift ? C.green : C.faint },
+                    { label: "Hospital", value: department?.hospitalName || "—", color: C.inkSoft },
+                    { label: "Paid by", value: "Hospital", color: C.inkSoft },
+                  ].map((item, i) => (
+                    <View key={i} style={[styles.metaCell, { backgroundColor: C.surface }]}>
+                      <Text style={styles.metaCellLabel}>{item.label}</Text>
+                      <Text style={[styles.metaCellValue, { color: item.color }]} numberOfLines={1}>{item.value}</Text>
+                    </View>
+                  ))}
+                </View>
+
+                {/* Hospital can see */}
+                <View style={[styles.alertBox, { backgroundColor: C.orangeLight, borderColor: C.orangeBorder }]}>
+                  <Feather name="alert-triangle" size={14} color={C.orange} style={{ marginTop: 1 }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.alertBoxTitle, { color: "#92400E" }]}>Hospital can see</Text>
+                    <Text style={[styles.alertBoxBody, { color: "#B45309" }]}>{hospitalCanSee}</Text>
+                  </View>
+                </View>
+
+                {/* Hospital cannot see */}
+                <View style={[styles.alertBox, { backgroundColor: C.greenLight, borderColor: C.greenBorder, marginTop: 8 }]}>
+                  <Feather name="shield" size={14} color={C.greenDark} style={{ marginTop: 1 }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.alertBoxTitle, { color: C.greenDark }]}>Hospital cannot see</Text>
+                    <Text style={[styles.alertBoxBody, { color: C.muted }]}>{hospitalCannotSee}</Text>
+                  </View>
+                </View>
+
+                {/* Add Pro upsell if no Pro */}
+                {!showPro && (
+                  <Pressable
+                    style={[styles.alertBox, { backgroundColor: C.purpleLight, borderColor: C.purpleBorder, marginTop: 8, justifyContent: "space-between" }]}
+                    onPress={handleUpgrade}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.alertBoxBody, { color: C.purple, lineHeight: 18 }]}>
+                        Add Individual Pro for private Rounds + Clinical Memory
+                      </Text>
+                    </View>
+                    <View style={[styles.smallBtn, { backgroundColor: C.white, borderColor: C.purpleBorder, marginLeft: 8 }]}>
+                      <Text style={[styles.smallBtnText, { color: C.purple }]}>₹1,199/mo</Text>
+                      <Feather name="arrow-right" size={11} color={C.purple} />
+                    </View>
+                  </Pressable>
+                )}
+              </View>
+
+              <View style={[styles.cardFooter, { borderTopColor: C.border }]}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Feather name="clock" size={11} color={C.faint} />
+                  <Text style={styles.footerMeta}>{renewDate ? `Next bill: ${renewDate}` : "Team plan active"}</Text>
+                </View>
+                <Pressable onPress={handleLeave}>
+                  <Text style={styles.footerAction}>Leave department</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : (
+            <View style={[styles.card, { backgroundColor: C.white, borderColor: C.border }]}>
+              <View style={styles.inactiveRow}>
+                <View style={[styles.inactiveIcon, { backgroundColor: C.surface, borderColor: C.border }]}>
+                  <Feather name="home" size={18} color={C.faint} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.inactiveTitle, { color: C.faint }]}>Team Plan</Text>
+                  <Text style={[styles.inactiveSub, { color: C.faint }]}>Not part of any department</Text>
+                </View>
+                <Pressable
+                  style={[styles.smallBtn, { backgroundColor: C.greenLight, borderColor: C.greenBorder }]}
+                  onPress={handleJoinTeam}
+                >
+                  <Text style={[styles.smallBtnText, { color: C.greenDark }]}>Join team</Text>
+                  <Feather name="arrow-right" size={12} color={C.greenDark} />
+                </Pressable>
+              </View>
+            </View>
+          )}
         </View>
       )}
 
-      {/* Individual plan */}
+      {/* ── INDIVIDUAL PRO SECTION ── */}
       {!showFree && (
-        <View style={{ gap: 8 }}>
+        <View style={{ marginBottom: 12 }}>
           <View style={styles.sectionHeader}>
             <Feather name="cpu" size={12} color={C.faint} />
-            <Text style={[styles.sectionHeaderText, { color: C.faint }]}>YOUR PERSONAL PLAN</Text>
+            <Text style={[styles.sectionHeaderText, { color: C.faint }]}>PERSONAL PLAN</Text>
           </View>
-          <IndividualProCard
-            active={showPro}
-            planName={currentPlanLabel}
-            casesUsed={subStatus?.casesUsed ?? 0}
-            casesLimit={subStatus?.casesLimit ?? 10}
-            renewDate={renewDate}
-            onUpgrade={handleUpgrade}
-            onManage={handleManage}
-          />
+
+          {showPro ? (
+            <View style={[styles.activeCard, { borderColor: C.purpleBorder }]}>
+              {/* Dark purple header */}
+              <View style={[styles.cardHeader, { backgroundColor: "#0e0b1c" }]}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
+                  <View style={[styles.cardHeaderIcon, { backgroundColor: C.purpleLight, borderColor: C.purpleBorder }]}>
+                    <Feather name="cpu" size={16} color={C.purple} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.cardHeaderLabel}>INDIVIDUAL PRO</Text>
+                    <Text style={styles.cardHeaderTitle}>Your career layer</Text>
+                  </View>
+                </View>
+                <StatusPill status="active" />
+              </View>
+
+              <View style={styles.cardBody}>
+                {/* Feature bullets */}
+                <View style={[styles.proFeaturesBox, { backgroundColor: C.purpleLight, borderColor: C.purpleBorder }]}>
+                  <Text style={[styles.proFeaturesLabel, { color: C.purple }]}>WHAT INDIVIDUAL PRO GIVES YOU</Text>
+                  {[
+                    { emoji: "🧠", text: "Rounds — unlimited debriefs", sub: "After every case, at any hospital" },
+                    { emoji: "📚", text: "All 7 thinking lenses", sub: "First Principles to Full Debrief" },
+                    { emoji: "💾", text: "Clinical Memory — full career", sub: "Every hospital you've ever worked at" },
+                    { emoji: "🔒", text: "Fully private — HOD cannot see", sub: "This record belongs only to you" },
+                  ].map((item, i) => (
+                    <View key={i} style={[styles.proFeatureRow, i < 3 && { marginBottom: 10 }]}>
+                      <Text style={styles.proFeatureEmoji}>{item.emoji}</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.proFeatureText, { color: C.inkSoft }]}>{item.text}</Text>
+                        <Text style={[styles.proFeatureSub, { color: C.faint }]}>{item.sub}</Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+
+                {/* Privacy note */}
+                <View style={[styles.alertBox, { backgroundColor: C.greenLight, borderColor: C.greenBorder }]}>
+                  <Feather name="shield" size={14} color={C.greenDark} style={{ marginTop: 1 }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.alertBoxBody, { color: C.greenDark, lineHeight: 18 }]}>
+                      <Text style={{ fontWeight: "700" }}>Fully private.</Text>
+                      {" "}No hospital, no HOD, no employer has access to your Rounds or Clinical Memory — ever.
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              <View style={[styles.cardFooter, { borderTopColor: C.border }]}>
+                <View>
+                  <Text style={[styles.footerMeta, { fontSize: 13, fontWeight: "700", color: C.ink }]}>₹1,199/month</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 3 }}>
+                    <Feather name="clock" size={11} color={C.faint} />
+                    <Text style={styles.footerMeta}>{renewDate ? `Renews ${renewDate}` : "Individual Pro active"}</Text>
+                  </View>
+                </View>
+                <Pressable
+                  style={[styles.manageBtn, { borderColor: C.border }]}
+                  onPress={handleManage}
+                >
+                  <Text style={[styles.manageBtnText, { color: C.faint }]}>Manage</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : (
+            <Pressable
+              style={[styles.card, { backgroundColor: C.purpleLight, borderColor: C.purpleBorder, borderStyle: "dashed" }]}
+              onPress={handleUpgrade}
+            >
+              <View style={styles.inactiveRow}>
+                <View style={[styles.inactiveIcon, { backgroundColor: "rgba(124,106,246,0.08)", borderColor: C.purpleBorder }]}>
+                  <Feather name="cpu" size={18} color={C.purple} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.inactiveTitle, { color: C.purple }]}>Individual Pro</Text>
+                  <Text style={[styles.inactiveSub, { color: C.muted }]}>
+                    Private Rounds + Clinical Memory{showTeam ? " · HOD cannot see it" : " · Your career record"}
+                  </Text>
+                </View>
+                <View style={[styles.proUpgradeBtn, { backgroundColor: C.purple }]}>
+                  <Text style={styles.proUpgradeBtnText}>₹1,199/mo</Text>
+                  <Feather name="arrow-right" size={12} color={C.white} />
+                </View>
+              </View>
+            </Pressable>
+          )}
         </View>
       )}
 
-      {/* Access summary */}
-      {!showFree && <AccessSummary showTeam={showTeam} showPro={showPro} />}
+      {/* ── ACCESS TABLE ── */}
+      {!showFree && (
+        <View style={[styles.card, { backgroundColor: C.white, borderColor: C.border }]}>
+          <Text style={[styles.accessTitle, { color: C.ink }]}>Your access</Text>
+          {[
+            { label: "Case documentation", val: access.cases === "unlimited" ? "Unlimited" : access.cases },
+            { label: "Smart Dictation", val: "Always free" },
+            { label: "AI Discharge Summary", val: "Always free" },
+            { label: "Decision Support", val: access.unlimited ? "Unlimited" : access.aiCredits > 0 ? `${access.aiCredits} credits left` : "Upgrade to unlock" },
+            { label: "Rounds debriefs", val: access.unlimited ? "Unlimited" : access.aiCredits > 0 ? `${access.aiCredits} credits left` : "Upgrade to unlock" },
+            { label: "Clinical Memory", val: access.clinicalMemory ? "Private ✓" : "Add Pro" },
+            { label: "Shift management", val: access.shiftMgmt ? "Active ✓" : "—" },
+            { label: "Case handover", val: access.handover ? "Active ✓" : "—" },
+          ].map((item, i, arr) => {
+            const isGood = item.val.includes("Unlimited") || item.val.includes("✓") || item.val.includes("free");
+            const isCredit = item.val.includes("credits");
+            const isLocked = item.val.includes("Upgrade") || item.val.includes("Add") || item.val === "—";
+            const valColor = isGood ? C.greenDark : isCredit ? C.orange : isLocked ? (item.val === "—" ? C.faint : C.red) : C.faint;
+            return (
+              <View key={i} style={[styles.accessRow, i < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: C.surface }]}>
+                <Text style={[styles.accessLabel, { color: C.inkSoft }]}>{item.label}</Text>
+                <Text style={[styles.accessVal, { color: valColor }]}>{item.val}</Text>
+              </View>
+            );
+          })}
+        </View>
+      )}
 
-      {/* Help link */}
+      {/* Help */}
       <Pressable
         style={styles.helpRow}
         onPress={() => (navigation as any).navigate("HelpSupport")}
       >
-        <Text style={[styles.helpText, { color: C.faint }]}>Questions about your subscriptions?</Text>
-        <Text style={[styles.helpLink, { color: C.green }]}>Get help</Text>
+        <Text style={[styles.helpText, { color: C.faint }]}>Questions?</Text>
+        <Text style={[styles.helpLink, { color: C.green }]}>support@ermate.app</Text>
         <Feather name="arrow-right" size={13} color={C.green} />
       </Pressable>
     </ScrollView>
   );
 }
 
-// ── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  loadingWrap: { flex: 1, alignItems: "center", backgroundColor: "#F7F8FA" },
+  loadingWrap: { flex: 1, alignItems: "center", backgroundColor: C.surface },
+
+  identityRow: { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 16, padding: 14, borderWidth: 1.5, marginBottom: 12, backgroundColor: C.white },
+  avatarCircle: { width: 44, height: 44, borderRadius: 22, backgroundColor: C.green, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  avatarText: { fontSize: 17, fontWeight: "800", color: C.white },
+  identityName: { fontSize: 15, fontWeight: "800", letterSpacing: -0.3 },
+  identityEmail: { fontSize: 12, marginTop: 1 },
+  planBadge: { fontSize: 11, fontWeight: "700" },
+
+  creditBar: { borderRadius: 14, padding: 14, borderWidth: 1, marginBottom: 12 },
+  creditBarTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
+  creditBarTitle: { fontSize: 12, fontWeight: "700" },
+  creditBarUsed: { fontSize: 11 },
+  creditTrack: { height: 6, backgroundColor: "rgba(0,0,0,0.06)", borderRadius: 99, overflow: "hidden", marginBottom: 10 },
+  creditFill: { height: "100%", borderRadius: 99 },
+  creditBarDesc: { fontSize: 11, lineHeight: 16, marginBottom: 0 },
+  creditUpgradeBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, borderRadius: 10, paddingVertical: 10, marginTop: 10 },
+  creditUpgradeBtnText: { fontSize: 13, fontWeight: "700", color: C.white },
+
+  combinedBanner: { borderRadius: 16, padding: 16, borderWidth: 1, marginBottom: 12 },
+  combinedLabel: { fontSize: 10, fontWeight: "700", letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 },
+  combinedTitle: { fontSize: 14, fontWeight: "800", marginBottom: 12, letterSpacing: -0.3 },
+  combinedCards: { flexDirection: "row", gap: 8, marginBottom: 10 },
+  combinedCard: { flex: 1, borderRadius: 11, padding: 11, borderWidth: 1 },
+  combinedCardHeader: { flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 4 },
+  combinedCardLabel: { fontSize: 8, fontWeight: "800", letterSpacing: 0.5 },
+  combinedCardDesc: { fontSize: 11, lineHeight: 16 },
+  combinedNote: { fontSize: 11, lineHeight: 17 },
 
   pill: { flexDirection: "row", alignItems: "center", gap: 5, borderRadius: 99, paddingHorizontal: 10, paddingVertical: 4 },
   pillDot: { width: 6, height: 6, borderRadius: 3 },
-  pillText: { fontSize: 11, fontWeight: "700", letterSpacing: 0.2 },
+  pillText: { fontSize: 10, fontWeight: "700" },
 
-  card: { flexDirection: "row", alignItems: "center", borderRadius: 18, padding: 18, gap: 14 },
-  cardBorder: { backgroundColor: C.white, borderWidth: 1.5, borderColor: C.border },
-  dashedCard: { borderWidth: 1.5, borderStyle: "dashed" },
-  activeCard: { backgroundColor: C.white, borderWidth: 2, borderRadius: 18, overflow: "hidden", shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 10, shadowOffset: { width: 0, height: 3 }, elevation: 2 },
-  inactiveIcon: { width: 44, height: 44, borderRadius: 13, borderWidth: 1.5, justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  inactiveTitle: { fontSize: 14, fontWeight: "700" },
-  inactiveSub: { fontSize: 12, marginTop: 2, lineHeight: 17 },
-  inactiveNote: { fontSize: 11, color: C.faint, marginTop: 4, fontStyle: "italic" },
-  smallBtn: { flexDirection: "row", alignItems: "center", gap: 4, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7, flexShrink: 0 },
-  smallBtnText: { fontSize: 12, fontWeight: "700" },
+  card: { borderRadius: 18, padding: 16, borderWidth: 1.5, marginBottom: 12, backgroundColor: C.white },
+  sectionHeader: { flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 7, paddingLeft: 2 },
+  sectionHeaderText: { fontSize: 10, fontWeight: "700", textTransform: "uppercase", letterSpacing: 1 },
 
-  cardHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 14, paddingHorizontal: 18, gap: 8 },
-  cardHeaderIcon: { width: 36, height: 36, borderRadius: 10, borderWidth: 1.5, justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  cardHeaderLabel: { fontSize: 10, fontWeight: "700", color: "rgba(255,255,255,0.4)", letterSpacing: 0.8 },
-  cardHeaderTitle: { fontSize: 14, fontWeight: "800", color: "white", letterSpacing: -0.3, marginTop: 1 },
-  cardBody: { padding: 14, paddingHorizontal: 18 },
-  cardFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderTopWidth: 1, paddingHorizontal: 18, paddingVertical: 12 },
+  freeTitle: { fontSize: 14, fontWeight: "700", marginBottom: 8 },
+  caseTrack: { height: 6, borderRadius: 99, overflow: "hidden", marginBottom: 14 },
+  caseFill: { height: "100%", borderRadius: 99 },
+  freeBtns: { flexDirection: "row", gap: 10 },
+  freeBtn: { flex: 1, borderRadius: 11, paddingVertical: 11, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, borderWidth: 1 },
+  freeBtnText: { fontSize: 13, fontWeight: "700" },
 
-  metaGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 14 },
-  metaCell: { width: "47.5%", borderRadius: 10, padding: 10 },
-  metaCellLabel: { fontSize: 10, color: C.faint, fontWeight: "600", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 3 },
-  metaCellValue: { fontSize: 13, fontWeight: "700" },
-
-  alertBox: { flexDirection: "row", gap: 10, alignItems: "flex-start", borderWidth: 1, borderRadius: 12, padding: 10, paddingHorizontal: 13 },
-  alertBoxTitle: { fontSize: 12, fontWeight: "700", color: "#92400E", marginBottom: 2 },
-  alertBoxBody: { fontSize: 11, color: "#B45309", lineHeight: 17 },
-
+  activeCard: { borderRadius: 16, overflow: "hidden", borderWidth: 2 },
+  cardHeader: { paddingVertical: 13, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  cardHeaderIcon: { width: 34, height: 34, borderRadius: 9, alignItems: "center", justifyContent: "center", borderWidth: 1.5 },
+  cardHeaderLabel: { fontSize: 10, fontWeight: "700", color: "rgba(255,255,255,0.35)", letterSpacing: 0.8, textTransform: "uppercase" },
+  cardHeaderTitle: { fontSize: 14, fontWeight: "800", color: C.white, letterSpacing: -0.3 },
+  cardBody: { padding: 14 },
+  cardFooter: { paddingVertical: 11, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderTopWidth: 1 },
   footerMeta: { fontSize: 11, color: C.faint },
   footerAction: { fontSize: 12, fontWeight: "600", color: C.faint },
 
-  proUpgradeBtn: { backgroundColor: C.purple, borderRadius: 10, paddingHorizontal: 11, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 0 },
+  metaGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 },
+  metaCell: { flex: 1, minWidth: "45%", borderRadius: 9, padding: 10 },
+  metaCellLabel: { fontSize: 9, color: C.faint, fontWeight: "600", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 3 },
+  metaCellValue: { fontSize: 13, fontWeight: "700" },
+
+  alertBox: { flexDirection: "row", gap: 8, borderRadius: 10, padding: 12, borderWidth: 1 },
+  alertBoxTitle: { fontSize: 11, fontWeight: "700", marginBottom: 2 },
+  alertBoxBody: { fontSize: 11, lineHeight: 17 },
+
+  smallBtn: { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1 },
+  smallBtnText: { fontSize: 12, fontWeight: "600" },
+
+  inactiveRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  inactiveIcon: { width: 40, height: 40, borderRadius: 11, alignItems: "center", justifyContent: "center", borderWidth: 1.5 },
+  inactiveTitle: { fontSize: 13, fontWeight: "700" },
+  inactiveSub: { fontSize: 12, marginTop: 2 },
+  proUpgradeBtn: { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 9, paddingHorizontal: 13, paddingVertical: 8 },
   proUpgradeBtnText: { fontSize: 12, fontWeight: "700", color: C.white },
-  proFeaturesBox: { borderWidth: 1, borderRadius: 12, padding: 13, marginBottom: 12 },
-  proFeaturesLabel: { fontSize: 11, fontWeight: "700", letterSpacing: 0.8, marginBottom: 10 },
-  proFeatureRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
-  proFeatureIconWrap: { width: 26, height: 26, borderRadius: 7, justifyContent: "center", alignItems: "center", flexShrink: 0, marginTop: 1 },
+
+  proFeaturesBox: { borderRadius: 11, padding: 13, marginBottom: 12, borderWidth: 1 },
+  proFeaturesLabel: { fontSize: 9, fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 12 },
+  proFeatureRow: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
+  proFeatureEmoji: { fontSize: 16, flexShrink: 0, marginTop: 1 },
   proFeatureText: { fontSize: 13, fontWeight: "600" },
   proFeatureSub: { fontSize: 11, marginTop: 1 },
-  manageBtn: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 },
-  manageBtnText: { fontSize: 12, fontWeight: "600", color: C.faint },
 
-  combinedBanner: { borderRadius: 18, padding: 16, paddingHorizontal: 18, borderWidth: 1, borderColor: "rgba(255,255,255,0.05)" },
-  combinedLabel: { fontSize: 10, fontWeight: "700", color: "rgba(255,255,255,0.4)", letterSpacing: 1, marginBottom: 6 },
-  combinedTitle: { fontSize: 15, fontWeight: "800", color: "white", marginBottom: 12, letterSpacing: -0.3 },
-  combinedPill: { flex: 1, borderWidth: 1, borderRadius: 11, padding: 10, paddingHorizontal: 12 },
-  combinedPillLabel: { fontSize: 10, fontWeight: "700", letterSpacing: 0.5 },
-  combinedPillBody: { fontSize: 11, color: "rgba(255,255,255,0.5)", lineHeight: 17 },
-  combinedFootnote: { fontSize: 11, color: "rgba(255,255,255,0.3)", lineHeight: 19, marginTop: 4 },
+  manageBtn: { borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1 },
+  manageBtnText: { fontSize: 12, fontWeight: "600" },
 
-  tableCard: { borderWidth: 1.5, borderRadius: 18, padding: 16, paddingHorizontal: 18 },
-  tableTitle: { fontSize: 13, fontWeight: "700", marginBottom: 12, letterSpacing: -0.2 },
-  tableHeaderRow: { flexDirection: "row", alignItems: "center", marginBottom: 2, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: "#F0F1F3" },
-  tableHeaderCell: { fontSize: 10, fontWeight: "700", letterSpacing: 0.4 },
-  tableRow: { flexDirection: "row", alignItems: "center", paddingVertical: 9 },
-  tableCell: { fontSize: 12, fontWeight: "500" },
-  tableCheckCell: { fontSize: 13, fontWeight: "700", textAlign: "center" },
-  tableVisCell: { fontSize: 10, fontWeight: "700", textAlign: "right" },
+  accessTitle: { fontSize: 13, fontWeight: "700", marginBottom: 12 },
+  accessRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 7 },
+  accessLabel: { fontSize: 12.5 },
+  accessVal: { fontSize: 12, fontWeight: "600" },
 
-  freeCard: { borderWidth: 1.5, borderRadius: 18, padding: 20, alignItems: "center" },
-  freeIconWrap: { width: 60, height: 60, borderRadius: 18, justifyContent: "center", alignItems: "center", marginBottom: 12 },
-  freeTitle: { fontSize: 15, fontWeight: "800", marginBottom: 12 },
-  freeMeta: { fontSize: 12 },
-  freeSub: { fontSize: 13, textAlign: "center", lineHeight: 20, marginBottom: 16 },
-  freeBtns: { flexDirection: "row", gap: 10, width: "100%" },
-  freeBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderWidth: 1, borderRadius: 12, paddingVertical: 12 },
-  freeBtnText: { fontSize: 13, fontWeight: "700" },
-  progressTrack: { height: 6, borderRadius: 3, width: "100%", overflow: "hidden" },
-  progressFill: { height: 6, borderRadius: 3 },
-
-  identityCard: { flexDirection: "row", alignItems: "center", borderRadius: 18, paddingVertical: 16, paddingHorizontal: 18, borderWidth: 1.5, gap: 14 },
-  avatarCircle: { width: 48, height: 48, borderRadius: 24, justifyContent: "center", alignItems: "center", flexShrink: 0 },
-  avatarText: { fontSize: 18, fontWeight: "800", color: "white" },
-  identityName: { fontSize: 16, fontWeight: "800", letterSpacing: -0.3 },
-  identityEmail: { fontSize: 12, marginTop: 1 },
-  planTag: { borderRadius: 99, paddingHorizontal: 10, paddingVertical: 4 },
-  planTagText: { fontSize: 11, fontWeight: "700" },
-
-  switcherWrap: { gap: 6 },
-  switcherLabel: { fontSize: 9, fontWeight: "700", letterSpacing: 1.2, textTransform: "uppercase" },
-  switcherRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
-  switcherBtn: { borderWidth: 1.5, borderRadius: 99, paddingHorizontal: 12, paddingVertical: 6 },
-  switcherBtnText: { fontSize: 11, fontWeight: "600" },
-
-  sectionHeader: { flexDirection: "row", alignItems: "center", gap: 5, paddingLeft: 2 },
-  sectionHeaderText: { fontSize: 11, fontWeight: "700", letterSpacing: 1 },
-
-  helpRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, paddingVertical: 10 },
+  helpRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 8, marginTop: 4 },
   helpText: { fontSize: 13 },
   helpLink: { fontSize: 13, fontWeight: "600" },
 });

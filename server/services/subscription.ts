@@ -23,6 +23,7 @@ export async function getOrCreateSubscription(userId: string, userEmail: string)
     status: "active",
     casesUsed: 0,
     casesLimit: FREE_CASE_LIMIT,
+    aiCredits: 5,
   }).returning();
 
   return newSub;
@@ -142,7 +143,8 @@ export async function resetMonthlyCases(userId: string) {
 export async function deductAiCredit(userId: string): Promise<{ ok: boolean; remaining: number }> {
   const db = getDb()!;
   const sub = await getOrCreateSubscription(userId, "");
-  if (sub.plan === "free") return { ok: false, remaining: 0 };
+  // Free plan can use their 5 one-time credits; unlimited plans (pro) never deduct
+  if (sub.plan !== "free") return { ok: true, remaining: 9999 };
   if (sub.aiCredits <= 0) return { ok: false, remaining: 0 };
   await db.update(subscriptions)
     .set({ aiCredits: sub.aiCredits - 1, updatedAt: new Date() })
