@@ -5,6 +5,8 @@ import { eq } from "drizzle-orm";
 const FREE_CASE_LIMIT = 10;
 const PREMIUM_CASE_LIMIT = 999999;
 const PREMIUM_PRICE_INR = 559;
+const BASE_AI_CREDITS = 20;
+const PRO_AI_CREDITS = 50;
 
 export async function getOrCreateSubscription(userId: string, userEmail: string) {
   const db = getDb()!;
@@ -86,6 +88,7 @@ export async function activatePlan(
       plan,
       status: "active",
       casesLimit: PREMIUM_CASE_LIMIT,
+      aiCredits: plan === "pro" ? PRO_AI_CREDITS : BASE_AI_CREDITS,
       currentPeriodStart: now,
       currentPeriodEnd: periodEnd,
       stripeCustomerId: stripeCustomerId || sub.stripeCustomerId,
@@ -136,4 +139,24 @@ export async function resetMonthlyCases(userId: string) {
     .where(eq(subscriptions.id, sub.id));
 }
 
-export { FREE_CASE_LIMIT, PREMIUM_CASE_LIMIT, PREMIUM_PRICE_INR };
+export async function deductAiCredit(userId: string): Promise<{ ok: boolean; remaining: number }> {
+  const db = getDb()!;
+  const sub = await getOrCreateSubscription(userId, "");
+  if (sub.plan === "free") return { ok: false, remaining: 0 };
+  if (sub.aiCredits <= 0) return { ok: false, remaining: 0 };
+  await db.update(subscriptions)
+    .set({ aiCredits: sub.aiCredits - 1, updatedAt: new Date() })
+    .where(eq(subscriptions.id, sub.id));
+  return { ok: true, remaining: sub.aiCredits - 1 };
+}
+
+export async function addAiCredits(userId: string, amount: number) {
+  const db = getDb()!;
+  const sub = await getOrCreateSubscription(userId, "");
+  await db.update(subscriptions)
+    .set({ aiCredits: sub.aiCredits + amount, updatedAt: new Date() })
+    .where(eq(subscriptions.id, sub.id));
+  return { aiCredits: sub.aiCredits + amount };
+}
+
+export { FREE_CASE_LIMIT, PREMIUM_CASE_LIMIT, PREMIUM_PRICE_INR, BASE_AI_CREDITS, PRO_AI_CREDITS };

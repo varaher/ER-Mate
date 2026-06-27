@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Alert,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
+import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { Feather } from "@expo/vector-icons";
@@ -41,6 +42,18 @@ const C = {
   combinedBg: "#0D1520",
 };
 
+interface SubStatus {
+  plan: string;
+  status: string;
+  casesUsed: number;
+  casesLimit: number;
+  casesRemaining: number | null;
+  currentPeriodEnd: string | null;
+  priceInr: number;
+  freeCaseLimit: number;
+  credits_balance: number;
+}
+
 type Scenario = "both" | "team_only" | "pro_only" | "free";
 type PillStatus = "active" | "trial" | "inactive" | "grace";
 
@@ -50,6 +63,12 @@ const SCENARIOS: { id: Scenario; label: string }[] = [
   { id: "pro_only", label: "Pro only" },
   { id: "free", label: "Free" },
 ];
+
+function planLabel(plan: string) {
+  if (plan === "pro") return "Pro Plan";
+  if (plan === "base") return "Base Plan";
+  return "Free Plan";
+}
 
 // ── Status pill ──────────────────────────────────────────────────────────────
 function StatusPill({ status }: { status: PillStatus }) {
@@ -105,7 +124,6 @@ function TeamPlanCard({ active, deptName, role, shiftName, renewDate, onJoin, on
 
   return (
     <View style={[styles.activeCard, { borderColor: C.greenBorder }]}>
-      {/* Header */}
       <View style={[styles.cardHeader, { backgroundColor: C.teamHeaderBg }]}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
           <View style={[styles.cardHeaderIcon, { backgroundColor: C.greenLight, borderColor: C.greenBorder }]}>
@@ -119,7 +137,6 @@ function TeamPlanCard({ active, deptName, role, shiftName, renewDate, onJoin, on
         <StatusPill status="active" />
       </View>
 
-      {/* Body */}
       <View style={styles.cardBody}>
         <View style={styles.metaGrid}>
           {[
@@ -152,7 +169,6 @@ function TeamPlanCard({ active, deptName, role, shiftName, renewDate, onJoin, on
         </View>
       </View>
 
-      {/* Footer */}
       <View style={[styles.cardFooter, { borderTopColor: C.border }]}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
           <Feather name="clock" size={11} color={C.faint} />
@@ -166,11 +182,13 @@ function TeamPlanCard({ active, deptName, role, shiftName, renewDate, onJoin, on
   );
 }
 
-// ── Individual Pro card ──────────────────────────────────────────────────────
+// ── Individual plan card ─────────────────────────────────────────────────────
 interface ProCardProps {
   active: boolean;
-  trial?: boolean;
-  trialDaysLeft?: number;
+  planName: string;
+  aiCredits: number;
+  casesUsed: number;
+  casesLimit: number;
   renewDate?: string;
   onUpgrade?: () => void;
   onManage?: () => void;
@@ -183,7 +201,7 @@ const PRO_FEATURES: { icon: keyof typeof Feather.glyphMap; text: string; sub: st
   { icon: "lock", text: "Private to you forever", sub: "Your HOD cannot access this" },
 ];
 
-function IndividualProCard({ active, trial, trialDaysLeft, renewDate, onUpgrade, onManage }: ProCardProps) {
+function IndividualProCard({ active, planName, aiCredits, casesUsed, casesLimit, renewDate, onUpgrade, onManage }: ProCardProps) {
   if (!active) {
     return (
       <View style={[styles.card, styles.dashedCard, { borderColor: C.purpleBorder, backgroundColor: C.purpleLight }]}>
@@ -191,44 +209,52 @@ function IndividualProCard({ active, trial, trialDaysLeft, renewDate, onUpgrade,
           <Feather name="cpu" size={20} color={C.purple} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.inactiveTitle, { color: C.purple }]}>Individual Pro</Text>
-          <Text style={[styles.inactiveSub, { color: C.muted }]}>Your personal career layer · Rounds + Clinical Memory</Text>
+          <Text style={[styles.inactiveTitle, { color: C.purple }]}>Individual Plan</Text>
+          <Text style={[styles.inactiveSub, { color: C.muted }]}>Rounds + Clinical Memory · Your personal career layer</Text>
           <Text style={styles.inactiveNote}>Not subscribed — your hospital's Team plan doesn't include this</Text>
         </View>
         <Pressable style={styles.proUpgradeBtn} onPress={onUpgrade}>
-          <Text style={styles.proUpgradeBtnText}>₹1,199/mo</Text>
+          <Text style={styles.proUpgradeBtnText}>Upgrade</Text>
           <Feather name="arrow-right" size={12} color={C.white} />
         </Pressable>
       </View>
     );
   }
 
+  const creditsLow = aiCredits <= 5;
+  const creditsOut = aiCredits === 0;
+
   return (
     <View style={[styles.activeCard, { borderColor: C.purpleBorder }]}>
-      {/* Header */}
       <View style={[styles.cardHeader, { backgroundColor: C.proHeaderBg }]}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
           <View style={[styles.cardHeaderIcon, { backgroundColor: C.purpleLight, borderColor: C.purpleBorder }]}>
             <Feather name="cpu" size={16} color={C.purple} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.cardHeaderLabel}>INDIVIDUAL PRO</Text>
-            <Text style={styles.cardHeaderTitle}>Your career layer</Text>
+            <Text style={styles.cardHeaderLabel}>INDIVIDUAL PLAN</Text>
+            <Text style={styles.cardHeaderTitle}>{planName}</Text>
           </View>
         </View>
-        <StatusPill status={trial ? "trial" : "active"} />
+        <StatusPill status="active" />
       </View>
 
-      {/* Body */}
       <View style={styles.cardBody}>
-        {trial ? (
-          <View style={[styles.trialBanner, { backgroundColor: C.orangeLight, borderColor: C.orangeBorder }]}>
-            <Feather name="clock" size={12} color={C.orange} />
-            <Text style={styles.trialBannerText}>
-              Free trial · {trialDaysLeft ?? 0} days remaining · Then ₹1,199/month
+        {/* Cases + AI credits row */}
+        <View style={styles.metaGrid}>
+          <View style={[styles.metaCell, { backgroundColor: C.surface }]}>
+            <Text style={styles.metaCellLabel}>Cases documented</Text>
+            <Text style={[styles.metaCellValue, { color: C.inkSoft }]}>
+              {casesLimit >= 999000 ? "Unlimited" : `${casesUsed} / ${casesLimit}`}
             </Text>
           </View>
-        ) : null}
+          <View style={[styles.metaCell, { backgroundColor: creditsOut ? "rgba(239,68,68,0.06)" : creditsLow ? C.orangeLight : C.purpleLight }]}>
+            <Text style={styles.metaCellLabel}>AI credits left</Text>
+            <Text style={[styles.metaCellValue, { color: creditsOut ? "#DC2626" : creditsLow ? C.orange : C.purple }]}>
+              {aiCredits} {creditsOut ? "· Exhausted" : creditsLow ? "· Running low" : "remaining"}
+            </Text>
+          </View>
+        </View>
 
         <View style={[styles.proFeaturesBox, { backgroundColor: C.purpleLight, borderColor: C.purpleBorder }]}>
           <Text style={[styles.proFeaturesLabel, { color: C.purple }]}>WHAT THIS PLAN GIVES YOU</Text>
@@ -256,14 +282,12 @@ function IndividualProCard({ active, trial, trialDaysLeft, renewDate, onUpgrade,
         </View>
       </View>
 
-      {/* Footer */}
       <View style={[styles.cardFooter, { borderTopColor: C.border }]}>
         <View>
-          <Text style={styles.footerPrice}>₹1,199/month</Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 }}>
             <Feather name="clock" size={11} color={C.faint} />
             <Text style={styles.footerMeta}>
-              {trial ? `Free until ${renewDate ?? "—"} · Then charged` : renewDate ? `Renews ${renewDate}` : "Pro plan active"}
+              {renewDate ? `Renews ${renewDate}` : "Individual plan active"}
             </Text>
           </View>
         </View>
@@ -276,7 +300,7 @@ function IndividualProCard({ active, trial, trialDaysLeft, renewDate, onUpgrade,
 }
 
 // ── Combined banner ──────────────────────────────────────────────────────────
-function CombinedBanner() {
+function CombinedBanner({ deptName, planName }: { deptName?: string; planName?: string }) {
   return (
     <View style={[styles.combinedBanner, { backgroundColor: C.combinedBg }]}>
       <Text style={styles.combinedLabel}>BOTH PLANS ACTIVE</Text>
@@ -288,12 +312,12 @@ function CombinedBanner() {
             <Feather name="home" size={12} color={C.green} />
             <Text style={[styles.combinedPillLabel, { color: C.green }]}>TEAM PLAN</Text>
           </View>
-          <Text style={styles.combinedPillBody}>Your shift · Department cases · Hospital pays</Text>
+          <Text style={styles.combinedPillBody}>{deptName || "Your department"} · Hospital pays</Text>
         </View>
         <View style={[styles.combinedPill, { backgroundColor: "rgba(124,106,246,0.1)", borderColor: "rgba(124,106,246,0.18)" }]}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
             <Feather name="cpu" size={12} color={C.purple} />
-            <Text style={[styles.combinedPillLabel, { color: C.purple }]}>INDIVIDUAL PRO</Text>
+            <Text style={[styles.combinedPillLabel, { color: C.purple }]}>{planName?.toUpperCase() || "INDIVIDUAL"}</Text>
           </View>
           <Text style={styles.combinedPillBody}>Your Rounds · Your Memory · You pay</Text>
         </View>
@@ -326,7 +350,7 @@ function VisibilityTable() {
       <View style={styles.tableHeaderRow}>
         <Text style={[styles.tableHeaderCell, { flex: 1, color: C.faint }]}>Feature</Text>
         <Text style={[styles.tableHeaderCell, { width: 48, textAlign: "center", color: C.greenDark }]}>Team</Text>
-        <Text style={[styles.tableHeaderCell, { width: 38, textAlign: "center", color: C.purple }]}>Pro</Text>
+        <Text style={[styles.tableHeaderCell, { width: 38, textAlign: "center", color: C.purple }]}>Indv.</Text>
         <Text style={[styles.tableHeaderCell, { width: 82, textAlign: "right", color: C.faint }]}>Hospital</Text>
       </View>
 
@@ -363,21 +387,44 @@ interface FreeStateProps {
 }
 
 function FreeState({ casesUsed, casesLimit, onUpgradePro, onJoinTeam }: FreeStateProps) {
+  const pct = casesLimit > 0 ? Math.min(1, casesUsed / casesLimit) : 0;
   return (
     <View style={[styles.freeCard, { backgroundColor: C.white, borderColor: C.border }]}>
       <View style={[styles.freeIconWrap, { backgroundColor: C.surface }]}>
         <Feather name="clipboard" size={28} color={C.faint} />
       </View>
       <Text style={[styles.freeTitle, { color: C.ink }]}>Free plan</Text>
+
+      {/* Progress bar */}
+      <View style={{ width: "100%", marginBottom: 6 }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 6 }}>
+          <Text style={[styles.freeMeta, { color: C.muted }]}>Cases used</Text>
+          <Text style={[styles.freeMeta, { color: pct >= 1 ? "#DC2626" : C.inkSoft, fontWeight: "700" }]}>
+            {casesUsed} / {casesLimit}
+          </Text>
+        </View>
+        <View style={[styles.progressTrack, { backgroundColor: "#F0F1F3" }]}>
+          <View style={[styles.progressFill, {
+            width: `${Math.round(pct * 100)}%` as any,
+            backgroundColor: pct >= 1 ? "#DC2626" : pct >= 0.7 ? C.orange : C.green,
+          }]} />
+        </View>
+        {pct >= 1 ? (
+          <Text style={[styles.freeMeta, { color: "#DC2626", marginTop: 4 }]}>
+            Case limit reached — upgrade to keep documenting
+          </Text>
+        ) : null}
+      </View>
+
       <Text style={[styles.freeSub, { color: C.muted }]}>
-        You've used {casesUsed} of {casesLimit} free cases. Upgrade to keep documenting without limits.
+        Upgrade to document unlimited cases and get AI credits for Smart Dictation, Clinical Decision Support, and more.
       </Text>
       <View style={styles.freeBtns}>
         <Pressable
           style={[styles.freeBtn, { backgroundColor: C.greenLight, borderColor: C.greenBorder }]}
           onPress={onUpgradePro}
         >
-          <Text style={[styles.freeBtnText, { color: C.greenDark }]}>Individual Pro</Text>
+          <Text style={[styles.freeBtnText, { color: C.greenDark }]}>Upgrade plan</Text>
           <Feather name="arrow-right" size={13} color={C.greenDark} />
         </Pressable>
         <Pressable
@@ -400,21 +447,37 @@ export default function MySubscriptionsScreen() {
   const { user, token } = useAuth();
   const { department, membership, shiftSession, activeShift, isInDepartment } = useDepartment();
 
-  const [subStatus, setSubStatus] = useState<{
-    plan: string;
-    casesUsed: number;
-    casesLimit: number;
-    currentPeriodEnd: string | null;
-  } | null>(null);
+  const [subStatus, setSubStatus] = useState<SubStatus | null>(null);
   const [loadingSub, setLoadingSub] = useState(true);
   const [scenario, setScenario] = useState<Scenario | null>(null);
 
+  const fetchSub = useCallback(async () => {
+    if (!user?.id) { setLoadingSub(false); return; }
+    try {
+      const url = new URL(
+        `/api/subscription/status?userId=${encodeURIComponent(user.id)}&userEmail=${encodeURIComponent(user.email || "")}`,
+        getApiUrl()
+      ).href;
+      const headers: Record<string, string> = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      const res = await fetch(url, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setSubStatus(data);
+      }
+    } catch { }
+    setLoadingSub(false);
+  }, [user?.id, user?.email, token]);
+
+  useFocusEffect(useCallback(() => { fetchSub(); }, [fetchSub]));
+
+  // Derive scenario from real data
+  const hasPaidPlan = subStatus ? (subStatus.plan === "base" || subStatus.plan === "pro") : false;
   const hasTeam = isInDepartment;
-  const hasPro = subStatus?.plan === "pro";
   const realScenario: Scenario =
-    hasTeam && hasPro ? "both"
+    hasTeam && hasPaidPlan ? "both"
     : hasTeam ? "team_only"
-    : hasPro ? "pro_only"
+    : hasPaidPlan ? "pro_only"
     : "free";
 
   const activeScenario: Scenario = scenario ?? realScenario;
@@ -422,24 +485,6 @@ export default function MySubscriptionsScreen() {
   const showPro = activeScenario === "both" || activeScenario === "pro_only";
   const showBoth = activeScenario === "both";
   const showFree = activeScenario === "free";
-  const proTrial = activeScenario === "pro_only";
-
-  useEffect(() => {
-    fetchSub();
-  }, [user?.id]);
-
-  const fetchSub = async () => {
-    if (!user?.id) { setLoadingSub(false); return; }
-    try {
-      const url = new URL(
-        `/api/subscription/status?userId=${encodeURIComponent(user.id)}&userEmail=${encodeURIComponent(user.email || "")}`,
-        getApiUrl()
-      ).href;
-      const res = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-      if (res.ok) setSubStatus(await res.json());
-    } catch { }
-    setLoadingSub(false);
-  };
 
   const formatRenew = (iso: string | null | undefined) => {
     if (!iso) return undefined;
@@ -450,6 +495,8 @@ export default function MySubscriptionsScreen() {
 
   const renewDate = formatRenew(subStatus?.currentPeriodEnd);
   const doctorInitial = user?.name?.charAt(0)?.toUpperCase() ?? "D";
+  const currentPlanLabel = planLabel(subStatus?.plan ?? "free");
+  const aiCredits = subStatus?.credits_balance ?? 0;
 
   const handleJoinTeam = () => (navigation as any).navigate("SetupDepartment");
   const handleUpgrade = () => (navigation as any).navigate("Upgrade", {});
@@ -481,26 +528,36 @@ export default function MySubscriptionsScreen() {
           <Text style={styles.avatarText}>{doctorInitial}</Text>
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.identityName, { color: C.ink }]}>{user?.name || "Doctor"}</Text>
-          <Text style={[styles.identityEmail, { color: C.faint }]}>{user?.email || ""}</Text>
+          <Text style={[styles.identityName, { color: C.ink }]} numberOfLines={1}>{user?.name || "Doctor"}</Text>
+          <Text style={[styles.identityEmail, { color: C.faint }]} numberOfLines={1}>{user?.email || ""}</Text>
         </View>
-        <View style={{ alignItems: "flex-end" }}>
+        <View style={{ alignItems: "flex-end", gap: 2 }}>
           {showFree ? (
-            <Text style={[styles.identityPlan, { color: C.faint }]}>Free plan</Text>
-          ) : showBoth ? (
-            <View style={{ alignItems: "flex-end", gap: 2 }}>
-              <Text style={[styles.identityPlan, { color: C.green }]}>Team · Active</Text>
-              <Text style={[styles.identityPlan, { color: C.purple }]}>Pro · Active</Text>
+            <View style={[styles.planTag, { backgroundColor: "#F3F4F6" }]}>
+              <Text style={[styles.planTagText, { color: C.faint }]}>Free plan</Text>
             </View>
+          ) : showBoth ? (
+            <>
+              <View style={[styles.planTag, { backgroundColor: C.greenLight }]}>
+                <Text style={[styles.planTagText, { color: C.greenDark }]}>Team · Active</Text>
+              </View>
+              <View style={[styles.planTag, { backgroundColor: C.purpleLight }]}>
+                <Text style={[styles.planTagText, { color: C.purple }]}>{currentPlanLabel} · Active</Text>
+              </View>
+            </>
           ) : showTeam ? (
-            <Text style={[styles.identityPlan, { color: C.green }]}>Team · Active</Text>
+            <View style={[styles.planTag, { backgroundColor: C.greenLight }]}>
+              <Text style={[styles.planTagText, { color: C.greenDark }]}>Team · Active</Text>
+            </View>
           ) : (
-            <Text style={[styles.identityPlan, { color: C.purple }]}>Pro · Active</Text>
+            <View style={[styles.planTag, { backgroundColor: C.purpleLight }]}>
+              <Text style={[styles.planTagText, { color: C.purple }]}>{currentPlanLabel} · Active</Text>
+            </View>
           )}
         </View>
       </View>
 
-      {/* Scenario switcher */}
+      {/* Scenario switcher — dev/preview tool */}
       <View style={styles.switcherWrap}>
         <Text style={[styles.switcherLabel, { color: C.faint }]}>PREVIEW STATES</Text>
         <View style={styles.switcherRow}>
@@ -523,7 +580,12 @@ export default function MySubscriptionsScreen() {
       </View>
 
       {/* Combined banner */}
-      {showBoth && <CombinedBanner />}
+      {showBoth && (
+        <CombinedBanner
+          deptName={department?.name}
+          planName={currentPlanLabel}
+        />
+      )}
 
       {/* Free state */}
       {showFree && (
@@ -554,7 +616,7 @@ export default function MySubscriptionsScreen() {
         </View>
       )}
 
-      {/* Individual Pro */}
+      {/* Individual plan */}
       {!showFree && (
         <View style={{ gap: 8 }}>
           <View style={styles.sectionHeader}>
@@ -563,8 +625,10 @@ export default function MySubscriptionsScreen() {
           </View>
           <IndividualProCard
             active={showPro}
-            trial={proTrial}
-            trialDaysLeft={18}
+            planName={currentPlanLabel}
+            aiCredits={aiCredits}
+            casesUsed={subStatus?.casesUsed ?? 0}
+            casesLimit={subStatus?.casesLimit ?? 10}
             renewDate={renewDate}
             onUpgrade={handleUpgrade}
             onManage={handleUpgrade}
@@ -576,16 +640,14 @@ export default function MySubscriptionsScreen() {
       {!showFree && <VisibilityTable />}
 
       {/* Help link */}
-      {!showFree && (
-        <Pressable
-          style={styles.helpRow}
-          onPress={() => (navigation as any).navigate("HelpSupport")}
-        >
-          <Text style={[styles.helpText, { color: C.faint }]}>Questions about your subscriptions?</Text>
-          <Text style={[styles.helpLink, { color: C.green }]}>Get help</Text>
-          <Feather name="arrow-right" size={13} color={C.green} />
-        </Pressable>
-      )}
+      <Pressable
+        style={styles.helpRow}
+        onPress={() => (navigation as any).navigate("HelpSupport")}
+      >
+        <Text style={[styles.helpText, { color: C.faint }]}>Questions about your subscriptions?</Text>
+        <Text style={[styles.helpLink, { color: C.green }]}>Get help</Text>
+        <Feather name="arrow-right" size={13} color={C.green} />
+      </Pressable>
     </ScrollView>
   );
 }
@@ -627,12 +689,9 @@ const styles = StyleSheet.create({
 
   footerMeta: { fontSize: 11, color: C.faint },
   footerAction: { fontSize: 12, fontWeight: "600", color: C.faint },
-  footerPrice: { fontSize: 13, fontWeight: "700", color: C.ink },
 
   proUpgradeBtn: { backgroundColor: C.purple, borderRadius: 10, paddingHorizontal: 11, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 0 },
   proUpgradeBtnText: { fontSize: 12, fontWeight: "700", color: C.white },
-  trialBanner: { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderRadius: 10, paddingVertical: 9, paddingHorizontal: 12, marginBottom: 12 },
-  trialBannerText: { fontSize: 12, fontWeight: "600", color: "#92400E", flex: 1 },
   proFeaturesBox: { borderWidth: 1, borderRadius: 12, padding: 13, marginBottom: 12 },
   proFeaturesLabel: { fontSize: 11, fontWeight: "700", letterSpacing: 0.8, marginBottom: 10 },
   proFeatureRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
@@ -661,18 +720,22 @@ const styles = StyleSheet.create({
 
   freeCard: { borderWidth: 1.5, borderRadius: 18, padding: 20, alignItems: "center" },
   freeIconWrap: { width: 60, height: 60, borderRadius: 18, justifyContent: "center", alignItems: "center", marginBottom: 12 },
-  freeTitle: { fontSize: 15, fontWeight: "800", marginBottom: 6 },
+  freeTitle: { fontSize: 15, fontWeight: "800", marginBottom: 12 },
+  freeMeta: { fontSize: 12 },
   freeSub: { fontSize: 13, textAlign: "center", lineHeight: 20, marginBottom: 16 },
   freeBtns: { flexDirection: "row", gap: 10, width: "100%" },
   freeBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderWidth: 1, borderRadius: 12, paddingVertical: 12 },
   freeBtnText: { fontSize: 13, fontWeight: "700" },
+  progressTrack: { height: 6, borderRadius: 3, width: "100%", overflow: "hidden" },
+  progressFill: { height: 6, borderRadius: 3 },
 
   identityCard: { flexDirection: "row", alignItems: "center", borderRadius: 18, paddingVertical: 16, paddingHorizontal: 18, borderWidth: 1.5, gap: 14 },
   avatarCircle: { width: 48, height: 48, borderRadius: 24, justifyContent: "center", alignItems: "center", flexShrink: 0 },
   avatarText: { fontSize: 18, fontWeight: "800", color: "white" },
   identityName: { fontSize: 16, fontWeight: "800", letterSpacing: -0.3 },
   identityEmail: { fontSize: 12, marginTop: 1 },
-  identityPlan: { fontSize: 12, fontWeight: "700" },
+  planTag: { borderRadius: 99, paddingHorizontal: 10, paddingVertical: 4 },
+  planTagText: { fontSize: 11, fontWeight: "700" },
 
   switcherWrap: { gap: 6 },
   switcherLabel: { fontSize: 9, fontWeight: "700", letterSpacing: 1.2, textTransform: "uppercase" },

@@ -58,9 +58,22 @@ export default function ProfileScreen() {
 
   const isGoogleUser = authMethod === "google";
   const { department, membership, isHOD, shiftSession, activeShift, checkOut, refresh: refreshDept, incomingCount } = useDepartment();
+  const [localPlan, setLocalPlan] = useState<string | null>(null);
 
   useEffect(() => {
     if (user?.id) loadProfile();
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const url = new URL(
+      `/api/subscription/status?userId=${encodeURIComponent(user.id)}&userEmail=${encodeURIComponent(user.email || "")}`,
+      getApiUrl()
+    ).href;
+    fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.plan) setLocalPlan(d.plan); })
+      .catch(() => {});
   }, [user?.id]);
 
   const loadProfile = async () => {
@@ -254,7 +267,7 @@ export default function ProfileScreen() {
           <View style={[styles.planBadge, { backgroundColor: theme.primaryLight }]}>
             <Feather name="zap" size={13} color={theme.primary} />
             <Text style={[styles.planText, { color: theme.primary }]}>
-              {user?.subscription_plan || "Free"} Plan
+              {localPlan === "pro" ? "Pro" : localPlan === "base" ? "Base" : (user?.subscription_plan || "Free")} Plan
             </Text>
           </View>
         </View>

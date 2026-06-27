@@ -3997,6 +3997,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         currentPeriodEnd: sub.currentPeriodEnd,
         priceInr: PREMIUM_PRICE_INR,
         freeCaseLimit: FREE_CASE_LIMIT,
+        credits_balance: sub.aiCredits ?? 0,
       });
     } catch (error) {
       console.error("Subscription status error:", error);
