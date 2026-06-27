@@ -4,8 +4,8 @@ export const RAZORPAY_PLAN_IDS = {
     annual: "plan_base_annual_XXXXXXXX",
   },
   pro: {
-    monthly: "plan_pro_monthly_XXXXXXXX",
-    annual: "plan_pro_annual_XXXXXXXX",
+    monthly: "plan_T6jHSDEbLQz5GU",
+    annual: "plan_T6jIkMQie6c6Q6",
   },
 } as const;
 
