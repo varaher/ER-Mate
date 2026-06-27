@@ -7,6 +7,7 @@ import {
   Pressable,
   ActivityIndicator,
   Alert,
+  Linking,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useFocusEffect } from "@react-navigation/native";
@@ -510,7 +511,28 @@ export default function MySubscriptionsScreen() {
   const handleJoinTeam = () => (navigation as any).navigate("SetupDepartment");
   const handleUpgrade = () => (navigation as any).navigate("Upgrade", {});
   const handleLeave = () =>
-    Alert.alert("Leave Department", "Contact your HOD to be removed from the department roster.");
+    Alert.alert(
+      "Leave Department",
+      "Department removal is managed by your HOD. You can email support if you need help.",
+      [
+        { text: "Email Support", onPress: () => Linking.openURL("mailto:support@ermate.app?subject=Department removal request") },
+        { text: "OK", style: "cancel" },
+      ]
+    );
+  const handleManage = () =>
+    Alert.alert(
+      "Manage Individual Pro",
+      "To cancel or change your subscription, contact our support team.",
+      [
+        {
+          text: "Email Support",
+          onPress: () => Linking.openURL(
+            "mailto:support@ermate.app?subject=Manage%20my%20Individual%20Pro%20subscription"
+          ),
+        },
+        { text: "Close", style: "cancel" },
+      ]
+    );
 
   if (loadingSub) {
     return (
@@ -641,7 +663,7 @@ export default function MySubscriptionsScreen() {
             casesLimit={subStatus?.casesLimit ?? 10}
             renewDate={renewDate}
             onUpgrade={handleUpgrade}
-            onManage={handleUpgrade}
+            onManage={handleManage}
           />
         </View>
       )}

@@ -4203,7 +4203,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         const subEntity = payload?.subscription?.entity;
         const notes = subEntity?.notes as Record<string, string> | undefined;
         const userId = notes?.userId;
-        const plan = (notes?.plan || "base") as "base" | "pro";
+        const plan = (notes?.plan || "pro") as "base" | "pro";
         const cycle = (notes?.cycle || "monthly") as "monthly" | "annual";
         if (userId) {
           await activatePlan(userId, plan, cycle);

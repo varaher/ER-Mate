@@ -240,6 +240,10 @@ export default function UpgradeScreen() {
 
   const activePlan = PLANS.find(p => p.id === selectedPlan)!;
   const isAnnual = billingCycle === "annual";
+  const userCurrentPlan = subStatus?.plan ?? "free";
+  const isPlanActive = (planId: PlanId) =>
+    planId === "free" ? true : userCurrentPlan === planId;
+  const activeCtaDisabled = activePlan.ctaDisabled || isPlanActive(activePlan.id as PlanId);
 
   const teamMonthly = (teamConsultants * 599) + (teamResidents * 399);
   const teamAnnual = (teamConsultants * 5990) + (teamResidents * 3990);
@@ -461,7 +465,7 @@ export default function UpgradeScreen() {
                       ))}
                     </View>
 
-                    {!plan.ctaDisabled && (
+                    {!isPlanActive(plan.id as PlanId) && (
                       <Pressable
                         onPress={() => {
                           handlePlanSelect(plan.id, pi);
@@ -479,6 +483,12 @@ export default function UpgradeScreen() {
                           Start {plan.name} — Free for 1st Month
                         </Text>
                       </Pressable>
+                    )}
+                    {isPlanActive(plan.id as PlanId) && plan.id !== "free" && (
+                      <View style={[s.cardCTA, { backgroundColor: "transparent", borderWidth: 1, borderColor: plan.accent }]}>
+                        <Feather name="check-circle" size={14} color={plan.accent} style={{ marginRight: 6 }} />
+                        <Text style={[s.cardCTAText, { color: plan.accent }]}>Current Plan</Text>
+                      </View>
                     )}
                   </Pressable>
                 </Animated.View>
@@ -662,31 +672,31 @@ export default function UpgradeScreen() {
               style={({ pressed }) => [
                 s.stickyCTA,
                 {
-                  backgroundColor: activePlan.ctaDisabled
+                  backgroundColor: activeCtaDisabled
                     ? (isDarkMode ? "#2D333B" : "#E5E7EB")
                     : activePlan.isDark ? "#6366F1" : "#1DB870",
-                  opacity: (pressed && !activePlan.ctaDisabled) || ctaLoading ? 0.88 : 1,
-                  shadowColor: activePlan.ctaDisabled ? "transparent" : activePlan.isDark ? "#6366F1" : "#1DB870",
-                  shadowOpacity: activePlan.ctaDisabled ? 0 : 0.38,
+                  opacity: (pressed && !activeCtaDisabled) || ctaLoading ? 0.88 : 1,
+                  shadowColor: activeCtaDisabled ? "transparent" : activePlan.isDark ? "#6366F1" : "#1DB870",
+                  shadowOpacity: activeCtaDisabled ? 0 : 0.38,
                   shadowRadius: 16, shadowOffset: { width: 0, height: 6 },
-                  elevation: activePlan.ctaDisabled ? 0 : 8,
+                  elevation: activeCtaDisabled ? 0 : 8,
                 },
               ]}
               onPress={() => handleSubscribe(selectedPlan, billingCycle)}
-              disabled={activePlan.ctaDisabled || ctaLoading}
+              disabled={activeCtaDisabled || ctaLoading}
             >
               {ctaLoading ? (
                 <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
-              ) : !activePlan.ctaDisabled ? (
+              ) : !activeCtaDisabled ? (
                 <Feather name="gift" size={16} color="#FFFFFF" style={{ marginRight: 8 }} />
               ) : null}
               <Text style={[s.stickyCTAText, {
-                color: activePlan.ctaDisabled ? (isDarkMode ? "#6B7280" : "#9CA3AF") : "#FFFFFF",
+                color: activeCtaDisabled ? (isDarkMode ? "#6B7280" : "#9CA3AF") : "#FFFFFF",
               }]}>
-                {ctaLoading ? "Setting up..." : activePlan.ctaDisabled ? "Current Plan" : `Start ${activePlan.name} — Free for 1st Month`}
+                {ctaLoading ? "Setting up..." : activeCtaDisabled ? "Current Plan" : `Start ${activePlan.name} — Free for 1st Month`}
               </Text>
             </Pressable>
-            {!activePlan.ctaDisabled && (
+            {!activeCtaDisabled && (
               <Text style={[s.stickySubtext, { color: theme.textMuted }]}>
                 {isAnnual
                   ? `Free 30 days · Then ${activePlan.annualPrice}/year (${activePlan.annualEquiv}/mo) · Save ${activePlan.annualSavings}`
