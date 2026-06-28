@@ -29,6 +29,11 @@ import { CheckboxGroup } from "@/components/CheckboxGroup";
 import { TextInputField } from "@/components/TextInputField";
 import { AIDiagnosisPanel } from "@/components/AIDiagnosisPanel";
 import SmartDictation, { SmartDictationExtracted } from "@/components/SmartDictation";
+import DictationResultModal, {
+  calculateDictationCompletion,
+  DictationCompletion,
+  getTabStatus,
+} from "@/components/DictationResultModal";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { useDepartment } from "@/context/DepartmentContext";
@@ -550,6 +555,8 @@ export default function CaseSheetScreen() {
   const recordingRef = useRef<Audio.Recording | null>(null);
   const localDraftIdRef = useRef<string | null>(null);
   const caseStartRef = useRef<number>(Date.now());
+  const [dictationCompletion, setDictationCompletion] = useState<DictationCompletion | null>(null);
+  const [showDictationResult, setShowDictationResult] = useState(false);
   const [roundsNudge, setRoundsNudge] = useState<{
     savedMins: number;
     complaint: string;
@@ -1972,6 +1979,9 @@ export default function CaseSheetScreen() {
       if (vbg.hemoglobin) updateFormData("adjuncts", "abgHb", vbg.hemoglobin);
       updateFormData("adjuncts", "abgStatus", "done");
     }
+    const completion = calculateDictationCompletion(data);
+    setDictationCompletion(completion);
+    setShowDictationResult(true);
     handleSave(true);
   };
 
@@ -2148,12 +2158,25 @@ export default function CaseSheetScreen() {
     </View>
   );
 
-  const TabButton = ({ tab, label, icon }: { tab: TabType; label: string; icon: string }) => (
-    <Pressable style={[styles.tabBtn, { backgroundColor: activeTab === tab ? theme.primary : theme.backgroundSecondary }]} onPress={() => setActiveTab(tab)}>
-      <Feather name={icon as any} size={16} color={activeTab === tab ? "#FFFFFF" : theme.textSecondary} />
-      <Text style={[styles.tabBtnText, { color: activeTab === tab ? "#FFFFFF" : theme.textSecondary }]}>{label}</Text>
-    </Pressable>
-  );
+  const TabButton = ({ tab, label, icon }: { tab: TabType; label: string; icon: string }) => {
+    const isActive = activeTab === tab;
+    const tc = dictationCompletion ? dictationCompletion[tab] : null;
+    const status = tc ? getTabStatus(tc) : null;
+    const dotColor =
+      status === "full" ? "#10b981" : status === "partial" ? "#f59e0b" : status === "empty" ? "#ef4444" : null;
+    return (
+      <Pressable
+        style={[styles.tabBtn, { backgroundColor: isActive ? theme.primary : theme.backgroundSecondary }]}
+        onPress={() => setActiveTab(tab)}
+      >
+        <Feather name={icon as any} size={16} color={isActive ? "#FFFFFF" : theme.textSecondary} />
+        <Text style={[styles.tabBtnText, { color: isActive ? "#FFFFFF" : theme.textSecondary }]}>{label}</Text>
+        {dotColor ? (
+          <View style={[styles.tabDot, { backgroundColor: dotColor }]} />
+        ) : null}
+      </Pressable>
+    );
+  };
 
   if (loading) {
     return (
@@ -3597,6 +3620,15 @@ export default function CaseSheetScreen() {
           navigation.navigate("Rounds", { caseId, lensId });
         }}
       />
+      <DictationResultModal
+        visible={showDictationResult}
+        completion={dictationCompletion}
+        onClose={() => setShowDictationResult(false)}
+        onReviewGaps={(tab) => {
+          setShowDictationResult(false);
+          setActiveTab(tab);
+        }}
+      />
       <View style={[styles.bottomNav, { backgroundColor: theme.card, borderTopColor: theme.border, paddingBottom: insets.bottom + Spacing.sm }]}>
         <Pressable style={[styles.navBtn, styles.prevBtn]} onPress={handlePrevious} disabled={activeTab === "patient"}>
           <Feather name="arrow-left" size={18} color={activeTab === "patient" ? theme.textMuted : theme.text} />
@@ -3673,6 +3705,7 @@ const styles = StyleSheet.create({
   tabBar: { paddingHorizontal: Spacing.md, gap: Spacing.sm, paddingVertical: Spacing.sm },
   tabBtn: { flexDirection: "row", alignItems: "center", paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm, borderRadius: BorderRadius.full, gap: Spacing.xs },
   tabBtnText: { fontSize: 13, fontWeight: "600" },
+  tabDot: { width: 7, height: 7, borderRadius: 4, marginLeft: 2 },
   swipeHint: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingBottom: 4, gap: Spacing.xs },
   swipeHintText: { ...Typography.small },
   content: { paddingHorizontal: Spacing.md, paddingTop: 4, paddingBottom: Spacing.md },
