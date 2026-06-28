@@ -8,7 +8,11 @@ import {
   Alert,
   ActivityIndicator,
   ScrollView,
+  Share,
+  Platform,
+  Linking,
 } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -38,6 +42,11 @@ export default function SetupDepartmentScreen() {
   const [nightStart, setNightStart] = useState("22:00");
   const [nightEnd, setNightEnd] = useState("06:00");
   const [loading, setLoading] = useState(false);
+  const [created, setCreated] = useState(false);
+  const [inviteLink, setInviteLink] = useState("");
+  const [createdDeptName, setCreatedDeptName] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [deptId, setDeptId] = useState<number | null>(null);
 
   const handleCreate = async () => {
     if (!deptName.trim()) {
@@ -49,19 +58,51 @@ export default function SetupDepartmentScreen() {
       const res = await fetch(`${getApiUrl()}/api/department/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ name: deptName.trim(), hospitalName: hospitalName.trim(), morningStart, morningEnd, eveningStart, eveningEnd, nightStart, nightEnd, hodName: user?.name || "", hodEmail: (user as any)?.email || "" }),
+        body: JSON.stringify({
+          name: deptName.trim(),
+          hospitalName: hospitalName.trim(),
+          morningStart, morningEnd,
+          eveningStart, eveningEnd,
+          nightStart, nightEnd,
+          hodName: user?.name || "",
+          hodEmail: (user as any)?.email || "",
+        }),
       });
       const data = await res.json();
       if (!res.ok) { Alert.alert("Error", data.error || "Failed to create department"); return; }
       await refresh();
-      Alert.alert("Department Created!", `${deptName} is ready. Now add your team members.`, [
-        { text: "Manage Roster", onPress: () => navigation.replace("ManageRoster") },
-      ]);
+      setCreatedDeptName(deptName.trim());
+      setInviteLink(data.inviteLink || "");
+      setDeptId(data.department?.id || null);
+      setCreated(true);
     } catch {
       Alert.alert("Error", "Network error. Please try again.");
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleCopy = async () => {
+    await Clipboard.setStringAsync(inviteLink);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  };
+
+  const handleWhatsApp = () => {
+    const msg = `Join our ER team on ErMate!\n\nTap the link below, sign in with Google, and fill in your name and role. I'll approve you from my end.\n\n${inviteLink}`;
+    const url = `whatsapp://send?text=${encodeURIComponent(msg)}`;
+    Linking.canOpenURL(url).then((supported) => {
+      if (supported) {
+        Linking.openURL(url);
+      } else {
+        Share.share({ message: msg, title: "Join ErMate Team" });
+      }
+    });
+  };
+
+  const handleShare = () => {
+    const msg = `Join our ER team on ErMate!\n\nTap the link below, sign in with Google, and fill in your name and role. I'll approve you from my end.\n\n${inviteLink}`;
+    Share.share({ message: msg, title: "Join ErMate Team" });
   };
 
   const TimeField = ({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) => (
@@ -78,6 +119,87 @@ export default function SetupDepartmentScreen() {
     </View>
   );
 
+  // ── Success / Invite Link view ──────────────────────────────
+  if (created) {
+    return (
+      <ScrollView
+        style={{ flex: 1, backgroundColor: theme.backgroundDefault }}
+        contentContainerStyle={{ paddingTop: headerHeight + Spacing.lg, paddingHorizontal: Spacing.lg, paddingBottom: 60 }}
+      >
+        <View style={[styles.successBadge, { backgroundColor: theme.primaryLight, borderColor: theme.primary + "30" }]}>
+          <Feather name="check-circle" size={32} color={theme.primary} />
+          <Text style={[styles.successTitle, { color: theme.primary }]}>{createdDeptName} created!</Text>
+          <Text style={[styles.successSub, { color: theme.textSecondary }]}>
+            Share this link with your team. They click it, sign in with Google, and request to join. You approve each one.
+          </Text>
+        </View>
+
+        <Text style={[styles.sectionTitle, { color: theme.textSecondary, marginTop: Spacing.lg }]}>TEAM INVITE LINK</Text>
+        <View style={[styles.linkCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <Text style={[styles.linkText, { color: theme.text }]} numberOfLines={2} selectable>{inviteLink}</Text>
+          <Pressable
+            style={({ pressed }) => [styles.copyBtn, { backgroundColor: copied ? theme.primary : theme.backgroundSecondary, opacity: pressed ? 0.8 : 1 }]}
+            onPress={handleCopy}
+          >
+            <Feather name={copied ? "check" : "copy"} size={16} color={copied ? "#fff" : theme.text} />
+            <Text style={[styles.copyBtnText, { color: copied ? "#fff" : theme.text }]}>{copied ? "Copied!" : "Copy"}</Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.shareRow}>
+          <Pressable
+            style={({ pressed }) => [styles.shareBtn, { backgroundColor: "#25D366", opacity: pressed ? 0.85 : 1 }]}
+            onPress={handleWhatsApp}
+          >
+            <Text style={styles.shareBtnText}>Share on WhatsApp</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.shareBtn, { backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border, opacity: pressed ? 0.85 : 1 }]}
+            onPress={handleShare}
+          >
+            <Feather name="share-2" size={16} color={theme.text} />
+            <Text style={[styles.shareBtnText, { color: theme.text }]}>More</Text>
+          </Pressable>
+        </View>
+
+        <View style={[styles.howItWorksBox, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <Text style={[styles.howTitle, { color: theme.text }]}>How it works</Text>
+          {[
+            "Doctor clicks the link on their phone",
+            "Signs in with Google",
+            "Types their name and role",
+            "You approve them from Manage Roster",
+          ].map((step, i) => (
+            <View key={i} style={styles.stepRow}>
+              <View style={[styles.stepNum, { backgroundColor: theme.primaryLight }]}>
+                <Text style={[styles.stepNumText, { color: theme.primary }]}>{i + 1}</Text>
+              </View>
+              <Text style={[styles.stepText, { color: theme.textSecondary }]}>{step}</Text>
+            </View>
+          ))}
+        </View>
+
+        <View style={styles.actionRow}>
+          <Pressable
+            style={({ pressed }) => [styles.actionBtn, { backgroundColor: theme.primary, opacity: pressed ? 0.85 : 1 }]}
+            onPress={() => navigation.replace("ManageRoster")}
+          >
+            <Feather name="users" size={18} color="#fff" />
+            <Text style={styles.actionBtnText}>Manage Roster</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.actionBtn, { backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border, opacity: pressed ? 0.85 : 1 }]}
+            onPress={() => navigation.replace("MySubscriptions")}
+          >
+            <Feather name="credit-card" size={18} color={theme.text} />
+            <Text style={[styles.actionBtnText, { color: theme.text }]}>Activate Plan</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
+    );
+  }
+
+  // ── Create form ───────────────────────────────────────────
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: theme.backgroundDefault }}
@@ -121,9 +243,9 @@ export default function SetupDepartmentScreen() {
       </View>
 
       <View style={[styles.infoBox, { backgroundColor: theme.primaryLight }]}>
-        <Feather name="info" size={16} color={theme.primary} />
+        <Feather name="link" size={16} color={theme.primary} />
         <Text style={[styles.infoText, { color: theme.primary }]}>
-          Default capacity: 2 consultants + 6 residents per shift. You can invite members after creating the department.
+          After creating your department, you'll get a shareable link to send to your team via WhatsApp.
         </Text>
       </View>
 
@@ -155,8 +277,28 @@ const styles = StyleSheet.create({
   timeLabel: { fontSize: 12, marginBottom: 4, fontWeight: "500" },
   timeInput: { borderWidth: 1, borderRadius: BorderRadius.sm, paddingHorizontal: 10, paddingVertical: 8, fontSize: 16, textAlign: "center" },
   divider: { height: 1, marginVertical: Spacing.md },
-  infoBox: { flexDirection: "row", gap: 10, padding: Spacing.md, borderRadius: BorderRadius.md, marginTop: Spacing.sm, marginBottom: Spacing.lg },
+  infoBox: { flexDirection: "row", gap: 10, padding: Spacing.md, borderRadius: BorderRadius.md, marginTop: Spacing.sm, marginBottom: Spacing.lg, alignItems: "flex-start" },
   infoText: { flex: 1, fontSize: 14, lineHeight: 18 },
   createBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 16, borderRadius: BorderRadius.lg },
   createBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  // Success state
+  successBadge: { borderRadius: BorderRadius.lg, padding: Spacing.xl, alignItems: "center", gap: Spacing.sm, marginBottom: Spacing.lg, borderWidth: 1 },
+  successTitle: { fontSize: 22, fontWeight: "700", marginTop: 4 },
+  successSub: { fontSize: 14, textAlign: "center", lineHeight: 20 },
+  linkCard: { borderRadius: BorderRadius.lg, borderWidth: 1, padding: Spacing.md, marginBottom: Spacing.md, gap: Spacing.sm },
+  linkText: { fontSize: 13, fontFamily: "monospace", lineHeight: 18 },
+  copyBtn: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", paddingHorizontal: 14, paddingVertical: 8, borderRadius: BorderRadius.md },
+  copyBtnText: { fontSize: 14, fontWeight: "700" },
+  shareRow: { flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.lg },
+  shareBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 13, borderRadius: BorderRadius.md },
+  shareBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+  howItWorksBox: { borderRadius: BorderRadius.lg, borderWidth: 1, padding: Spacing.md, marginBottom: Spacing.lg },
+  howTitle: { fontSize: 15, fontWeight: "700", marginBottom: Spacing.md },
+  stepRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: Spacing.sm },
+  stepNum: { width: 26, height: 26, borderRadius: 13, alignItems: "center", justifyContent: "center" },
+  stepNumText: { fontSize: 13, fontWeight: "700" },
+  stepText: { flex: 1, fontSize: 14, lineHeight: 18 },
+  actionRow: { flexDirection: "row", gap: Spacing.sm },
+  actionBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 14, borderRadius: BorderRadius.lg },
+  actionBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
 });

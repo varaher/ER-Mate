@@ -1,0 +1,305 @@
+Let me understand the exact flow you want before looking at any code.
+
+---
+
+**What you're describing:**
+
+```
+HOD creates team
+      ↓
+ErMate generates a shareable invite link
+      ↓
+HOD shares link via WhatsApp to doctors
+      ↓
+Doctor clicks link → opens ErMate
+      ↓
+Doctor signs in with Google
+      ↓
+Doctor types their name and post (role)
+      ↓
+HOD sees pending request → approves each one
+      ↓
+Doctor is now part of the team
+      ↓
+Subscription activates for the team
+```
+
+---
+
+**This is simpler than what was built before.** No email invites, no manual email entry by HOD. Just a shareable link — exactly like WhatsApp groups or Google Meet.
+
+---
+
+**Let me check what's currently built before telling your developer what to fix.**
+
+No code files uploaded — I'll work from what we know about the codebase and give your developer precise instructions.
+
+---
+
+## The Complete Flow — Redesigned
+
+---
+
+### Flow 1 — HOD Creates Team and Gets Link
+
+```
+HOD goes to Profile → My Department
+Taps "Create Department"
+Fills:
+  Department name: City Emergency
+  Hospital: Rajagiri Hospital
+  Shifts: Morning 06:00-14:00
+          Evening 14:00-22:00
+          Night   22:00-06:00
+Taps "Create Department"
+         ↓
+Backend generates unique invite token:
+  token = crypto.randomUUID()
+  invite_link = https://ermate.in/join?token=abc123xyz
+         ↓
+HOD sees:
+┌─────────────────────────────┐
+│  City Emergency created ✓   │
+│                             │
+│  Your team invite link:     │
+│  ermate.in/join?token=abc.. │
+│                             │
+│  [Copy Link]  [WhatsApp]    │
+│                             │
+│  Share this with your team. │
+│  They click, sign in with   │
+│  Google, and request to     │
+│  join. You approve each one.│
+└─────────────────────────────┘
+```
+
+---
+
+### Flow 2 — Doctor Receives and Clicks Link
+
+```
+Doctor gets WhatsApp message from HOD:
+"Join our ER team on ErMate:
+ ermate.in/join?token=abc123xyz"
+         ↓
+Doctor taps link → browser opens ermate.in
+         ↓
+ErMate reads the token from URL
+Shows JOIN SCREEN:
+┌─────────────────────────────┐
+│  You've been invited to     │
+│  City Emergency             │
+│  Rajagiri Hospital          │
+│                             │
+│  Sign in to request access: │
+│  [Continue with Google]     │
+└─────────────────────────────┘
+         ↓
+Doctor signs in with Google
+         ↓
+If new to ErMate → account created automatically
+If existing ErMate user → logged in
+         ↓
+Doctor fills join form:
+┌─────────────────────────────┐
+│  Join City Emergency        │
+│                             │
+│  Your name:                 │
+│  [Dr. Priya Nair       ]    │
+│                             │
+│  Your role:                 │
+│  ○ Consultant               │
+│  ● Resident                 │
+│                             │
+│  [Request to Join]          │
+└─────────────────────────────┘
+         ↓
+Backend creates department_members row:
+  status: "pending"
+  role: "resident"
+  name: "Dr. Priya Nair"
+         ↓
+Doctor sees:
+"Request sent. Your HOD will
+ approve you shortly."
+```
+
+---
+
+### Flow 3 — HOD Approves Members
+
+```
+HOD opens ErMate
+Sees notification badge on Department tab:
+"2 join requests pending"
+         ↓
+HOD goes to Department → Pending Requests:
+
+┌─────────────────────────────┐
+│  Pending Requests (2)       │
+│                             │
+│  Dr. Priya Nair             │
+│  Role requested: Resident   │
+│  [Approve] [Decline]        │
+│                             │
+│  Dr. Rahul Menon            │
+│  Role requested: Consultant │
+│  [Approve] [Decline]        │
+└─────────────────────────────┘
+         ↓
+HOD taps Approve
+         ↓
+department_members status → "active"
+Doctor gets push notification:
+"Dr. Neeraj approved your request
+ to join City Emergency. 
+ You can now check in to shifts."
+```
+
+---
+
+### Flow 4 — Subscription Links to Team
+
+```
+After HOD approves the first doctor:
+System checks: is billing active?
+         ↓
+If NOT active:
+  Banner shows on HOD dashboard:
+  "You have 6 active members.
+   Activate Team plan to unlock
+   all features for your team."
+  
+  [Activate Team Plan →]
+  
+  Tapping opens the subscription screen
+  with roster pre-filled:
+    Consultants: 2 (from approved members)
+    Residents:   4 (from approved members)
+    Total:       ₹3,196/month
+  
+  HOD pays via Razorpay
+  Team features unlock for everyone
+         ↓
+If billing ALREADY active:
+  New member added → bill updates
+  next cycle automatically
+```
+
+---
+
+## What Your Developer Needs to Build
+
+**Tell your developer exactly this:**
+
+---
+
+**Backend changes:**
+
+```
+1. Add invite_token to departments table:
+   invite_token TEXT UNIQUE
+   Generate on department creation:
+   invite_token = crypto.randomBytes(16).toString('hex')
+
+2. New route — GET /api/department/join/:token
+   Returns: { departmentName, hospitalName, valid: true/false }
+   Used by join screen to show department info
+
+3. New route — POST /api/department/join/:token
+   Body: { name, role, googleUserId, email }
+   Creates department_members row with status: "pending"
+   Sends push notification to HOD
+
+4. New route — GET /api/department/:id/pending
+   Returns all pending member requests (HOD only)
+
+5. New route — POST /api/department/members/:memberId/approve
+   Updates status → "active"
+   Sends push notification to the approved doctor
+
+6. New route — POST /api/department/members/:memberId/decline
+   Updates status → "declined"
+
+7. Regenerate invite link:
+   POST /api/department/:id/regenerate-invite
+   Creates new token (old link stops working)
+```
+
+---
+
+**Frontend changes:**
+
+```
+1. SetupDepartmentScreen:
+   After successful creation → show invite link screen
+   [Copy Link] button → copies to clipboard
+   [Share on WhatsApp] → opens WhatsApp with pre-filled message:
+   "Join our ER team on ErMate:
+    https://ermate.in/join?token=XXXXX"
+
+2. New screen: JoinDepartmentScreen
+   Route: ermate.in/join?token=XXXXX
+   Shows department name from token lookup
+   Google Sign In button
+   After sign in → name + role form
+   Submit → POST /api/department/join/:token
+
+3. HOD Dashboard/Department screen:
+   Pending requests badge
+   Approve/Decline buttons
+
+4. Subscription screen:
+   Pre-fill calculator from actual approved member count
+   Link "Activate Team Plan" from department screen
+```
+
+---
+
+**Database — one column to add:**
+
+```sql
+ALTER TABLE departments 
+ADD COLUMN invite_token TEXT UNIQUE;
+
+-- Generate for existing departments:
+UPDATE departments 
+SET invite_token = encode(gen_random_bytes(16), 'hex')
+WHERE invite_token IS NULL;
+```
+
+---
+
+## Why the Current Flow Was Broken
+
+The old flow required HOD to type each doctor's email manually. That's not how Indian ER teams communicate — they use WhatsApp groups. A shareable link is the right model.
+
+This new flow:
+- HOD creates department → gets one link
+- Shares to WhatsApp group — all 36 doctors get it
+- Each doctor clicks, signs in with Google, fills name and role
+- HOD approves each from one screen
+- Subscription activates for the whole team
+
+Much simpler. Much more likely to actually get used.
+
+---
+
+**Priority order for developer:**
+
+```
+Day 1: Add invite_token to DB
+        GET /join/:token route
+        POST /join/:token route
+        JoinDepartmentScreen
+
+Day 2: HOD pending requests screen
+        Approve/Decline routes
+        Push notifications
+
+Day 3: WhatsApp share button
+        Subscription pre-fill from member count
+        Link subscription screen to department
+```
+
+Show this to your developer and ask them to start with Day 1 tasks. The join link flow is the foundation everything else depends on.

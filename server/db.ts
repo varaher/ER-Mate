@@ -153,7 +153,15 @@ export async function ensureDepartmentTables(): Promise<void> {
     await p.query(`
       ALTER TABLE department_members ADD COLUMN IF NOT EXISTS name TEXT;
       ALTER TABLE department_members ADD COLUMN IF NOT EXISTS email TEXT;
+      ALTER TABLE departments ADD COLUMN IF NOT EXISTS invite_token TEXT UNIQUE;
     `);
+    // Generate invite_token for any departments that don't have one (Node.js side)
+    const depts = await p.query("SELECT id FROM departments WHERE invite_token IS NULL");
+    const cryptoM = await import("crypto");
+    for (const row of depts.rows) {
+      const tok = cryptoM.randomBytes(16).toString("hex");
+      await p.query("UPDATE departments SET invite_token = $1 WHERE id = $2", [tok, row.id]);
+    }
     console.log("[DB] Department tables ready");
   } catch (e) {
     console.error("[DB] Failed to ensure department tables:", e);

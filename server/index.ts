@@ -424,6 +424,14 @@ function setupErrorHandler(app: express.Application) {
     res.json({ build, ts: Date.now() });
   });
 
+  // Serve join-department page BEFORE Expo catches all paths
+  app.get("/join", (_req: Request, res: Response) => {
+    const filePath = path.resolve(process.cwd(), "server/templates/join-department.html");
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache");
+    res.sendFile(filePath);
+  });
+
   // Serve reset-password page BEFORE Expo catches all paths
   app.get("/reset-password", (_req: Request, res: Response) => {
     const filePath = path.resolve(process.cwd(), "server/templates/reset-password.html");
