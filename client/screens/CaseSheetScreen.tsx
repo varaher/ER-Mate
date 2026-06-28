@@ -1892,6 +1892,9 @@ export default function CaseSheetScreen() {
       if (data.examFindings.general) {
         updateExamData("general", "notes", (examData.general.notes ? examData.general.notes + " " : "") + data.examFindings.general);
       }
+      if (data.examFindings.heent) {
+        updateExamData("general", "notes", (examData.general.notes ? examData.general.notes + " HEENT: " : "HEENT: ") + data.examFindings.heent);
+      }
       if (data.examFindings.cvs) {
         updateExamData("cvs", "notes", (examData.cvs.notes ? examData.cvs.notes + " " : "") + data.examFindings.cvs);
       }
@@ -1903,6 +1906,12 @@ export default function CaseSheetScreen() {
       }
       if (data.examFindings.cns) {
         updateExamData("cns", "notes", (examData.cns.notes ? examData.cns.notes + " " : "") + data.examFindings.cns);
+      }
+      if (data.examFindings.musculoskeletal) {
+        updateExamData("extremities", "notes", (examData.extremities.notes ? examData.extremities.notes + " " : "") + data.examFindings.musculoskeletal);
+      }
+      if (data.examFindings.skin) {
+        updateExamData("general", "notes", (examData.general.notes ? examData.general.notes + " Skin: " : "Skin: ") + data.examFindings.skin);
       }
     }
     if (data.restAllNormal) {

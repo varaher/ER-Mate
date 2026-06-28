@@ -112,9 +112,10 @@ export function calculateDictationCompletion(
         f(data.examFindings?.cns) || !!data.restAllNormal,
         !!data.restAllNormal,
         f(data.examFindings?.skin),
+        f(data.examFindings?.musculoskeletal) || !!data.restAllNormal,
       ] as boolean[]
     ).filter(Boolean).length,
-    total: 8,
+    total: 9,
   };
 
   const treatment: TabCompletion = {
@@ -140,9 +141,10 @@ export function calculateDictationCompletion(
       [
         !!(data.diagnosis && data.diagnosis.length > 0),
         !!(data.differentialDiagnosis && data.differentialDiagnosis.length > 0),
+        f(data.treatmentNotes),
       ] as boolean[]
     ).filter(Boolean).length,
-    total: 4,
+    total: 3,
   };
 
   const totalFilled =

@@ -11,6 +11,7 @@ import VoiceRecorder, { ExtractedClinicalData } from "@/components/VoiceRecorder
 import { DocumentScanner } from "@/components/DocumentScanner";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import SmartDictation, { SmartDictationExtracted } from "@/components/SmartDictation";
+import DictationResultModal, { calculateDictationCompletion, getTabStatus, DictationCompletion, TabType } from "@/components/DictationResultModal";
 import { AIDiagnosisPanel } from "@/components/AIDiagnosisPanel";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
@@ -298,6 +299,8 @@ export default function PediatricCaseSheetScreen() {
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>("patient");
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [dictationCompletion, setDictationCompletion] = useState<DictationCompletion | null>(null);
+  const [showDictationResult, setShowDictationResult] = useState(false);
   const [patient, setPatient] = useState<PatientInfo | null>(null);
 
   const [patData, setPatData] = useState<PATFormData>({
@@ -1140,6 +1143,9 @@ export default function PediatricCaseSheetScreen() {
     if (data.imagingOrdered) {
       setTreatmentData((prev) => ({ ...prev, imaging: prev.imaging ? prev.imaging + ", " + data.imagingOrdered : data.imagingOrdered! }));
     }
+    const completion = calculateDictationCompletion(data);
+    setDictationCompletion(completion);
+    setShowDictationResult(true);
     handleSave(true);
   };
 
@@ -1322,12 +1328,23 @@ export default function PediatricCaseSheetScreen() {
           </View>
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabBar}>
-          {TABS.map((tab) => (
-            <Pressable key={tab.key} style={[styles.tabBtn, { backgroundColor: activeTab === tab.key ? theme.primary : "transparent" }]} onPress={() => setActiveTab(tab.key)}>
-              <Feather name={tab.icon as any} size={16} color={activeTab === tab.key ? "#FFFFFF" : theme.textSecondary} />
-              <Text style={[styles.tabBtnText, { color: activeTab === tab.key ? "#FFFFFF" : theme.textSecondary }]}>{tab.label}</Text>
-            </Pressable>
-          ))}
+          {TABS.map((tab) => {
+            const isActive = activeTab === tab.key;
+            const tc = dictationCompletion ? dictationCompletion[tab.key as TabType] : null;
+            const dotStatus = tc ? getTabStatus(tc) : null;
+            const dotColor = dotStatus === "full" ? "#10b981" : dotStatus === "partial" ? "#f59e0b" : dotStatus === "empty" ? "#ef4444" : null;
+            return (
+              <Pressable key={tab.key} style={[styles.tabBtn, { backgroundColor: isActive ? theme.primary : "transparent" }]} onPress={() => setActiveTab(tab.key)}>
+                <View style={{ position: "relative" }}>
+                  <Feather name={tab.icon as any} size={16} color={isActive ? "#FFFFFF" : theme.textSecondary} />
+                  {dotColor ? (
+                    <View style={{ position: "absolute", top: -3, right: -4, width: 7, height: 7, borderRadius: 3.5, backgroundColor: dotColor, borderWidth: 1, borderColor: isActive ? theme.primary : theme.backgroundSecondary }} />
+                  ) : null}
+                </View>
+                <Text style={[styles.tabBtnText, { color: isActive ? "#FFFFFF" : theme.textSecondary }]}>{tab.label}</Text>
+              </Pressable>
+            );
+          })}
         </ScrollView>
       </View>
       <KeyboardAwareScrollViewCompat contentContainerStyle={[styles.content, { paddingBottom: 100 }]}>
@@ -2300,6 +2317,15 @@ export default function PediatricCaseSheetScreen() {
           </View>
         </View>
       </Modal>
+      <DictationResultModal
+        visible={showDictationResult}
+        completion={dictationCompletion}
+        onClose={() => setShowDictationResult(false)}
+        onReviewGaps={(firstGapTab) => {
+          setShowDictationResult(false);
+          setActiveTab(firstGapTab as TabKey);
+        }}
+      />
     </View>
   );
 }
