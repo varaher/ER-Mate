@@ -138,7 +138,7 @@ export default function ShiftSelectScreen() {
                     },
                   ]}
                   onPress={() => !isFull && handleCheckIn(shift)}
-                  disabled={isFull || isCheckingThisIn !== null}
+                  disabled={isFull || !!checkingIn}
                 >
                   <View style={[styles.shiftColorBar, { backgroundColor: shiftColor }]} />
                   <View style={styles.shiftContent}>
@@ -183,7 +183,7 @@ export default function ShiftSelectScreen() {
                           { backgroundColor: shiftColor, opacity: pressed ? 0.85 : 1 },
                         ]}
                         onPress={() => handleCheckIn(shift)}
-                        disabled={isCheckingThisIn !== null}
+                        disabled={!!checkingIn}
                       >
                         {isCheckingThisIn ? (
                           <ActivityIndicator size="small" color="#fff" />
