@@ -9,6 +9,7 @@ import {
   Pressable,
   Platform,
   Modal,
+  useWindowDimensions,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -37,6 +38,8 @@ export default function LoginScreen() {
   const { login, googleSignIn, loginWithToken } = useAuth();
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const isDesktop = Platform.OS === "web" && width >= 900;
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -111,6 +114,13 @@ export default function LoginScreen() {
   useEffect(() => {
     return () => stopQrPoll();
   }, []);
+
+  // Auto-start QR on desktop
+  useEffect(() => {
+    if (isDesktop && qrStatus === "idle") {
+      startQrLogin();
+    }
+  }, [isDesktop]);
 
   useEffect(() => {
     warmUpBackend((msg) => setServerStatus(msg));
@@ -389,224 +399,267 @@ export default function LoginScreen() {
     }
   };
 
-  return (
-    <View style={[styles.container, { backgroundColor: theme.backgroundDefault }]}>
-      <KeyboardAwareScrollViewCompat
-        contentContainerStyle={[
-          styles.content,
-          { paddingTop: insets.top + Spacing["4xl"], paddingBottom: insets.bottom + Spacing["4xl"] },
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.header}>
-          <View style={[styles.iconContainer, { backgroundColor: theme.primary }]}>
-            <Feather name="activity" size={40} color="#FFFFFF" />
-          </View>
-          <Text style={[styles.title, { color: theme.text }]}>ErMate</Text>
-          <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-            Emergency Room EMR
-          </Text>
-          {serverStatus ? (
-            <View style={styles.serverStatusRow}>
-              <ActivityIndicator size="small" color={theme.primary} style={{ transform: [{ scale: 0.7 }] }} />
-              <Text style={[styles.serverStatusText, { color: theme.textMuted }]}>{serverStatus}</Text>
-            </View>
-          ) : null}
+  const formContent = (
+    <>
+      <View style={styles.header}>
+        <View style={[styles.iconContainer, { backgroundColor: theme.primary }]}>
+          <Feather name="activity" size={40} color="#FFFFFF" />
         </View>
+        <Text style={[styles.title, { color: theme.text }]}>ErMate</Text>
+        <Text style={[styles.subtitle, { color: theme.textSecondary }]}>Emergency Room EMR</Text>
+        {serverStatus ? (
+          <View style={styles.serverStatusRow}>
+            <ActivityIndicator size="small" color={theme.primary} style={{ transform: [{ scale: 0.7 }] }} />
+            <Text style={[styles.serverStatusText, { color: theme.textMuted }]}>{serverStatus}</Text>
+          </View>
+        ) : null}
+      </View>
 
+      <Pressable
+        style={({ pressed }) => [styles.googleButton, { backgroundColor: theme.card, borderColor: theme.border, opacity: pressed || googleLoading || !request ? 0.8 : 1 }]}
+        onPress={handleGoogleSignIn}
+        disabled={googleLoading || !request}
+      >
+        {googleLoading ? (
+          <ActivityIndicator color={theme.text} size="small" />
+        ) : (
+          <>
+            <View style={styles.googleIconContainer}><Text style={styles.googleG}>G</Text></View>
+            <Text style={[styles.googleButtonText, { color: theme.text }]}>Sign in with Google</Text>
+          </>
+        )}
+      </Pressable>
+
+      {googleError ? (
+        <View style={[styles.errorBox, { backgroundColor: "#fee2e2", borderColor: "#fca5a5" }]}>
+          <Text style={{ color: "#b91c1c", fontSize: 13, textAlign: "center" }}>{googleError}</Text>
+        </View>
+      ) : null}
+
+      {isAppleAvailable ? (
         <Pressable
-          style={({ pressed }) => [
-            styles.googleButton,
-            {
-              backgroundColor: theme.card,
-              borderColor: theme.border,
-              opacity: pressed || googleLoading || !request ? 0.8 : 1,
-            },
-          ]}
-          onPress={handleGoogleSignIn}
-          disabled={googleLoading || !request}
+          style={({ pressed }) => [styles.appleButton, { opacity: pressed || appleLoading ? 0.8 : 1 }]}
+          onPress={handleAppleSignIn}
+          disabled={appleLoading}
         >
-          {googleLoading ? (
-            <ActivityIndicator color={theme.text} size="small" />
+          {appleLoading ? (
+            <ActivityIndicator color="#FFFFFF" size="small" />
           ) : (
             <>
-              <View style={styles.googleIconContainer}>
-                <Text style={styles.googleG}>G</Text>
-              </View>
-              <Text style={[styles.googleButtonText, { color: theme.text }]}>
-                Sign in with Google
-              </Text>
+              <Feather name="command" size={20} color="#FFFFFF" />
+              <Text style={styles.appleButtonText}>Sign in with Apple</Text>
             </>
           )}
         </Pressable>
+      ) : null}
 
-        {googleError ? (
-          <View style={[styles.errorBox, { backgroundColor: "#fee2e2", borderColor: "#fca5a5" }]}>
-            <Text style={{ color: "#b91c1c", fontSize: 13, textAlign: "center" }}>
-              {googleError}
-            </Text>
+      <View style={styles.dividerRow}>
+        <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
+        <Text style={[styles.dividerText, { color: theme.textMuted }]}>or</Text>
+        <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
+      </View>
+
+      <View style={styles.form}>
+        <View style={styles.inputGroup}>
+          <Text style={[styles.label, { color: theme.text }]}>Email</Text>
+          <View style={[styles.inputContainer, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <Feather name="mail" size={20} color={theme.textMuted} style={styles.inputIcon} />
+            <TextInput
+              style={[styles.input, { color: theme.text }]}
+              placeholder="Enter your email"
+              placeholderTextColor={theme.textMuted}
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoComplete="email"
+            />
           </View>
-        ) : null}
-
-        {isAppleAvailable ? (
-          <Pressable
-            style={({ pressed }) => [
-              styles.appleButton,
-              { opacity: pressed || appleLoading ? 0.8 : 1 },
-            ]}
-            onPress={handleAppleSignIn}
-            disabled={appleLoading}
-          >
-            {appleLoading ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
-            ) : (
-              <>
-                <Feather name="command" size={20} color="#FFFFFF" />
-                <Text style={styles.appleButtonText}>Sign in with Apple</Text>
-              </>
-            )}
-          </Pressable>
-        ) : null}
-
-        <View style={styles.dividerRow}>
-          <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
-          <Text style={[styles.dividerText, { color: theme.textMuted }]}>or</Text>
-          <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
         </View>
 
-        <View style={styles.form}>
-          <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: theme.text }]}>Email</Text>
-            <View style={[styles.inputContainer, { backgroundColor: theme.card, borderColor: theme.border }]}>
-              <Feather name="mail" size={20} color={theme.textMuted} style={styles.inputIcon} />
-              <TextInput
-                style={[styles.input, { color: theme.text }]}
-                placeholder="Enter your email"
-                placeholderTextColor={theme.textMuted}
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoComplete="email"
-              />
-            </View>
+        <View style={styles.inputGroup}>
+          <Text style={[styles.label, { color: theme.text }]}>Password</Text>
+          <View style={[styles.inputContainer, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <Feather name="lock" size={20} color={theme.textMuted} style={styles.inputIcon} />
+            <TextInput
+              style={[styles.input, { color: theme.text }]}
+              placeholder="Enter your password"
+              placeholderTextColor={theme.textMuted}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+              autoCapitalize="none"
+            />
+            <Pressable onPress={() => setShowPassword(!showPassword)} style={styles.eyeButton}>
+              <Feather name={showPassword ? "eye-off" : "eye"} size={20} color={theme.textMuted} />
+            </Pressable>
           </View>
+        </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: theme.text }]}>Password</Text>
-            <View style={[styles.inputContainer, { backgroundColor: theme.card, borderColor: theme.border }]}>
-              <Feather name="lock" size={20} color={theme.textMuted} style={styles.inputIcon} />
-              <TextInput
-                style={[styles.input, { color: theme.text }]}
-                placeholder="Enter your password"
-                placeholderTextColor={theme.textMuted}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-                autoCapitalize="none"
-              />
-              <Pressable onPress={() => setShowPassword(!showPassword)} style={styles.eyeButton}>
-                <Feather name={showPassword ? "eye-off" : "eye"} size={20} color={theme.textMuted} />
+        <Pressable onPress={() => { setForgotEmail(email); setForgotSent(false); setShowForgotModal(true); }} style={styles.forgotButton}>
+          <Text style={[styles.forgotText, { color: theme.primary }]}>Forgot Password?</Text>
+        </Pressable>
+        <Pressable
+          style={({ pressed }) => [styles.button, { backgroundColor: theme.primary, opacity: pressed || loading ? 0.8 : 1 }]}
+          onPress={handleLogin}
+          disabled={loading}
+        >
+          {loading ? (
+            <View style={styles.loadingRow}>
+              <ActivityIndicator color="#FFFFFF" size="small" />
+              <Text style={styles.loadingText}>Signing in...</Text>
+            </View>
+          ) : (
+            <Text style={styles.buttonText}>Sign In</Text>
+          )}
+        </Pressable>
+        {loading && loadingMessage ? (
+          <Text style={[styles.loadingHint, { color: theme.textMuted }]}>{loadingMessage}</Text>
+        ) : null}
+        <Pressable
+          style={({ pressed }) => [styles.secondaryButton, { opacity: pressed ? 0.7 : 1 }]}
+          onPress={() => navigation.navigate("Register")}
+        >
+          <Text style={[styles.secondaryButtonText, { color: theme.textSecondary }]}>
+            Don't have an account?{" "}
+            <Text style={{ color: theme.primary, fontWeight: "600" }}>Sign Up</Text>
+          </Text>
+        </Pressable>
+
+        {/* QR option — mobile web only (desktop shows it in the right panel) */}
+        {Platform.OS === "web" && !isDesktop ? (
+          <View style={styles.qrSection}>
+            <View style={styles.qrDividerRow}>
+              <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
+              <Text style={[styles.dividerText, { color: theme.textMuted }]}>or</Text>
+              <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
+            </View>
+            {!showQrLogin ? (
+              <Pressable
+                style={({ pressed }) => [styles.qrButton, { borderColor: theme.primary, opacity: pressed ? 0.7 : 1 }]}
+                onPress={startQrLogin}
+              >
+                <Feather name="smartphone" size={18} color={theme.primary} />
+                <Text style={[styles.qrButtonText, { color: theme.primary }]}>Sign in with Phone QR</Text>
               </Pressable>
-            </View>
+            ) : (
+              <View style={[styles.qrBox, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                <Text style={[styles.qrTitle, { color: theme.text }]}>Scan with ErMate on your phone</Text>
+                {qrStatus === "loading" ? (
+                  <ActivityIndicator color={theme.primary} style={{ marginVertical: Spacing.xl }} />
+                ) : qrStatus === "expired" ? (
+                  <View style={styles.qrExpiredBox}>
+                    <Text style={[styles.qrExpiredText, { color: theme.danger || "#ef4444" }]}>QR code expired</Text>
+                    <Pressable style={[styles.qrRetryBtn, { backgroundColor: theme.primary }]} onPress={startQrLogin}>
+                      <Text style={styles.qrRetryText}>Generate New QR</Text>
+                    </Pressable>
+                  </View>
+                ) : qrUrl ? (
+                  <View style={styles.qrImageBox}>
+                    {React.createElement(require("react-native").Image, {
+                      source: { uri: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrUrl)}` },
+                      style: styles.qrImage,
+                      resizeMode: "contain",
+                    })}
+                    <Text style={[styles.qrHint, { color: theme.textMuted }]}>Open ErMate app → Profile → Link to Web → Approve this session</Text>
+                  </View>
+                ) : null}
+                <Pressable onPress={() => { stopQrPoll(); setShowQrLogin(false); setQrStatus("idle"); }}>
+                  <Text style={[styles.qrCancel, { color: theme.textMuted }]}>Cancel</Text>
+                </Pressable>
+              </View>
+            )}
+          </View>
+        ) : null}
+      </View>
+
+      <View style={styles.footer}>
+        <Text style={[styles.footerText, { color: theme.textMuted }]}>For Emergency Medicine Professionals</Text>
+      </View>
+    </>
+  );
+
+  return (
+    <View style={[styles.container, { backgroundColor: theme.backgroundDefault }]}>
+      {isDesktop ? (
+        /* ── Desktop: two-column layout ── */
+        <View style={styles.desktopWrapper}>
+          {/* Left panel — sign-in form */}
+          <View style={styles.desktopLeft}>
+            <KeyboardAwareScrollViewCompat
+              contentContainerStyle={[styles.content, styles.desktopFormContent, { paddingTop: insets.top + Spacing["4xl"], paddingBottom: insets.bottom + Spacing["4xl"] }]}
+              showsVerticalScrollIndicator={false}
+            >
+              {formContent}
+            </KeyboardAwareScrollViewCompat>
           </View>
 
-          <Pressable
-            onPress={() => {
-              setForgotEmail(email);
-              setForgotSent(false);
-              setShowForgotModal(true);
-            }}
-            style={styles.forgotButton}
-          >
-            <Text style={[styles.forgotText, { color: theme.primary }]}>Forgot Password?</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
-              styles.button,
-              { backgroundColor: theme.primary, opacity: pressed || loading ? 0.8 : 1 },
-            ]}
-            onPress={handleLogin}
-            disabled={loading}
-          >
-            {loading ? (
-              <View style={styles.loadingRow}>
-                <ActivityIndicator color="#FFFFFF" size="small" />
-                <Text style={styles.loadingText}>Signing in...</Text>
+          {/* Right panel — Link your device */}
+          <View style={[styles.desktopRight, { backgroundColor: theme.card, borderLeftColor: theme.border }]}>
+            <View style={styles.desktopQrPanel}>
+              <View style={[styles.desktopQrIconWrap, { backgroundColor: theme.primary + "18" }]}>
+                <Feather name="smartphone" size={34} color={theme.primary} />
               </View>
-            ) : (
-              <Text style={styles.buttonText}>Sign In</Text>
-            )}
-          </Pressable>
-          {loading && loadingMessage ? (
-            <Text style={[styles.loadingHint, { color: theme.textMuted }]}>{loadingMessage}</Text>
-          ) : null}
-          <Pressable
-            style={({ pressed }) => [
-              styles.secondaryButton,
-              { opacity: pressed ? 0.7 : 1 },
-            ]}
-            onPress={() => navigation.navigate("Register")}
-          >
-            <Text style={[styles.secondaryButtonText, { color: theme.textSecondary }]}>
-              Don't have an account?{" "}
-              <Text style={{ color: theme.primary, fontWeight: "600" }}>Sign Up</Text>
-            </Text>
-          </Pressable>
+              <Text style={[styles.desktopQrTitle, { color: theme.text }]}>Link your device</Text>
+              <Text style={[styles.desktopQrSubtitle, { color: theme.textSecondary }]}>
+                Already using ErMate on your phone?{"\n"}Scan to log in instantly — no password needed.
+              </Text>
 
-          {Platform.OS === "web" ? (
-            <View style={styles.qrSection}>
-              <View style={styles.qrDividerRow}>
-                <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
-                <Text style={[styles.dividerText, { color: theme.textMuted }]}>or</Text>
-                <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
-              </View>
-              {!showQrLogin ? (
-                <Pressable
-                  style={({ pressed }) => [styles.qrButton, { borderColor: theme.primary, opacity: pressed ? 0.7 : 1 }]}
-                  onPress={startQrLogin}
-                >
-                  <Feather name="smartphone" size={18} color={theme.primary} />
-                  <Text style={[styles.qrButtonText, { color: theme.primary }]}>Sign in with Phone QR</Text>
-                </Pressable>
-              ) : (
-                <View style={[styles.qrBox, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                  <Text style={[styles.qrTitle, { color: theme.text }]}>Scan with ErMate on your phone</Text>
-                  {qrStatus === "loading" ? (
-                    <ActivityIndicator color={theme.primary} style={{ marginVertical: Spacing.xl }} />
-                  ) : qrStatus === "expired" ? (
-                    <View style={styles.qrExpiredBox}>
-                      <Text style={[styles.qrExpiredText, { color: theme.danger || "#ef4444" }]}>QR code expired</Text>
-                      <Pressable style={[styles.qrRetryBtn, { backgroundColor: theme.primary }]} onPress={startQrLogin}>
-                        <Text style={styles.qrRetryText}>Generate New QR</Text>
-                      </Pressable>
-                    </View>
-                  ) : qrUrl ? (
-                    <View style={styles.qrImageBox}>
-                      {/* eslint-disable-next-line @typescript-eslint/no-var-requires */}
-                      {React.createElement(require("react-native").Image, {
-                        source: { uri: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrUrl)}` },
-                        style: styles.qrImage,
-                        resizeMode: "contain",
-                      })}
-                      <Text style={[styles.qrHint, { color: theme.textMuted }]}>Open ErMate app → Profile → Link to Web → Approve this session</Text>
-                    </View>
-                  ) : null}
-                  <Pressable onPress={() => { stopQrPoll(); setShowQrLogin(false); setQrStatus("idle"); }}>
-                    <Text style={[styles.qrCancel, { color: theme.textMuted }]}>Cancel</Text>
+              {/* QR code area */}
+              {qrStatus === "loading" ? (
+                <View style={styles.desktopQrLoadingBox}>
+                  <ActivityIndicator color={theme.primary} size="large" />
+                  <Text style={[styles.desktopQrHint, { color: theme.textMuted }]}>Generating QR code...</Text>
+                </View>
+              ) : qrStatus === "expired" ? (
+                <View style={styles.desktopQrLoadingBox}>
+                  <Text style={{ color: theme.danger || "#ef4444", ...Typography.bodyMedium, fontWeight: "600", marginBottom: Spacing.md }}>QR expired</Text>
+                  <Pressable style={[styles.qrRetryBtn, { backgroundColor: theme.primary }]} onPress={startQrLogin}>
+                    <Text style={styles.qrRetryText}>Generate New QR</Text>
                   </Pressable>
                 </View>
+              ) : qrUrl ? (
+                <View style={[styles.desktopQrImageWrap, { borderColor: theme.border }]}>
+                  {React.createElement(require("react-native").Image, {
+                    source: { uri: `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(qrUrl)}` },
+                    style: styles.desktopQrImage,
+                    resizeMode: "contain",
+                  })}
+                </View>
+              ) : (
+                <Pressable style={[styles.qrButton, { borderColor: theme.primary, marginVertical: Spacing.xl }]} onPress={startQrLogin}>
+                  <Feather name="refresh-cw" size={18} color={theme.primary} />
+                  <Text style={[styles.qrButtonText, { color: theme.primary }]}>Generate QR Code</Text>
+                </Pressable>
               )}
-            </View>
-          ) : null}
-        </View>
 
-        <View style={styles.footer}>
-          <Text style={[styles.footerText, { color: theme.textMuted }]}>
-            For Emergency Medicine Professionals
-          </Text>
+              {/* Steps */}
+              <View style={styles.desktopSteps}>
+                {([
+                  { n: "1", label: "Open ErMate on your phone" },
+                  { n: "2", label: "Profile  →  Link to Web" },
+                  { n: "3", label: "Tap Approve — you're in!" },
+                ] as const).map(({ n, label }) => (
+                  <View key={n} style={styles.desktopStep}>
+                    <View style={[styles.desktopStepBadge, { backgroundColor: theme.primary }]}>
+                      <Text style={styles.desktopStepNum}>{n}</Text>
+                    </View>
+                    <Text style={[styles.desktopStepText, { color: theme.textSecondary }]}>{label}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          </View>
         </View>
-      </KeyboardAwareScrollViewCompat>
+      ) : (
+        /* ── Mobile: single-column layout ── */
+        <KeyboardAwareScrollViewCompat
+          contentContainerStyle={[styles.content, { paddingTop: insets.top + Spacing["4xl"], paddingBottom: insets.bottom + Spacing["4xl"] }]}
+          showsVerticalScrollIndicator={false}
+        >
+          {formContent}
+        </KeyboardAwareScrollViewCompat>
+      )}
       <Modal
         visible={showForgotModal}
         transparent
@@ -1050,5 +1103,93 @@ const styles = StyleSheet.create({
   qrCancel: {
     ...Typography.small,
     textDecorationLine: "underline",
+  },
+  desktopWrapper: {
+    flex: 1,
+    flexDirection: "row",
+  },
+  desktopLeft: {
+    flex: 1,
+    maxWidth: 480,
+  },
+  desktopFormContent: {
+    maxWidth: 420,
+    alignSelf: "center",
+    width: "100%",
+  },
+  desktopRight: {
+    flex: 1,
+    borderLeftWidth: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  desktopQrPanel: {
+    width: "100%",
+    maxWidth: 360,
+    alignItems: "center",
+    paddingHorizontal: Spacing.xl,
+    gap: Spacing.lg,
+  },
+  desktopQrIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: Spacing.sm,
+  },
+  desktopQrTitle: {
+    ...Typography.h2,
+    textAlign: "center",
+  },
+  desktopQrSubtitle: {
+    ...Typography.body,
+    textAlign: "center",
+    lineHeight: 22,
+  },
+  desktopQrLoadingBox: {
+    alignItems: "center",
+    gap: Spacing.md,
+    paddingVertical: Spacing.xl,
+  },
+  desktopQrHint: {
+    ...Typography.small,
+    textAlign: "center",
+  },
+  desktopQrImageWrap: {
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    padding: Spacing.md,
+    marginVertical: Spacing.sm,
+  },
+  desktopQrImage: {
+    width: 220,
+    height: 220,
+  },
+  desktopSteps: {
+    width: "100%",
+    gap: Spacing.md,
+    marginTop: Spacing.sm,
+  },
+  desktopStep: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+  },
+  desktopStepBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  desktopStepNum: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  desktopStepText: {
+    ...Typography.body,
+    flex: 1,
   },
 });
