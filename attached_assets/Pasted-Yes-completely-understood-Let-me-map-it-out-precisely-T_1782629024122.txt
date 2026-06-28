@@ -1,0 +1,303 @@
+Yes, completely understood. Let me map it out precisely.
+
+---
+
+## The Three Views
+
+```
+Same app, same login — different view based on role + shift
+
+HOD VIEW          → sees everything, all shifts, all cases
+CONSULTANT VIEW   → sees all cases in their current shift
+RESIDENT VIEW     → sees only their own cases in their shift
+```
+
+---
+
+## What Each Person Sees
+
+**HOD Dashboard:**
+```
+CITY EMERGENCY · All Shifts
+
+MORNING SHIFT (active)
+  Dr. Priya    — 4 cases
+  Dr. Rahul    — 3 cases
+  Dr. Arun     — 5 cases
+
+EVENING SHIFT (active)
+  Dr. Meena    — 2 cases
+  Dr. Sanjay   — 3 cases
+
+ALL ACTIVE CASES (17)
+  Bed 10 · Abdulahad · Chest pain · P1
+  Bed 11 · Biju · Calculi · P2
+  Bed 12 · Mohammed · RTA · P1
+  ...all cases across all shifts...
+
+[Generate Handover Sheet]   [Print All Cases]
+```
+
+---
+
+**Consultant Dashboard (on their shift):**
+```
+EVENING SHIFT · Consultant View
+
+ALL SHIFT CASES (8)
+  Bed 10 · Abdulahad · Chest pain · P1
+           Dr. Priya documenting
+  Bed 11 · Biju · Calculi · P2
+           Dr. Rahul documenting
+  Bed 12 · Mohammed · RTA · P1
+           YOUR CASE
+  ...all cases in this shift...
+
+Tap any case → READ + REVIEW
+  Can add Consultant Review note
+  Can escalation-review if flagged
+
+MY CASES (3)
+  Cases you personally documented
+  Full edit access
+```
+
+---
+
+**Resident Dashboard (on their shift):**
+```
+EVENING SHIFT · Resident View
+
+MY CASES (3)
+  Bed 10 · Abdulahad · Chest pain · P1
+  Bed 12 · Mohammed · RTA · P1
+  Bed 15 · New patient
+
+Can only see their own cases
+Can escalate any case to consultant
+Cannot see other residents' cases
+```
+
+---
+
+## Feature Access by Role
+
+```
+Feature                    Resident    Consultant    HOD
+─────────────────────────────────────────────────────────
+Document own cases            ✓            ✓          ✓
+See own cases                 ✓            ✓          ✓
+See all shift cases           ✗            ✓          ✓
+See all department cases      ✗            ✗          ✓
+Add consultant review note    ✗            ✓          ✓
+Receive escalations           ✗            ✓          ✓
+Escalate to consultant        ✓            ✗          ✗
+Approve/decline members       ✗            ✗          ✓
+Force logout doctors          ✗            ✗          ✓
+HOD Dashboard                 ✗            ✗          ✓
+Generate handover sheet       ✗            ✓          ✓
+Print all cases (desktop)     ✗            ✓          ✓
+Configure shifts              ✗            ✗          ✓
+View department analytics     ✗            ✗          ✓
+```
+
+---
+
+## The Shared Shift Dashboard — Key Design
+
+When a doctor checks into a shift, the Cases tab changes:
+
+```
+BEFORE (individual mode):
+Cases tab → only your cases
+
+AFTER (shift checked in):
+Cases tab shows TWO sections:
+
+┌─────────────────────────────────┐
+│  EVENING SHIFT · 14:00–22:00    │
+│  6 doctors active               │
+├─────────────────────────────────┤
+│  ALL SHIFT CASES    [Consultant+HOD only]
+│  ──────────────────────────────│
+│  🔴 Bed 10 · Abdulahad         │
+│     Chest pain · Dr. Priya     │
+│  🔴 Bed 12 · Mohammed · RTA    │
+│     Dr. Rahul                  │
+│  🟡 Bed 14 · Anitha · Fever    │
+│     Dr. Arun                   │
+├─────────────────────────────────┤
+│  MY CASES           [All roles] │
+│  ──────────────────────────────│
+│  🔴 Bed 15 · Sebastian · DKA   │
+│     YOUR CASE                  │
+└─────────────────────────────────┘
+```
+
+---
+
+## Desktop Printing Flow
+
+```
+HOD or Consultant opens ermate.in on desktop
+         ↓
+Logs in (QR scan from phone or password)
+         ↓
+Sees full shift dashboard
+         ↓
+Taps Print / Download
+         ↓
+Two options:
+  [All Active Cases PDF]
+  — Every case in current shift
+  — One page per case or summary table
+
+  [Handover Sheet PDF]
+  — Only handed-over cases
+  — Landscape A4 format
+  — Print at nurses station
+```
+
+---
+
+## What Your Developer Needs to Build
+
+**Tell your developer this exact list:**
+
+```
+1. BACKEND — Shift case query
+
+New endpoint:
+GET /api/department/:id/shift-cases?shiftId=X
+
+Returns all cases being documented 
+by doctors currently checked into that shift.
+
+Logic:
+  - Get all active shift_sessions for shiftId
+  - Get all case_overlays for those sessions
+  - Fetch case data from external backend
+  - Merge and return with doctor name attached
+
+Access control:
+  - Resident: only their own cases
+  - Consultant: all cases in their shift
+  - HOD: all cases in all shifts
+
+2. FRONTEND — Cases tab update
+
+When shift is active:
+  Show TWO sections:
+    "Shift Cases" (consultant/HOD) 
+    "My Cases" (all)
+
+When no shift (individual mode):
+  Show only own cases (current behaviour)
+
+3. FRONTEND — Case card in shift view
+
+Each case card shows:
+  Bed number (from case_overlays.bedNumber)
+  Patient name
+  Chief complaint
+  Triage priority colour
+  Documenting doctor name
+  Handed over badge if applicable
+  CONSULTANT REVIEWED badge if reviewed
+
+4. CONSULTANT — Review flow
+
+Consultant taps any shift case (not their own)
+  → Opens case in READ ONLY mode
+  → Sees all documentation
+  → Tap "Add Consultant Review"
+  → Types review note
+  → POST /api/escalations/:id/review
+     or new POST /api/cases/:id/consultant-review
+  → Case shows CONSULTANT REVIEWED ✓ badge
+
+5. HOD DASHBOARD — Already partially built
+  Extend to show real case data
+  from all shifts using shift-cases endpoint
+
+6. DESKTOP — Print
+  Both handover sheet (existing) AND
+  new "All Cases" PDF button
+  Shows every active case in current shift
+  Formatted for A4 portrait printing
+```
+
+---
+
+## The Merge Pattern — Critical
+
+Since cases live on the external backend, the shift dashboard needs a merge:
+
+```typescript
+async function getShiftCases(shiftId, userId, role) {
+  // 1. Who is on this shift?
+  const sessions = await db
+    .select()
+    .from(shiftSessions)
+    .where(
+      and(
+        eq(shiftSessions.shiftId, shiftId),
+        eq(shiftSessions.status, "active")
+      )
+    );
+
+  // 2. What cases do they have? (from case_overlays)
+  const overlays = await db
+    .select()
+    .from(caseOverlays)
+    .where(eq(caseOverlays.shiftId, shiftId));
+
+  // 3. Fetch those cases from external backend
+  const caseIds = overlays.map(o => o.caseId);
+  const externalCases = await fetchCasesFromExternal(caseIds);
+
+  // 4. Merge
+  const merged = externalCases.map(c => ({
+    ...c,
+    overlay: overlays.find(o => o.caseId === c.id),
+    doctor: sessions.find(s => s.userId === c.createdByUserId),
+  }));
+
+  // 5. Filter by role
+  if (role === "resident") {
+    return merged.filter(c => c.createdByUserId === userId);
+  }
+  // consultant and HOD see all
+  return merged;
+}
+```
+
+---
+
+## Build Order for Developer
+
+```
+Week 1:
+  Day 1-2: GET /api/department/shift-cases endpoint
+           with role-based filtering
+
+  Day 3-4: Cases tab — shift mode vs individual mode
+           Two-section layout when shift active
+
+  Day 5:   Case card with bed number + doctor name
+
+Week 2:
+  Day 1-2: Consultant read-only case view
+           Add consultant review note
+
+  Day 3:   HOD dashboard wired to real case data
+
+  Day 4-5: Desktop print — All Cases PDF
+           alongside existing handover sheet
+```
+
+---
+
+**The foundation is solid.** Shifts, sessions, case overlays, and the merge pattern are all already in your schema. This is building the UI layer on top of what's already in the database.
+
+Send this to your developer and ask them to start with the `GET /api/department/shift-cases` endpoint first — everything else depends on that working correctly.

@@ -233,6 +233,12 @@ export const caseOverlays = pgTable("case_overlays", {
   consultantReviewedBy: text("consultant_reviewed_by"),
   consultantReviewedAt: timestamp("consultant_reviewed_at"),
   consultantNote: text("consultant_note"),
+  patientName: text("patient_name"),
+  patientAge: text("patient_age"),
+  chiefComplaint: text("chief_complaint"),
+  triagePriority: integer("triage_priority"),
+  doctorUserId: text("doctor_user_id"),
+  doctorName: text("doctor_name"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`),
 });
 

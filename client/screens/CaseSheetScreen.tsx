@@ -522,8 +522,8 @@ export default function CaseSheetScreen() {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RouteProps>();
   const { theme, isDark } = useTheme();
-  const { user } = useAuth();
-  const { membership } = useDepartment();
+  const { user, token } = useAuth();
+  const { membership, department, shiftSession } = useDepartment();
   const insets = useSafeAreaInsets();
   
   const { caseId } = route.params;
@@ -1338,6 +1338,22 @@ export default function CaseSheetScreen() {
       if (res.success) {
         saveClinicalDataToServer(caseId, payload).catch(() => {});
         await invalidateCases();
+        if (department?.id && shiftSession?.id) {
+          const complaint = (formData as any)?.chiefComplaint || formData?.sample?.signsSymptoms?.split(",")[0]?.trim() || "";
+          fetch(`${getApiUrl()}/api/cases/${caseId}/register-shift`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({
+              departmentId: department.id,
+              shiftSessionId: shiftSession.id,
+              patientName: caseData?.patient?.name || "",
+              patientAge: String(caseData?.patient?.age || ""),
+              chiefComplaint: complaint,
+              triagePriority: caseData?.triage_priority || null,
+              doctorName: user?.name || user?.email || "",
+            }),
+          }).catch(() => {});
+        }
         const effectiveDraftId = currentDraftId || localDraftIdRef.current;
         if (effectiveDraftId) {
           await commitDraft(caseId);

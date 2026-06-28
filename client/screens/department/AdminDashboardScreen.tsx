@@ -31,6 +31,7 @@ export default function AdminDashboardScreen() {
 
   const [members, setMembers] = useState<any[]>([]);
   const [activeSessions, setActiveSessions] = useState<any[]>([]);
+  const [allShiftCases, setAllShiftCases] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [forcingOut, setForcingOut] = useState<number | null>(null);
@@ -41,13 +42,18 @@ export default function AdminDashboardScreen() {
     if (!department || !token) { setLoading(false); return; }
     if (!silent) setLoading(true);
     try {
-      const res = await fetch(`${getApiUrl()}/api/department/${department.id}/admin`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
+      const [adminRes, casesRes] = await Promise.all([
+        fetch(`${getApiUrl()}/api/department/${department.id}/admin`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${getApiUrl()}/api/department/${department.id}/all-shift-cases`, { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+      if (adminRes.ok) {
+        const data = await adminRes.json();
         setMembers(data.members || []);
         setActiveSessions(data.activeSessions || []);
+      }
+      if (casesRes.ok) {
+        const data = await casesRes.json();
+        setAllShiftCases(data.cases || []);
       }
     } catch {}
     setLoading(false);
@@ -170,6 +176,44 @@ export default function AdminDashboardScreen() {
         </View>
       )}
 
+      {allShiftCases.length > 0 ? (
+        <>
+          <Text style={[styles.sectionTitle, { color: theme.textSecondary, marginTop: Spacing.lg }]}>
+            ACTIVE CASES ({allShiftCases.length})
+          </Text>
+          <View style={[styles.card, { backgroundColor: theme.card }]}>
+            {allShiftCases.map((c, idx) => {
+              const priorityColors: Record<number, string> = { 1: "#ef4444", 2: "#f97316", 3: "#eab308", 4: "#22c55e", 5: "#3b82f6" };
+              const color = priorityColors[c.triagePriority] || "#9ca3af";
+              return (
+                <View key={c.id} style={[styles.caseRow, { borderBottomColor: theme.border, borderBottomWidth: idx < allShiftCases.length - 1 ? 1 : 0 }]}>
+                  <View style={[styles.casePriorityBar, { backgroundColor: color }]} />
+                  <View style={{ flex: 1, paddingLeft: Spacing.sm }}>
+                    <Text style={[styles.caseName, { color: theme.text }]} numberOfLines={1}>
+                      {c.patientName || "Unknown patient"}
+                      {c.bedNumber ? <Text style={{ color: theme.textMuted }}> · Bed {c.bedNumber}</Text> : null}
+                    </Text>
+                    <Text style={[styles.caseMeta, { color: theme.textSecondary }]} numberOfLines={1}>
+                      {c.chiefComplaint || "—"} · {c.shiftName || "Shift"} · {c.doctorName || c.doctorUserId || "Unknown"}
+                    </Text>
+                  </View>
+                  {c.consultantReviewedBy ? (
+                    <View style={[styles.reviewedBadge, { backgroundColor: "#d1fae5" }]}>
+                      <Text style={styles.reviewedText}>Reviewed</Text>
+                    </View>
+                  ) : null}
+                  {c.triagePriority ? (
+                    <View style={[styles.pBadge, { backgroundColor: color + "22" }]}>
+                      <Text style={[styles.pText, { color }]}>P{c.triagePriority}</Text>
+                    </View>
+                  ) : null}
+                </View>
+              );
+            })}
+          </View>
+        </>
+      ) : null}
+
       <Text style={[styles.sectionTitle, { color: theme.textSecondary, marginTop: Spacing.lg }]}>ACTIVE MEMBERS ({members.length})</Text>
       <View style={[styles.card, { backgroundColor: theme.card }]}>
         {members.map((m, idx) => (
@@ -229,4 +273,12 @@ const styles = StyleSheet.create({
   onShiftDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#10b981" },
   onShiftText: { fontSize: 12, fontWeight: "700", color: "#065f46" },
   offShiftText: { fontSize: 12 },
+  caseRow: { flexDirection: "row", alignItems: "center", paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, gap: 8, overflow: "hidden" },
+  casePriorityBar: { width: 4, height: 36, borderRadius: 2 },
+  caseName: { fontSize: 14, fontWeight: "600" },
+  caseMeta: { fontSize: 12, marginTop: 2 },
+  reviewedBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  reviewedText: { fontSize: 10, fontWeight: "700", color: "#065f46" },
+  pBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  pText: { fontSize: 11, fontWeight: "700" },
 });

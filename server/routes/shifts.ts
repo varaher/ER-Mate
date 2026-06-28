@@ -272,6 +272,209 @@ export function registerShiftRoutes(app: Express) {
     }
   });
 
+  // ── POST /api/cases/:caseId/register-shift ──────────────────
+  // Called after commit to link a case to the current shift overlay
+  app.post("/api/cases/:caseId/register-shift", async (req: Request, res: Response) => {
+    const userId = extractUserId(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    const db = getDb();
+    if (!db) return res.status(503).json({ error: "DB unavailable" });
+    try {
+      const { caseId } = req.params;
+      const { departmentId, shiftSessionId, patientName, patientAge, chiefComplaint, triagePriority, bedNumber, doctorName } = req.body;
+      if (!departmentId) return res.status(400).json({ error: "departmentId required" });
+
+      const existing = await db
+        .select()
+        .from(caseOverlays)
+        .where(and(eq(caseOverlays.caseId, caseId), eq(caseOverlays.departmentId, departmentId)))
+        .limit(1);
+
+      if (existing.length) {
+        const [updated] = await db
+          .update(caseOverlays)
+          .set({
+            shiftSessionId: shiftSessionId || existing[0].shiftSessionId,
+            patientName: patientName || existing[0].patientName,
+            patientAge: patientAge || existing[0].patientAge,
+            chiefComplaint: chiefComplaint || existing[0].chiefComplaint,
+            triagePriority: triagePriority ?? existing[0].triagePriority,
+            doctorUserId: userId,
+            doctorName: doctorName || existing[0].doctorName,
+            bedNumber: bedNumber || existing[0].bedNumber,
+          })
+          .where(eq(caseOverlays.id, existing[0].id))
+          .returning();
+        return res.json({ success: true, overlay: updated });
+      }
+
+      const [overlay] = await db
+        .insert(caseOverlays)
+        .values({
+          caseId,
+          departmentId,
+          shiftSessionId: shiftSessionId || null,
+          patientName: patientName || null,
+          patientAge: patientAge || null,
+          chiefComplaint: chiefComplaint || null,
+          triagePriority: triagePriority ?? null,
+          doctorUserId: userId,
+          doctorName: doctorName || null,
+          bedNumber: bedNumber || null,
+          handoverStatus: "active",
+        })
+        .returning();
+      res.json({ success: true, overlay });
+    } catch (e) {
+      console.error("[ShiftOverlay] Register error:", e);
+      res.status(500).json({ error: "Failed to register case" });
+    }
+  });
+
+  // ── GET /api/shifts/:shiftId/cases ──────────────────────────
+  // Returns all case overlays registered under a shift (for shift dashboard)
+  app.get("/api/shifts/:shiftId/cases", async (req: Request, res: Response) => {
+    const userId = extractUserId(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    const db = getDb();
+    if (!db) return res.status(503).json({ error: "DB unavailable" });
+    try {
+      const shiftId = parseInt(req.params.shiftId);
+
+      // Get all active sessions in this shift
+      const sessions = await db
+        .select()
+        .from(shiftSessions)
+        .where(and(eq(shiftSessions.shiftId, shiftId), eq(shiftSessions.status, "active")));
+
+      if (!sessions.length) return res.json({ cases: [] });
+
+      const sessionIds = sessions.map((s) => s.id);
+
+      // Get overlays for these sessions (cases registered in this shift)
+      let overlays: any[] = [];
+      for (const sid of sessionIds) {
+        const rows = await db
+          .select()
+          .from(caseOverlays)
+          .where(eq(caseOverlays.shiftSessionId, sid));
+        overlays.push(...rows);
+      }
+
+      // Also find overlays by doctorUserId matching session userIds (cases registered without sessionId)
+      const sessionUserIds = sessions.map((s) => s.userId);
+      const shift = await db.select().from(shifts).where(eq(shifts.id, shiftId)).limit(1);
+      if (!shift.length) return res.json({ cases: [] });
+      const departmentId = shift[0].departmentId;
+
+      // Get requesting user's membership role
+      const myMem = await db
+        .select()
+        .from(departmentMembers)
+        .where(and(eq(departmentMembers.userId, userId), eq(departmentMembers.departmentId, departmentId)))
+        .limit(1);
+      const myRole = myMem[0]?.role || "resident";
+
+      // Filter based on role
+      const deduped = [...new Map(overlays.map((o) => [o.id, o])).values()];
+      const filtered = myRole === "resident"
+        ? deduped.filter((o) => o.doctorUserId === userId || o.handedOverByUserId === userId)
+        : deduped; // consultant / HOD sees all
+
+      // Attach session info (role for shift)
+      const result = filtered.map((overlay) => {
+        const sess = sessions.find((s) => s.id === overlay.shiftSessionId);
+        return {
+          ...overlay,
+          roleForShift: sess?.roleForShift || null,
+          isOwn: overlay.doctorUserId === userId,
+        };
+      });
+
+      res.json({ cases: result, myRole });
+    } catch (e) {
+      console.error("[ShiftCases] Error:", e);
+      res.status(500).json({ error: "Failed to fetch shift cases" });
+    }
+  });
+
+  // ── GET /api/department/:deptId/all-shift-cases ──────────────
+  // HOD view: all active shift cases across all shifts in a department
+  app.get("/api/department/:deptId/all-shift-cases", async (req: Request, res: Response) => {
+    const userId = extractUserId(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    const db = getDb();
+    if (!db) return res.status(503).json({ error: "DB unavailable" });
+    try {
+      const departmentId = parseInt(req.params.deptId);
+      const myMem = await db
+        .select()
+        .from(departmentMembers)
+        .where(and(eq(departmentMembers.userId, userId), eq(departmentMembers.departmentId, departmentId)))
+        .limit(1);
+      if (!myMem.length || myMem[0].role !== "hod") {
+        return res.status(403).json({ error: "HOD only" });
+      }
+
+      const deptShifts = await db.select().from(shifts).where(eq(shifts.departmentId, departmentId));
+      const activeSessions = await db
+        .select()
+        .from(shiftSessions)
+        .where(and(eq(shiftSessions.departmentId, departmentId), eq(shiftSessions.status, "active")));
+
+      const sessionIds = activeSessions.map((s) => s.id);
+      let allOverlays: any[] = [];
+      for (const sid of sessionIds) {
+        const rows = await db.select().from(caseOverlays).where(eq(caseOverlays.shiftSessionId, sid));
+        allOverlays.push(...rows);
+      }
+
+      const result = allOverlays.map((o) => {
+        const sess = activeSessions.find((s) => s.id === o.shiftSessionId);
+        const shift = deptShifts.find((sh) => sh.id === sess?.shiftId);
+        return { ...o, shiftName: shift?.name || null, roleForShift: sess?.roleForShift || null, isOwn: o.doctorUserId === userId };
+      });
+
+      res.json({ cases: result, shifts: deptShifts });
+    } catch (e) {
+      res.status(500).json({ error: "Failed to fetch department cases" });
+    }
+  });
+
+  // ── POST /api/cases/:caseId/consultant-review ────────────────
+  app.post("/api/cases/:caseId/consultant-review", async (req: Request, res: Response) => {
+    const userId = extractUserId(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    const db = getDb();
+    if (!db) return res.status(503).json({ error: "DB unavailable" });
+    try {
+      const { caseId } = req.params;
+      const { note, departmentId } = req.body;
+      if (!note) return res.status(400).json({ error: "Note required" });
+
+      const existing = await db
+        .select()
+        .from(caseOverlays)
+        .where(eq(caseOverlays.caseId, caseId))
+        .limit(1);
+
+      if (!existing.length) {
+        return res.status(404).json({ error: "Case not registered in department" });
+      }
+
+      const [updated] = await db
+        .update(caseOverlays)
+        .set({ consultantReviewedBy: userId, consultantReviewedAt: new Date(), consultantNote: note })
+        .where(eq(caseOverlays.id, existing[0].id))
+        .returning();
+
+      res.json({ success: true, overlay: updated });
+    } catch (e) {
+      console.error("[ConsultantReview] Error:", e);
+      res.status(500).json({ error: "Failed to save review" });
+    }
+  });
+
   // ── GET /api/handover/case/:caseId ──────────────────────────
   app.get("/api/handover/case/:caseId", async (req: Request, res: Response) => {
     const userId = extractUserId(req);
