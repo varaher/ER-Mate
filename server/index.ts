@@ -424,6 +424,14 @@ function setupErrorHandler(app: express.Application) {
     res.json({ build, ts: Date.now() });
   });
 
+  // Serve reset-password page BEFORE Expo catches all paths
+  app.get("/reset-password", (_req: Request, res: Response) => {
+    const filePath = path.resolve(process.cwd(), "server/templates/reset-password.html");
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache");
+    res.sendFile(filePath);
+  });
+
   // MUST run before configureExpoAndLanding which claims GET "/".
   // Replit's deployment healthcheck hits "/" with no text/html Accept header —
   // intercept it here and return 200 immediately so the process is never killed.

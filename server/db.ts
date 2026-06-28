@@ -160,6 +160,28 @@ export async function ensureDepartmentTables(): Promise<void> {
   }
 }
 
+export async function ensurePasswordResetTable(): Promise<void> {
+  const p = getPool();
+  if (!p) return;
+  try {
+    await p.query(`
+      CREATE TABLE IF NOT EXISTS password_reset_tokens (
+        id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        email TEXT NOT NULL,
+        token TEXT UNIQUE NOT NULL,
+        expires_at TIMESTAMP NOT NULL,
+        used_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS prt_token_idx ON password_reset_tokens(token);
+      CREATE INDEX IF NOT EXISTS prt_email_idx ON password_reset_tokens(email);
+    `);
+    console.log("[DB] password_reset_tokens table ready");
+  } catch (e) {
+    console.error("[DB] Failed to ensure password_reset_tokens table:", e);
+  }
+}
+
 export async function ensureAuthSessionsTable(): Promise<void> {
   const p = getPool();
   if (!p) return;

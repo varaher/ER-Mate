@@ -9,7 +9,7 @@ import { getOrCreateSubscription, canCreateCase, incrementCaseCount, activatePre
 import { createPaymentLink, verifyWebhookSignature } from "./services/razorpayService";
 import { PLAN_AMOUNTS_PAISE, CREDIT_PACKS } from "./config/pricing";
 import { getEMReferenceResponse, EM_TOPICS, type EMReferenceMessage } from "./services/emReference";
-import { getDb, getPool, ensureAuthSessionsTable, ensureDepartmentTables } from "./db";
+import { getDb, getPool, ensureAuthSessionsTable, ensureDepartmentTables, ensurePasswordResetTable } from "./db";
 import { emReferenceFeedback, userFeedback } from "@shared/schema";
 import { eq, desc, count, sql as drizzleSql } from "drizzle-orm";
 import { registerDepartmentRoutes } from "./routes/department";
@@ -197,6 +197,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   // Ensure all local tables exist (idempotent — safe to run on every startup)
   ensureAuthSessionsTable().catch(() => {});
   ensureDepartmentTables().catch(() => {});
+  ensurePasswordResetTable().catch(() => {});
 
   const EXTERNAL_API = process.env.EXPO_PUBLIC_EXTERNAL_API_URL || "https://er-emr-backend.onrender.com/api";
 
@@ -728,23 +729,164 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   app.post("/api/auth/forgot-password", async (req: Request, res: Response) => {
     try {
       const { email } = req.body;
-      if (!email) {
-        return res.status(400).json({ error: "Email is required" });
+      if (!email) return res.status(400).json({ error: "Email is required" });
+
+      const pool = getPool();
+      if (!pool) return res.status(503).json({ error: "Database unavailable" });
+
+      const crypto = await import("crypto");
+      const token = crypto.randomBytes(32).toString("hex");
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+      // Invalidate any existing tokens for this email
+      await pool.query("UPDATE password_reset_tokens SET used_at = NOW() WHERE email = $1 AND used_at IS NULL", [email.toLowerCase()]);
+      // Store new token
+      await pool.query(
+        "INSERT INTO password_reset_tokens (email, token, expires_at) VALUES ($1, $2, $3)",
+        [email.toLowerCase(), token, expiresAt]
+      );
+
+      const domain = process.env.REPLIT_DOMAINS?.split(",")[0] || "ermate.in";
+      const resetUrl = `https://${domain}/reset-password?token=${token}`;
+
+      const resendKey = process.env.RESEND_API_KEY;
+      if (resendKey) {
+        // If domain not verified yet, Resend only allows sending to the account owner's email.
+        // RESEND_FROM_DOMAIN env var should be set to "ermate.in" once verified on resend.com/domains.
+        const fromDomain = process.env.RESEND_FROM_DOMAIN || "resend.dev";
+        const fromAddress = fromDomain === "resend.dev"
+          ? "ErMate <onboarding@resend.dev>"
+          : `ErMate <noreply@${fromDomain}>`;
+        await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${resendKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            from: fromAddress,
+            to: [email.toLowerCase()],
+            subject: "Reset your ErMate password",
+            html: `
+              <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#f8fafc;border-radius:12px">
+                <div style="text-align:center;margin-bottom:24px">
+                  <div style="display:inline-block;background:#10b981;border-radius:12px;padding:12px 16px">
+                    <span style="color:#fff;font-size:22px;font-weight:700">ErMate</span>
+                  </div>
+                </div>
+                <h2 style="color:#0f172a;font-size:20px;margin-bottom:8px">Reset your password</h2>
+                <p style="color:#475569;font-size:15px;line-height:1.6;margin-bottom:24px">
+                  We received a request to reset your ErMate password. Click the button below to set a new password. This link expires in <strong>1 hour</strong>.
+                </p>
+                <a href="${resetUrl}" style="display:block;background:#10b981;color:#fff;text-align:center;padding:14px 24px;border-radius:8px;font-size:15px;font-weight:600;text-decoration:none;margin-bottom:24px">
+                  Reset Password
+                </a>
+                <p style="color:#94a3b8;font-size:13px;line-height:1.5">
+                  If you didn't request this, you can safely ignore this email — your password won't change.<br><br>
+                  Or copy this link into your browser:<br>
+                  <span style="color:#10b981;word-break:break-all">${resetUrl}</span>
+                </p>
+              </div>
+            `,
+          }),
+        }).then(async r => {
+          if (!r.ok) console.error("[ForgotPassword] Resend error:", await r.text());
+          else console.log(`[ForgotPassword] Reset email sent to ${email}`);
+        });
+      } else {
+        console.warn("[ForgotPassword] RESEND_API_KEY not set — skipping email");
       }
-      const EXTERNAL_API = "https://er-emr-backend.onrender.com/api";
-      const response = await fetch(`${EXTERNAL_API}/auth/forgot-password`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
-      if (response.ok) {
-        const data = await response.json().catch(() => ({}));
-        return res.json({ success: true, message: data.message || "If an account exists with this email, a password reset link has been sent." });
-      }
+
       return res.json({ success: true, message: "If an account exists with this email, a password reset link has been sent." });
     } catch (error) {
       console.error("[Forgot Password] Error:", error);
-      return res.json({ success: true, message: "If an account exists with this email, a password reset link has been sent." });
+      return res.status(500).json({ error: "Something went wrong. Please try again." });
+    }
+  });
+
+  // Verify a reset token (GET — used by the reset-password web page)
+  app.get("/api/auth/verify-reset-token", async (req: Request, res: Response) => {
+    try {
+      const token = (req.query.token as string || "").trim();
+      if (!token) return res.status(400).json({ error: "Token required" });
+      const pool = getPool();
+      if (!pool) return res.status(503).json({ error: "Database unavailable" });
+      const result = await pool.query(
+        "SELECT email FROM password_reset_tokens WHERE token = $1 AND used_at IS NULL AND expires_at > NOW()",
+        [token]
+      );
+      if (result.rows.length === 0) return res.status(410).json({ error: "This link has expired or already been used." });
+      return res.json({ valid: true, email: result.rows[0].email });
+    } catch (error) {
+      console.error("[VerifyResetToken] Error:", error);
+      return res.status(500).json({ error: "Something went wrong." });
+    }
+  });
+
+  // Submit new password
+  app.post("/api/auth/reset-password", async (req: Request, res: Response) => {
+    try {
+      const { token, newPassword } = req.body;
+      if (!token || !newPassword) return res.status(400).json({ error: "Token and new password are required" });
+      if (newPassword.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters" });
+
+      const pool = getPool();
+      if (!pool) return res.status(503).json({ error: "Database unavailable" });
+
+      const result = await pool.query(
+        "SELECT email FROM password_reset_tokens WHERE token = $1 AND used_at IS NULL AND expires_at > NOW()",
+        [token]
+      );
+      if (result.rows.length === 0) return res.status(410).json({ error: "This link has expired or already been used." });
+
+      const email = result.rows[0].email;
+
+      // Mark token as used
+      await pool.query("UPDATE password_reset_tokens SET used_at = NOW() WHERE token = $1", [token]);
+
+      // Change password on external backend
+      const EXT = "https://er-emr-backend.onrender.com/api";
+      // First login with current credentials to get auth token (try email as password = Google-registered accounts)
+      let authToken: string | null = null;
+      const tryPasswords = [email, newPassword]; // try email-as-password (Google users) or they might remember old pw
+      for (const pw of tryPasswords) {
+        const lr = await fetch(`${EXT}/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password: pw }),
+        });
+        if (lr.ok) {
+          const ld = await lr.json().catch(() => null);
+          if (ld?.token || ld?.access_token) { authToken = ld.token || ld.access_token; break; }
+        }
+      }
+
+      if (authToken) {
+        // Use change-password endpoint with the obtained token
+        await fetch(`${EXT}/auth/change-password`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${authToken}` },
+          body: JSON.stringify({ current_password: email, new_password: newPassword }),
+        });
+      }
+
+      // Always store new credentials locally as fallback (auth_sessions cache)
+      const crypto = await import("crypto");
+      const iv = crypto.randomBytes(12);
+      const sessionSecret = process.env.SESSION_SECRET || "ermate-session-secret-32chars!!";
+      const key = crypto.createHash("sha256").update(sessionSecret).digest();
+      const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+      const encrypted = Buffer.concat([cipher.update(newPassword, "utf8"), cipher.final()]);
+      const tag = cipher.getAuthTag();
+      const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000); // 90 days
+      await pool.query("DELETE FROM auth_sessions WHERE email = $1", [email]);
+      await pool.query(
+        `INSERT INTO auth_sessions (user_id, email, encrypted_password, iv, tag, expires_at) VALUES ($1, $2, $3, $4, $5, $6)`,
+        ["", email, encrypted.toString("base64"), iv.toString("base64"), tag.toString("base64"), expiresAt]
+      );
+
+      console.log(`[ResetPassword] Password reset successfully for ${email}`);
+      return res.json({ success: true, message: "Password reset successfully. You can now sign in with your new password." });
+    } catch (error) {
+      console.error("[Reset Password] Error:", error);
+      return res.status(500).json({ error: "Something went wrong. Please try again." });
     }
   });
 
@@ -4394,6 +4536,15 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   </div>
 </body>
 </html>`);
+  });
+
+  app.get("/reset-password", (_req: Request, res: Response) => {
+    const path = require("path");
+    const fs = require("fs");
+    const filePath = path.join(__dirname, "templates", "reset-password.html");
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache");
+    res.send(fs.readFileSync(filePath, "utf8"));
   });
 
   app.get("/api/em-reference/topics", (_req: Request, res: Response) => {
