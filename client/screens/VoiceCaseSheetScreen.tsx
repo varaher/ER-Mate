@@ -1359,38 +1359,238 @@ export default function VoiceCaseSheetScreen() {
                 />
               </View>
 
-              {/* ── READ-ONLY SUMMARY CARDS ──────────────────────────────────── */}
+              {/* ── ALL CAPTURED DATA (READ-ONLY) ────────────────────────────── */}
               <Text style={[s.sectionLabel, { color: theme.textSecondary, marginTop: Spacing.md, marginBottom: 4 }]}>
-                Summary (read-only)
+                All captured data
               </Text>
 
+              {/* VITALS */}
               {vitalsLine ? (
-                <View style={[s.reviewField, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                  <Text style={[s.reviewFieldLabel, { color: theme.textSecondary }]}>Vitals</Text>
-                  <Text style={[s.reviewFieldValue, { color: theme.text }]}>{vitalsLine}</Text>
+                <View style={[s.reviewSection, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                  <View style={s.reviewSectionHeader}>
+                    <Feather name="activity" size={12} color={ACCENT} />
+                    <Text style={[s.reviewSectionTitle, { color: ACCENT }]}>Vitals</Text>
+                  </View>
+                  <Text style={[s.reviewSectionRow, { color: theme.text, borderTopColor: theme.border }]}>{vitalsLine}</Text>
+                  {(vs.grbs || ps.disability?.grbs) ? (
+                    <Text style={[s.reviewSectionRow, { color: theme.text, borderTopColor: theme.border }]}>
+                      GRBS: {vs.grbs || ps.disability?.grbs} mg/dL
+                    </Text>
+                  ) : null}
                 </View>
               ) : null}
 
-              {ex.investigationsOrdered ? (
-                <View style={[s.reviewField, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                  <Text style={[s.reviewFieldLabel, { color: theme.textSecondary }]}>Investigations Ordered</Text>
-                  <Text style={[s.reviewFieldValue, { color: theme.text }]}>{ex.investigationsOrdered}</Text>
-                </View>
-              ) : null}
+              {/* PRIMARY SURVEY */}
+              {(() => {
+                const rows = [
+                  (ps.airway?.status || ps.airway?.findings)
+                    ? `Airway: ${[ps.airway?.status, ps.airway?.findings].filter(Boolean).join(' — ')}` : null,
+                  ps.breathing?.auscultation ? `Auscultation: ${ps.breathing.auscultation}` : null,
+                  ps.breathing?.workOfBreathing ? `Work of breathing: ${ps.breathing.workOfBreathing}` : null,
+                  ps.breathing?.oxygenDevice ? `O2 device: ${ps.breathing.oxygenDevice}` : null,
+                  ps.circulation?.crt ? `CRT: ${ps.circulation.crt}` : null,
+                  ps.disability?.pupils ? `Pupils: ${ps.disability.pupils}` : null,
+                  ps.disability?.power ? `Power: ${ps.disability.power}` : null,
+                  (ps.exposure?.findings || ex.examFindings?.musculoskeletal)
+                    ? `Exposure: ${ps.exposure?.findings || ex.examFindings?.musculoskeletal}` : null,
+                ].filter(Boolean) as string[];
+                if (rows.length === 0) return null;
+                return (
+                  <View style={[s.reviewSection, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                    <View style={s.reviewSectionHeader}>
+                      <Feather name="shield" size={12} color={ACCENT} />
+                      <Text style={[s.reviewSectionTitle, { color: ACCENT }]}>Primary Survey (ABCDE)</Text>
+                    </View>
+                    {rows.map((r, i) => (
+                      <Text key={i} style={[s.reviewSectionRow, { color: theme.text, borderTopColor: theme.border }]}>{r}</Text>
+                    ))}
+                  </View>
+                );
+              })()}
 
-              {medsLine ? (
-                <View style={[s.reviewField, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                  <Text style={[s.reviewFieldLabel, { color: theme.textSecondary }]}>Medications / Fluids</Text>
-                  <Text style={[s.reviewFieldValue, { color: theme.text }]}>{medsLine}</Text>
-                </View>
-              ) : null}
+              {/* EXAMINATION FINDINGS */}
+              {(() => {
+                const ef = ex.examFindings || {};
+                const rows = [
+                  ef.general ? `General: ${ef.general}` : null,
+                  ef.cvs ? `CVS: ${ef.cvs}` : null,
+                  ef.respiratory ? `Respiratory: ${ef.respiratory}` : null,
+                  ef.abdomen ? `Abdomen: ${ef.abdomen}` : null,
+                  ef.cns ? `CNS: ${ef.cns}` : null,
+                  ef.heent ? `HEENT: ${ef.heent}` : null,
+                  ef.musculoskeletal ? `MSK: ${ef.musculoskeletal}` : null,
+                ].filter(Boolean) as string[];
+                if (rows.length === 0) return null;
+                return (
+                  <View style={[s.reviewSection, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                    <View style={s.reviewSectionHeader}>
+                      <Feather name="search" size={12} color={ACCENT} />
+                      <Text style={[s.reviewSectionTitle, { color: ACCENT }]}>Examination Findings</Text>
+                    </View>
+                    {rows.map((r, i) => (
+                      <Text key={i} style={[s.reviewSectionRow, { color: theme.text, borderTopColor: theme.border }]}>{r}</Text>
+                    ))}
+                  </View>
+                );
+              })()}
 
-              {ex.adjuncts?.ecgDone ? (
-                <View style={[s.reviewField, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                  <Text style={[s.reviewFieldLabel, { color: theme.textSecondary }]}>ECG</Text>
-                  <Text style={[s.reviewFieldValue, { color: theme.text }]}>{ex.adjuncts.ecgFindings || "Done"}</Text>
-                </View>
-              ) : null}
+              {/* ADDITIONAL HISTORY */}
+              {(() => {
+                const toS = (v: any) => Array.isArray(v) ? v.join(', ') : (v ? String(v) : '');
+                const rows = [
+                  ex.allergies ? `Allergies: ${toS(ex.allergies)}` : null,
+                  ex.currentMedications ? `Current meds: ${toS(ex.currentMedications)}` : null,
+                  ex.pastSurgicalHistory ? `Surgical history: ${toS(ex.pastSurgicalHistory)}` : null,
+                  ex.lastMeal ? `Last meal: ${toS(ex.lastMeal)}` : null,
+                  ex.negativeSymptoms ? `Pertinent negatives: ${toS(ex.negativeSymptoms)}` : null,
+                  ex.socialHistory ? `Social history: ${toS(ex.socialHistory)}` : null,
+                  ex.familyHistory ? `Family history: ${toS(ex.familyHistory)}` : null,
+                ].filter(Boolean) as string[];
+                if (rows.length === 0) return null;
+                return (
+                  <View style={[s.reviewSection, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                    <View style={s.reviewSectionHeader}>
+                      <Feather name="archive" size={12} color={ACCENT} />
+                      <Text style={[s.reviewSectionTitle, { color: ACCENT }]}>Additional History</Text>
+                    </View>
+                    {rows.map((r, i) => (
+                      <Text key={i} style={[s.reviewSectionRow, { color: theme.text, borderTopColor: theme.border }]}>{r}</Text>
+                    ))}
+                  </View>
+                );
+              })()}
+
+              {/* INVESTIGATIONS & RESULTS */}
+              {(() => {
+                const toS = (v: any) => Array.isArray(v) ? v.join(', ') : (v ? String(v) : '');
+                const rows: string[] = [];
+                if (ex.investigationsOrdered) rows.push(`Labs: ${toS(ex.investigationsOrdered)}`);
+                if (ex.imagingOrdered) rows.push(`Imaging: ${toS(ex.imagingOrdered)}`);
+                if (ex.adjuncts?.efastDone || ex.adjuncts?.efastFindings)
+                  rows.push(`EFAST: ${ex.adjuncts?.efastFindings || 'Done'}`);
+                if (ex.adjuncts?.ecgDone)
+                  rows.push(`ECG: ${ex.adjuncts?.ecgFindings || 'Done'}`);
+                if (ex.resultsSummary) rows.push(`Results: ${toS(ex.resultsSummary)}`);
+                if (ex.vbgResults) {
+                  const vbg = ex.vbgResults;
+                  const parts = [
+                    vbg.ph ? `pH ${vbg.ph}` : null,
+                    vbg.pco2 ? `PCO2 ${vbg.pco2}` : null,
+                    vbg.po2 ? `PO2 ${vbg.po2}` : null,
+                    vbg.hco3 ? `HCO3 ${vbg.hco3}` : null,
+                    vbg.lactate ? `Lac ${vbg.lactate}` : null,
+                    vbg.hemoglobin ? `Hb ${vbg.hemoglobin}` : null,
+                    vbg.sao2 ? `SaO2 ${vbg.sao2}%` : null,
+                    vbg.fio2 ? `FiO2 ${vbg.fio2}%` : null,
+                    vbg.sodium ? `Na ${vbg.sodium}` : null,
+                    vbg.potassium ? `K ${vbg.potassium}` : null,
+                    vbg.creatinine ? `Cr ${vbg.creatinine}` : null,
+                  ].filter(Boolean);
+                  if (parts.length > 0) rows.push(`VBG/ABG: ${parts.join('  |  ')}`);
+                }
+                if (rows.length === 0) return null;
+                return (
+                  <View style={[s.reviewSection, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                    <View style={s.reviewSectionHeader}>
+                      <Feather name="clipboard" size={12} color={ACCENT} />
+                      <Text style={[s.reviewSectionTitle, { color: ACCENT }]}>Investigations & Results</Text>
+                    </View>
+                    {rows.map((r, i) => (
+                      <Text key={i} style={[s.reviewSectionRow, { color: theme.text, borderTopColor: theme.border }]}>{r}</Text>
+                    ))}
+                  </View>
+                );
+              })()}
+
+              {/* MEDICATIONS & TREATMENT */}
+              {(() => {
+                const meds = (ex.prescribedMedications || []).filter((m: any) => m.name);
+                const infs = (ex.prescribedInfusions || []).filter((i: any) => i.name);
+                if (meds.length === 0 && infs.length === 0 && !ex.treatmentNotes) return null;
+                return (
+                  <View style={[s.reviewSection, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                    <View style={s.reviewSectionHeader}>
+                      <Feather name="thermometer" size={12} color={ACCENT} />
+                      <Text style={[s.reviewSectionTitle, { color: ACCENT }]}>Medications & Treatment</Text>
+                    </View>
+                    {meds.map((m: any, i: number) => (
+                      <Text key={`med-${i}`} style={[s.reviewSectionRow, { color: theme.text, borderTopColor: theme.border }]}>
+                        {`${m.name}${m.dose ? ' ' + m.dose : ''}${m.route ? ' ' + m.route : ''}${m.frequency ? ' ' + m.frequency : ''}`.trim()}
+                      </Text>
+                    ))}
+                    {infs.map((f: any, i: number) => (
+                      <Text key={`inf-${i}`} style={[s.reviewSectionRow, { color: theme.text, borderTopColor: theme.border }]}>
+                        {`${f.name}${f.dose ? ' ' + f.dose : ''}${f.rate ? ' @ ' + f.rate : ''}`.trim()}
+                      </Text>
+                    ))}
+                    {ex.treatmentNotes ? (
+                      <Text style={[s.reviewSectionRow, { color: theme.text, borderTopColor: theme.border }]}>
+                        Notes: {ex.treatmentNotes}
+                      </Text>
+                    ) : null}
+                  </View>
+                );
+              })()}
+
+              {/* ASSESSMENT & PLAN */}
+              {(() => {
+                const rows: string[] = [];
+                if (ex.differentialDiagnosis?.length > 0)
+                  rows.push(`Differentials: ${ex.differentialDiagnosis.join(' / ')}`);
+                if (ex.disposition?.plan) rows.push(`Disposition: ${ex.disposition.plan}`);
+                const consults = (ex.consultations || []).filter((c: any) => c.specialty || c.doctorName);
+                if (consults.length > 0)
+                  rows.push(`Consultations: ${consults.map((c: any) => `${c.specialty || ''}${c.doctorName ? ' (Dr. ' + c.doctorName + ')' : ''}${c.adviceGiven ? ': ' + c.adviceGiven : ''}`).join('; ')}`);
+                else if (ex.consultationGiven) rows.push(`Consultation: ${ex.consultationGiven}`);
+                const psych = ex.psychologicalAssessment;
+                if (psych) {
+                  const flags = [
+                    psych.suicidalIdeation ? 'Suicidal ideation' : null,
+                    psych.selfHarm ? 'Self-harm history' : null,
+                    psych.substanceAbuse ? 'Substance abuse' : null,
+                    psych.psychiatricHistory ? 'Psychiatric history' : null,
+                  ].filter(Boolean);
+                  if (flags.length > 0) rows.push(`Psych flags: ${flags.join(', ')}`);
+                }
+                if (rows.length === 0) return null;
+                return (
+                  <View style={[s.reviewSection, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                    <View style={s.reviewSectionHeader}>
+                      <Feather name="git-branch" size={12} color={ACCENT} />
+                      <Text style={[s.reviewSectionTitle, { color: ACCENT }]}>Assessment & Plan</Text>
+                    </View>
+                    {rows.map((r, i) => (
+                      <Text key={i} style={[s.reviewSectionRow, { color: theme.text, borderTopColor: theme.border }]}>{r}</Text>
+                    ))}
+                  </View>
+                );
+              })()}
+
+              {/* PEDIATRIC SPECIFIC */}
+              {caseType === "pediatric" && (() => {
+                const rows = [
+                  (ex.patientWeight || ex.weight) ? `Weight: ${ex.patientWeight || ex.weight} kg` : null,
+                  ex.immunizationHistory ? `Immunization: ${ex.immunizationHistory}` : null,
+                  ex.birthHistory ? `Birth history: ${ex.birthHistory}` : null,
+                  ex.feedingHistory ? `Feeding: ${ex.feedingHistory}` : null,
+                  ex.developmentalHistory ? `Development: ${ex.developmentalHistory}` : null,
+                  ex.patAssessment?.appearance ? `PAT Appearance: ${ex.patAssessment.appearance}` : null,
+                  ex.patAssessment?.workOfBreathing ? `PAT WOB: ${ex.patAssessment.workOfBreathing}` : null,
+                  ex.patAssessment?.circulationToSkin ? `PAT Circulation: ${ex.patAssessment.circulationToSkin}` : null,
+                ].filter(Boolean) as string[];
+                if (rows.length === 0) return null;
+                return (
+                  <View style={[s.reviewSection, { backgroundColor: theme.card, borderColor: "#0ea5e930" }]}>
+                    <View style={s.reviewSectionHeader}>
+                      <Feather name="users" size={12} color="#0ea5e9" />
+                      <Text style={[s.reviewSectionTitle, { color: "#0ea5e9" }]}>Pediatric Details</Text>
+                    </View>
+                    {rows.map((r, i) => (
+                      <Text key={i} style={[s.reviewSectionRow, { color: theme.text, borderTopColor: theme.border }]}>{r}</Text>
+                    ))}
+                  </View>
+                );
+              })()}
 
               {detectedLanguage && !detectedLanguage.startsWith("en") ? (
                 <View style={[s.langBadge, { backgroundColor: "#06b6d415", borderColor: "#06b6d430" }]}>
@@ -1588,5 +1788,20 @@ const s = StyleSheet.create({
   reviewEditInput: {
     fontSize: 14, lineHeight: 20, borderRadius: BorderRadius.sm,
     paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs, minHeight: 40,
+  },
+  reviewSection: {
+    borderRadius: BorderRadius.md, borderWidth: 1,
+    marginBottom: Spacing.sm, overflow: "hidden",
+  },
+  reviewSectionHeader: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: Spacing.md, paddingTop: Spacing.sm, paddingBottom: 6,
+  },
+  reviewSectionTitle: {
+    fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.6,
+  },
+  reviewSectionRow: {
+    fontSize: 14, lineHeight: 20, paddingHorizontal: Spacing.md,
+    paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth,
   },
 });
