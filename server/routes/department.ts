@@ -109,8 +109,8 @@ export function registerDepartmentRoutes(app: Express) {
         await db.insert(shifts).values({ departmentId: dept.id, ...s });
       }
 
-      const domain = process.env.REPLIT_DOMAINS?.split(",")[0] || "ermate.in";
-      const inviteLink = `https://${domain}/join?token=${inviteToken}`;
+      const baseUrl = process.env.APP_URL || "https://ermate.in";
+      const inviteLink = `${baseUrl}/join?token=${inviteToken}`;
 
       res.json({ success: true, department: { ...dept, inviteToken }, inviteLink });
     } catch (e) {
@@ -146,8 +146,8 @@ export function registerDepartmentRoutes(app: Express) {
       }
 
       const deptShifts = await db.select().from(shifts).where(eq(shifts.departmentId, mem.departmentId));
-      const domain = process.env.REPLIT_DOMAINS?.split(",")[0] || "ermate.in";
-      const inviteLink = deptRow?.invite_token ? `https://${domain}/join?token=${deptRow.invite_token}` : null;
+      const baseUrl = process.env.APP_URL || "https://ermate.in";
+      const inviteLink = deptRow?.invite_token ? `${baseUrl}/join?token=${deptRow.invite_token}` : null;
 
       // Count pending members
       const pool2 = getPool();
@@ -199,8 +199,8 @@ export function registerDepartmentRoutes(app: Express) {
           const r = await pool.query("SELECT invite_token FROM departments WHERE id = $1 LIMIT 1", [departmentId]);
           const tok = r.rows[0]?.invite_token;
           if (tok) {
-            const domain = process.env.REPLIT_DOMAINS?.split(",")[0] || "ermate.in";
-            inviteLink = `https://${domain}/join?token=${tok}`;
+            const baseUrl = process.env.APP_URL || "https://ermate.in";
+            inviteLink = `${baseUrl}/join?token=${tok}`;
           }
         }
       }
@@ -421,8 +421,8 @@ export function registerDepartmentRoutes(app: Express) {
       if (!hodCheck.length) return res.status(403).json({ error: "Only the HOD can regenerate the invite link" });
       const newToken = crypto.randomBytes(16).toString("hex");
       await pool.query("UPDATE departments SET invite_token = $1 WHERE id = $2", [newToken, departmentId]);
-      const domain = process.env.REPLIT_DOMAINS?.split(",")[0] || "ermate.in";
-      res.json({ success: true, inviteLink: `https://${domain}/join?token=${newToken}` });
+      const baseUrl = process.env.APP_URL || "https://ermate.in";
+      res.json({ success: true, inviteLink: `${baseUrl}/join?token=${newToken}` });
     } catch (e) {
       res.status(500).json({ error: "Failed to regenerate invite link" });
     }

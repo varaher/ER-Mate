@@ -158,9 +158,14 @@ export default function ShiftSelectScreen() {
                       {shift.startTime} – {shift.endTime}
                     </Text>
                     <View style={styles.slotsRow}>
+                      <Feather name="user-check" size={14} color={theme.textMuted} />
+                      <Text style={[styles.slotsText, { color: theme.textMuted }]}>
+                        {counts?.consultantsActive ?? 0} / {shift.maxConsultants} consultants
+                      </Text>
+                      <Text style={[styles.slotsDot, { color: theme.textMuted }]}>·</Text>
                       <Feather name="users" size={14} color={theme.textMuted} />
                       <Text style={[styles.slotsText, { color: theme.textMuted }]}>
-                        {active} / {max} slots used
+                        {counts?.residentsActive ?? 0} / {shift.maxResidents} residents
                       </Text>
                     </View>
                     <View style={styles.slotBar}>
@@ -227,8 +232,9 @@ const styles = StyleSheet.create({
   availBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   availText: { fontSize: 12, fontWeight: "700" },
   shiftTime: { fontSize: 14, marginBottom: 8 },
-  slotsRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 },
+  slotsRow: { flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 6, flexWrap: "wrap" },
   slotsText: { fontSize: 12 },
+  slotsDot: { fontSize: 12, marginHorizontal: 2 },
   slotBar: { height: 4, borderRadius: 2, backgroundColor: "#e5e7eb", marginBottom: 12 },
   slotFill: { height: 4, borderRadius: 2 },
   checkInBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 10, borderRadius: BorderRadius.md },
