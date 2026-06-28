@@ -1,7 +1,7 @@
 # ErMate - Emergency Room EMR Application
 
 ## Overview
-ErMate is a mobile-first Emergency Room Electronic Medical Records (EMR) application developed by Varah Group, designed to optimize the workflow for emergency medicine professionals. It supports patient triage, case management, physical examinations, investigations, treatment planning, and discharge documentation. Key features include voice dictation, document scanning, AI-powered clinical decision support, comprehensive documentation export, and an integrated "Learn" section for medical education. The application operates on a subscription-based model, aiming to enhance efficiency and accuracy in emergency care.
+ErMate is a mobile-first Emergency Room Electronic Medical Records (EMR) application developed by Varah Group, designed to optimize the workflow for emergency medicine professionals. It supports patient triage, case management, physical examinations, investigations, treatment planning, and discharge documentation. Key features include voice dictation, document scanning, AI-powered clinical decision support, comprehensive documentation export, a team shift management system, and an integrated "Learn" section for medical education. The application operates on a subscription-based model, aiming to enhance efficiency and accuracy in emergency care.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
@@ -9,7 +9,7 @@ Preferred communication style: Simple, everyday language.
 ## System Architecture
 
 ### Frontend Architecture
-The application is built with React Native (Expo SDK 54, React 19.1.0 with React Compiler experimental) and TypeScript. Navigation is managed through `RootStackNavigator` and `MainTabNavigator`. State management utilizes `AuthContext`, `CaseContext`, and TanStack React Query. UI/UX features themed components, automatic dark/light mode (with Night Shift), medical-specific color schemes, and enhanced navigation with Reanimated. Clinical workflows follow sequential modal flows for Triage, Adult Case Sheets (ATLS-based), Pediatric Case Sheets (PALS-based for ≤16 years), and Discharge Summaries, with age-based routing.
+The application is built with React Native (Expo SDK 54, React 19.1.0 with React Compiler experimental) and TypeScript. Navigation is managed through `RootStackNavigator` and `MainTabNavigator`. State management utilizes `AuthContext`, `CaseContext`, `DepartmentContext`, and TanStack React Query. UI/UX features themed components, automatic dark/light mode (with Night Shift), medical-specific color schemes, and enhanced navigation with Reanimated. Clinical workflows follow sequential modal flows for Triage, Adult Case Sheets (ATLS-based), Pediatric Case Sheets (PALS-based for ≤16 years), and Discharge Summaries, with age-based routing.
 
 React Query keys are scoped to the authenticated user (e.g. `["cases", user?.id]`) to prevent cross-user data leaks. All queries are gated with `enabled: !!user?.id`.
 
@@ -17,7 +17,7 @@ React Query keys are scoped to the authenticated user (e.g. `["cases", user?.id]
 An Express.js server in TypeScript acts as a proxy, directing all core API calls to an external backend at `https://er-emr-backend.onrender.com/api`. Gzip compression (`compression` npm package, level 6) is enabled on all responses. JS/CSS static assets are served with `Cache-Control: public, max-age=31536000, immutable`; HTML and manifests use `no-cache`.
 
 ### Data Storage
-Drizzle ORM with PostgreSQL is used for `users` and `ai_feedback` tables, with Zod validation. Local storage uses AsyncStorage for user tokens, session data, case timing records, trivia streak counts, and night shift preferences.
+Drizzle ORM with PostgreSQL is used for `users`, `ai_feedback`, `auth_sessions`, `departments`, `department_members`, `shifts`, `shift_sessions`, `handovers`, `case_overlays`, and `escalations` tables, with Zod validation. Local storage uses AsyncStorage for user tokens, session data, case timing records, trivia streak counts, and night shift preferences.
 
 ### Authentication
 Supports email/password, Google Sign-In, and Apple Sign-In. A `warmUpBackend()` function prevents cold start issues on the external backend. API calls are wrapped with `fetchWithTimeout`, and login/register attempts include a retry mechanism.
@@ -25,17 +25,41 @@ Supports email/password, Google Sign-In, and Apple Sign-In. A `warmUpBackend()` 
 `AuthContext` exports a `loginWithToken(authToken, userData)` helper that sets AsyncStorage + React state in one call — used by the web QR login flow.
 
 ### Key Features
-- **Voice Input System**: Uses `expo-audio` for recording, Sarvam AI for speech-to-text (Saaras v3 model, with OpenAI Whisper as fallback), and OpenAI for clinical data extraction to auto-populate case sheet fields. This includes "Smart Dictation" for comprehensive history capture and field-specific dictation.
-- **Document Scanning System**: Captures documents via camera or image picker, uses Sarvam Vision API for OCR, and OpenAI for clinical data structuring to populate case sheet fields.
-- **Clinical Decision Support** (formerly "AI Diagnosis"): Generates differential diagnoses labelled CONSISTENT / POSSIBLE / LESS LIKELY, with medical guideline citations and a self-learning feedback system. Integrates medical literature search (PubMed, WikEM) for evidence-based suggestions. Includes an inline disclaimer banner. Actions are labelled "Add to Case" / "Exclude".
-- **Document Export System**: Exports Case Sheets and Discharge Summaries in PDF and DOCX formats.
-- **Device Linking (Mobile → Web)**:
-  - *6-digit code*: Profile → Link to Web → enter code on the web app.
-  - *QR code login (web)*: On the web login screen, tap "Sign in with Phone QR" to generate a QR. Scan with the ErMate phone app (Profile → Link to Web → approve). Web session logs in automatically. Backend endpoints: `POST /api/device-link/generate`, `POST /api/device-link/approve`, `GET /api/device-link/status?token=xxx`.
-- **Quick Case Sheet**: Allows direct entry into a case sheet, bypassing triage, with minimal patient information.
-- **Editable Vitals**: Displayed on the Patient tab of case sheets, with age-based normal ranges and color-coding for pediatric patients.
-- **Psychological Assessment**: Integrated into case sheets, flagging relevant conditions.
-- **Learn Section**: Includes "Simulation-Based Teaching" (interactive clinical case simulations), "EM Reference Library" (AI-powered chat for guidelines), and "Trivia Time" (case-based MCQ quizzes with detailed explanations).
+
+#### Clinical EMR
+- **Patient Triage**: 5-level (P1–P5) priority system with vitals, GCS, chief complaint, and triage colour at the door.
+- **Adult Case Sheet** (ATLS-based): 7 clinical tabs — Patient, History (SAMPLE), Primary Survey (ABCDE), Examination, Treatment, Notes, Disposition. Switchable Medical / Trauma mode.
+- **Pediatric Case Sheet** (PALS-based, ≤16 yrs): Age-appropriate documentation with paediatric normal ranges, weight-based dosing references, and developmental history.
+- **Smart Dictation**: Doctor dictates naturally; Sarvam AI transcribes (Saaras v3, OpenAI Whisper fallback), GPT-4o extracts structured clinical data and auto-populates all relevant fields across all 7 tabs.
+- **Dictation Completion Map**: After every Smart Dictation session, a visual bottom sheet shows which tabs were filled, field counts per tab (e.g. 14/40 fields captured), colour-coded progress bars (green ≥75%, amber partial, red 0%), and "Review gaps" button that jumps to the first empty tab. Coloured dots persist on each tab button so the doctor always knows where gaps remain.
+- **Document Scanning**: Camera or gallery photo → Sarvam Vision OCR → GPT-4o structures clinical data → populates fields.
+- **Clinical Decision Support**: AI-generated differential diagnoses labelled CONSISTENT / POSSIBLE / LESS LIKELY, with PubMed and WikEM citations. Actions: "Add to Case" / "Exclude".
+- **Discharge Summary**: AI-generated from documented data, exportable as PDF or DOCX.
+- **Editable Vitals**: Inline editing in the Patient tab with age-based normal ranges and colour coding for abnormal values.
+- **Psychological Assessment**: PHQ-2, GAD-2, and PTSD flags integrated in the Examination tab.
+- **Quick Case Sheet**: Bypass triage for fast-track or pre-triaged patients — start a case with just name and complaint.
+
+#### Team & Shift Management (local PostgreSQL, new)
+- **Department Setup**: HOD creates the department with name, hospital, and shift schedules (Morning / Evening / Night with max consultant and resident slot counts). Invite link shareable via WhatsApp.
+- **Shift Check-In**: Shift Selection modal appears when the app is opened during a shift window. Doctors pick their shift, see real-time slot counts, and tap Start. A shift banner appears on the Dashboard.
+- **Shift-Aware Case View**: When on shift, consultants and HOD see a SHIFT CASES section in the Cases tab — all cases from every doctor currently on the same shift, colour-coded by triage priority with doctor name/role badges. Auto-refreshes every 30 seconds.
+- **Consultant Review**: Consultant taps a resident's shift case → review modal → writes clinical notes → case is marked Reviewed (green badge visible to all on the shift).
+- **HOD Dashboard**: Live view of shift slot counts, all doctors currently on shift with duration, all active cases across all shifts, and Force Out for individual sessions. Names resolved from department roster (not raw UUIDs).
+- **Manage Roster**: HOD adds/removes team members; invite link regeneration. Members list shows name, email, role, and on-shift status.
+- **Handover Sheet**: Select cases to hand over, add pending notes, export PDF. Incoming handovers visible in Profile.
+
+#### Learn Section
+- **Simulation-Based Teaching**: Branching clinical scenarios with evolving vitals, investigation results, and management decision trees.
+- **EM Reference Library**: AI-powered guideline chat (GPT-4o + PubMed integration).
+- **Trivia Time**: Case-based MCQ quizzes with weekly streak tracking (AsyncStorage-persisted).
+
+#### Tools & Productivity
+- **Pediatric Drug Calculator**: Weight-based emergency drug dosing (adrenaline, atropine, adenosine, fluid boluses, etc.).
+- **My Weekly Stats**: Cases documented this week, estimated time saved vs paper (avg 14 min/case), top presenting complaints, all-time totals. Powered by `useCaseTimer`.
+- **Cases by Complaint**: Toggle the Cases tab to group cases by presenting complaint, sorted by frequency.
+- **Night Shift Display Mode**: Auto dark mode 9 pm–6 am; manual override (Always Light / Always Dark).
+- **Link to Web**: 6-digit code or QR scan to transfer phone session to a desktop browser instantly.
+- **Feature Tour**: `TourScreen` (Profile → Take a Tour) — interactive expandable cards for every feature across 4 categories: Clinical EMR, Team & Shifts, Learning, Tools. NEW badge on shift-related and dictation-map features.
 
 ### Case Sheet Field Mapping (External Backend)
 When loading cases saved by the external backend directly (not via the app's own voice commit), the field structure differs:
@@ -43,6 +67,25 @@ When loading cases saved by the external backend directly (not via the app's own
 - **Procedures**: Top-level `procedures_performed` array is read as fallback when `procedures.procedures_performed` is absent.
 - **Medications**: Top-level `drugs_administered` array is used as fallback when `treatment.medications` is empty.
 - **History**: `history.signs_and_symptoms` → `sample.signsSymptoms`; `history.family_history` and `history.social_history` are appended to `otherHistory`.
+
+### Dictation Completion Map Architecture
+`client/components/DictationResultModal.tsx` exports:
+- `calculateDictationCompletion(data: SmartDictationExtracted): DictationCompletion` — scores each of 7 tabs (patient 10 fields, history 7, primary 5, exam 8, treatment 5, notes 1, disposition 4) from the extracted dictation data.
+- `getTabStatus(tc: TabCompletion): "full" | "partial" | "empty"` — full ≥75%, partial >0%, empty = 0.
+- `DictationResultModal` — bottom sheet with overall bar, per-tab progress rows, and "Review gaps" / "Done" actions.
+In `CaseSheetScreen`: after `handleSmartDictation` completes, `calculateDictationCompletion(data)` is called and stored in `dictationCompletion` state. `TabButton` reads this state to render a coloured dot (green/amber/red) per tab.
+
+### Team System Architecture
+Departments, shifts, and shift sessions live entirely in local PostgreSQL. Cases remain on the external backend. Data is merged on `caseId` (text) client-side.
+
+Key tables: `departments`, `department_members` (has `name`, `email`, `role`, `status`), `shifts` (has `maxConsultants`, `maxResidents`, `startTime`, `endTime`), `shift_sessions` (has `userId`, `roleForShift`, `checkedInAt`, `status`), `case_overlays` (has `patientName`, `patientAge`, `chiefComplaint`, `triagePriority`, `doctorUserId`, `doctorName`).
+
+Routes: `server/routes/department.ts` (department CRUD, members, admin endpoint), `server/routes/shifts.ts` (shift CRUD, check-in/out, shift cases, consultant review, HOD all-shift-cases, shift counts), registered via `registerDepartmentRoutes()` and `registerShiftRoutes()` in `server/routes.ts`.
+
+`DepartmentContext` exports: `department`, `membership`, `shiftSession`, `activeShift`, `isHOD`, `checkIn`, `dismissShiftSelect`, `showShiftSelect`, `shifts`.
+
+### Shift-Aware Case Registration
+After every successful `commitToBackend` in `CaseSheetScreen`, `POST /api/cases/:id/register-shift` is called if the user is on an active shift. This stores a patient snapshot (name, age, chief complaint, triage priority, doctor name) in `case_overlays` linked to the shift session — enabling the Shift Cases view and HOD Dashboard.
 
 ### Privacy & Case Filtering
 Cases are filtered server-side by checking `created_by_user_id` (primary), `created_by`, `doctor_id`, `user_id`, and `doctor_email` against the authenticated user. This prevents any cross-user data leaks regardless of which field name the external backend uses.
@@ -74,7 +117,7 @@ Offers a Free Plan (10 cases), a Base Plan (unlimited EMR, 20 AI credits/month),
 - **Functionality**: Handles authentication, case management, AI features, and subscription checks.
 
 ### Database
-- PostgreSQL via Drizzle ORM.
+- PostgreSQL via Drizzle ORM (local tables for team/shift system).
 
 ### Key NPM Packages
 - `expo-av`, `expo-audio`: Audio recording.
@@ -84,9 +127,9 @@ Offers a Free Plan (10 cases), a Base Plan (unlimited EMR, 20 AI credits/month),
 - `compression`: Gzip middleware for Express (type declaration in `server/compression.d.ts`).
 
 ### AI Integration
-- **OpenAI**: Used for clinical decision support, interpretation, clinical data extraction, and as a fallback for speech-to-text.
-- **Sarvam AI**: Primary provider for speech-to-text (Saaras v3 model) and document OCR (Sarvam Vision).
-- **PubMed (NCBI E-utilities) & WikEM API**: Integrated for medical literature search to support clinical decision support.
+- **OpenAI**: Clinical decision support, data extraction, and fallback speech-to-text.
+- **Sarvam AI**: Primary speech-to-text (Saaras v3 model) and document OCR (Sarvam Vision).
+- **PubMed (NCBI E-utilities) & WikEM API**: Medical literature search for clinical decision support.
 
 ## Key Custom Hooks
 | Hook | File | Purpose |

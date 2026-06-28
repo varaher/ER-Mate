@@ -47,6 +47,7 @@ import ManageRosterScreen from "@/screens/department/ManageRosterScreen";
 import AdminDashboardScreen from "@/screens/department/AdminDashboardScreen";
 import HandoverDetailScreen from "@/screens/HandoverDetailScreen";
 import EscalationScreen from "@/screens/EscalationScreen";
+import TourScreen from "@/screens/TourScreen";
 
 export type RootStackParamList = {
   Login: undefined;
@@ -72,6 +73,7 @@ export type RootStackParamList = {
   HelpSupport: undefined;
   About: undefined;
   PediatricDrugCalculator: { weight?: string } | undefined;
+  Tour: undefined;
   SimulationList: undefined;
   Simulation: { caseId: string };
   EMReference: undefined;
@@ -294,6 +296,13 @@ export default function RootStackNavigator() {
             options={{
               presentation: "modal",
               headerTitle: "About ErMate",
+            }}
+          />
+          <Stack.Screen
+            name="Tour"
+            component={TourScreen}
+            options={{
+              headerTitle: "Feature Tour",
             }}
           />
           <Stack.Screen
