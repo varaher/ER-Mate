@@ -48,11 +48,13 @@ interface SubStatus {
   casesRemaining: number | null;
   currentPeriodEnd: string | null;
   credits_balance: number;
+  isTrial?: boolean;
+  trialEnd?: string | null;
 }
 
 function getAccess(sub: { plan: string; teamActive: boolean; casesUsed: number; aiCredits: number }) {
-  const unlimited = sub.teamActive || sub.plan === "pro";
-  const isFree = !unlimited;
+  const unlimited = sub.teamActive || sub.plan === "pro" || sub.plan === "trial";
+  const isFree = !unlimited && sub.plan === "free";
   return {
     unlimited,
     isFree,
@@ -153,6 +155,7 @@ export default function MySubscriptionsScreen() {
 
   const showTeam = isInDepartment;
   const plan = subStatus?.plan ?? "free";
+  const isTrial = plan === "trial";
   const showPro = plan === "pro";
   const aiCredits = subStatus?.credits_balance ?? 0;
 
@@ -234,7 +237,8 @@ export default function MySubscriptionsScreen() {
         <View style={{ alignItems: "flex-end" }}>
           {showPro && <Text style={[styles.planBadge, { color: C.green }]}>Pro · Active</Text>}
           {showTeam && <Text style={[styles.planBadge, { color: C.greenDark, marginTop: showPro ? 2 : 0 }]}>Team · Active</Text>}
-          {showFree && <Text style={[styles.planBadge, { color: C.faint }]}>Free</Text>}
+          {isTrial && <Text style={[styles.planBadge, { color: C.orange }]}>Free Trial</Text>}
+          {!showPro && !showTeam && !isTrial && <Text style={[styles.planBadge, { color: C.faint }]}>Free</Text>}
         </View>
       </View>
 
@@ -270,8 +274,43 @@ export default function MySubscriptionsScreen() {
         </View>
       )}
 
+      {/* Trial card */}
+      {isTrial && (
+        <View style={[styles.card, { backgroundColor: C.white, borderColor: C.orangeBorder }]}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
+            <View style={{ backgroundColor: C.orangeLight, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}>
+              <Text style={{ color: "#92400E", fontSize: 11, fontWeight: "700", letterSpacing: 0.4 }}>FREE TRIAL</Text>
+            </View>
+            <Feather name="gift" size={15} color={C.orange} />
+          </View>
+          <Text style={{ color: C.ink, fontSize: 15, fontWeight: "700", marginBottom: 4 }}>
+            All features unlocked — 30 days free
+          </Text>
+          <Text style={{ color: C.muted, fontSize: 13, lineHeight: 18, marginBottom: 12 }}>
+            Full access to Smart Dictation, AI Decision Support, document scanning, unlimited cases, discharge summaries, and every learning tool — at no cost.
+          </Text>
+          {subStatus?.trialEnd ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 12 }}>
+              <Feather name="clock" size={13} color={C.orange} />
+              <Text style={{ color: "#92400E", fontSize: 13, fontWeight: "600" }}>
+                Trial ends {new Date(subStatus.trialEnd).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+              </Text>
+            </View>
+          ) : null}
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <Pressable
+              style={[styles.freeBtn, { backgroundColor: C.greenLight, borderColor: C.greenBorder, flex: 1 }]}
+              onPress={handleUpgrade}
+            >
+              <Text style={[styles.freeBtnText, { color: C.greenDark }]}>Subscribe after trial</Text>
+              <Feather name="arrow-right" size={13} color={C.greenDark} />
+            </Pressable>
+          </View>
+        </View>
+      )}
+
       {/* Free state card */}
-      {showFree && (
+      {showFree && !isTrial && (
         <View style={[styles.card, { backgroundColor: C.white, borderColor: C.border }]}>
           <Text style={[styles.freeTitle, { color: C.ink }]}>
             Free plan — {Math.max(0, 10 - (subStatus?.casesUsed ?? 0))} cases remaining

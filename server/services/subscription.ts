@@ -4,26 +4,49 @@ import { eq } from "drizzle-orm";
 
 const FREE_CASE_LIMIT = 10;
 const PREMIUM_CASE_LIMIT = 999999;
+const TRIAL_CASE_LIMIT = 999999;
+const TRIAL_AI_CREDITS = 999;
 const PREMIUM_PRICE_INR = 559;
 const BASE_AI_CREDITS = 20;
 const PRO_AI_CREDITS = 50;
+
+function isTrialActive(sub: { plan: string; currentPeriodEnd: Date | null }): boolean {
+  if (sub.plan !== "trial") return false;
+  if (!sub.currentPeriodEnd) return false;
+  return new Date() < new Date(sub.currentPeriodEnd);
+}
 
 export async function getOrCreateSubscription(userId: string, userEmail: string) {
   const db = getDb()!;
   const existing = await db.select().from(subscriptions).where(eq(subscriptions.userId, userId)).limit(1);
 
   if (existing.length > 0) {
-    return existing[0];
+    const sub = existing[0];
+    // Auto-expire trial: if plan is "trial" and period ended, downgrade to free
+    if (sub.plan === "trial" && sub.currentPeriodEnd && new Date() >= new Date(sub.currentPeriodEnd)) {
+      await db.update(subscriptions)
+        .set({ plan: "free", casesLimit: FREE_CASE_LIMIT, casesUsed: 0, aiCredits: 5, updatedAt: new Date() })
+        .where(eq(subscriptions.id, sub.id));
+      return { ...sub, plan: "free", casesLimit: FREE_CASE_LIMIT, casesUsed: 0, aiCredits: 5 };
+    }
+    return sub;
   }
+
+  // New user → 30-day free trial with all features
+  const now = new Date();
+  const trialEnd = new Date(now);
+  trialEnd.setDate(trialEnd.getDate() + 30);
 
   const [newSub] = await (db as any).insert(subscriptions).values({
     userId,
     userEmail,
-    plan: "free",
+    plan: "trial",
     status: "active",
     casesUsed: 0,
-    casesLimit: FREE_CASE_LIMIT,
-    aiCredits: 5,
+    casesLimit: TRIAL_CASE_LIMIT,
+    aiCredits: TRIAL_AI_CREDITS,
+    currentPeriodStart: now,
+    currentPeriodEnd: trialEnd,
   }).returning();
 
   return newSub;
@@ -32,6 +55,7 @@ export async function getOrCreateSubscription(userId: string, userEmail: string)
 export async function canCreateCase(userId: string, userEmail: string): Promise<{ allowed: boolean; casesUsed: number; casesLimit: number; plan: string }> {
   const sub = await getOrCreateSubscription(userId, userEmail);
 
+  // Paid plans and active trials: unlimited
   if (sub.plan !== "free") {
     return { allowed: true, casesUsed: sub.casesUsed, casesLimit: sub.casesLimit, plan: sub.plan };
   }
@@ -143,7 +167,7 @@ export async function resetMonthlyCases(userId: string) {
 export async function deductAiCredit(userId: string): Promise<{ ok: boolean; remaining: number }> {
   const db = getDb()!;
   const sub = await getOrCreateSubscription(userId, "");
-  // Free plan can use their 5 one-time credits; unlimited plans (pro) never deduct
+  // Paid plans and active trials: unlimited, never deduct
   if (sub.plan !== "free") return { ok: true, remaining: 9999 };
   if (sub.aiCredits <= 0) return { ok: false, remaining: 0 };
   await db.update(subscriptions)

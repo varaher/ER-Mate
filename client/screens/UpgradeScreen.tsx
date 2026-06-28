@@ -127,6 +127,7 @@ export default function UpgradeScreen() {
   const totalDrs = teamConsultants + teamResidents;
 
   const userPlan = subStatus?.plan ?? "free";
+  const isTrialActive = userPlan === "trial";
   const isProActive = userPlan === "pro";
 
   const handleProCheckout = async () => {

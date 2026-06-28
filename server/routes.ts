@@ -4152,6 +4152,8 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       }
 
       const sub = await getOrCreateSubscription(userId, userEmail || "");
+      const isTrial = sub.plan === "trial";
+      const isPaid = sub.plan !== "free" && sub.plan !== "trial";
       res.json({
         plan: sub.plan,
         status: sub.status,
@@ -4162,6 +4164,8 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         priceInr: PREMIUM_PRICE_INR,
         freeCaseLimit: FREE_CASE_LIMIT,
         credits_balance: sub.aiCredits ?? 0,
+        isTrial,
+        trialEnd: isTrial ? sub.currentPeriodEnd : null,
       });
     } catch (error) {
       console.error("Subscription status error:", error);
