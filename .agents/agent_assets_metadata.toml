@@ -6,3 +6,9 @@ id = "ZdC5IUelBK2jJhGN0UFwg"
 uri = "file://ErMate_User_Guide.md"
 type = "text"
 title = "ErMate Complete User Guide"
+
+[[outputs]]
+id = "bH7Hdur_XBXHDTyMPQOi_"
+uri = "file://ErMate_User_Guide.pdf"
+type = "pdf"
+title = "ErMate User Guide"
