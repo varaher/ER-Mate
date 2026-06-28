@@ -1,0 +1,82 @@
+Crystal clear. The error is a database column missing.
+
+---
+
+**What the logs show:**
+
+```
+code: '42703'        ← PostgreSQL error code for
+                       "column does not exist"
+
+[Dept] Create error: error: column...
+
+POST /api/department/create 500
+```
+
+**PostgreSQL error 42703 = a column being referenced in the query doesn't exist in the database table.**
+
+The route exists and is being called correctly. The DB migration was never run.
+
+---
+
+**The fix — tell your developer:**
+
+```
+The departments table is missing columns.
+Need to run a DB migration.
+
+Run this SQL directly on the PostgreSQL database:
+
+-- Add missing columns to departments table
+ALTER TABLE departments 
+ADD COLUMN IF NOT EXISTS hospital_name TEXT;
+
+ADD COLUMN IF NOT EXISTS invite_token TEXT UNIQUE;
+
+ADD COLUMN IF NOT EXISTS max_concurrent INTEGER DEFAULT 8;
+
+ADD COLUMN IF NOT EXISTS allow_overflow BOOLEAN DEFAULT true;
+
+ADD COLUMN IF NOT EXISTS plan TEXT DEFAULT 'team';
+
+ADD COLUMN IF NOT EXISTS billing_active BOOLEAN DEFAULT false;
+
+ADD COLUMN IF NOT EXISTS payment_subscription_id TEXT;
+
+-- Generate invite tokens for any existing rows
+UPDATE departments 
+SET invite_token = encode(gen_random_bytes(16), 'hex')
+WHERE invite_token IS NULL;
+```
+
+**How to run this in Replit:**
+
+```
+Option 1 — Drizzle push:
+npx drizzle-kit push
+
+Option 2 — Direct SQL in Replit shell:
+Open Shell tab
+psql $DATABASE_URL
+Then paste the ALTER TABLE statements above
+
+Option 3 — Add a one-time migration endpoint:
+POST /api/admin/migrate
+That runs the SQL and returns success
+```
+
+---
+
+**Why this happened:**
+
+The schema was updated in the code (shared/schema.ts) but `drizzle-kit push` was never run to actually apply those changes to the live PostgreSQL database. The table exists but without the new columns.
+
+---
+
+**After running the migration:**
+
+Try creating the department again. It will work.
+
+Then immediately send your developer the invite link task from my previous message — that's the next thing to build once department creation works.
+
+**Which method does your developer prefer — drizzle-kit push, direct psql, or a migration endpoint?**
