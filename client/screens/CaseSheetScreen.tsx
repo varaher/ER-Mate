@@ -552,6 +552,7 @@ export default function CaseSheetScreen() {
   const [otherHistory, setOtherHistory] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [activeVoiceField, setActiveVoiceField] = useState<string | null>(null);
+  const activeVoiceFieldRef = useRef<string | null>(null);
   const recordingRef = useRef<Audio.Recording | null>(null);
   const localDraftIdRef = useRef<string | null>(null);
   const caseStartRef = useRef<number>(Date.now());
@@ -1433,6 +1434,7 @@ export default function CaseSheetScreen() {
       await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
       const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
       recordingRef.current = recording;
+      activeVoiceFieldRef.current = fieldKey;
       setIsRecording(true);
       setActiveVoiceField(fieldKey);
     } catch (err) {
@@ -1447,8 +1449,10 @@ export default function CaseSheetScreen() {
       const uri = recordingRef.current.getURI();
       recordingRef.current = null;
       setIsRecording(false);
-      if (uri && activeVoiceField) {
-        await transcribeAudio(uri, activeVoiceField);
+      const fieldKey = activeVoiceFieldRef.current;
+      activeVoiceFieldRef.current = null;
+      if (uri && fieldKey) {
+        await transcribeAudio(uri, fieldKey);
       }
       setActiveVoiceField(null);
     } catch (err) {
