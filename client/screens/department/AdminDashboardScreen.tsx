@@ -87,6 +87,14 @@ export default function AdminDashboardScreen() {
     return `${Math.floor(mins / 60)}h ${mins % 60}m`;
   };
 
+  const getMemberName = (userId: string): string => {
+    const m = members.find((mem) => mem.userId === userId);
+    return m?.name || m?.email?.split("@")[0] || userId;
+  };
+
+  const formatRole = (role: string) =>
+    role === "hod" ? "HOD" : role.charAt(0).toUpperCase() + role.slice(1);
+
   const shiftStats = shifts.map((shift) => {
     const sessions = activeSessions.filter((s) => s.shiftId === shift.id);
     const consultants = sessions.filter((s) => s.roleForShift === "consultant").length;
@@ -154,9 +162,9 @@ export default function AdminDashboardScreen() {
               <View key={sess.id} style={[styles.sessionRow, { borderBottomColor: theme.border, borderBottomWidth: idx < activeSessions.length - 1 ? 1 : 0 }]}>
                 <View style={[styles.sessionDot, { backgroundColor: shiftColor }]} />
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.sessionUserId, { color: theme.text }]} numberOfLines={1}>{sess.userId}</Text>
+                  <Text style={[styles.sessionUserId, { color: theme.text }]} numberOfLines={1}>{getMemberName(sess.userId)}</Text>
                   <Text style={[styles.sessionMeta, { color: theme.textSecondary }]}>
-                    {sess.roleForShift} · {shiftName} · {getSessionDuration(sess.checkedInAt)}
+                    {formatRole(sess.roleForShift)} · {shiftName} · {getSessionDuration(sess.checkedInAt)}
                   </Text>
                 </View>
                 <Pressable
@@ -219,11 +227,11 @@ export default function AdminDashboardScreen() {
         {members.map((m, idx) => (
           <View key={m.id} style={[styles.memberRow, { borderBottomColor: theme.border, borderBottomWidth: idx < members.length - 1 ? 1 : 0 }]}>
             <View style={[styles.memberAvatar, { backgroundColor: theme.primaryLight }]}>
-              <Text style={[styles.memberAvatarText, { color: theme.primary }]}>{(m.userId || "?").charAt(0).toUpperCase()}</Text>
+              <Text style={[styles.memberAvatarText, { color: theme.primary }]}>{(m.name || m.email || m.userId || "?").charAt(0).toUpperCase()}</Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.memberName, { color: theme.text }]} numberOfLines={1}>{m.userId}</Text>
-              <Text style={[styles.memberRole, { color: theme.textSecondary }]}>{m.role}</Text>
+              <Text style={[styles.memberName, { color: theme.text }]} numberOfLines={1}>{m.name || m.email?.split("@")[0] || m.userId}</Text>
+              <Text style={[styles.memberRole, { color: theme.textSecondary }]}>{formatRole(m.role)}</Text>
             </View>
             {activeSessions.some((s) => s.userId === m.userId) ? (
               <View style={[styles.onShiftBadge, { backgroundColor: "#d1fae5" }]}>
