@@ -4120,9 +4120,11 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       const cycleLabel = billingCycle === "annual" ? "Annual" : "Monthly";
       const description = `ErMate ${planLabel} Plan — ${cycleLabel}`;
 
-      const domain = process.env.REPLIT_DOMAINS?.split(",")[0] || "er-mate.replit.app";
+      const domain = "ermate.in";
       const callbackUrl = `https://${domain}/payment-callback?plan=${plan}&cycle=${billingCycle}`;
-      const referenceId = `sub_${userId || "anon"}_${plan}_${billingCycle}_${Date.now()}`;
+      const ts = Date.now().toString().slice(-10);
+      const uid = (userId || "anon").slice(-8);
+      const referenceId = `sub_${uid}_${plan[0]}${billingCycle[0]}_${ts}`;
 
       const { url, id } = await createPaymentLink({
         amountPaise,
@@ -4176,9 +4178,11 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       const cycleLabel = billingCycle === "annual" ? "Annual" : "Monthly";
       const description = `ErMate Team Plan — ${consultants}C + ${residents}R · ${cycleLabel} · ₹${amountRs.toLocaleString("en-IN")}`;
 
-      const domain = process.env.REPLIT_DOMAINS?.split(",")[0] || "er-mate.replit.app";
+      const domain = "ermate.in";
       const callbackUrl = `https://${domain}/payment-callback?plan=team&cycle=${billingCycle}`;
-      const referenceId = `team_${userId || "anon"}_${consultants}c${residents}r_${Date.now()}`;
+      const ts = Date.now().toString().slice(-10);
+      const uid = (userId || "anon").slice(-8);
+      const referenceId = `team_${uid}_${ts}`;
 
       const { url, id } = await createPaymentLink({
         amountPaise,
@@ -4224,9 +4228,11 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         userName = payload.name || payload.fullName || "";
       } catch { /* non-fatal */ }
 
-      const domain = process.env.REPLIT_DOMAINS?.split(",")[0] || "er-mate.replit.app";
+      const domain = "ermate.in";
       const callbackUrl = `https://${domain}/payment-callback?type=credits&pack=${pack.id}`;
-      const referenceId = `credits_${userId || "anon"}_${pack.id}_${Date.now()}`;
+      const ts = Date.now().toString().slice(-10);
+      const uid = (userId || "anon").slice(-8);
+      const referenceId = `cr_${uid}_${pack.id}_${ts}`;
 
       const { url } = await createPaymentLink({
         amountPaise: pack.amountPaise,
