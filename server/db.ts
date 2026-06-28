@@ -154,6 +154,8 @@ export async function ensureDepartmentTables(): Promise<void> {
       ALTER TABLE department_members ADD COLUMN IF NOT EXISTS name TEXT;
       ALTER TABLE department_members ADD COLUMN IF NOT EXISTS email TEXT;
       ALTER TABLE departments ADD COLUMN IF NOT EXISTS invite_token TEXT UNIQUE;
+      ALTER TABLE departments ADD COLUMN IF NOT EXISTS plan TEXT DEFAULT 'team';
+      ALTER TABLE departments ADD COLUMN IF NOT EXISTS payment_subscription_id TEXT;
     `);
     // Generate invite_token for any departments that don't have one (Node.js side)
     const depts = await p.query("SELECT id FROM departments WHERE invite_token IS NULL");
