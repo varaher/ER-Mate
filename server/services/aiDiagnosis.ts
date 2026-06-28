@@ -1497,6 +1497,7 @@ SCHEMA (fill every field, use "" for not mentioned):
     "done": false,
     "sampleType": "VBG or ABG",
     "ph": "", "pco2": "", "po2": "", "hco3": "", "be": "", "lactate": "",
+    "sao2": "", "fio2": "",
     "hemoglobin": "", "sodium": "", "potassium": "", "chloride": "", "creatinine": "", "glucose": "", "bilirubin": ""
   },
   "adjuncts": {
@@ -1516,8 +1517,8 @@ SCHEMA (fill every field, use "" for not mentioned):
   "consultations": [{ "specialty": "", "doctorName": "", "adviceGiven": "" }],
   "diagnosis": [],
   "differentialDiagnosis": [],
-  "prescribedMedications": [{ "name": "", "dose": "", "route": "", "frequency": "" }],
-  "prescribedInfusions": [{ "name": "", "dose": "", "rate": "" }],
+  "prescribedMedications": [],
+  "prescribedInfusions": [],
   "disposition": { "plan": "", "pendingReports": "", "followUp": "" },
   "psychologicalAssessment": {
     "assessed": false,

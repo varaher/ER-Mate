@@ -463,9 +463,8 @@ export default function SmartDictation({
       const result = await response.json();
 
       if (result.extracted) {
-        setExtractedData(result.extracted);
-        setShowResults(true);
-        setStep('review');
+        onDataExtracted({ ...result.extracted, rawTranscription: textToProcess });
+        resetAll();
       } else {
         Alert.alert('Notice', 'Could not identify specific clinical fields from the text. The raw text has been preserved.');
         onDataExtracted({ rawTranscription: textToProcess });

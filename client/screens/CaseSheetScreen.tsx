@@ -1946,25 +1946,33 @@ export default function CaseSheetScreen() {
       setTreatmentData((prev) => ({ ...prev, differentialDiagnoses: prev.differentialDiagnoses ? prev.differentialDiagnoses + ", " + ddx : ddx }));
     }
     if (data.prescribedMedications && data.prescribedMedications.length > 0) {
-      const newMeds: MedicationEntry[] = data.prescribedMedications.map((med) => ({
-        id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
-        name: med.name || "",
-        dose: med.dose || "",
-        route: med.route || "",
-        frequency: med.frequency || "",
-      }));
-      setTreatmentData((prev) => ({ ...prev, medications: [...prev.medications, ...newMeds] }));
+      const newMeds: MedicationEntry[] = data.prescribedMedications
+        .filter((med) => med.name && med.name.trim() !== "")
+        .map((med) => ({
+          id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
+          name: med.name || "",
+          dose: med.dose || "",
+          route: med.route || "",
+          frequency: med.frequency || "stat",
+        }));
+      if (newMeds.length > 0) {
+        setTreatmentData((prev) => ({ ...prev, medications: [...prev.medications, ...newMeds] }));
+      }
     }
     if (data.prescribedInfusions && data.prescribedInfusions.length > 0) {
-      const newInfusions: InfusionEntry[] = data.prescribedInfusions.map((inf) => ({
-        id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
-        name: inf.name || "",
-        dose: inf.dose || "",
-        dilution: inf.dilution || "",
-        rate: inf.rate || "",
-        notes: "",
-      }));
-      setTreatmentData((prev) => ({ ...prev, infusions: [...prev.infusions, ...newInfusions] }));
+      const newInfusions: InfusionEntry[] = data.prescribedInfusions
+        .filter((inf) => inf.name && inf.name.trim() !== "")
+        .map((inf) => ({
+          id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
+          name: inf.name || "",
+          dose: inf.dose || "",
+          dilution: inf.dilution || "",
+          rate: inf.rate || "",
+          notes: "",
+        }));
+      if (newInfusions.length > 0) {
+        setTreatmentData((prev) => ({ ...prev, infusions: [...prev.infusions, ...newInfusions] }));
+      }
     }
     if (data.treatmentNotes) {
       setTreatmentData((prev) => ({ ...prev, otherMedications: (prev.otherMedications ? prev.otherMedications + ". " : "") + data.treatmentNotes }));
@@ -1975,7 +1983,7 @@ export default function CaseSheetScreen() {
     if (data.imagingOrdered) {
       setTreatmentData((prev) => ({ ...prev, imaging: prev.imaging ? prev.imaging + ", " + data.imagingOrdered : data.imagingOrdered! }));
     }
-    if (data.vbgResults) {
+    if (data.vbgResults && data.vbgResults.done) {
       const vbg = data.vbgResults;
       if (vbg.ph) updateFormData("adjuncts", "abgPh", vbg.ph);
       if (vbg.pco2) updateFormData("adjuncts", "abgPco2", vbg.pco2);
@@ -1991,6 +1999,7 @@ export default function CaseSheetScreen() {
       if (vbg.glucose) updateFormData("adjuncts", "abgGlucose", vbg.glucose);
       if (vbg.hemoglobin) updateFormData("adjuncts", "abgHb", vbg.hemoglobin);
       updateFormData("adjuncts", "abgStatus", "done");
+      if (vbg.sampleType) updateFormData("adjuncts", "abgSampleType", vbg.sampleType);
     }
     const completion = calculateDictationCompletion(data);
     setDictationCompletion(completion);
