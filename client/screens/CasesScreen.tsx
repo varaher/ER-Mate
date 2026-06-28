@@ -14,6 +14,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
+import { Audio } from "expo-av";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -94,6 +95,55 @@ export default function CasesScreen() {
   const [reviewModal, setReviewModal] = useState<ShiftCaseItem | null>(null);
   const [reviewNote, setReviewNote] = useState("");
   const [submittingReview, setSubmittingReview] = useState(false);
+  const [isReviewRecording, setIsReviewRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const reviewRecordingRef = useRef<Audio.Recording | null>(null);
+
+  const startReviewRecording = async () => {
+    try {
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permission Required", "Microphone access is needed for voice input");
+        return;
+      }
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      reviewRecordingRef.current = recording;
+      setIsReviewRecording(true);
+    } catch {
+      Alert.alert("Error", "Failed to start recording");
+    }
+  };
+
+  const stopReviewRecording = async () => {
+    if (!reviewRecordingRef.current) return;
+    try {
+      setIsReviewRecording(false);
+      await reviewRecordingRef.current.stopAndUnloadAsync();
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      const uri = reviewRecordingRef.current.getURI();
+      reviewRecordingRef.current = null;
+      if (!uri) return;
+      setIsTranscribing(true);
+      const formData = new FormData();
+      formData.append("file", { uri, name: "review.m4a", type: "audio/m4a" } as any);
+      const res = await fetch(`${getApiUrl()}/ai/voice-to-text`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.transcription) {
+          setReviewNote((prev) => (prev ? prev + " " + data.transcription : data.transcription));
+        }
+      }
+    } catch {
+      Alert.alert("Error", "Failed to transcribe audio");
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
 
   const isConsultantOrHOD =
     isHOD || membership?.role === "consultant" || shiftSession?.roleForShift === "consultant";
@@ -573,7 +623,31 @@ export default function CasesScreen() {
                     </View>
                   ) : null}
 
-                  <Text style={[styles.reviewLabel, { color: theme.text }]}>Consultant Review Note</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: Spacing.xs }}>
+                    <Text style={[styles.reviewLabel, { color: theme.text, marginBottom: 0 }]}>Consultant Review Note</Text>
+                    <Pressable
+                      onPressIn={startReviewRecording}
+                      onPressOut={stopReviewRecording}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 5,
+                        backgroundColor: isReviewRecording ? TriageColors.red : theme.primary,
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        borderRadius: 8,
+                      }}
+                    >
+                      {isTranscribing ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <Feather name={isReviewRecording ? "mic-off" : "mic"} size={14} color="#FFFFFF" />
+                      )}
+                      <Text style={{ color: "#FFFFFF", fontSize: 12, fontWeight: "600" }}>
+                        {isTranscribing ? "Transcribing..." : isReviewRecording ? "Release to stop" : "Hold to dictate"}
+                      </Text>
+                    </Pressable>
+                  </View>
                   <TextInput
                     style={[styles.reviewInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]}
                     placeholder="Add your clinical review, recommendations, or escalation notes..."
