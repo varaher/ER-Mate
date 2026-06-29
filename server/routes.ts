@@ -697,6 +697,49 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  // Registration proxy — forwards to external backend and handles email-send failures gracefully
+  app.post("/api/auth/register", async (req: Request, res: Response) => {
+    const EXTERNAL_API = "https://er-emr-backend.onrender.com/api";
+    try {
+      const registerRes = await fetch(`${EXTERNAL_API}/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(req.body),
+      });
+
+      if (registerRes.ok) {
+        const data = await registerRes.json().catch(() => null);
+        if (data) return res.json(data);
+      }
+
+      const errorText = await registerRes.text().catch(() => "");
+
+      // If the external backend crashed with a 5xx (e.g. welcome-email failure),
+      // the user may have been created. Try logging in to confirm.
+      if (registerRes.status >= 500) {
+        console.warn("[Register] External backend returned 5xx — trying login to check if user was created:", errorText);
+        const loginRes = await fetch(`${EXTERNAL_API}/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: req.body.email, password: req.body.password }),
+        });
+        if (loginRes.ok) {
+          const loginData = await loginRes.json().catch(() => null);
+          if (loginData) return res.json(loginData);
+        }
+      }
+
+      // Pass the original error back (400 = validation, 409 = duplicate, etc.)
+      let parsed: any = null;
+      try { parsed = JSON.parse(errorText); } catch {}
+      const errorMsg = parsed?.detail || parsed?.error || parsed?.message || errorText || "Registration failed";
+      return res.status(registerRes.status || 400).json({ error: errorMsg });
+    } catch (err) {
+      console.error("[Register] Error:", err);
+      return res.status(500).json({ error: "Registration failed. Please try again." });
+    }
+  });
+
   app.post("/api/auth/change-password", async (req: Request, res: Response) => {
     try {
       const { currentPassword, newPassword } = req.body;

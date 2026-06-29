@@ -139,22 +139,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = async (data: RegisterData) => {
     try {
-      const res = await apiPost<{ access_token: string; refresh_token?: string; user: User }>("/auth/register", data);
+      // Route through our proxy so we can handle welcome-email failures gracefully
+      const baseUrl = getApiUrl();
+      const response = await fetch(`${baseUrl}/api/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      const json = await response.json().catch(() => ({}));
 
-      if (res.success && res.data) {
-        const { access_token, refresh_token, user: userData } = res.data;
+      if (response.ok && json.access_token) {
+        const { access_token, refresh_token, user: userData } = json;
         queryClient.clear();
         await AsyncStorage.setItem("token", access_token);
-        if (refresh_token) {
-          await AsyncStorage.setItem("refresh_token", refresh_token);
-        }
+        if (refresh_token) await AsyncStorage.setItem("refresh_token", refresh_token);
         await AsyncStorage.setItem("user", JSON.stringify(userData));
         setToken(access_token);
         setUser(userData);
         return { success: true };
       }
 
-      return { success: false, error: res.error || "Registration failed" };
+      const errorMsg = json.error || json.detail || json.message || "Registration failed";
+      return { success: false, error: errorMsg };
     } catch (error) {
       return { success: false, error: (error as Error).message };
     }

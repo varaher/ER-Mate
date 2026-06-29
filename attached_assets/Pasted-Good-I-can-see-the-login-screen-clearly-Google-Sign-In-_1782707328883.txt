@@ -1,0 +1,112 @@
+Good — I can see the login screen clearly. Google Sign-In is there. The issue is specifically the Create Account (email/password registration) not working.
+
+---
+
+## What I Can See
+
+```
+Login screen:
+  ✓ Sign in with Google — working
+  ✓ Email + Password fields
+  ✓ Forgot Password?
+  ✓ Sign In button
+  ✓ Link your device (QR) — shows "QR expired"
+  ✓ Don't have an account? Sign Up
+```
+
+---
+
+## The Real Problem — Two Issues
+
+**Issue 1 — Create Account failing**
+
+Most likely cause based on what you showed:
+
+```
+The registration endpoint probably tries
+to send a welcome email via Resend.
+
+Resend is broken (wrong domain — Japan).
+
+So the flow is:
+  Doctor fills form → taps Create Account
+  Backend creates user ✓
+  Backend tries to send welcome email
+  Resend rejects (wrong domain) ✗
+  Backend throws an error
+  Frontend shows failure
+  Doctor thinks account wasn't created
+```
+
+The account IS being created — but the email sending is crashing the whole registration response.
+
+---
+
+## Fix — Tell Your Developer
+
+**Fix 1 — Make email sending non-blocking**
+
+```typescript
+// In server/routes/auth.ts or similar
+// Find the register route
+
+// CURRENT (wrong):
+await sendWelcomeEmail(user.email); // crashes if Resend fails
+res.json({ success: true, user });
+
+// FIX — wrap email in try/catch, don't block registration:
+try {
+  await sendWelcomeEmail(user.email);
+} catch (err) {
+  console.error('Welcome email failed:', err);
+  // Don't throw — just log it
+}
+// Registration succeeds regardless of email
+res.json({ success: true, user });
+```
+
+This fix alone will make registration work immediately even before Resend is fixed.
+
+---
+
+**Fix 2 — Fix Resend domain (Japan → Mumbai)**
+
+```
+Step 1: Go to resend.com → log in
+Step 2: Domains → find the wrong domain
+Step 3: Delete it
+Step 4: Add Domain → ermate.in
+        Region: ap-south-1 (Mumbai) ← NOT Japan
+Step 5: Copy the DNS records Resend shows you
+Step 6: Add them to your domain registrar
+Step 7: Wait 15-30 min → Verified ✓
+Step 8: Update from address in code:
+        from: 'ErMate <noreply@ermate.in>'
+```
+
+---
+
+**Fix 3 — Also fix Forgot Password same way**
+
+Same root cause. Forgot password email fails because Resend domain is wrong. Same fix — both will work once ermate.in is verified in Resend.
+
+---
+
+## Priority
+
+```
+Do Fix 1 first — 5 minutes
+  Registration works immediately
+  No waiting for DNS
+
+Do Fix 2 after — 30 minutes
+  Emails start working
+  Forgot password works
+  Welcome emails work
+```
+
+---
+
+**Tell your developer:** Find the register route, wrap the `sendWelcomeEmail` call in try/catch so it doesn't block registration. That's the immediate fix. Resend domain fix follows separately.
+
+Also — where is ermate.in registered? GoDaddy, Namecheap, Hostinger? Tell me and I'll give exact DNS steps.
