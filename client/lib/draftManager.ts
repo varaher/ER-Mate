@@ -12,6 +12,8 @@ export interface DraftCase {
   triageData?: any;
   caseSheetData?: any;
   dischargeSummaryData?: any;
+  lastActiveTab?: string;
+  heldAt?: string;
 }
 
 export interface DraftStore {

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useRef } from "react";
+import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -15,7 +15,7 @@ import {
   Platform,
 } from "react-native";
 import { Audio } from "expo-av";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -28,6 +28,8 @@ import { getApiUrl } from "@/lib/query-client";
 import { isPediatric } from "@/lib/pediatricVitals";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { getAllDrafts, type DraftCase } from "@/lib/draftManager";
+import { draftOverallCompletion, calcTabCompletion } from "@/lib/tabCompletion";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -79,7 +81,7 @@ const getPriorityColor = (level: number | null) => {
 
 export default function CasesScreen() {
   const navigation = useNavigation<NavigationProp>();
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const { user, token } = useAuth();
   const { shiftSession, activeShift, membership, isHOD } = useDepartment();
   const insets = useSafeAreaInsets();
@@ -91,6 +93,16 @@ export default function CasesScreen() {
   const [editMode, setEditMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  const [inProgressDrafts, setInProgressDrafts] = useState<DraftCase[]>([]);
+
+  useFocusEffect(
+    useCallback(() => {
+      getAllDrafts().then((all) => {
+        setInProgressDrafts(all.filter((d) => d.status === "draft" && !!d.backendCaseId));
+      });
+    }, []),
+  );
 
   const [reviewModal, setReviewModal] = useState<ShiftCaseItem | null>(null);
   const [reviewNote, setReviewNote] = useState("");
@@ -512,6 +524,69 @@ export default function CasesScreen() {
         )}
       </View>
 
+      {inProgressDrafts.length > 0 && (
+        <View style={{ paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg }}>
+          <View style={styles.sectionHeaderRow}>
+            <View style={[styles.sectionDot, { backgroundColor: "#f59e0b" }]} />
+            <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
+              IN PROGRESS ({inProgressDrafts.length})
+            </Text>
+          </View>
+          {inProgressDrafts.map((draft) => {
+            const patientName = draft.triageData?.patient?.name || draft.caseSheetData?.patient?.name || "Unknown patient";
+            const complaint = draft.triageData?.presenting_complaint?.text || draft.caseSheetData?.presenting_complaint?.text || "";
+            const priority: number = draft.triageData?.triage_priority ?? draft.caseSheetData?.triage_priority ?? 5;
+            const dotColor = getPriorityColor(priority);
+            const completion = draftOverallCompletion(draft);
+            const barColor = completion >= 75 ? "#10b981" : completion >= 30 ? "#f59e0b" : "#9ca3af";
+            const heldAt = draft.heldAt ? new Date(draft.heldAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : null;
+            const patientAge = parseFloat(draft.triageData?.patient?.age || "0") || 0;
+            const screenName = isPediatric(patientAge) ? "PediatricCaseSheet" : "CaseSheet";
+            return (
+              <Pressable
+                key={draft.draftId}
+                onPress={() => navigation.navigate(screenName as any, { caseId: draft.backendCaseId! })}
+                style={({ pressed }) => [
+                  styles.inProgressCard,
+                  { backgroundColor: theme.card, borderColor: theme.border, opacity: pressed ? 0.85 : 1 },
+                ]}
+              >
+                <View style={styles.inProgressLeft}>
+                  <View style={[styles.priorityDot, { backgroundColor: dotColor }]} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.inProgressName, { color: theme.text }]} numberOfLines={1}>{patientName}</Text>
+                    {!!complaint && (
+                      <Text style={[styles.inProgressComplaint, { color: theme.textMuted }]} numberOfLines={1}>{complaint}</Text>
+                    )}
+                    {completion > 0 && (
+                      <View style={styles.inProgressBarRow}>
+                        <View style={[styles.inProgressBarBg, { backgroundColor: isDark ? "#334155" : "rgba(0,0,0,0.06)" }]}>
+                          <View style={[styles.inProgressBarFill, { width: `${completion}%` as any, backgroundColor: barColor }]} />
+                        </View>
+                        <Text style={[styles.inProgressPct, { color: theme.textMuted }]}>{completion}%</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+                <View style={styles.inProgressRight}>
+                  {heldAt ? (
+                    <View style={styles.heldBadge}>
+                      <Feather name="pause-circle" size={10} color="#92400e" />
+                      <Text style={styles.heldBadgeText}>Held {heldAt}</Text>
+                    </View>
+                  ) : null}
+                  <View style={[styles.resumeBtn, { backgroundColor: theme.primary }]}>
+                    <Text style={styles.resumeBtnText}>Resume</Text>
+                    <Feather name="arrow-right" size={12} color="#fff" />
+                  </View>
+                </View>
+              </Pressable>
+            );
+          })}
+          <View style={[styles.sectionDivider, { backgroundColor: theme.border }]} />
+        </View>
+      )}
+
       {onShift && isConsultantOrHOD && shiftCases.length > 0 ? (
         <View style={{ paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg }}>
           <View style={styles.sectionHeaderRow}>
@@ -706,6 +781,83 @@ const styles = StyleSheet.create({
   filterBtn: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.full },
   filterText: { ...Typography.label },
 
+  inProgressCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    marginBottom: Spacing.sm,
+    padding: Spacing.md,
+    gap: Spacing.sm,
+  },
+  inProgressLeft: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: Spacing.sm,
+  },
+  inProgressName: {
+    fontSize: 14,
+    fontWeight: "700",
+    marginBottom: 2,
+  },
+  inProgressComplaint: {
+    fontSize: 11,
+    marginBottom: 5,
+  },
+  inProgressBarRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  inProgressBarBg: {
+    flex: 1,
+    height: 4,
+    borderRadius: 99,
+    overflow: "hidden",
+    maxWidth: 100,
+  },
+  inProgressBarFill: {
+    height: "100%",
+    borderRadius: 99,
+  },
+  inProgressPct: {
+    fontSize: 9,
+    fontWeight: "700",
+  },
+  inProgressRight: {
+    alignItems: "flex-end",
+    gap: 6,
+    flexShrink: 0,
+  },
+  heldBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "#fef3c7",
+    borderRadius: 99,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  heldBadgeText: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: "#92400e",
+  },
+  resumeBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 99,
+  },
+  resumeBtnText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#fff",
+  },
   sectionHeaderRow: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginBottom: Spacing.sm },
   sectionDot: { width: 6, height: 6, borderRadius: 3 },
   sectionLabel: { fontSize: 11, fontWeight: "700", letterSpacing: 0.8 },

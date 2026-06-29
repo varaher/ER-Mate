@@ -1,0 +1,61 @@
+Let me build this properly.
+
+Here's the complete interactive design. Let me walk you through every part.
+
+---
+
+**How to test it:**
+
+1. Tap any case from the list — it opens the case sheet
+2. Wait 2 seconds — a **red alert banner** appears at the top: *"New patient arrived — needs attention"*
+3. Tap **"Hold & Start New →"** — a confirmation sheet slides up showing exactly what's been saved so far
+4. Confirm — goes straight to New Patient form
+5. Start the new case — it opens as the active case
+6. Look at the **tray at the bottom** — you see all open cases as tabs
+7. Tap the held case — it resumes exactly where you left off
+8. The **"+"** button in the tray lets you add more cases anytime
+
+---
+
+**The five components your developer needs to build:**
+
+**1. Red alert banner** — appears when a new patient arrives mid-documentation. One tap holds the current case and opens New Case.
+
+**2. Hold confirmation modal** — shows the doctor exactly what percentage is saved in each tab before they switch. No anxiety about losing work.
+
+**3. Case tray** — permanent bar at the bottom of every case sheet. Shows all open cases as tabs with completion percentage and HELD badge. Tap to switch instantly.
+
+**4. Resume banner** — when a held case is reopened, a yellow banner shows "Resuming — X% complete" with the last note. Doctor knows exactly where they are.
+
+**5. Cases list** — In Progress section at the top showing all held and active cases with completion bars and "Tap to resume" prompt.
+
+---
+
+**What to tell your developer:**
+
+```
+No backend changes needed.
+All local state management.
+
+New state per case:
+  status: "active" | "held" | "complete"
+  activeTab: last tab the doctor was on
+  tabCompletion: already exists
+
+New UI components:
+  CaseTray — bottom bar on CaseSheetScreen
+  HoldModal — confirmation before switching
+  ResumeBanner — shown when case is resumed
+  Red alert banner — triggered by new shift case
+                     registration or manual trigger
+
+Auto-hold trigger:
+  When doctor taps [+ New Case] from 
+  within a case sheet — current case
+  auto-saves and status → "held"
+  
+  When doctor taps another case in tray —
+  same: current case → "held"
+
+Estimated build time: 3-4 days frontend
+```

@@ -44,6 +44,10 @@ import { cacheCasePayload } from "@/lib/caseCache";
 import { recordCaseTime, getTimeSavedMinutes } from "@/hooks/useCaseTimer";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { updateDraft, getAllDrafts, type DraftCase } from "@/lib/draftManager";
+import { CaseTray } from "@/components/CaseTray";
+import { HoldModal } from "@/components/HoldModal";
+import { calcTabCompletion, overallCompletion, type TabCompletionMap } from "@/lib/tabCompletion";
 import {
   AIRWAY_STATUS_OPTIONS,
   AIRWAY_MAINTENANCE_OPTIONS,
@@ -558,6 +562,12 @@ export default function CaseSheetScreen() {
   const caseStartRef = useRef<number>(Date.now());
   const [dictationCompletion, setDictationCompletion] = useState<DictationCompletion | null>(null);
   const [showDictationResult, setShowDictationResult] = useState(false);
+  const [showHoldModal, setShowHoldModal] = useState(false);
+  const [pendingSwitchDraft, setPendingSwitchDraft] = useState<DraftCase | null>(null);
+  const [holdAndNewMode, setHoldAndNewMode] = useState(false);
+  const [trayRefreshKey, setTrayRefreshKey] = useState(0);
+  const [isResumed, setIsResumed] = useState(false);
+  const [holdTabSnapshot, setHoldTabSnapshot] = useState<TabCompletionMap | null>(null);
   const [roundsNudge, setRoundsNudge] = useState<{
     savedMins: number;
     complaint: string;
@@ -791,6 +801,7 @@ export default function CaseSheetScreen() {
         if (hasLocalDraft) {
           loadFromCaseSheetData(draft!.caseSheetData);
           setLastSaved(new Date(draft!.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+          if ((draft as any)?.heldAt) setIsResumed(true);
         } else {
         const newFormData = getDefaultATLSFormData();
         if (res.data.vitals_at_arrival) {
@@ -1302,6 +1313,41 @@ export default function CaseSheetScreen() {
         informant: mlcDetails.informantBroughtBy,
       } : null,
     };
+  };
+
+  const handleSwitchCase = (targetDraft: DraftCase) => {
+    const payload = buildPayload();
+    setHoldTabSnapshot(calcTabCompletion(payload));
+    setPendingSwitchDraft(targetDraft);
+    setHoldAndNewMode(false);
+    setShowHoldModal(true);
+  };
+
+  const handleHoldAndNew = () => {
+    const payload = buildPayload();
+    setHoldTabSnapshot(calcTabCompletion(payload));
+    setHoldAndNewMode(true);
+    setPendingSwitchDraft(null);
+    setShowHoldModal(true);
+  };
+
+  const confirmHoldAndSwitch = async () => {
+    setShowHoldModal(false);
+    await handleSave(true);
+    const effectiveDraftId = currentDraftId || localDraftIdRef.current;
+    if (effectiveDraftId) {
+      await updateDraft(effectiveDraftId, {
+        lastActiveTab: activeTab,
+        heldAt: new Date().toISOString(),
+      } as any);
+    }
+    setTrayRefreshKey((k) => k + 1);
+    if (holdAndNewMode) {
+      navigation.goBack();
+      setTimeout(() => (navigation as any).navigate("Triage"), 350);
+    } else if (pendingSwitchDraft?.backendCaseId) {
+      (navigation as any).replace("CaseSheet", { caseId: pendingSwitchDraft.backendCaseId });
+    }
   };
 
   const handleSave = async (silent: boolean = false) => {
@@ -2227,6 +2273,15 @@ export default function CaseSheetScreen() {
             <Pressable style={styles.headerIcon}><Feather name="mic" size={20} color={theme.textSecondary} /></Pressable>
           </View>
         </View>
+        {isResumed && (
+          <View style={styles.resumeBanner}>
+            <Feather name="play-circle" size={13} color="#92400e" />
+            <Text style={styles.resumeBannerText}>Resuming held case — pick up where you left off</Text>
+            <Pressable onPress={() => setIsResumed(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Feather name="x" size={13} color="#92400e" />
+            </Pressable>
+          </View>
+        )}
         <View style={styles.caseModeRow}>
           {(["Medical", "Trauma"] as const).map((m) => (
             <Pressable
@@ -3651,6 +3706,12 @@ export default function CaseSheetScreen() {
           setActiveTab(tab);
         }}
       />
+      <CaseTray
+        currentCaseId={caseId}
+        onSwitchCase={handleSwitchCase}
+        onNewCase={handleHoldAndNew}
+        refreshKey={trayRefreshKey}
+      />
       <View style={[styles.bottomNav, { backgroundColor: theme.card, borderTopColor: theme.border, paddingBottom: insets.bottom + Spacing.sm }]}>
         <Pressable style={[styles.navBtn, styles.prevBtn]} onPress={handlePrevious} disabled={activeTab === "patient"}>
           <Feather name="arrow-left" size={18} color={activeTab === "patient" ? theme.textMuted : theme.text} />
@@ -3706,6 +3767,14 @@ export default function CaseSheetScreen() {
           </View>
         </Pressable>
       </Modal>
+      <HoldModal
+        visible={showHoldModal}
+        patientName={caseData?.patient?.name || "This patient"}
+        tabCompletion={holdTabSnapshot}
+        onCancel={() => setShowHoldModal(false)}
+        onConfirm={confirmHoldAndSwitch}
+        actionLabel={holdAndNewMode ? "Hold & start new patient" : "Hold & switch case"}
+      />
     </View>
   );
 }
@@ -3721,6 +3790,22 @@ const styles = StyleSheet.create({
   savedText: { ...Typography.small, marginTop: 2 },
   headerRight: { flexDirection: "row", gap: Spacing.sm },
   headerIcon: { padding: Spacing.sm },
+  resumeBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#fef3c7",
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderBottomWidth: 1,
+    borderBottomColor: "#fde68a",
+  },
+  resumeBannerText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#92400e",
+  },
   caseModeRow: { flexDirection: "row", gap: Spacing.xs, paddingHorizontal: Spacing.md, paddingTop: Spacing.xs },
   caseModeBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: Spacing.md, paddingVertical: 5, borderRadius: BorderRadius.full, borderWidth: 1 },
   caseModeBtnText: { fontSize: 12, fontWeight: "700" },
