@@ -801,11 +801,26 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       if (!authHeader) {
         return res.status(401).json({ error: "Authentication required" });
       }
+
+      // For Google users, currentPassword is not sent from the client.
+      // The external backend stores their email as the default password on Google sign-up.
+      // Decode the JWT to get the email and use it as the fallback current_password.
+      let resolvedCurrentPassword = currentPassword;
+      if (!resolvedCurrentPassword) {
+        const token = authHeader.replace(/^Bearer\s+/i, "");
+        const payload = decodeJwt(token);
+        const email = payload?.email;
+        if (email) {
+          resolvedCurrentPassword = email.toLowerCase().trim();
+          console.log("[ChangePassword] Google user — using email as current_password");
+        }
+      }
+
       const EXTERNAL_API = "https://er-emr-backend.onrender.com/api";
       const response = await fetch(`${EXTERNAL_API}/auth/change-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": authHeader },
-        body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+        body: JSON.stringify({ current_password: resolvedCurrentPassword, new_password: newPassword }),
       });
       if (response.ok) {
         const data = await response.json().catch(() => ({}));
