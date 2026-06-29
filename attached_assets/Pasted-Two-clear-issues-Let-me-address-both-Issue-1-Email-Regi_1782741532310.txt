@@ -1,0 +1,227 @@
+Two clear issues. Let me address both.
+
+---
+
+## Issue 1 — Email Registration and Login Broken
+
+**Root cause — same Resend problem:**
+
+```
+Registration:
+  Form submits → user created in DB
+  Welcome email fires → Resend fails
+  Whole request crashes
+  Doctor sees "failed" but account exists
+
+Login with email:
+  Doctor tries to log in with email they 
+  registered — gets error
+  Because registration appeared to fail,
+  they don't know the account exists
+```
+
+**Tell your developer — two fixes:**
+
+**Fix A — Wrap email in try/catch (5 minutes)**
+```typescript
+// server/routes/auth.ts — register route
+
+// BEFORE:
+await sendWelcomeEmail(user.email, user.name);
+
+// AFTER:
+try {
+  await sendWelcomeEmail(user.email, user.name);
+} catch (err) {
+  console.error('[Email] Welcome email failed:', err.message);
+  // Never block registration for email failure
+}
+
+// Registration succeeds regardless
+res.json({ success: true, token, user });
+```
+
+**Fix B — Same for forgot password route**
+```typescript
+// server/routes/auth.ts — forgot password route
+
+try {
+  await sendPasswordResetEmail(email, resetLink);
+} catch (err) {
+  console.error('[Email] Reset email failed:', err.message);
+}
+
+// Still return success so user isn't confused
+res.json({ 
+  message: "If this email exists, a reset link was sent." 
+});
+```
+
+---
+
+## Issue 2 — Google Login Users Need to Set a Password
+
+This is a genuine product gap. When a doctor signs up with Google, no password is created. They can't log in with email later. They can't share credentials with a colleague. They feel locked to Google.
+
+**What needs to be built — "Set Password" in Profile:**
+
+```
+Profile → Security → Set Password
+
+If logged in via Google:
+  "You signed up with Google.
+   Set a password to also log in 
+   with your email."
+  
+  New password:        [________]
+  Confirm password:    [________]
+  
+  [Set Password]
+  
+  ✓ After this, you can log in with
+    rajagirier@gmail.com + your password
+    OR continue using Google Sign-In
+```
+
+---
+
+## How It Works Technically
+
+**Tell your developer:**
+
+```typescript
+// New route: POST /api/auth/set-password
+// Auth required (must be logged in)
+
+app.post('/api/auth/set-password', 
+  requireAuth, 
+  async (req, res) => {
+    const { password, confirmPassword } = req.body;
+    
+    if (password !== confirmPassword) {
+      return res.status(400).json({ 
+        error: 'Passwords do not match' 
+      });
+    }
+    
+    if (password.length < 8) {
+      return res.status(400).json({ 
+        error: 'Password must be at least 8 characters' 
+      });
+    }
+    
+    // Hash and save
+    const hashed = await bcrypt.hash(password, 10);
+    
+    await db.update(users)
+      .set({ 
+        passwordHash: hashed,
+        hasPassword: true  // new column
+      })
+      .where(eq(users.id, req.user.id));
+    
+    res.json({ success: true });
+  }
+);
+
+// Also update: POST /api/auth/change-password
+// For users who already have a password
+
+app.post('/api/auth/change-password',
+  requireAuth,
+  async (req, res) => {
+    const { currentPassword, newPassword } = req.body;
+    
+    // Verify current password first
+    const user = await db.select()
+      .from(users)
+      .where(eq(users.id, req.user.id))
+      .limit(1);
+    
+    const valid = await bcrypt.compare(
+      currentPassword, 
+      user[0].passwordHash
+    );
+    
+    if (!valid) {
+      return res.status(401).json({ 
+        error: 'Current password is incorrect' 
+      });
+    }
+    
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await db.update(users)
+      .set({ passwordHash: hashed })
+      .where(eq(users.id, req.user.id));
+    
+    res.json({ success: true });
+  }
+);
+```
+
+**Schema — add one column:**
+```sql
+ALTER TABLE users 
+ADD COLUMN IF NOT EXISTS has_password 
+BOOLEAN DEFAULT false;
+
+-- Run: npx drizzle-kit push
+```
+
+**Profile screen — Security section:**
+```typescript
+// In ProfileScreen.tsx
+
+// Show different UI based on how user signed up:
+
+const hasPassword = user.hasPassword;
+const isGoogleUser = user.googleId !== null;
+
+// If Google user with no password:
+{isGoogleUser && !hasPassword && (
+  <SettingsRow
+    icon="lock"
+    title="Set Password"
+    subtitle="Log in with email + password too"
+    onPress={() => navigate('SetPassword')}
+    badge="Recommended"
+  />
+)}
+
+// If user has a password:
+{hasPassword && (
+  <SettingsRow
+    icon="lock"
+    title="Change Password"
+    subtitle="Update your login password"
+    onPress={() => navigate('ChangePassword')}
+  />
+)}
+```
+
+---
+
+## Summary — Three Tasks for Developer
+
+```
+Task 1 — 5 minutes (immediate fix):
+  Wrap sendWelcomeEmail in try/catch
+  Wrap sendPasswordResetEmail in try/catch
+  Registration and login work immediately
+
+Task 2 — 30 minutes (Resend fix):
+  Delete Japan domain in Resend
+  Add ermate.in with Mumbai region
+  Add DNS records to domain registrar
+  Emails start working
+
+Task 3 — Half day (set password feature):
+  Add has_password column to users table
+  POST /api/auth/set-password route
+  POST /api/auth/change-password route  
+  SetPasswordScreen in Profile
+  ChangePasswordScreen in Profile
+```
+
+**Task 1 is the unblock. Do it now.**
+Tasks 2 and 3 follow in order.
