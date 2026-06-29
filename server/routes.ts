@@ -1007,22 +1007,40 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       }
       tryPasswords.push(email); // Google fallback: email = default password
 
+      // Login helper with cold-start retry (same pattern as the login proxy)
+      const tryLogin = async (emailAddr: string, pw: string): Promise<string | null> => {
+        const label = pw === emailAddr ? "email-as-password" : "stored-credential";
+        for (const timeoutMs of [20000, 45000]) {
+          try {
+            const ctrl = new AbortController();
+            const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+            const lr = await fetch(`${EXT}/auth/login`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ email: emailAddr.trim().toLowerCase(), password: pw }),
+              signal: ctrl.signal,
+            });
+            clearTimeout(timer);
+            const ld = await lr.json().catch(() => null);
+            console.log(`[ResetPassword] Login attempt (${label}, ${timeoutMs}ms):`, lr.status, JSON.stringify(ld)?.substring(0, 120));
+            if (lr.ok && (ld?.token || ld?.access_token)) return ld.token || ld.access_token;
+            if (!lr.ok) break; // Wrong password — no point retrying with longer timeout
+          } catch (e: any) {
+            if (e?.name === "AbortError") {
+              console.warn(`[ResetPassword] Login attempt (${label}) timed out after ${timeoutMs}ms — retrying`);
+              continue;
+            }
+            throw e;
+          }
+        }
+        return null;
+      };
+
       let authToken: string | null = null;
       let usedPassword: string | null = null;
       for (const pw of tryPasswords) {
-        const lr = await fetch(`${EXT}/auth/login`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password: pw }),
-        });
-        if (lr.ok) {
-          const ld = await lr.json().catch(() => null);
-          if (ld?.token || ld?.access_token) {
-            authToken = ld.token || ld.access_token;
-            usedPassword = pw;
-            break;
-          }
-        }
+        const tok = await tryLogin(email, pw);
+        if (tok) { authToken = tok; usedPassword = pw; break; }
       }
 
       if (!authToken) {

@@ -1,0 +1,161 @@
+The developer has done an excellent job of explaining the full picture. Let me review it clearly.
+
+---
+
+## What the Developer Got Right ✓
+
+The architecture explanation is accurate and honest:
+
+```
+Google users → password on external backend 
+               is their email address
+               
+Email users → password is what they set
+
+auth_sessions → caches the password after 
+                first successful login
+                
+Password reset → needs auth_sessions to work
+```
+
+The root cause diagnosis is correct:
+```
+rajagirier@gmail.com was created BEFORE
+credential caching was added.
+
+auth_sessions has NO entry for this email.
+
+So password reset has nothing to work with.
+Returns error now (fix is good — no more lying).
+```
+
+---
+
+## The One Mistake ✓
+
+```
+The developer says:
+
+"Fix for this user specifically:
+  Someone with external backend DB access 
+  must run:
+  UPDATE users SET password_hash = bcrypt('new_password')
+  WHERE email = 'rajagirier@gmail.com'"
+
+THIS IS WRONG.
+```
+
+The external backend is `er-emr-backend.onrender.com` — you don't control that database. You cannot run SQL on it directly. That's the whole reason the credential caching system exists in the first place.
+
+---
+
+## The Actual Fix for This Account
+
+The developer missed the simplest solution:
+
+```
+rajagirier@gmail.com is a Google account.
+
+Google users' password on external backend
+= their email address.
+
+So the password for rajagirier@gmail.com
+on the external backend IS:
+  rajagirier@gmail.com
+
+That's the design. Email = password for Google users.
+```
+
+**Tell your developer:**
+
+```typescript
+// In the reset-password route,
+// add one more attempt BEFORE giving up:
+
+// Attempt 1: auth_sessions lookup (existing)
+// Attempt 2: email as password (existing) ← THIS SHOULD WORK
+//            but may be failing silently
+
+// Check this specific login attempt:
+const testLogin = await fetch(
+  'https://er-emr-backend.onrender.com/api/auth/login',
+  {
+    method: 'POST',
+    body: JSON.stringify({
+      email: 'rajagirier@gmail.com',
+      password: 'rajagirier@gmail.com'  // ← email as password
+    })
+  }
+);
+console.log('[Debug] Google password attempt:', 
+  await testLogin.json());
+
+// If this succeeds → auth token obtained
+// Change password to new one
+// Store new password in auth_sessions
+// Return success — for real
+```
+
+---
+
+## Why This Should Work
+
+```
+Account rajagirier@gmail.com:
+  Created via Google Sign-In
+  External backend password = rajagirier@gmail.com
+  
+Reset password route attempt 2 already tries:
+  email as password → should succeed
+  
+But it's failing — which means either:
+
+1. The email being passed is slightly wrong
+   (case mismatch, whitespace, etc.)
+
+2. The external backend URL is different
+   for login vs what the reset route uses
+
+3. The attempt is timing out before response
+   (Render cold start during the reset)
+```
+
+**Quickest debug — tell developer to add this log:**
+
+```typescript
+console.log('[ResetPassword] Trying email-as-password for:', email);
+const attempt = await fetch(externalBackend + '/api/auth/login', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ 
+    email: email.trim().toLowerCase(), 
+    password: email.trim().toLowerCase() 
+  }),
+  signal: AbortSignal.timeout(45000), // 45 sec for cold start
+});
+const result = await attempt.json();
+console.log('[ResetPassword] Email-as-password result:', result);
+```
+
+---
+
+## Meanwhile — Get You Logged In Now
+
+Since Google Sign-In works and the external backend password for your account IS your email:
+
+```
+Option A — Use Google Sign-In
+  Works right now. No fix needed.
+  Just tap Sign in with Google.
+
+Option B — Email login with email as password
+  Email:    rajagirier@gmail.com
+  Password: rajagirier@gmail.com
+  
+  Try this right now on the login screen.
+  If it works → you're in
+  Then immediately go to Profile → 
+  Set Password → set something memorable
+```
+
+**Try Option B right now — email address as the password. That is literally what the external backend stores for Google-linked accounts.**
