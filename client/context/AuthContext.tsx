@@ -104,11 +104,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await AsyncStorage.removeItem("token");
       await AsyncStorage.removeItem("refresh_token");
       await AsyncStorage.removeItem("user");
-      
-      const res = await apiPost<{ access_token: string; refresh_token?: string; user: User }>("/auth/login", {
-        email,
-        password,
+
+      // Route through our proxy so cold-start retries are handled server-side
+      const baseUrl = getApiUrl();
+      const rawRes = await fetch(`${baseUrl}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.toLowerCase().trim(), password }),
       });
+      const json = await rawRes.json().catch(() => ({}));
+      const res = rawRes.ok
+        ? { success: true, data: json as { access_token: string; refresh_token?: string; user: User } }
+        : { success: false, error: json?.error || json?.detail || "Login failed" };
 
       console.log("[AuthContext] Login response:", res.success, res.error);
 

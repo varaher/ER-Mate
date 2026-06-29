@@ -4,7 +4,7 @@ description: Why production publish fails with iOS/Android bundle timeout and ho
 ---
 
 ## The problem
-Production build (cloudrun) always starts Metro from a cold cache. Compiling iOS/Android bundles takes ~3-4 min from cold; the build script hard timeout is 2 min → "Download timeout after 2m". Local dev succeeds only because Metro transform cache warms up between attempts.
+Production build (cloudrun) always starts Metro from a cold cache. Compiling iOS/Android bundles takes ~2+ min from cold; the build script per-bundle download timeout is 2 min → "Download timeout after 2m". Local dev succeeds only because Metro transform cache warms up between attempts.
 
 ## The fix (applied)
 Two-part solution:
@@ -18,3 +18,8 @@ Verify with: python3 -c "import json; m=json.load(open('static-build/ios/manifes
 
 ## Pre-build command
 REPLIT_INTERNAL_APP_DOMAIN=er-mate.replit.app npm run expo:static:build
+
+## Metro cache warm-up trick (when build keeps failing)
+If Metro times out on iOS/Android (~99% compiled but download times out), the Metro transform cache is still warm in memory even after the build exits. Immediately retry: `REPLIT_INTERNAL_APP_DOMAIN=er-mate.replit.app npm run expo:static:build`. The second attempt uses cached transforms → bundles compile in 5-7s each instead of 2+ min, and downloads complete well within the timeout. If Metro process died, let it fail once with a 5-minute bash timeout (which populates the on-disk cache), then retry immediately.
+
+**Why:** Metro's on-disk transform cache in node_modules/.cache/metro persists between runs. First run populates it (~2 min); second run reads from it (~6 s). The build script does NOT clear this cache before starting.

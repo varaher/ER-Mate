@@ -697,6 +697,57 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  // Login proxy — routes through our server to handle Render cold-start retries
+  app.post("/api/auth/login", async (req: Request, res: Response) => {
+    const EXT = "https://er-emr-backend.onrender.com/api";
+    const { email, password } = req.body || {};
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email and password are required" });
+    }
+    const attempt = async (timeoutMs: number) => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const r = await fetch(`${EXT}/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: email.toLowerCase().trim(), password }),
+          signal: controller.signal,
+        });
+        clearTimeout(timer);
+        return r;
+      } catch (err: any) {
+        clearTimeout(timer);
+        if (err.name === "AbortError") return null; // timed out
+        throw err;
+      }
+    };
+    try {
+      // First attempt — 20 s (fast path when backend is warm)
+      let r = await attempt(20000);
+      // Second attempt — 40 s (allow time for Render cold start)
+      if (!r) {
+        console.warn("[Login] First attempt timed out, retrying for cold start...");
+        r = await attempt(40000);
+      }
+      if (!r) {
+        return res.status(503).json({ error: "Server is taking too long to respond. Please try again." });
+      }
+      const text = await r.text();
+      let data: any = null;
+      try { data = JSON.parse(text); } catch {}
+      if (r.ok && data) {
+        console.log(`[Login] Success for ${email}`);
+        return res.json(data);
+      }
+      const errorMsg = data?.detail || data?.error || data?.message || "Invalid credentials";
+      return res.status(r.status).json({ error: errorMsg });
+    } catch (err) {
+      console.error("[Login] Error:", err);
+      return res.status(500).json({ error: "Login failed. Please try again." });
+    }
+  });
+
   // Registration proxy — forwards to external backend and handles email-send failures gracefully
   app.post("/api/auth/register", async (req: Request, res: Response) => {
     const EXTERNAL_API = "https://er-emr-backend.onrender.com/api";
