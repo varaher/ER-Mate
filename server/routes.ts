@@ -641,7 +641,26 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
       if (loginRes.ok) {
         const loginData = await safeJsonParse(loginRes);
-        if (loginData) return res.json(loginData);
+        if (loginData) {
+          // Cache credentials so password-reset flow can retrieve the current password later
+          try {
+            const pool = getPool();
+            if (pool) {
+              const { enc, iv, tag } = encryptPassword(loginPassword);
+              const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+              const jwtPayload = loginData.token ? decodeJwt(loginData.token) : null;
+              const userId = jwtPayload?.sub || jwtPayload?.id || jwtPayload?.user_id || "";
+              await pool.query("DELETE FROM auth_sessions WHERE email = $1", [email.toLowerCase().trim()]);
+              await pool.query(
+                `INSERT INTO auth_sessions (user_id, email, encrypted_password, iv, tag, expires_at) VALUES ($1, $2, $3, $4, $5, $6)`,
+                [userId, email.toLowerCase().trim(), enc, iv, tag, expiresAt]
+              );
+            }
+          } catch (cacheErr) {
+            console.warn("[Google Auth] Could not cache credentials:", cacheErr);
+          }
+          return res.json(loginData);
+        }
       }
 
       // Try 2: attempt registration for new Google users
@@ -738,6 +757,23 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       try { data = JSON.parse(text); } catch {}
       if (r.ok && data) {
         console.log(`[Login] Success for ${email}`);
+        // Cache credentials so password-reset flow can retrieve the current password later
+        try {
+          const pool = getPool();
+          if (pool) {
+            const { enc, iv, tag } = encryptPassword(password);
+            const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+            const jwtPayload = data.token ? decodeJwt(data.token) : null;
+            const userId = jwtPayload?.sub || jwtPayload?.id || jwtPayload?.user_id || "";
+            await pool.query("DELETE FROM auth_sessions WHERE email = $1", [email.toLowerCase().trim()]);
+            await pool.query(
+              `INSERT INTO auth_sessions (user_id, email, encrypted_password, iv, tag, expires_at) VALUES ($1, $2, $3, $4, $5, $6)`,
+              [userId, email.toLowerCase().trim(), enc, iv, tag, expiresAt]
+            );
+          }
+        } catch (cacheErr) {
+          console.warn("[Login] Could not cache credentials:", cacheErr);
+        }
         return res.json(data);
       }
       const errorMsg = data?.detail || data?.error || data?.message || "Invalid credentials";
@@ -964,13 +1000,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         );
         if (sessionRow.rows.length > 0) {
           const { encrypted_password, iv, tag } = sessionRow.rows[0];
-          const crypto = await import("crypto");
-          const sessionSecret = process.env.SESSION_SECRET || "ermate-session-secret-32chars!!";
-          const key = crypto.createHash("sha256").update(sessionSecret).digest();
-          const decipher = crypto.createDecipheriv("aes-256-gcm", key, Buffer.from(iv, "base64"));
-          decipher.setAuthTag(Buffer.from(tag, "base64"));
-          const decrypted = Buffer.concat([decipher.update(Buffer.from(encrypted_password, "base64")), decipher.final()]);
-          tryPasswords.push(decrypted.toString("utf8"));
+          tryPasswords.push(decryptPassword(encrypted_password, iv, tag));
         }
       } catch (e) {
         console.warn("[ResetPassword] Could not retrieve stored credentials:", e);
@@ -978,6 +1008,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       tryPasswords.push(email); // Google fallback: email = default password
 
       let authToken: string | null = null;
+      let usedPassword: string | null = null;
       for (const pw of tryPasswords) {
         const lr = await fetch(`${EXT}/auth/login`, {
           method: "POST",
@@ -986,40 +1017,51 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         });
         if (lr.ok) {
           const ld = await lr.json().catch(() => null);
-          if (ld?.token || ld?.access_token) { authToken = ld.token || ld.access_token; break; }
+          if (ld?.token || ld?.access_token) {
+            authToken = ld.token || ld.access_token;
+            usedPassword = pw;
+            break;
+          }
         }
       }
 
-      if (authToken) {
-        // Authenticated — now change the password on the external backend
-        const cpRes = await fetch(`${EXT}/auth/change-password`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${authToken}` },
-          body: JSON.stringify({ current_password: tryPasswords[0], new_password: newPassword }),
+      if (!authToken) {
+        // We could not authenticate to the external backend — the password cannot be changed.
+        // This typically means the user's current password is unknown (never logged in via our proxy,
+        // or logged in via Google with a non-email password). The reset link itself is valid; the
+        // limitation is that we have no way to authenticate on their behalf.
+        console.error(`[ResetPassword] Cannot authenticate to external backend for ${email} — aborting reset`);
+        // Re-open the token so the user can try again (un-mark it as used)
+        await pool.query("UPDATE password_reset_tokens SET used_at = NULL WHERE token = $1 AND used_at IS NOT NULL", [token]);
+        return res.status(500).json({
+          error: "Password reset could not be completed. Please sign in with Google if your account was created that way, or contact support at support@ermate.in.",
+          code: "AUTH_FAILED",
         });
-        if (!cpRes.ok) {
-          const cpErr = await cpRes.text().catch(() => "");
-          console.warn("[ResetPassword] change-password failed:", cpRes.status, cpErr);
-        } else {
-          console.log(`[ResetPassword] Password changed on external backend for ${email}`);
-        }
-      } else {
-        console.warn(`[ResetPassword] Could not authenticate to external backend for ${email} — password not changed there`);
       }
 
-      // Always store new credentials locally as fallback (auth_sessions cache)
-      const crypto = await import("crypto");
-      const iv = crypto.randomBytes(12);
-      const sessionSecret = process.env.SESSION_SECRET || "ermate-session-secret-32chars!!";
-      const key = crypto.createHash("sha256").update(sessionSecret).digest();
-      const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
-      const encrypted = Buffer.concat([cipher.update(newPassword, "utf8"), cipher.final()]);
-      const tag = cipher.getAuthTag();
+      // Authenticated — now change the password on the external backend
+      const cpRes = await fetch(`${EXT}/auth/change-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${authToken}` },
+        body: JSON.stringify({ current_password: usedPassword, new_password: newPassword }),
+      });
+      if (!cpRes.ok) {
+        const cpErr = await cpRes.text().catch(() => "");
+        console.error("[ResetPassword] change-password failed:", cpRes.status, cpErr);
+        await pool.query("UPDATE password_reset_tokens SET used_at = NULL WHERE token = $1 AND used_at IS NOT NULL", [token]);
+        return res.status(500).json({
+          error: "Password reset failed. Please try again or contact support at support@ermate.in.",
+          code: "CHANGE_FAILED",
+        });
+      }
+
+      // Cache new credentials in auth_sessions so future logins/resets work
+      const { enc, iv: newIv, tag: newTag } = encryptPassword(newPassword);
       const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000); // 90 days
-      await pool.query("DELETE FROM auth_sessions WHERE email = $1", [email]);
+      await pool.query("DELETE FROM auth_sessions WHERE email = $1", [email.toLowerCase()]);
       await pool.query(
         `INSERT INTO auth_sessions (user_id, email, encrypted_password, iv, tag, expires_at) VALUES ($1, $2, $3, $4, $5, $6)`,
-        ["", email, encrypted.toString("base64"), iv.toString("base64"), tag.toString("base64"), expiresAt]
+        ["", email.toLowerCase(), enc, newIv, newTag, expiresAt]
       );
 
       console.log(`[ResetPassword] Password reset successfully for ${email}`);

@@ -1,0 +1,135 @@
+The logs tell the complete story. Let me read them line by line.
+
+---
+
+## What the Logs Show
+
+```
+19:47:34  healthcheck failed × 4     ← server restarting
+19:47:37  [DB] password_reset_tokens table ready
+19:47:37  [DB] Department tables ready
+19:47:37  [DB] auth_sessions table ready
+          ↓ server is up
+
+19:48:52  POST /api/auth/login 401   ← login failed
+19:49:10  POST /api/auth/login 401   ← tried again, failed
+
+19:49:15  [ForgotPassword] Reset email sent  ← email working!
+19:49:15  POST /api/auth/forgot-password 200 ← reset requested
+
+19:49:28  GET /api/auth/verify-reset-token 200 ← link clicked
+
+19:50:19  [ResetPassword] Could not authentic ← BUG STILL HERE
+19:50:19  [ResetPassword] Password reset succ ← lying again
+19:50:19  POST /api/auth/reset-password 200
+
+19:50:55  POST /api/auth/login 401   ← login fails again
+19:50:55  POST /api/auth/login 401   ← tried twice
+```
+
+---
+
+## Three Things Confirmed
+
+**Good news — reset email IS arriving**
+```
+19:49:15  [ForgotPassword] Reset email sent
+```
+Resend is working. Email arrived. This is fixed.
+
+**Bad news — the fix didn't fully work**
+```
+19:50:19  [ResetPassword] Could not authentic...
+19:50:19  [ResetPassword] Password reset succ  ← still lying
+```
+
+The developer's fix retrieved the stored password from auth_sessions — but it's still failing to authenticate with the external backend. Then returning success falsely.
+
+**The auth_sessions lookup is failing too**
+```
+The stored password in auth_sessions 
+is either:
+  - Not found (no session stored for this user)
+  - Encrypted differently than expected
+  - The account has no stored session
+    because you logged in via Google originally
+```
+
+---
+
+## Tell Your Developer — Exact Fix Needed
+
+```
+The [ResetPassword] Could not authenticate
+error means auth_sessions lookup returned
+nothing for rajagirier@gmail.com
+
+This happens because the account was 
+originally created via Google OAuth —
+no password session was ever stored.
+
+The fix needs one more approach:
+
+In the reset-password route, after all 
+attempts fail, don't return success.
+Return an actual error so the user knows:
+
+// CURRENT (wrong):
+if (!authToken) {
+  console.log('[ResetPassword] Could not authenticate');
+  // falls through and returns success anyway
+}
+return res.json({ success: true }); // ← LIE
+
+// FIX:
+if (!authToken) {
+  console.error('[ResetPassword] Could not authenticate');
+  return res.status(500).json({ 
+    error: 'Password reset failed — please contact support',
+    code: 'AUTH_FAILED'
+  });
+}
+// Only reach here if password actually changed
+return res.json({ success: true });
+```
+
+**AND — the real solution for Google accounts:**
+
+```
+For accounts that were created via Google
+(no password ever set), the external backend
+needs to be called differently.
+
+Ask developer:
+Does the external backend have an 
+admin password reset endpoint?
+Or a way to set password without 
+knowing the current one?
+
+If yes → use that in the reset flow
+         for Google-linked accounts
+
+If no → the only option is to set the 
+        password directly via the 
+        external backend's admin API
+        or database access
+```
+
+---
+
+## Quickest Path to Get You Logged In
+
+Since Google Sign-In works perfectly for your account — use that for now.
+
+```
+Open ErMate
+Tap: Sign in with Google
+Select: rajagirier@gmail.com
+You're in — no password needed
+```
+
+The email+password login for this specific account is broken because it was Google-linked from the start. Google login bypasses all of this completely.
+
+**Use Google Sign-In today. Fix the password reset for other users separately.**
+
+Does Google Sign-In work for you right now?
