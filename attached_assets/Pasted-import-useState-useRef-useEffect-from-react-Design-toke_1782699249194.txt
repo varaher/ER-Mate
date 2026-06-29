@@ -1,0 +1,844 @@
+import { useState, useRef, useEffect } from "react";
+
+// ── Design tokens ──────────────────────────────────────────────────────────
+const C = {
+  green:       "#1DB870",
+  greenDark:   "#15924F",
+  greenLight:  "rgba(29,184,112,0.1)",
+  greenBorder: "rgba(29,184,112,0.2)",
+  purple:      "#7C6AF6",
+  purpleLight: "rgba(124,106,246,0.1)",
+  ink:         "#0B0F14",
+  inkSoft:     "#1E2530",
+  muted:       "#6B7280",
+  faint:       "#9CA3AF",
+  border:      "#E8EAED",
+  surface:     "#F7F8FA",
+  white:       "#FFFFFF",
+  orange:      "#F59E0B",
+  red:         "#EF4444",
+  blue:        "#3B82F6",
+};
+
+// ── Priority colours ───────────────────────────────────────────────────────
+const P = {
+  P1: { bg:"#FEF2F2", dot:"#EF4444", label:"P1", text:"#991B1B" },
+  P2: { bg:"#FFF7ED", dot:"#F97316", label:"P2", text:"#9A3412" },
+  P3: { bg:"#FEFCE8", dot:"#EAB308", label:"P3", text:"#713F12" },
+  P4: { bg:"#F0FDF4", dot:"#22C55E", label:"P4", text:"#14532D" },
+};
+
+// ── Tab data ───────────────────────────────────────────────────────────────
+const TABS = ["Patient","History","Primary","Exam","Treatment","Notes","Disposition"];
+
+// ── Mock case data ─────────────────────────────────────────────────────────
+const MOCK_CASES = [
+  {
+    id:1, name:"Abdulahad", age:52, complaint:"Chest pain",
+    priority:"P1", status:"active",
+    tabCompletion:{ Patient:90, History:60, Primary:80, Exam:20, Treatment:70, Notes:0, Disposition:0 },
+    activeTab:"History",
+    lastNote:"History 60% complete — allergies and medications still needed",
+    timeStarted:"10:12",
+  },
+  {
+    id:2, name:"Mohammed", age:34, complaint:"RTA — head injury",
+    priority:"P1", status:"held",
+    tabCompletion:{ Patient:100, History:40, Primary:100, Exam:50, Treatment:80, Notes:0, Disposition:0 },
+    activeTab:"Primary",
+    lastNote:"Held — jumped to this case mid-shift",
+    timeStarted:"10:31",
+  },
+  {
+    id:3, name:"Meenakshi", age:28, complaint:"Abdominal pain",
+    priority:"P2", status:"held",
+    tabCompletion:{ Patient:80, History:30, Primary:60, Exam:0, Treatment:0, Notes:0, Disposition:0 },
+    activeTab:"Patient",
+    lastNote:"Held — just started",
+    timeStarted:"10:44",
+  },
+];
+
+// ── Icons ──────────────────────────────────────────────────────────────────
+const MicIcon = ({ active }) => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <rect x="5" y="1" width="6" height="9" rx="3" fill={active ? C.red : "currentColor"}/>
+    <path d="M3 8C3 10.8 5.2 13 8 13s5-2.2 5-5" stroke={active ? C.red : "currentColor"} strokeWidth="1.4" strokeLinecap="round"/>
+    <path d="M8 13v2" stroke={active ? C.red : "currentColor"} strokeWidth="1.4" strokeLinecap="round"/>
+  </svg>
+);
+const PauseIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+    <rect x="2" y="2" width="4" height="10" rx="1.5" fill="currentColor"/>
+    <rect x="8" y="2" width="4" height="10" rx="1.5" fill="currentColor"/>
+  </svg>
+);
+const PlusIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+    <path d="M7 2v10M2 7h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+  </svg>
+);
+const BackIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+    <path d="M11 4L6 9L11 14" stroke={C.ink} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+const CheckIcon = ({ size=12, color=C.green }) => (
+  <svg width={size} height={size} viewBox="0 0 12 12" fill="none" style={{flexShrink:0}}>
+    <path d="M2 6L4.5 8.5L10 3" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+const AlertIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+    <path d="M7 2L13 11H1L7 2Z" stroke={C.orange} strokeWidth="1.3" strokeLinejoin="round"/>
+    <path d="M7 5.5v3M7 10v.5" stroke={C.orange} strokeWidth="1.3" strokeLinecap="round"/>
+  </svg>
+);
+
+// ── Completion bar ─────────────────────────────────────────────────────────
+function CompletionBar({ pct, size="sm" }) {
+  const h = size==="sm" ? 4 : 6;
+  const color = pct >= 75 ? C.green : pct >= 30 ? C.orange : pct > 0 ? "#F97316" : "rgba(0,0,0,0.08)";
+  return (
+    <div style={{ height:h, background:"rgba(0,0,0,0.06)", borderRadius:99, overflow:"hidden", flex:1 }}>
+      <div style={{ height:"100%", width:`${pct}%`, background:color, borderRadius:99, transition:"width 0.4s" }}/>
+    </div>
+  );
+}
+
+// ── Tab completion dot ─────────────────────────────────────────────────────
+function TabDot({ pct }) {
+  if (pct === 0) return null;
+  const color = pct >= 75 ? C.green : C.orange;
+  return <div style={{ width:5, height:5, borderRadius:"50%", background:color, position:"absolute", top:2, right:2 }}/>;
+}
+
+// ── Case tab button (in tray) ─────────────────────────────────────────────
+function CaseTrayTab({ c, isActive, onClick }) {
+  const overall = Math.round(Object.values(c.tabCompletion).reduce((a,b)=>a+b,0) / TABS.length);
+  const isHeld = c.status === "held";
+  const pColor = P[c.priority];
+
+  return (
+    <button onClick={onClick} style={{
+      flex:1, border:"none", cursor:"pointer", fontFamily:"inherit",
+      background: isActive ? C.white : "rgba(255,255,255,0.6)",
+      borderRadius:10, padding:"8px 10px",
+      boxShadow: isActive ? "0 2px 10px rgba(0,0,0,0.1)" : "none",
+      transition:"all 0.2s", textAlign:"left",
+      outline: isActive ? `2px solid ${C.green}` : "none",
+      outlineOffset:0,
+      position:"relative",
+    }}>
+      {isHeld && (
+        <div style={{
+          position:"absolute", top:4, right:4,
+          background:C.orange, borderRadius:99, padding:"1px 6px",
+          fontSize:8, fontWeight:800, color:"white", letterSpacing:0.3,
+        }}>HELD</div>
+      )}
+      <div style={{ display:"flex", alignItems:"center", gap:5, marginBottom:4 }}>
+        <div style={{ width:7, height:7, borderRadius:"50%", background:pColor.dot, flexShrink:0 }}/>
+        <span style={{ fontSize:10, fontWeight:700, color:C.inkSoft, whiteSpace:"nowrap",
+          overflow:"hidden", textOverflow:"ellipsis", maxWidth:70 }}>{c.name}</span>
+      </div>
+      <div style={{ fontSize:9, color:C.faint, marginBottom:5, whiteSpace:"nowrap",
+        overflow:"hidden", textOverflow:"ellipsis" }}>{c.complaint}</div>
+      <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+        <CompletionBar pct={overall} size="sm"/>
+        <span style={{ fontSize:8, fontWeight:700, color:C.faint }}>{overall}%</span>
+      </div>
+    </button>
+  );
+}
+
+// ── Full case sheet screen ─────────────────────────────────────────────────
+function CaseSheet({ caseData, onHoldAndNew, onSwitch, allCases, onBack }) {
+  const [activeTab, setActiveTab] = useState(caseData.activeTab);
+  const [isRecording, setIsRecording] = useState(false);
+  const [showNewPatientBanner, setShowNewPatientBanner] = useState(false);
+  const pColor = P[caseData.priority];
+
+  // Simulate new patient alert after 2s
+  useEffect(() => {
+    const t = setTimeout(() => setShowNewPatientBanner(true), 2500);
+    return () => clearTimeout(t);
+  }, [caseData.id]);
+
+  const overall = Math.round(Object.values(caseData.tabCompletion).reduce((a,b)=>a+b,0) / TABS.length);
+  const heldCases = allCases.filter(c => c.id !== caseData.id);
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", height:"100%", background:C.surface }}>
+
+      {/* New patient alert banner */}
+      {showNewPatientBanner && (
+        <div style={{
+          background:C.red, padding:"10px 16px",
+          display:"flex", alignItems:"center", justifyContent:"space-between",
+          flexShrink:0, zIndex:30,
+        }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            <span style={{ fontSize:16 }}>🚨</span>
+            <div>
+              <div style={{ fontSize:12, fontWeight:800, color:"white" }}>New patient arrived — needs attention</div>
+              <div style={{ fontSize:10, color:"rgba(255,255,255,0.7)" }}>Case #{caseData.id} will be held automatically</div>
+            </div>
+          </div>
+          <button onClick={() => { setShowNewPatientBanner(false); onHoldAndNew(); }}
+            style={{ background:"white", border:"none", borderRadius:8, padding:"6px 12px",
+              fontSize:11, fontWeight:800, color:C.red, cursor:"pointer", fontFamily:"inherit",
+              flexShrink:0 }}>
+            Hold &amp; Start New →
+          </button>
+        </div>
+      )}
+
+      {/* Case header */}
+      <div style={{ background:C.white, borderBottom:`1px solid ${C.border}`, flexShrink:0 }}>
+        <div style={{ padding:"10px 14px", display:"flex", alignItems:"center", gap:10 }}>
+          <button onClick={onBack} style={{ background:"none", border:"none", cursor:"pointer",
+            padding:0, display:"flex" }}><BackIcon/></button>
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+              <span style={{ fontSize:14, fontWeight:800, color:C.ink, letterSpacing:-0.3 }}>
+                {caseData.name}
+              </span>
+              <span style={{ fontSize:10, fontWeight:700, color:pColor.text,
+                background:pColor.bg, borderRadius:5, padding:"2px 7px" }}>
+                {caseData.priority}
+              </span>
+              {caseData.status === "held" && (
+                <span style={{ fontSize:9, fontWeight:800, color:C.orange,
+                  background:"rgba(249,115,22,0.1)", borderRadius:5, padding:"2px 7px" }}>
+                  RESUMED
+                </span>
+              )}
+            </div>
+            <div style={{ fontSize:11, color:C.faint }}>{caseData.age}y · {caseData.complaint}</div>
+          </div>
+
+          {/* Overall completion */}
+          <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
+            <CompletionBar pct={overall} size="sm"/>
+            <span style={{ fontSize:10, fontWeight:700, color:overall>=75?C.greenDark:C.orange,
+              minWidth:28 }}>{overall}%</span>
+          </div>
+        </div>
+
+        {/* Tab bar */}
+        <div style={{ display:"flex", gap:0, overflowX:"auto", scrollbarWidth:"none",
+          padding:"0 8px", borderTop:`1px solid ${C.border}` }}>
+          {TABS.map(tab => {
+            const pct = caseData.tabCompletion[tab];
+            const isActive = activeTab === tab;
+            return (
+              <button key={tab} onClick={() => setActiveTab(tab)} style={{
+                border:"none", cursor:"pointer", fontFamily:"inherit",
+                background:"transparent", padding:"9px 10px",
+                fontSize:11, fontWeight: isActive ? 700 : 500,
+                color: isActive ? C.green : C.muted,
+                borderBottom: isActive ? `2px solid ${C.green}` : "2px solid transparent",
+                whiteSpace:"nowrap", transition:"all 0.15s",
+                position:"relative", flexShrink:0,
+              }}>
+                {tab}
+                <TabDot pct={pct}/>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Tab content */}
+      <div style={{ flex:1, overflow:"auto", padding:"16px 14px" }}>
+
+        {/* Completion summary for this tab */}
+        <div style={{
+          background:C.white, border:`1px solid ${C.border}`,
+          borderRadius:12, padding:"12px 14px", marginBottom:14,
+        }}>
+          <div style={{ fontSize:10, fontWeight:700, color:C.faint, letterSpacing:0.8,
+            textTransform:"uppercase", marginBottom:10 }}>
+            Dictation capture — {activeTab} tab
+          </div>
+          {TABS.map(tab => {
+            const pct = caseData.tabCompletion[tab];
+            return (
+              <div key={tab} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
+                <span style={{ fontSize:11, color: tab===activeTab ? C.ink : C.faint,
+                  width:72, flexShrink:0, fontWeight: tab===activeTab ? 700 : 400 }}>{tab}</span>
+                <CompletionBar pct={pct} size="sm"/>
+                <span style={{ fontSize:10, fontWeight:700, minWidth:28, textAlign:"right",
+                  color: pct>=75 ? C.greenDark : pct>=30 ? C.orange : C.faint }}>{pct}%</span>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Mock fields for active tab */}
+        {activeTab === "History" && (
+          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+            <MockField label="Signs & Symptoms" value="Central chest pain radiating to jaw, onset 2 hours ago" filled/>
+            <MockField label="Allergies" value="" filled={false}/>
+            <MockField label="Medications (home)" value="" filled={false}/>
+            <MockField label="Past Medical History" value="Hypertension, on treatment" filled/>
+            <MockField label="Last Meal" value="4 hours ago" filled/>
+            <MockField label="Events" value="Sudden onset while climbing stairs" filled/>
+          </div>
+        )}
+        {activeTab === "Patient" && (
+          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+            <MockField label="Heart Rate" value="108 bpm" filled abnormal/>
+            <MockField label="Blood Pressure" value="94/60 mmHg" filled abnormal/>
+            <MockField label="SpO₂" value="96%" filled/>
+            <MockField label="Respiratory Rate" value="22/min" filled abnormal/>
+            <MockField label="Temperature" value="" filled={false}/>
+            <MockField label="GCS" value="15/15" filled/>
+          </div>
+        )}
+        {(activeTab !== "History" && activeTab !== "Patient") && (
+          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+            {activeTab === "Primary" && <>
+              <MockField label="Airway" value="Patent, self-maintained" filled/>
+              <MockField label="Breathing" value="Air entry bilateral, no added sounds" filled/>
+              <MockField label="Circulation" value="Tachycardia, peripheral pulses weak" filled/>
+              <MockField label="Disability" value="GCS 15, GRBS 142 mg/dL" filled/>
+              <MockField label="Exposure" value="" filled={false}/>
+            </>}
+            {activeTab === "Exam" && <>
+              <MockField label="General appearance" value="" filled={false}/>
+              <MockField label="Cardiovascular" value="" filled={false}/>
+              <MockField label="Respiratory" value="" filled={false}/>
+            </>}
+            {activeTab === "Treatment" && <>
+              <MockField label="IV Access" value="18G right antecubital" filled/>
+              <MockField label="IV Fluids" value="NS 500ml wide open" filled/>
+              <MockField label="Medications given" value="Aspirin 325mg oral, Morphine 5mg IV" filled/>
+              <MockField label="Oxygen" value="Nasal prongs 4L/min" filled/>
+            </>}
+            {(activeTab === "Notes" || activeTab === "Disposition") && (
+              <div style={{ padding:"32px 20px", textAlign:"center" }}>
+                <div style={{ fontSize:28, marginBottom:10 }}>📝</div>
+                <div style={{ fontSize:13, color:C.faint }}>
+                  {activeTab === "Notes" ? "No notes yet — dictate or type" : "Complete examination first"}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Voice dictation bar */}
+      <div style={{
+        background:C.white, borderTop:`1px solid ${C.border}`,
+        padding:"10px 14px", flexShrink:0,
+      }}>
+        <button onClick={() => setIsRecording(!isRecording)} style={{
+          width:"100%",
+          background: isRecording
+            ? "linear-gradient(135deg,#EF4444,#DC2626)"
+            : `linear-gradient(135deg,${C.green},${C.greenDark})`,
+          border:"none", borderRadius:12, padding:"13px",
+          fontSize:14, fontWeight:700, color:"white",
+          cursor:"pointer", fontFamily:"inherit",
+          display:"flex", alignItems:"center", justifyContent:"center", gap:8,
+          boxShadow: isRecording
+            ? "0 4px 16px rgba(239,68,68,0.3)"
+            : "0 4px 16px rgba(29,184,112,0.3)",
+          transition:"all 0.2s",
+        }}>
+          <MicIcon active={isRecording}/>
+          {isRecording ? "Stop Recording" : "Start Dictation"}
+          {isRecording && (
+            <span style={{ fontSize:11, fontWeight:600, opacity:0.8 }}>
+              · Listening...
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* Case tray */}
+      <div style={{
+        background:"#ECEEF1", borderTop:`1px solid ${C.border}`,
+        padding:"10px 12px", flexShrink:0,
+      }}>
+        <div style={{ fontSize:9, fontWeight:700, color:C.faint, letterSpacing:1,
+          textTransform:"uppercase", marginBottom:8 }}>
+          Open cases — tap to switch
+        </div>
+        <div style={{ display:"flex", gap:8, alignItems:"stretch" }}>
+          {allCases.map(c => (
+            <CaseTrayTab
+              key={c.id}
+              c={c}
+              isActive={c.id === caseData.id}
+              onClick={() => c.id !== caseData.id && onSwitch(c.id)}
+            />
+          ))}
+
+          {/* New case button */}
+          <button onClick={onHoldAndNew} style={{
+            flexShrink:0, width:52, border:`1.5px dashed ${C.border}`,
+            borderRadius:10, background:"rgba(255,255,255,0.6)",
+            cursor:"pointer", display:"flex", flexDirection:"column",
+            alignItems:"center", justifyContent:"center", gap:4, padding:"8px 0",
+          }}>
+            <div style={{ width:24, height:24, borderRadius:"50%",
+              background:C.green, display:"flex", alignItems:"center", justifyContent:"center" }}>
+              <PlusIcon/>
+            </div>
+            <span style={{ fontSize:8, fontWeight:700, color:C.muted }}>New</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Mock field ─────────────────────────────────────────────────────────────
+function MockField({ label, value, filled, abnormal=false }) {
+  return (
+    <div style={{
+      background:C.white, border:`1px solid ${C.border}`,
+      borderRadius:10, padding:"10px 13px",
+    }}>
+      <div style={{ fontSize:9, fontWeight:700, color:C.faint, letterSpacing:0.5,
+        textTransform:"uppercase", marginBottom:4 }}>{label}</div>
+      {filled ? (
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+          <span style={{ fontSize:13, color: abnormal ? "#DC2626" : C.inkSoft, fontWeight: abnormal ? 600 : 400 }}>
+            {value}
+          </span>
+          <CheckIcon color={abnormal ? "#DC2626" : C.green}/>
+        </div>
+      ) : (
+        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+          <div style={{ height:2, flex:1, background:C.border, borderRadius:99 }}/>
+          <span style={{ fontSize:10, color:C.faint }}>Not captured</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Hold confirmation modal ────────────────────────────────────────────────
+function HoldModal({ fromCase, onConfirm, onCancel }) {
+  return (
+    <div style={{
+      position:"absolute", inset:0, background:"rgba(0,0,0,0.5)",
+      display:"flex", alignItems:"flex-end", zIndex:50,
+    }}>
+      <div style={{
+        background:C.white, borderRadius:"20px 20px 0 0",
+        padding:"24px 20px 32px", width:"100%",
+      }}>
+        <div style={{ fontSize:16, fontWeight:800, color:C.ink, marginBottom:6 }}>
+          Hold current case?
+        </div>
+        <div style={{ fontSize:13, color:C.muted, lineHeight:1.6, marginBottom:16 }}>
+          <strong style={{ color:C.inkSoft }}>{fromCase.name}</strong> will be saved exactly as is.
+          You can return and continue from where you left off.
+        </div>
+
+        {/* What's saved */}
+        <div style={{ background:C.surface, borderRadius:10, padding:"12px 14px", marginBottom:16 }}>
+          <div style={{ fontSize:10, fontWeight:700, color:C.faint, letterSpacing:0.8,
+            textTransform:"uppercase", marginBottom:8 }}>What's saved so far</div>
+          {TABS.map(tab => {
+            const pct = fromCase.tabCompletion[tab];
+            return (
+              <div key={tab} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:5 }}>
+                <span style={{ fontSize:11, color:C.muted, width:68, flexShrink:0 }}>{tab}</span>
+                <CompletionBar pct={pct} size="sm"/>
+                <span style={{ fontSize:10, fontWeight:700, minWidth:26, textAlign:"right",
+                  color: pct>=75 ? C.greenDark : pct>0 ? C.orange : C.faint }}>{pct}%</span>
+              </div>
+            );
+          })}
+        </div>
+
+        <div style={{ display:"flex", gap:10 }}>
+          <button onClick={onCancel} style={{
+            flex:1, background:C.surface, border:`1px solid ${C.border}`,
+            borderRadius:11, padding:"13px", fontSize:14, fontWeight:600,
+            color:C.muted, cursor:"pointer", fontFamily:"inherit",
+          }}>Stay here</button>
+          <button onClick={onConfirm} style={{
+            flex:2, background:`linear-gradient(135deg,${C.green},${C.greenDark})`,
+            border:"none", borderRadius:11, padding:"13px",
+            fontSize:14, fontWeight:700, color:"white",
+            cursor:"pointer", fontFamily:"inherit",
+            boxShadow:"0 4px 14px rgba(29,184,112,0.3)",
+            display:"flex", alignItems:"center", justifyContent:"center", gap:8,
+          }}>
+            <PauseIcon/>
+            Hold &amp; start new patient
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Resume banner ──────────────────────────────────────────────────────────
+function ResumeBanner({ c }) {
+  const overall = Math.round(Object.values(c.tabCompletion).reduce((a,b)=>a+b,0)/TABS.length);
+  return (
+    <div style={{
+      background:C.orangeLight || "rgba(249,115,22,0.08)",
+      border:`1px solid rgba(249,115,22,0.2)`,
+      borderRadius:12, padding:"12px 14px", margin:"12px 14px 0",
+      display:"flex", alignItems:"center", gap:10,
+    }}>
+      <AlertIcon/>
+      <div style={{ flex:1 }}>
+        <div style={{ fontSize:12, fontWeight:700, color:"#9A3412" }}>
+          Resuming case — {overall}% complete
+        </div>
+        <div style={{ fontSize:11, color:C.muted }}>{c.lastNote}</div>
+      </div>
+      <div style={{ fontSize:11, fontWeight:700, color:C.orange }}>
+        Continue →
+      </div>
+    </div>
+  );
+}
+
+// ── New case quick form ────────────────────────────────────────────────────
+function NewCaseForm({ onStart, onCancel, heldCount }) {
+  const [name, setName]  = useState("");
+  const [complaint, setComplaint] = useState("");
+  const [priority, setPriority] = useState("P1");
+
+  return (
+    <div style={{ background:C.surface, height:"100%", display:"flex", flexDirection:"column" }}>
+      <div style={{ background:C.white, borderBottom:`1px solid ${C.border}`,
+        padding:"14px 16px", display:"flex", alignItems:"center", gap:10 }}>
+        <button onClick={onCancel} style={{ background:"none", border:"none", cursor:"pointer",
+          padding:0, display:"flex" }}><BackIcon/></button>
+        <div>
+          <div style={{ fontSize:16, fontWeight:800, color:C.ink }}>New patient</div>
+          {heldCount > 0 && (
+            <div style={{ fontSize:11, color:C.orange }}>
+              {heldCount} case{heldCount>1?"s":""} held — you can switch back anytime
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={{ flex:1, padding:"16px", display:"flex", flexDirection:"column", gap:14 }}>
+
+        {/* Held cases reminder */}
+        {heldCount > 0 && (
+          <div style={{ background:"rgba(249,115,22,0.08)", border:"1px solid rgba(249,115,22,0.2)",
+            borderRadius:12, padding:"11px 14px",
+            display:"flex", alignItems:"center", gap:10 }}>
+            <PauseIcon/>
+            <span style={{ fontSize:12, color:"#9A3412", fontWeight:600 }}>
+              {heldCount} case{heldCount>1?"s":""} on hold — complete this patient first, then resume
+            </span>
+          </div>
+        )}
+
+        <div>
+          <label style={{ fontSize:11, fontWeight:700, color:C.muted, letterSpacing:0.5,
+            textTransform:"uppercase", display:"block", marginBottom:6 }}>Patient name</label>
+          <input value={name} onChange={e=>setName(e.target.value)}
+            placeholder="Enter name..."
+            style={{ width:"100%", padding:"13px 14px", borderRadius:11, border:`1.5px solid ${C.border}`,
+              fontSize:15, fontFamily:"inherit", color:C.ink, background:C.white, outline:"none" }}/>
+        </div>
+
+        <div>
+          <label style={{ fontSize:11, fontWeight:700, color:C.muted, letterSpacing:0.5,
+            textTransform:"uppercase", display:"block", marginBottom:6 }}>Chief complaint</label>
+          <input value={complaint} onChange={e=>setComplaint(e.target.value)}
+            placeholder="What brings the patient in?"
+            style={{ width:"100%", padding:"13px 14px", borderRadius:11, border:`1.5px solid ${C.border}`,
+              fontSize:15, fontFamily:"inherit", color:C.ink, background:C.white, outline:"none" }}/>
+        </div>
+
+        <div>
+          <label style={{ fontSize:11, fontWeight:700, color:C.muted, letterSpacing:0.5,
+            textTransform:"uppercase", display:"block", marginBottom:8 }}>Priority</label>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8 }}>
+            {Object.entries(P).map(([key, val]) => (
+              <button key={key} onClick={() => setPriority(key)} style={{
+                border: priority===key ? `2px solid ${val.dot}` : `2px solid ${C.border}`,
+                borderRadius:10, padding:"10px 6px", cursor:"pointer",
+                background: priority===key ? val.bg : C.white,
+                fontFamily:"inherit",
+              }}>
+                <div style={{ width:8, height:8, borderRadius:"50%", background:val.dot,
+                  margin:"0 auto 4px" }}/>
+                <div style={{ fontSize:11, fontWeight:800, color:val.text }}>{key}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ padding:"12px 16px 32px", background:C.white, borderTop:`1px solid ${C.border}` }}>
+        <button
+          onClick={() => name && complaint && onStart({ name, complaint, priority })}
+          disabled={!name || !complaint}
+          style={{
+            width:"100%",
+            background: !name||!complaint ? C.border : `linear-gradient(135deg,${C.green},${C.greenDark})`,
+            border:"none", borderRadius:12, padding:"15px",
+            fontSize:15, fontWeight:700, color: !name||!complaint ? C.faint : "white",
+            cursor: !name||!complaint ? "not-allowed" : "pointer",
+            fontFamily:"inherit",
+            boxShadow: !name||!complaint ? "none" : "0 4px 16px rgba(29,184,112,0.3)",
+          }}>
+          Start Case
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Cases list screen ──────────────────────────────────────────────────────
+function CasesListScreen({ cases, onOpen, onNewCase }) {
+  const inProgress = cases.filter(c => c.status !== "complete");
+  return (
+    <div style={{ background:C.surface, height:"100%", display:"flex", flexDirection:"column" }}>
+      <div style={{ background:C.white, borderBottom:`1px solid ${C.border}`,
+        padding:"16px 16px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+        <div style={{ fontSize:17, fontWeight:800, color:C.ink }}>Cases</div>
+        <button onClick={onNewCase} style={{
+          background:`linear-gradient(135deg,${C.green},${C.greenDark})`,
+          border:"none", borderRadius:10, padding:"9px 16px",
+          fontSize:13, fontWeight:700, color:"white", cursor:"pointer",
+          fontFamily:"inherit", display:"flex", alignItems:"center", gap:6,
+          boxShadow:"0 3px 10px rgba(29,184,112,0.25)",
+        }}>
+          <PlusIcon/> New Case
+        </button>
+      </div>
+
+      <div style={{ flex:1, overflow:"auto", padding:"14px 14px" }}>
+
+        {inProgress.length > 0 && (
+          <>
+            <div style={{ fontSize:10, fontWeight:700, color:C.faint, letterSpacing:1,
+              textTransform:"uppercase", marginBottom:10 }}>
+              In progress · {inProgress.length} cases
+            </div>
+            <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:20 }}>
+              {inProgress.map(c => {
+                const pColor = P[c.priority];
+                const overall = Math.round(Object.values(c.tabCompletion).reduce((a,b)=>a+b,0)/TABS.length);
+                const isHeld = c.status === "held";
+                return (
+                  <button key={c.id} onClick={() => onOpen(c.id)} style={{
+                    background:C.white, border:`1.5px solid ${isHeld?"rgba(249,115,22,0.3)":C.border}`,
+                    borderRadius:14, padding:"14px 16px", textAlign:"left",
+                    cursor:"pointer", fontFamily:"inherit",
+                    boxShadow: isHeld ? "0 2px 12px rgba(249,115,22,0.1)" : "0 1px 4px rgba(0,0,0,0.04)",
+                    display:"flex", gap:12, alignItems:"center",
+                  }}>
+                    <div style={{ width:36, height:36, borderRadius:10, background:pColor.bg,
+                      display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                      <div style={{ width:10, height:10, borderRadius:"50%", background:pColor.dot }}/>
+                    </div>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:3 }}>
+                        <span style={{ fontSize:14, fontWeight:700, color:C.ink }}>{c.name}</span>
+                        <span style={{ fontSize:9, fontWeight:700,
+                          color: isHeld ? "#9A3412" : C.greenDark,
+                          background: isHeld ? "rgba(249,115,22,0.1)" : C.greenLight,
+                          borderRadius:5, padding:"2px 7px" }}>
+                          {isHeld ? "⏸ HELD" : "ACTIVE"}
+                        </span>
+                      </div>
+                      <div style={{ fontSize:12, color:C.faint, marginBottom:6 }}>
+                        {c.age}y · {c.complaint} · Started {c.timeStarted}
+                      </div>
+                      <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                        <CompletionBar pct={overall}/>
+                        <span style={{ fontSize:10, fontWeight:700,
+                          color:overall>=75?C.greenDark:C.orange, flexShrink:0 }}>{overall}%</span>
+                      </div>
+                      {isHeld && (
+                        <div style={{ fontSize:10, color:"#9A3412", marginTop:4 }}>
+                          Last: {c.activeTab} tab · Tap to resume
+                        </div>
+                      )}
+                    </div>
+                    <span style={{ color:C.faint, fontSize:18, flexShrink:0 }}>›</span>
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// MAIN
+// ══════════════════════════════════════════════════════════════════════════
+export default function MultiCaseTray() {
+  const [cases, setCases] = useState(MOCK_CASES);
+  const [screen, setScreen] = useState("list"); // "list" | "case" | "new"
+  const [activeCaseId, setActiveCaseId] = useState(null);
+  const [showHoldModal, setShowHoldModal] = useState(false);
+  const [pendingNewCase, setPendingNewCase] = useState(false);
+
+  const activeCase = cases.find(c => c.id === activeCaseId);
+
+  const openCase = (id) => {
+    setCases(prev => prev.map(c =>
+      c.id === id ? { ...c, status:"active" } :
+      c.status === "active" ? { ...c, status:"held" } : c
+    ));
+    setActiveCaseId(id);
+    setScreen("case");
+  };
+
+  const handleHoldAndNew = () => {
+    if (activeCase) {
+      setShowHoldModal(true);
+    } else {
+      setScreen("new");
+    }
+  };
+
+  const confirmHold = () => {
+    setCases(prev => prev.map(c =>
+      c.id === activeCaseId ? { ...c, status:"held" } : c
+    ));
+    setShowHoldModal(false);
+    setScreen("new");
+  };
+
+  const startNewCase = ({ name, complaint, priority }) => {
+    const newId = Date.now();
+    const newCase = {
+      id: newId, name, complaint, priority,
+      status:"active",
+      tabCompletion:{ Patient:0, History:0, Primary:0, Exam:0, Treatment:0, Notes:0, Disposition:0 },
+      activeTab:"Patient",
+      lastNote:"Just started",
+      timeStarted: new Date().toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit",hour12:false}),
+    };
+    setCases(prev => prev.map(c =>
+      c.status==="active" ? {...c, status:"held"} : c
+    ).concat(newCase));
+    setActiveCaseId(newId);
+    setScreen("case");
+  };
+
+  const switchCase = (id) => {
+    setCases(prev => prev.map(c =>
+      c.id === id ? {...c, status:"active"} :
+      c.status === "active" ? {...c, status:"held"} : c
+    ));
+    setActiveCaseId(id);
+  };
+
+  const heldCount = cases.filter(c => c.status==="held").length;
+
+  return (
+    <div style={{
+      fontFamily:"'DM Sans','Helvetica Neue',sans-serif",
+      background:"#D4D8D4", minHeight:"100vh",
+      display:"flex", flexDirection:"column", alignItems:"center",
+      padding:"24px 0 40px", gap:16,
+    }}>
+
+      {/* Title */}
+      <div style={{ textAlign:"center" }}>
+        <div style={{ fontSize:13, fontWeight:700, color:"#6B7280", letterSpacing:0.5 }}>
+          ErMate · Multi-Case Tray
+        </div>
+        <div style={{ fontSize:11, color:"#9CA3AF", marginTop:2 }}>
+          Tap "Hold &amp; Start New" or the 🚨 banner to see the flow
+        </div>
+      </div>
+
+      {/* Phone */}
+      <div style={{
+        width:390, background:"#0B0F14", borderRadius:48, padding:12,
+        boxShadow:"0 40px 80px rgba(0,0,0,0.3),0 0 0 1px rgba(255,255,255,0.06)",
+        flexShrink:0,
+      }}>
+        <div style={{
+          background:"#F7F8FA", borderRadius:38,
+          overflow:"hidden", height:780, position:"relative",
+          display:"flex", flexDirection:"column",
+        }}>
+
+          {screen === "list" && (
+            <CasesListScreen
+              cases={cases}
+              onOpen={openCase}
+              onNewCase={() => setScreen("new")}
+            />
+          )}
+
+          {screen === "case" && activeCase && (
+            <>
+              {activeCase.status === "active" && activeCase.id !== MOCK_CASES[0].id && (
+                <ResumeBanner c={activeCase}/>
+              )}
+              <CaseSheet
+                caseData={activeCase}
+                allCases={cases}
+                onHoldAndNew={handleHoldAndNew}
+                onSwitch={switchCase}
+                onBack={() => setScreen("list")}
+              />
+            </>
+          )}
+
+          {screen === "new" && (
+            <NewCaseForm
+              heldCount={heldCount}
+              onStart={startNewCase}
+              onCancel={() => setScreen(activeCaseId ? "case" : "list")}
+            />
+          )}
+
+          {showHoldModal && activeCase && (
+            <HoldModal
+              fromCase={activeCase}
+              onConfirm={confirmHold}
+              onCancel={() => setShowHoldModal(false)}
+            />
+          )}
+
+        </div>
+      </div>
+
+      {/* Flow guide */}
+      <div style={{
+        background:"white", borderRadius:16, padding:"16px 20px",
+        maxWidth:390, width:"100%", border:"1px solid #E8EAED",
+      }}>
+        <div style={{ fontSize:11, fontWeight:800, color:"#9CA3AF", letterSpacing:1,
+          textTransform:"uppercase", marginBottom:12 }}>How to test this</div>
+        {[
+          "Tap any case to open the case sheet",
+          "Wait 2 seconds — a new patient alert appears",
+          "Tap 'Hold & Start New' — see the hold confirmation",
+          "Start the new patient case",
+          "Look at the tray at the bottom — tap the held case to resume",
+          "Case opens exactly where you left off",
+          "Use '+' in the tray to add another case anytime",
+        ].map((step,i) => (
+          <div key={i} style={{ display:"flex", gap:10, marginBottom:8, alignItems:"flex-start" }}>
+            <div style={{ width:20, height:20, borderRadius:"50%", background:"#F7F8FA",
+              border:"1px solid #E8EAED", display:"flex", alignItems:"center", justifyContent:"center",
+              fontSize:10, fontWeight:800, color:"#9CA3AF", flexShrink:0, marginTop:1 }}>{i+1}</div>
+            <span style={{ fontSize:12.5, color:"#6B7280", lineHeight:1.5 }}>{step}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
