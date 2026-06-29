@@ -1,0 +1,137 @@
+This is a very specific bug. The reset link works, new password is set, but login still fails with the new password.
+
+---
+
+## Exact Cause
+
+```
+Reset password flow:
+  Doctor clicks reset link ✓
+  Enters new password ✓
+  Backend hashes it ✓
+  Saves to database... ✗ or wrong column
+
+Login flow:
+  Doctor enters new password
+  Backend looks up password_hash
+  Compares — doesn't match
+  Login fails
+```
+
+**Most likely one of these three:**
+
+```
+1. Password saved to wrong column
+   DB has both 'password' and 'password_hash'
+   Reset saves to one, login checks the other
+
+2. Hash saved correctly but not committed
+   DB transaction rolled back silently
+
+3. Reset token not invalidated
+   Old token still works, creates confusion
+   about which password is current
+```
+
+---
+
+## Tell Your Developer — Exact Diagnostic
+
+**Step 1 — Check what's in the database right now:**
+
+```sql
+SELECT 
+  id, 
+  email, 
+  password_hash,
+  updated_at
+FROM users 
+WHERE email = 'rajagirier@gmail.com';
+```
+
+Then reset the password again and immediately run the same query. Check if `password_hash` changed and if `updated_at` updated.
+
+If `password_hash` did NOT change after reset — the reset is saving to the wrong place.
+
+---
+
+**Step 2 — Check the reset route:**
+
+```typescript
+// Find POST /api/auth/reset-password in routes.ts
+// Look for where it saves the new password
+
+// Common bug — saving to wrong field:
+await db.update(users)
+  .set({ password: hashedPassword })  // ← wrong field name
+  .where(eq(users.resetToken, token));
+
+// Should be:
+await db.update(users)
+  .set({ passwordHash: hashedPassword }) // ← correct
+  .where(eq(users.resetToken, token));
+```
+
+**Step 3 — Check the login route:**
+
+```typescript
+// Find POST /api/auth/login in routes.ts
+// Check what field it reads:
+
+const user = await db.select()
+  .from(users)
+  .where(eq(users.email, email));
+
+// Check it compares against passwordHash:
+const valid = await bcrypt.compare(
+  password, 
+  user.passwordHash  // ← must match what reset saves to
+);
+```
+
+**The field name must be identical in both places.**
+
+---
+
+**Step 4 — Quick direct fix while debugging:**
+
+```bash
+# In Replit shell — reset password directly:
+
+node -e "
+const bcrypt = require('bcryptjs');
+bcrypt.hash('ErMate@2026', 10).then(h => {
+  console.log(h);
+});
+"
+
+# Copy the hash output, then in psql:
+UPDATE users 
+SET password_hash = 'PASTE_HASH_HERE',
+    updated_at = NOW()
+WHERE email = 'rajagirier@gmail.com';
+
+# Verify it saved:
+SELECT email, password_hash, updated_at 
+FROM users 
+WHERE email = 'rajagirier@gmail.com';
+```
+
+Then try login immediately with `ErMate@2026`.
+
+---
+
+## My Bet on the Bug
+
+The reset route is saving `passwordHash` but the login route is reading `password_hash` — or vice versa. Drizzle ORM maps camelCase to snake_case automatically so a mismatch between the JS field name and DB column name would cause exactly this silent failure.
+
+```typescript
+// In schema.ts — check exact column definition:
+passwordHash: text("password_hash")
+
+// Reset must use:    passwordHash
+// Login must use:    passwordHash
+// Both hit the same DB column: password_hash
+```
+
+Tell your developer to paste both the reset route and login route side by side and compare the field names. That's where the bug is.

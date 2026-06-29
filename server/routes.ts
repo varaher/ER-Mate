@@ -952,9 +952,32 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
       // Change password on external backend
       const EXT = "https://er-emr-backend.onrender.com/api";
-      // First login with current credentials to get auth token (try email as password = Google-registered accounts)
+
+      // Build list of passwords to try for the login step (most likely first):
+      // 1. Current stored password from auth_sessions (regular email users who previously logged in)
+      // 2. Their email (Google-registered users whose default password = email)
+      const tryPasswords: string[] = [];
+      try {
+        const sessionRow = await pool.query(
+          "SELECT encrypted_password, iv, tag FROM auth_sessions WHERE email = $1 AND expires_at > NOW() ORDER BY created_at DESC LIMIT 1",
+          [email.toLowerCase()]
+        );
+        if (sessionRow.rows.length > 0) {
+          const { encrypted_password, iv, tag } = sessionRow.rows[0];
+          const crypto = await import("crypto");
+          const sessionSecret = process.env.SESSION_SECRET || "ermate-session-secret-32chars!!";
+          const key = crypto.createHash("sha256").update(sessionSecret).digest();
+          const decipher = crypto.createDecipheriv("aes-256-gcm", key, Buffer.from(iv, "base64"));
+          decipher.setAuthTag(Buffer.from(tag, "base64"));
+          const decrypted = Buffer.concat([decipher.update(Buffer.from(encrypted_password, "base64")), decipher.final()]);
+          tryPasswords.push(decrypted.toString("utf8"));
+        }
+      } catch (e) {
+        console.warn("[ResetPassword] Could not retrieve stored credentials:", e);
+      }
+      tryPasswords.push(email); // Google fallback: email = default password
+
       let authToken: string | null = null;
-      const tryPasswords = [email, newPassword]; // try email-as-password (Google users) or they might remember old pw
       for (const pw of tryPasswords) {
         const lr = await fetch(`${EXT}/auth/login`, {
           method: "POST",
@@ -968,12 +991,20 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       }
 
       if (authToken) {
-        // Use change-password endpoint with the obtained token
-        await fetch(`${EXT}/auth/change-password`, {
+        // Authenticated — now change the password on the external backend
+        const cpRes = await fetch(`${EXT}/auth/change-password`, {
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": `Bearer ${authToken}` },
-          body: JSON.stringify({ current_password: email, new_password: newPassword }),
+          body: JSON.stringify({ current_password: tryPasswords[0], new_password: newPassword }),
         });
+        if (!cpRes.ok) {
+          const cpErr = await cpRes.text().catch(() => "");
+          console.warn("[ResetPassword] change-password failed:", cpRes.status, cpErr);
+        } else {
+          console.log(`[ResetPassword] Password changed on external backend for ${email}`);
+        }
+      } else {
+        console.warn(`[ResetPassword] Could not authenticate to external backend for ${email} — password not changed there`);
       }
 
       // Always store new credentials locally as fallback (auth_sessions cache)
