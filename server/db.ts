@@ -149,13 +149,34 @@ export async function ensureDepartmentTables(): Promise<void> {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
-    // Add name/email columns if they don't exist yet (idempotent)
+    // Idempotent column migrations — covers all columns added since initial deploy
     await p.query(`
       ALTER TABLE department_members ADD COLUMN IF NOT EXISTS name TEXT;
       ALTER TABLE department_members ADD COLUMN IF NOT EXISTS email TEXT;
+      ALTER TABLE department_members ADD COLUMN IF NOT EXISTS joined_at TIMESTAMP;
+      ALTER TABLE department_members ADD COLUMN IF NOT EXISTS removed_at TIMESTAMP;
+
       ALTER TABLE departments ADD COLUMN IF NOT EXISTS invite_token TEXT UNIQUE;
       ALTER TABLE departments ADD COLUMN IF NOT EXISTS plan TEXT DEFAULT 'team';
       ALTER TABLE departments ADD COLUMN IF NOT EXISTS payment_subscription_id TEXT;
+      ALTER TABLE departments ADD COLUMN IF NOT EXISTS billing_active BOOLEAN DEFAULT false;
+      ALTER TABLE departments ADD COLUMN IF NOT EXISTS allow_overflow BOOLEAN DEFAULT true;
+      ALTER TABLE departments ADD COLUMN IF NOT EXISTS max_concurrent INTEGER DEFAULT 8;
+
+      ALTER TABLE shift_sessions ADD COLUMN IF NOT EXISTS force_logout_by TEXT;
+      ALTER TABLE shift_sessions ADD COLUMN IF NOT EXISTS force_logout_at TIMESTAMP;
+
+      ALTER TABLE case_overlays ADD COLUMN IF NOT EXISTS handover_status TEXT DEFAULT 'active';
+      ALTER TABLE case_overlays ADD COLUMN IF NOT EXISTS handed_over_to_shift_id INTEGER;
+      ALTER TABLE case_overlays ADD COLUMN IF NOT EXISTS handed_over_by_user_id TEXT;
+      ALTER TABLE case_overlays ADD COLUMN IF NOT EXISTS handed_over_at TIMESTAMP;
+      ALTER TABLE case_overlays ADD COLUMN IF NOT EXISTS received_by_user_id TEXT;
+      ALTER TABLE case_overlays ADD COLUMN IF NOT EXISTS received_at TIMESTAMP;
+      ALTER TABLE case_overlays ADD COLUMN IF NOT EXISTS bed_number TEXT;
+      ALTER TABLE case_overlays ADD COLUMN IF NOT EXISTS pending_notes TEXT;
+      ALTER TABLE case_overlays ADD COLUMN IF NOT EXISTS consultant_reviewed_by TEXT;
+      ALTER TABLE case_overlays ADD COLUMN IF NOT EXISTS consultant_reviewed_at TIMESTAMP;
+      ALTER TABLE case_overlays ADD COLUMN IF NOT EXISTS consultant_note TEXT;
       ALTER TABLE case_overlays ADD COLUMN IF NOT EXISTS patient_name TEXT;
       ALTER TABLE case_overlays ADD COLUMN IF NOT EXISTS patient_age TEXT;
       ALTER TABLE case_overlays ADD COLUMN IF NOT EXISTS chief_complaint TEXT;
