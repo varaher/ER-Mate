@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from "react";
+import { Alert } from "react-native";
 import { getApiUrl } from "@/lib/query-client";
 import { useAuth } from "@/context/AuthContext";
 
@@ -79,6 +80,10 @@ export function DepartmentProvider({ children }: { children: ReactNode }) {
   const [showShiftSelect, setShowShiftSelect] = useState(false);
   const [dismissed, setDismissed] = useState(false);
 
+  // Track previous session to detect auto-expiry
+  const prevSessionIdRef = useRef<number | null>(null);
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const apiBase = () => getApiUrl();
 
   const authHeaders = useCallback(() => ({
@@ -107,7 +112,20 @@ export function DepartmentProvider({ children }: { children: ReactNode }) {
 
       if (sessionRes.ok) {
         const data = await sessionRes.json();
-        setShiftSession(data.session);
+        const newSession: ShiftSession | null = data.session;
+
+        // Detect auto-expiry: we had a session, now we don't (and we didn't manually check out)
+        if (prevSessionIdRef.current !== null && newSession === null) {
+          Alert.alert(
+            "Shift Ended",
+            "Your shift session has expired automatically (1 hour after shift end time). Please check in again when your next shift starts.",
+            [{ text: "OK" }]
+          );
+          setDismissed(false);
+        }
+        prevSessionIdRef.current = newSession?.id ?? null;
+
+        setShiftSession(newSession);
         setActiveShift(data.shift);
       }
 
@@ -122,9 +140,11 @@ export function DepartmentProvider({ children }: { children: ReactNode }) {
     }
   }, [user, token, authHeaders]);
 
+  // Initial load on login
   useEffect(() => {
     if (user && token) {
       setDismissed(false);
+      prevSessionIdRef.current = null;
       refresh();
     } else {
       setDepartment(null);
@@ -134,8 +154,28 @@ export function DepartmentProvider({ children }: { children: ReactNode }) {
       setActiveShift(null);
       setIncomingCount(0);
       setPendingInvites([]);
+      prevSessionIdRef.current = null;
     }
   }, [user?.id, token]);
+
+  // Poll every 30 seconds when user is in a department to detect auto-expiry / force-logout
+  useEffect(() => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+    if (user && token && department) {
+      pollIntervalRef.current = setInterval(() => {
+        refresh();
+      }, 30000);
+    }
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    };
+  }, [user?.id, token, department?.id]);
 
   useEffect(() => {
     if (department && membership && !shiftSession && !dismissed && !isLoading) {
@@ -167,6 +207,7 @@ export function DepartmentProvider({ children }: { children: ReactNode }) {
       });
       const data = await res.json();
       if (!res.ok) return { success: false, error: data.error || "Failed to check in" };
+      prevSessionIdRef.current = data.session?.id ?? null;
       setShiftSession(data.session);
       setActiveShift(data.shift);
       setShowShiftSelect(false);
@@ -185,6 +226,7 @@ export function DepartmentProvider({ children }: { children: ReactNode }) {
       });
       const data = await res.json();
       if (!res.ok) return { success: false, error: data.error, pendingCases: data.pendingCases };
+      prevSessionIdRef.current = null;
       setShiftSession(null);
       setActiveShift(null);
       setDismissed(false);

@@ -553,3 +553,56 @@ export function registerShiftRoutes(app: Express) {
     }
   });
 }
+
+// ── Auto-expire sessions whose shift ended > 1 hour ago ──────
+// Called on a schedule (every 5 minutes) from server/index.ts
+export async function autoExpireShiftSessions(): Promise<number> {
+  const db = getDb();
+  if (!db) return 0;
+  try {
+    const rows = await db
+      .select({ session: shiftSessions, shift: shifts })
+      .from(shiftSessions)
+      .innerJoin(shifts, eq(shiftSessions.shiftId, shifts.id))
+      .where(eq(shiftSessions.status, "active"));
+
+    const now = new Date();
+    const toExpire: number[] = [];
+
+    for (const { session, shift } of rows) {
+      const checkedInAt = new Date(session.checkedInAt);
+      const [endH, endM] = shift.endTime.split(":").map(Number);
+      const [startH, startM] = shift.startTime.split(":").map(Number);
+      const endTotalMins = endH * 60 + endM;
+      const startTotalMins = startH * 60 + startM;
+
+      // Build the deadline: checkedInAt date @ endTime, +1 hr grace
+      const deadline = new Date(checkedInAt);
+      deadline.setHours(endH, endM, 0, 0);
+      // Night shift wraps midnight (e.g. 22:00-06:00) → endTime is next day
+      if (endTotalMins <= startTotalMins) {
+        deadline.setDate(deadline.getDate() + 1);
+      }
+      // Add 1-hour grace period
+      deadline.setTime(deadline.getTime() + 60 * 60 * 1000);
+
+      if (now > deadline) {
+        toExpire.push(session.id);
+      }
+    }
+
+    if (toExpire.length > 0) {
+      for (const sid of toExpire) {
+        await db
+          .update(shiftSessions)
+          .set({ status: "auto_expired", checkedOutAt: new Date() })
+          .where(eq(shiftSessions.id, sid));
+      }
+      console.log(`[AutoExpire] Expired ${toExpire.length} shift session(s)`);
+    }
+    return toExpire.length;
+  } catch (e) {
+    console.error("[AutoExpire] Error:", e);
+    return 0;
+  }
+}

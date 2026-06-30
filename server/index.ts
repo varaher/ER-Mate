@@ -3,6 +3,7 @@ import type { Request, Response, NextFunction } from "express";
 import { createServer } from "node:http";
 import compression from "compression";
 import { registerRoutes } from "./routes";
+import { autoExpireShiftSessions } from "./routes/shifts";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -484,6 +485,13 @@ function setupErrorHandler(app: express.Application) {
 
   // Register all routes (includes async DB init — server is already accepting /health)
   await registerRoutes(app, httpServer);
+
+  // Auto-expire shift sessions 1 hour after shift end time (runs every 5 minutes)
+  const runAutoExpire = () => {
+    autoExpireShiftSessions().catch((e) => console.error("[AutoExpire] Unhandled:", e));
+  };
+  runAutoExpire(); // Run once at startup to catch any stale sessions
+  setInterval(runAutoExpire, 5 * 60 * 1000);
 
   setupErrorHandler(app);
 })();

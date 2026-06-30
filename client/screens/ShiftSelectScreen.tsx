@@ -90,6 +90,23 @@ export default function ShiftSelectScreen() {
     Night: "#0f172a",
   };
 
+  // Returns true if current time falls within this shift's window
+  const isShiftActiveNow = (shift: Shift): boolean => {
+    const now = new Date();
+    const nowMins = now.getHours() * 60 + now.getMinutes();
+    const [sh, sm] = shift.startTime.split(":").map(Number);
+    const [eh, em] = shift.endTime.split(":").map(Number);
+    const startMins = sh * 60 + sm;
+    const endMins = eh * 60 + em;
+    if (startMins <= endMins) {
+      // Normal shift (e.g. 07:00-15:00)
+      return nowMins >= startMins && nowMins < endMins;
+    } else {
+      // Night shift crossing midnight (e.g. 22:00-06:00)
+      return nowMins >= startMins || nowMins < endMins;
+    }
+  };
+
   if (!showShiftSelect) return null;
 
   return (
@@ -126,6 +143,7 @@ export default function ShiftSelectScreen() {
               const shiftColor = SHIFT_COLORS[shift.name] || theme.primary;
               const isCheckingThisIn = checkingIn === shift.id;
 
+              const activeNow = isShiftActiveNow(shift);
               return (
                 <Pressable
                   key={shift.id}
@@ -133,7 +151,8 @@ export default function ShiftSelectScreen() {
                     styles.shiftCard,
                     {
                       backgroundColor: theme.card,
-                      borderColor: isFull ? theme.border : shiftColor + "40",
+                      borderColor: activeNow ? shiftColor : isFull ? theme.border : shiftColor + "40",
+                      borderWidth: activeNow ? 2 : 1.5,
                       opacity: pressed ? 0.9 : 1,
                     },
                   ]}
@@ -144,15 +163,23 @@ export default function ShiftSelectScreen() {
                   <View style={styles.shiftContent}>
                     <View style={styles.shiftRow}>
                       <Text style={[styles.shiftName, { color: theme.text }]}>{shift.name} Shift</Text>
-                      {isFull ? (
-                        <View style={[styles.fullBadge, { backgroundColor: theme.dangerLight }]}>
-                          <Text style={[styles.fullText, { color: theme.danger }]}>Full</Text>
-                        </View>
-                      ) : (
-                        <View style={[styles.availBadge, { backgroundColor: theme.primaryLight }]}>
-                          <Text style={[styles.availText, { color: theme.primary }]}>Available</Text>
-                        </View>
-                      )}
+                      <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
+                        {activeNow ? (
+                          <View style={[styles.activeNowBadge, { backgroundColor: "#d1fae5" }]}>
+                            <View style={styles.activeNowDot} />
+                            <Text style={[styles.activeNowText, { color: "#065f46" }]}>Active Now</Text>
+                          </View>
+                        ) : null}
+                        {isFull ? (
+                          <View style={[styles.fullBadge, { backgroundColor: theme.dangerLight }]}>
+                            <Text style={[styles.fullText, { color: theme.danger }]}>Full</Text>
+                          </View>
+                        ) : (
+                          <View style={[styles.availBadge, { backgroundColor: theme.primaryLight }]}>
+                            <Text style={[styles.availText, { color: theme.primary }]}>Available</Text>
+                          </View>
+                        )}
+                      </View>
                     </View>
                     <Text style={[styles.shiftTime, { color: theme.textSecondary }]}>
                       {shift.startTime} – {shift.endTime}
@@ -241,4 +268,7 @@ const styles = StyleSheet.create({
   checkInText: { color: "#fff", fontSize: 14, fontWeight: "700" },
   individualBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 14, borderRadius: BorderRadius.lg, borderWidth: 1, marginTop: Spacing.sm },
   individualText: { fontSize: 14 },
+  activeNowBadge: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  activeNowDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#10b981" },
+  activeNowText: { fontSize: 11, fontWeight: "700" },
 });
