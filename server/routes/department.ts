@@ -11,6 +11,7 @@ import {
   shifts,
   shiftSessions,
   pushTokens,
+  rotaAssignments,
 } from "@shared/schema";
 
 const GOOGLE_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ||
@@ -561,6 +562,164 @@ export function registerDepartmentRoutes(app: Express) {
       res.json({ success: true });
     } catch (e) {
       res.status(500).json({ error: "Failed to save push token" });
+    }
+  });
+
+  // ── GET /api/department/:id/rota ─────────────────────────────
+  app.get("/api/department/:id/rota", async (req: Request, res: Response) => {
+    const userId = extractUserId(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    const db = getDb();
+    if (!db) return res.status(503).json({ error: "DB unavailable" });
+    try {
+      const departmentId = parseInt(req.params.id);
+      const [deptShifts, assignments, members] = await Promise.all([
+        db.select().from(shifts).where(eq(shifts.departmentId, departmentId)),
+        db.select().from(rotaAssignments).where(eq(rotaAssignments.departmentId, departmentId)),
+        db.select().from(departmentMembers).where(and(eq(departmentMembers.departmentId, departmentId), eq(departmentMembers.status, "active"))),
+      ]);
+      res.json({ shifts: deptShifts, assignments, members });
+    } catch (e) {
+      res.status(500).json({ error: "Failed to fetch rota" });
+    }
+  });
+
+  // ── POST /api/department/:id/shifts ───────────────────────────
+  app.post("/api/department/:id/shifts", async (req: Request, res: Response) => {
+    const userId = extractUserId(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    const db = getDb();
+    if (!db) return res.status(503).json({ error: "DB unavailable" });
+    try {
+      const departmentId = parseInt(req.params.id);
+      const hodCheck = await db.select().from(departmentMembers)
+        .where(and(eq(departmentMembers.userId, userId), eq(departmentMembers.departmentId, departmentId), eq(departmentMembers.role, "hod"), eq(departmentMembers.status, "active")))
+        .limit(1);
+      if (!hodCheck.length) return res.status(403).json({ error: "HOD only" });
+      const existing = await db.select().from(shifts).where(eq(shifts.departmentId, departmentId));
+      if (existing.length >= 5) return res.status(400).json({ error: "Maximum 5 shifts allowed" });
+      const { name, startTime, endTime, maxConsultants, maxResidents } = req.body;
+      if (!name || !startTime || !endTime) return res.status(400).json({ error: "name, startTime, endTime required" });
+      const [shift] = await db.insert(shifts).values({ departmentId, name, startTime, endTime, maxConsultants: maxConsultants ?? 2, maxResidents: maxResidents ?? 6 }).returning();
+      res.json({ success: true, shift });
+    } catch (e) {
+      res.status(500).json({ error: "Failed to add shift" });
+    }
+  });
+
+  // ── PATCH /api/department/:id/shifts/:shiftId ─────────────────
+  app.patch("/api/department/:id/shifts/:shiftId", async (req: Request, res: Response) => {
+    const userId = extractUserId(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    const db = getDb();
+    if (!db) return res.status(503).json({ error: "DB unavailable" });
+    try {
+      const departmentId = parseInt(req.params.id);
+      const shiftId = parseInt(req.params.shiftId);
+      const hodCheck = await db.select().from(departmentMembers)
+        .where(and(eq(departmentMembers.userId, userId), eq(departmentMembers.departmentId, departmentId), eq(departmentMembers.role, "hod"), eq(departmentMembers.status, "active")))
+        .limit(1);
+      if (!hodCheck.length) return res.status(403).json({ error: "HOD only" });
+      const { name, startTime, endTime, maxConsultants, maxResidents } = req.body;
+      const updates: any = {};
+      if (name) updates.name = name;
+      if (startTime) updates.startTime = startTime;
+      if (endTime) updates.endTime = endTime;
+      if (maxConsultants != null) updates.maxConsultants = maxConsultants;
+      if (maxResidents != null) updates.maxResidents = maxResidents;
+      const [updated] = await db.update(shifts).set(updates).where(and(eq(shifts.id, shiftId), eq(shifts.departmentId, departmentId))).returning();
+      if (!updated) return res.status(404).json({ error: "Shift not found" });
+      res.json({ success: true, shift: updated });
+    } catch (e) {
+      res.status(500).json({ error: "Failed to update shift" });
+    }
+  });
+
+  // ── DELETE /api/department/:id/shifts/:shiftId ────────────────
+  app.delete("/api/department/:id/shifts/:shiftId", async (req: Request, res: Response) => {
+    const userId = extractUserId(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    const db = getDb();
+    if (!db) return res.status(503).json({ error: "DB unavailable" });
+    try {
+      const departmentId = parseInt(req.params.id);
+      const shiftId = parseInt(req.params.shiftId);
+      const hodCheck = await db.select().from(departmentMembers)
+        .where(and(eq(departmentMembers.userId, userId), eq(departmentMembers.departmentId, departmentId), eq(departmentMembers.role, "hod"), eq(departmentMembers.status, "active")))
+        .limit(1);
+      if (!hodCheck.length) return res.status(403).json({ error: "HOD only" });
+      await db.delete(rotaAssignments).where(and(eq(rotaAssignments.shiftId, shiftId), eq(rotaAssignments.departmentId, departmentId)));
+      await db.delete(shifts).where(and(eq(shifts.id, shiftId), eq(shifts.departmentId, departmentId)));
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ error: "Failed to delete shift" });
+    }
+  });
+
+  // ── POST /api/department/:id/rota ─────────────────────────────
+  app.post("/api/department/:id/rota", async (req: Request, res: Response) => {
+    const userId = extractUserId(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    const db = getDb();
+    if (!db) return res.status(503).json({ error: "DB unavailable" });
+    try {
+      const departmentId = parseInt(req.params.id);
+      const hodCheck = await db.select().from(departmentMembers)
+        .where(and(eq(departmentMembers.userId, userId), eq(departmentMembers.departmentId, departmentId), eq(departmentMembers.role, "hod"), eq(departmentMembers.status, "active")))
+        .limit(1);
+      if (!hodCheck.length) return res.status(403).json({ error: "HOD only" });
+      const { shiftId, memberUserId, roleForShift, customEndTime, notes } = req.body;
+      if (!shiftId || !memberUserId) return res.status(400).json({ error: "shiftId and memberUserId required" });
+      const existing = await db.select().from(rotaAssignments)
+        .where(and(eq(rotaAssignments.shiftId, shiftId), eq(rotaAssignments.memberUserId, memberUserId), eq(rotaAssignments.departmentId, departmentId)))
+        .limit(1);
+      if (existing.length) return res.status(400).json({ error: "Member already assigned to this shift" });
+      const [assignment] = await db.insert(rotaAssignments).values({ departmentId, shiftId, memberUserId, roleForShift, customEndTime: customEndTime || null, notes: notes || null }).returning();
+      res.json({ success: true, assignment });
+    } catch (e) {
+      res.status(500).json({ error: "Failed to add rota assignment" });
+    }
+  });
+
+  // ── PATCH /api/department/:id/rota/:assignmentId ──────────────
+  app.patch("/api/department/:id/rota/:assignmentId", async (req: Request, res: Response) => {
+    const userId = extractUserId(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    const db = getDb();
+    if (!db) return res.status(503).json({ error: "DB unavailable" });
+    try {
+      const departmentId = parseInt(req.params.id);
+      const assignmentId = parseInt(req.params.assignmentId);
+      const hodCheck = await db.select().from(departmentMembers)
+        .where(and(eq(departmentMembers.userId, userId), eq(departmentMembers.departmentId, departmentId), eq(departmentMembers.role, "hod"), eq(departmentMembers.status, "active")))
+        .limit(1);
+      if (!hodCheck.length) return res.status(403).json({ error: "HOD only" });
+      const { customEndTime, notes } = req.body;
+      const [updated] = await db.update(rotaAssignments).set({ customEndTime: customEndTime ?? null, notes: notes ?? null }).where(and(eq(rotaAssignments.id, assignmentId), eq(rotaAssignments.departmentId, departmentId))).returning();
+      if (!updated) return res.status(404).json({ error: "Assignment not found" });
+      res.json({ success: true, assignment: updated });
+    } catch (e) {
+      res.status(500).json({ error: "Failed to update rota assignment" });
+    }
+  });
+
+  // ── DELETE /api/department/:id/rota/:assignmentId ─────────────
+  app.delete("/api/department/:id/rota/:assignmentId", async (req: Request, res: Response) => {
+    const userId = extractUserId(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    const db = getDb();
+    if (!db) return res.status(503).json({ error: "DB unavailable" });
+    try {
+      const departmentId = parseInt(req.params.id);
+      const assignmentId = parseInt(req.params.assignmentId);
+      const hodCheck = await db.select().from(departmentMembers)
+        .where(and(eq(departmentMembers.userId, userId), eq(departmentMembers.departmentId, departmentId), eq(departmentMembers.role, "hod"), eq(departmentMembers.status, "active")))
+        .limit(1);
+      if (!hodCheck.length) return res.status(403).json({ error: "HOD only" });
+      await db.delete(rotaAssignments).where(and(eq(rotaAssignments.id, assignmentId), eq(rotaAssignments.departmentId, departmentId)));
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ error: "Failed to remove rota assignment" });
     }
   });
 
