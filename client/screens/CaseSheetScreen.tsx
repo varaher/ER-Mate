@@ -1392,14 +1392,14 @@ export default function CaseSheetScreen() {
       if (res.success) {
         saveClinicalDataToServer(caseId, payload).catch(() => {});
         await invalidateCases();
-        if (department?.id && shiftSession?.id) {
+        if (department?.id) {
           const complaint = (formData as any)?.chiefComplaint || formData?.sample?.signsSymptoms?.split(",")[0]?.trim() || "";
           fetch(`${getApiUrl()}/api/cases/${caseId}/register-shift`, {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
             body: JSON.stringify({
               departmentId: department.id,
-              shiftSessionId: shiftSession.id,
+              shiftSessionId: shiftSession?.id || null,
               patientName: caseData?.patient?.name || "",
               patientAge: String(caseData?.patient?.age || ""),
               chiefComplaint: complaint,

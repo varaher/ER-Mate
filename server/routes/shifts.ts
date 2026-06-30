@@ -464,11 +464,17 @@ export function registerShiftRoutes(app: Express) {
         .where(and(eq(shiftSessions.departmentId, departmentId), eq(shiftSessions.status, "active")));
 
       const sessionIds = activeSessions.map((s) => s.id);
-      let allOverlays: any[] = [];
-      for (const sid of sessionIds) {
-        const rows = await db.select().from(caseOverlays).where(eq(caseOverlays.shiftSessionId, sid));
-        allOverlays.push(...rows);
-      }
+
+      // Fetch all overlays for this department (covers both shift-linked and no-session cases)
+      const allDeptOverlays = await db
+        .select()
+        .from(caseOverlays)
+        .where(eq(caseOverlays.departmentId, departmentId));
+
+      // Keep overlays that either belong to an active session or have no session (saved without checking in)
+      const allOverlays = allDeptOverlays.filter(
+        (o) => o.shiftSessionId == null || sessionIds.includes(o.shiftSessionId)
+      );
 
       const result = allOverlays.map((o) => {
         const sess = activeSessions.find((s) => s.id === o.shiftSessionId);
