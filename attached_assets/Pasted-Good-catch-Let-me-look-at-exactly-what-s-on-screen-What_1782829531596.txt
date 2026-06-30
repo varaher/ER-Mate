@@ -1,0 +1,168 @@
+Good catch. Let me look at exactly what's on screen.
+
+---
+
+**What I can see:**
+
+```
+Image 2 — HOD Dashboard:
+  Shift Overview:
+    Morning  0 Con / 0 Res
+    Evening  2 Con / 3 Res
+    Night    0 Con / 0 Res
+    D2       0 Con / 0 Res
+
+  Live Check-ins (6):
+    Neeraj - HOD - Morning - 8h 18m
+    DASH nee - Consultant - Evening
+    Joshua jose13 - Resident - Evening
+    Jaice Davis - Resident - Evening
+    Salih Sharafudeen - Resident - Evening
+    Nirmal Krishnan - Consultant - Evening
+
+  Active Members (11):
+    Several "On Shift", several "Assign"
+```
+
+---
+
+## The Problem You're Pointing Out
+
+You're right — there are now **two separate, disconnected systems**:
+
+```
+SYSTEM 1 — "Check-In" (already built, working)
+  Doctors manually tap "Start Shift"
+  Shows up in "Live Check-ins"
+  This is ad-hoc — no planning, no schedule
+
+SYSTEM 2 — "Rota" (what we just designed)
+  HOD plans in advance who works when
+  This was DESIGNED but NOT YET BUILT
+  Currently doesn't exist in the actual app
+
+Right now: HOD Dashboard only shows System 1.
+The Rota screens I designed are not 
+connected to this dashboard at all.
+```
+
+---
+
+## Why They're Disconnected
+
+The HOD Dashboard you're looking at was built **before** we designed the Rota system today. It only knows about manual check-ins (`shift_sessions` table). It has no idea the `rota_assignments` table exists, because that table hasn't been built yet either.
+
+---
+
+## What Needs to Happen — The Actual Fix
+
+**Tell your developer this exact integration plan:**
+
+```
+STEP 1 — Build the rota_assignments table
+         (from earlier schema)
+
+STEP 2 — Connect Rota to Shift Check-In:
+  When a doctor opens the app and taps 
+  "Start Shift", the app should first 
+  check: "Is this doctor on the rota 
+  for this shift today?"
+
+  If YES on rota → check in normally,
+                    shows on HOD Dashboard
+                    exactly as it does now
+
+  If NOT on rota → show warning:
+                    "You're not rostered 
+                     for this shift. 
+                     Check in anyway?"
+                    (HOD can allow or block this)
+
+STEP 3 — HOD Dashboard shows BOTH:
+  
+  Current section (keep as is):
+    "Live Check-ins" — who's actually 
+    checked in right now (System 1)
+  
+  NEW section to add:
+    "Today's Rota" — who is SCHEDULED 
+    to be on shift today (System 2)
+    
+    Compare the two:
+    ✓ Rostered AND checked in → green
+    ⚠ Rostered but NOT checked in → amber
+       "Dr. Priya was scheduled for 
+        Morning but hasn't checked in"
+    — Checked in but NOT rostered → flag
+       "Dr. Arun checked in but wasn't 
+        scheduled — ad-hoc coverage"
+```
+
+---
+
+## Updated HOD Dashboard — What It Should Look Like
+
+```
+┌─────────────────────────────────┐
+│  Ra · HOD Admin Dashboard        │
+│                  [Manage Roster] │
+│                  [Manage Rota] ← NEW
+├─────────────────────────────────┤
+│  TODAY'S ROTA                    │ ← NEW SECTION
+│  Morning: Dr. Priya (not in yet) │
+│  Evening: DASH nee ✓, Joshua ✓   │
+│  Night:   Unassigned ⚠           │
+├─────────────────────────────────┤
+│  SHIFT OVERVIEW (existing)       │
+│  Morning  0 Con / 0 Res          │
+│  Evening  2 Con / 3 Res          │
+├─────────────────────────────────┤
+│  LIVE CHECK-INS (existing)       │
+│  Neeraj - HOD - Morning - 8h18m  │
+│  ...                             │
+└─────────────────────────────────┘
+```
+
+---
+
+## The Core Insight
+
+```
+"Live Check-ins" = WHAT IS HAPPENING NOW
+"Rota"           = WHAT WAS PLANNED
+
+These are two different things 
+that need to talk to each other:
+
+  Rota tells you who SHOULD check in
+  Live Check-ins tells you who DID
+  
+  The gap between them is what the
+  HOD actually needs to see —
+  no-shows, unplanned coverage, gaps.
+```
+
+---
+
+## Priority Fix for Your Developer
+
+```
+Phase 1 (this week):
+  Build rota_assignments table + routes
+  Build ManageRotaScreen (from earlier design)
+  Add "Manage Rota" button to HOD Dashboard
+  (separate from "Manage Roster" which 
+   manages WHO is on the team, not WHEN 
+   they work)
+
+Phase 2 (next week):
+  Add "Today's Rota" section to HOD Dashboard
+  Cross-reference rota vs check-ins
+  Show gaps/no-shows/unplanned coverage
+
+Phase 3:
+  Shift check-in checks rota first
+  Warn if checking in without being rostered
+```
+
+This is exactly the connection that was missing — good instinct to flag it before it got built disconnected.

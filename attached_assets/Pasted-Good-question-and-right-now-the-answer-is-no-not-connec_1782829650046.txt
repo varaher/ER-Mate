@@ -1,0 +1,120 @@
+Good question — and right now the answer is no, not connected to the rota either. Let me show exactly what's missing.
+
+---
+
+## Current State — Three Disconnected Pieces
+
+```
+PIECE 1: Rota (designed today, not built)
+  "Dr. Priya is scheduled for Evening shift"
+
+PIECE 2: Check-In (built, working)
+  "Dr. Priya tapped Start Shift at 14:05"
+
+PIECE 3: Case List (built, working — from earlier)
+  "Dr. Priya documented Case #47, #48, #49"
+
+None of these three currently reference each other
+in the HOD Dashboard view.
+```
+
+---
+
+## What You're Asking — Does HOD See Cases Per Rostered Doctor?
+
+This is the real question: when HOD opens the dashboard, can they see **not just who's on shift, but what each of them is actually doing** — their case list?
+
+**Right now: partially.** The shift dashboard (Cases tab) shows this, but the **HOD Dashboard screen itself** doesn't pull case data in.
+
+---
+
+## What Needs to Be Added
+
+```
+HOD Dashboard should show, per doctor on shift:
+
+┌──────────────────────────────────┐
+│  Joshua jose13                   │
+│  Resident · Evening · 3h 48m     │
+│                                   │
+│  📋 3 cases today                 │ ← NEW
+│     Bed 10 · Chest pain · P1     │ ← NEW
+│     Bed 12 · Fever · P3          │ ← NEW
+│     Bed 14 · RTA · P1            │ ← NEW
+│                                   │
+│  [End Shift]  [View All Cases →] │
+└──────────────────────────────────┘
+```
+
+---
+
+## Backend — What Already Exists vs What's Needed
+
+```
+ALREADY BUILT (from earlier session):
+  GET /api/shifts/:shiftId/cases
+  → Returns all cases for a shift,
+    already includes doctor name per case
+
+NEEDS TO BE ADDED:
+  Extend GET /api/department/:id/all-shift-cases
+  → Already exists too, per memory —
+    but needs to be WIRED into the 
+    HOD Dashboard screen, not just 
+    the shift Cases tab
+
+  The data exists. The HOD Dashboard 
+  screen just isn't calling that 
+  endpoint and rendering it yet.
+```
+
+---
+
+## The Fix — Tell Your Developer
+
+```
+On HOD Dashboard, for each doctor in 
+"Live Check-ins", add an expandable 
+case count + list:
+
+1. Call existing endpoint:
+   GET /api/department/:id/all-shift-cases
+   (this likely already returns 
+    caseId, doctorName, patientName, 
+    complaint, priority, bedNumber)
+
+2. Group results by doctorUserId
+
+3. Under each doctor's row in 
+   Live Check-ins, show:
+   "📋 X cases today"
+   Tap to expand → mini case list
+   Tap a case → opens full case sheet
+```
+
+This is mostly a **frontend wiring task**, not new backend work — assuming `all-shift-cases` already returns doctor-attributed case data (which the earlier build summary said it does).
+
+---
+
+## Updated Full Picture — What HOD Dashboard Should Eventually Show
+
+```
+┌─────────────────────────────────────┐
+│  TODAY'S ROTA                        │ Planned
+│  Morning: Priya (not checked in ⚠)   │
+│  Evening: 5 doctors rostered ✓       │
+├─────────────────────────────────────┤
+│  LIVE CHECK-INS                      │ Actual
+│  Joshua jose13 · 3 cases 📋          │ ← cases now visible
+│  [tap to expand case list]           │
+│  Jaice Davis · 2 cases 📋             │
+│  [End Shift]                         │
+├─────────────────────────────────────┤
+│  SHIFT OVERVIEW                      │ Counts
+│  Morning 0/0  Evening 2/3            │
+└─────────────────────────────────────┘
+```
+
+---
+
+**Quick check for your developer:** does `GET /api/department/:id/all-shift-cases` already return `doctorUserId` and `doctorName` per case? If yes, this is a half-day frontend task. If no, that field needs to be added first.
