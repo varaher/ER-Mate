@@ -70,7 +70,7 @@ When loading cases saved by the external backend directly (not via the app's own
 
 ### Dictation Completion Map Architecture
 `client/components/DictationResultModal.tsx` exports:
-- `calculateDictationCompletion(data: SmartDictationExtracted): DictationCompletion` — scores each of 7 tabs (patient 10 fields, history 7, primary 5, exam 8, treatment 5, notes 1, disposition 4) from the extracted dictation data.
+- `calculateDictationCompletion(data: SmartDictationExtracted): DictationCompletion` — scores each of 7 tabs (patient 10 fields, history 7, primary 5, exam 9, treatment 5, notes 1, disposition 3) from the extracted dictation data. Only fields that Smart Dictation can populate are scored; manual-only fields (e.g. dispositionType button) are excluded.
 - `getTabStatus(tc: TabCompletion): "full" | "partial" | "empty"` — full ≥75%, partial >0%, empty = 0.
 - `DictationResultModal` — bottom sheet with overall bar, per-tab progress rows, and "Review gaps" / "Done" actions.
 In `CaseSheetScreen`: after `handleSmartDictation` completes, `calculateDictationCompletion(data)` is called and stored in `dictationCompletion` state. `TabButton` reads this state to render a coloured dot (green/amber/red) per tab.
