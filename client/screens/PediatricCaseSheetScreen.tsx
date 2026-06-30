@@ -289,8 +289,8 @@ export default function PediatricCaseSheetScreen() {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<PediatricCaseSheetRouteProp>();
   const { theme, isDark } = useTheme();
-  const { user } = useAuth();
-  const { membership } = useDepartment();
+  const { user, token } = useAuth();
+  const { membership, department, shiftSession } = useDepartment();
   const insets = useSafeAreaInsets();
   
 
@@ -760,6 +760,21 @@ export default function PediatricCaseSheetScreen() {
       if (res && res.success !== false) {
         saveClinicalDataToServer(caseId, payload).catch(() => {});
         await invalidateCases();
+        if (department?.id) {
+          fetch(`${getApiUrl()}/api/cases/${caseId}/register-shift`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({
+              departmentId: department.id,
+              shiftSessionId: shiftSession?.id || null,
+              patientName: patient?.name || "",
+              patientAge: String(patient?.age || ""),
+              chiefComplaint: patient?.chief_complaint || "",
+              triagePriority: patient?.triage_category || null,
+              doctorName: user?.name || user?.email || "",
+            }),
+          }).catch(() => {});
+        }
         const effectiveDraftId = currentDraftId || localDraftIdRef.current;
         if (effectiveDraftId) {
           await commitDraft(caseId);
@@ -1401,6 +1416,40 @@ export default function PediatricCaseSheetScreen() {
                 return status === "normal" ? TriageColors.green : TriageColors.red;
               };
               return (
+                <>
+                <View style={[styles.pedVitalRefCard, { backgroundColor: theme.backgroundSecondary, borderColor: theme.border }]}>
+                  <View style={styles.pedVitalRefHeader}>
+                    <Feather name="bar-chart-2" size={16} color={TriageColors.green} />
+                    <Text style={[styles.pedVitalRefTitle, { color: theme.text }]}>Normal Vitals Reference (Pediatric)</Text>
+                  </View>
+                  <Text style={[styles.pedVitalRefAge, { color: theme.textSecondary }]}>{ageGroupLabel}</Text>
+                  <View style={styles.pedVitalRefGrid}>
+                    <View style={styles.pedVitalRefItem}>
+                      <Text style={[styles.pedVitalRefLabel, { color: TriageColors.green }]}>HR:</Text>
+                      <Text style={[styles.pedVitalRefValue, { color: TriageColors.green }]}>{ranges.hr.label}</Text>
+                    </View>
+                    <View style={styles.pedVitalRefItem}>
+                      <Text style={[styles.pedVitalRefLabel, { color: TriageColors.green }]}>RR:</Text>
+                      <Text style={[styles.pedVitalRefValue, { color: TriageColors.green }]}>{ranges.rr.label}</Text>
+                    </View>
+                    <View style={styles.pedVitalRefItem}>
+                      <Text style={[styles.pedVitalRefLabel, { color: TriageColors.green }]}>BP:</Text>
+                      <Text style={[styles.pedVitalRefValue, { color: TriageColors.green }]}>{ranges.bp_systolic.min}-{ranges.bp_systolic.max}/{ranges.bp_diastolic.min}-{ranges.bp_diastolic.max}</Text>
+                    </View>
+                    <View style={styles.pedVitalRefItem}>
+                      <Text style={[styles.pedVitalRefLabel, { color: TriageColors.green }]}>SpO2:</Text>
+                      <Text style={[styles.pedVitalRefValue, { color: TriageColors.green }]}>{ranges.spo2.label}</Text>
+                    </View>
+                    <View style={styles.pedVitalRefItem}>
+                      <Text style={[styles.pedVitalRefLabel, { color: TriageColors.green }]}>Temp:</Text>
+                      <Text style={[styles.pedVitalRefValue, { color: TriageColors.green }]}>{ranges.temperature.label}</Text>
+                    </View>
+                    <View style={styles.pedVitalRefItem}>
+                      <Text style={[styles.pedVitalRefLabel, { color: TriageColors.green }]}>GCS:</Text>
+                      <Text style={[styles.pedVitalRefValue, { color: TriageColors.green }]}>{ranges.gcs.label}</Text>
+                    </View>
+                  </View>
+                </View>
                 <View style={[styles.pedVitalsGrid, { backgroundColor: theme.backgroundSecondary }]}>
                   <View style={styles.pedVitalsRow}>
                     <View style={styles.pedVitalCell}>
@@ -1451,7 +1500,17 @@ export default function PediatricCaseSheetScreen() {
                       <Text style={[styles.pedVitalRange, { color: theme.textMuted }]}>/10</Text>
                     </View>
                   </View>
+                  <View style={styles.pedVitalsRow}>
+                    <View style={styles.pedVitalCell}>
+                      <Text style={[styles.vitalLabel, { color: theme.textMuted }]}>GRBS</Text>
+                      <TextInput style={[styles.pedVitalInput, { color: theme.text, borderColor: theme.border }]} keyboardType="numeric" value={patient.vitals.grbs} onChangeText={(v) => updateVital("grbs", v)} placeholder="--" placeholderTextColor={theme.textMuted} maxLength={4} />
+                      <Text style={[styles.pedVitalRange, { color: theme.textMuted }]}>mg/dL</Text>
+                    </View>
+                    <View style={styles.pedVitalCell} />
+                    <View style={styles.pedVitalCell} />
+                  </View>
                 </View>
+                </>
               );
             })()}
             <View style={[styles.weightSection, { backgroundColor: theme.backgroundSecondary, borderColor: TriageColors.blue }]}>
@@ -2362,11 +2421,19 @@ const styles = StyleSheet.create({
   vitalItem: { alignItems: "center", minWidth: 50 },
   vitalValue: { ...Typography.bodyMedium, fontWeight: "600" },
   vitalLabel: { ...Typography.small },
-  pedVitalsGrid: { marginTop: Spacing.md, padding: Spacing.md, borderRadius: BorderRadius.md, gap: Spacing.lg },
+  pedVitalsGrid: { marginTop: Spacing.sm, padding: Spacing.md, borderRadius: BorderRadius.md, gap: Spacing.lg },
   pedVitalsRow: { flexDirection: "row" as const, justifyContent: "space-around" as const, gap: Spacing.sm },
   pedVitalCell: { flex: 1, alignItems: "center" as const, gap: 3 },
   pedVitalInput: { fontWeight: "600" as const, textAlign: "center" as const, borderBottomWidth: 1, paddingVertical: 2, paddingHorizontal: 2, fontSize: 16, width: 50 },
   pedVitalRange: { fontSize: 8, textAlign: "center" as const, fontStyle: "italic" as const },
+  pedVitalRefCard: { marginTop: Spacing.md, padding: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1 },
+  pedVitalRefHeader: { flexDirection: "row" as const, alignItems: "center" as const, gap: Spacing.sm, marginBottom: 4 },
+  pedVitalRefTitle: { ...Typography.small, fontWeight: "600" as const },
+  pedVitalRefAge: { ...Typography.caption, marginBottom: Spacing.sm },
+  pedVitalRefGrid: { flexDirection: "row" as const, flexWrap: "wrap" as const, gap: Spacing.sm },
+  pedVitalRefItem: { flexDirection: "row" as const, alignItems: "center" as const, gap: 4, minWidth: "30%" as const },
+  pedVitalRefLabel: { ...Typography.caption, fontWeight: "700" as const },
+  pedVitalRefValue: { ...Typography.caption },
   weightSection: { marginTop: Spacing.lg, padding: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1.5, borderStyle: "dashed" },
   infoSection: { marginTop: Spacing.lg },
   fieldWithVoice: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: Spacing.md, marginBottom: Spacing.sm },

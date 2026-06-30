@@ -325,6 +325,19 @@ export function registerShiftRoutes(app: Express) {
       const { departmentId, shiftSessionId, patientName, patientAge, chiefComplaint, triagePriority, bedNumber, doctorName } = req.body;
       if (!departmentId) return res.status(400).json({ error: "departmentId required" });
 
+      // If client didn't know about an HOD-assigned session, look it up server-side
+      let resolvedSessionId: number | null = shiftSessionId || null;
+      if (!resolvedSessionId) {
+        const activeSession = await db
+          .select()
+          .from(shiftSessions)
+          .where(and(eq(shiftSessions.userId, userId), eq(shiftSessions.departmentId, departmentId), eq(shiftSessions.status, "active")))
+          .limit(1);
+        if (activeSession.length) {
+          resolvedSessionId = activeSession[0].id;
+        }
+      }
+
       const existing = await db
         .select()
         .from(caseOverlays)
@@ -335,7 +348,7 @@ export function registerShiftRoutes(app: Express) {
         const [updated] = await db
           .update(caseOverlays)
           .set({
-            shiftSessionId: shiftSessionId || existing[0].shiftSessionId,
+            shiftSessionId: resolvedSessionId || existing[0].shiftSessionId,
             patientName: patientName || existing[0].patientName,
             patientAge: patientAge || existing[0].patientAge,
             chiefComplaint: chiefComplaint || existing[0].chiefComplaint,
@@ -354,7 +367,7 @@ export function registerShiftRoutes(app: Express) {
         .values({
           caseId,
           departmentId,
-          shiftSessionId: shiftSessionId || null,
+          shiftSessionId: resolvedSessionId,
           patientName: patientName || null,
           patientAge: patientAge || null,
           chiefComplaint: chiefComplaint || null,
@@ -365,7 +378,7 @@ export function registerShiftRoutes(app: Express) {
           handoverStatus: "active",
         })
         .returning();
-      res.json({ success: true, overlay });
+      res.json({ success: true, overlay, resolvedSession: !!resolvedSessionId });
     } catch (e) {
       console.error("[ShiftOverlay] Register error:", e);
       res.status(500).json({ error: "Failed to register case" });
