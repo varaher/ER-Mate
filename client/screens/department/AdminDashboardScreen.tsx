@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -36,7 +36,19 @@ export default function AdminDashboardScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [forcingOut, setForcingOut] = useState<number | null>(null);
 
-  useFocusEffect(useCallback(() => { loadAdmin(); }, [department?.id]));
+  const isFocusedRef = useRef(false);
+
+  useFocusEffect(useCallback(() => {
+    isFocusedRef.current = true;
+    loadAdmin();
+    const interval = setInterval(() => {
+      if (isFocusedRef.current) loadAdmin(true);
+    }, 30000);
+    return () => {
+      isFocusedRef.current = false;
+      clearInterval(interval);
+    };
+  }, [department?.id]));
 
   const loadAdmin = async (silent = false) => {
     if (!department || !token) { setLoading(false); return; }

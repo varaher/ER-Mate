@@ -126,13 +126,45 @@ export function registerDepartmentRoutes(app: Express) {
     const db = getDb();
     if (!db) return res.status(503).json({ error: "DB unavailable" });
     try {
-      const membership = await db
+      let membershipRows = await db
         .select()
         .from(departmentMembers)
         .where(and(eq(departmentMembers.userId, userId), eq(departmentMembers.status, "active")))
         .limit(1);
-      if (!membership.length) return res.json({ department: null, membership: null, shifts: [] });
-      const mem = membership[0];
+
+      // Fallback: userId in department_members may be Google sub from join flow,
+      // while the app JWT sub is the external backend UUID. Look up by email
+      // stored in auth_sessions and self-heal the userId mismatch on first match.
+      if (!membershipRows.length) {
+        const pool = getPool();
+        if (pool) {
+          const sessionRow = await pool.query(
+            "SELECT email FROM auth_sessions WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1",
+            [userId]
+          );
+          const email = sessionRow.rows[0]?.email?.toLowerCase();
+          if (email) {
+            const emailMatch = await db
+              .select()
+              .from(departmentMembers)
+              .where(and(eq(departmentMembers.email, email), eq(departmentMembers.status, "active")))
+              .limit(1);
+            if (emailMatch.length) {
+              // Self-heal: update stored userId to the current JWT sub so future
+              // lookups succeed without the email fallback.
+              await pool.query(
+                "UPDATE department_members SET user_id = $1 WHERE id = $2",
+                [userId, emailMatch[0].id]
+              );
+              membershipRows = [{ ...emailMatch[0], userId }];
+              console.log(`[Dept] Self-healed userId for member ${emailMatch[0].id} (email: ${email})`);
+            }
+          }
+        }
+      }
+
+      if (!membershipRows.length) return res.json({ department: null, membership: null, shifts: [] });
+      const mem = membershipRows[0];
 
       // Use raw pool to get invite_token which may not be in Drizzle schema
       const pool = getPool();
@@ -296,6 +328,33 @@ export function registerDepartmentRoutes(app: Express) {
     } catch (e) {
       console.error("[Dept] Join post error:", e);
       res.status(500).json({ error: "Failed to submit join request" });
+    }
+  });
+
+  // ── GET /api/department/invites/pending ─────────────────────
+  // IMPORTANT: This must be registered BEFORE /:id/pending to avoid Express
+  // matching "invites" as the :id param, which causes parseInt("invites") = NaN
+  // in the /:id/pending handler and results in a DB error → 500.
+  app.get("/api/department/invites/pending", async (req: Request, res: Response) => {
+    const userId = extractUserId(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    const db = getDb();
+    if (!db) return res.status(503).json({ error: "DB unavailable" });
+    try {
+      const pending = await db
+        .select()
+        .from(departmentMembers)
+        .where(and(eq(departmentMembers.userId, userId), eq(departmentMembers.status, "pending")));
+      const withDept = await Promise.all(
+        pending.map(async (m) => {
+          const dept = await db.select().from(departments).where(eq(departments.id, m.departmentId)).limit(1);
+          return { ...m, department: dept[0] || null };
+        })
+      );
+      res.json({ invites: withDept });
+    } catch (e) {
+      console.error("[Dept] Invites pending error:", e);
+      res.status(500).json({ error: "Failed to fetch pending invites" });
     }
   });
 
@@ -481,29 +540,6 @@ export function registerDepartmentRoutes(app: Express) {
     } catch (e) {
       console.error("[Dept] Admin error:", e);
       res.status(500).json({ error: "Failed to fetch admin data" });
-    }
-  });
-
-  // ── GET /api/department/invites/pending ─────────────────────
-  app.get("/api/department/invites/pending", async (req: Request, res: Response) => {
-    const userId = extractUserId(req);
-    if (!userId) return res.status(401).json({ error: "Unauthorized" });
-    const db = getDb();
-    if (!db) return res.status(503).json({ error: "DB unavailable" });
-    try {
-      const pending = await db
-        .select()
-        .from(departmentMembers)
-        .where(and(eq(departmentMembers.userId, userId), eq(departmentMembers.status, "pending")));
-      const withDept = await Promise.all(
-        pending.map(async (m) => {
-          const dept = await db.select().from(departments).where(eq(departments.id, m.departmentId)).limit(1);
-          return { ...m, department: dept[0] || null };
-        })
-      );
-      res.json({ invites: withDept });
-    } catch (e) {
-      res.status(500).json({ error: "Failed to fetch pending invites" });
     }
   });
 
