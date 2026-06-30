@@ -473,14 +473,17 @@ export default function ManageRosterScreen() {
           const isExpanded = expandedShift === shift.id;
           return (
             <View key={shift.id} style={[styles.shiftCard, { backgroundColor: theme.card, borderLeftColor: color }]}>
-              <Pressable style={styles.shiftHeader} onPress={() => setExpandedShift(isExpanded ? null : shift.id)}>
-                <View style={[styles.shiftDot, { backgroundColor: color }]} />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.shiftName, { color: theme.text }]}>{shift.name}</Text>
-                  <Text style={[styles.shiftTime, { color: theme.textSecondary }]}>{shift.startTime} – {shift.endTime}  ·  {shiftAssignments.length} rostered</Text>
-                </View>
+              <View style={styles.shiftHeader}>
+                <Pressable style={{ flexDirection: "row", alignItems: "center", flex: 1 }} onPress={() => setExpandedShift(isExpanded ? null : shift.id)}>
+                  <View style={[styles.shiftDot, { backgroundColor: color }]} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.shiftName, { color: theme.text }]}>{shift.name}</Text>
+                    <Text style={[styles.shiftTime, { color: theme.textSecondary }]}>{shift.startTime} – {shift.endTime}  ·  {shiftAssignments.length} rostered</Text>
+                  </View>
+                  <Feather name={isExpanded ? "chevron-up" : "chevron-down"} size={18} color={theme.textMuted} style={{ marginLeft: 6 }} />
+                </Pressable>
                 {isHOD ? (
-                  <View style={{ flexDirection: "row", gap: 6 }}>
+                  <View style={{ flexDirection: "row", gap: 6, marginLeft: 8 }}>
                     <Pressable style={[styles.iconBtn, { backgroundColor: theme.primaryLight }]} onPress={() => openEditShift(shift)}>
                       <Feather name="edit-2" size={14} color={theme.primary} />
                     </Pressable>
@@ -489,8 +492,7 @@ export default function ManageRosterScreen() {
                     </Pressable>
                   </View>
                 ) : null}
-                <Feather name={isExpanded ? "chevron-up" : "chevron-down"} size={18} color={theme.textMuted} style={{ marginLeft: 6 }} />
-              </Pressable>
+              </View>
 
               {isExpanded ? (
                 <View style={[styles.shiftBody, { borderTopColor: theme.border }]}>
