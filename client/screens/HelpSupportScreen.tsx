@@ -86,16 +86,16 @@ export default function HelpSupportScreen() {
   const handleEmailSupport = async () => {
     const subject = encodeURIComponent("ErMate Support Request");
     const body = encodeURIComponent(`\n\n---\nUser: ${user?.name || "N/A"}\nEmail: ${user?.email || "N/A"}\nPlatform: ${Platform.OS}\nApp Version: 1.0.0`);
-    const mailtoUrl = `mailto:support@ermate.app?subject=${subject}&body=${body}`;
+    const mailtoUrl = `mailto:ermateapp@gmail.com?subject=${subject}&body=${body}`;
     try {
       const canOpen = await Linking.canOpenURL(mailtoUrl);
       if (canOpen) {
         await Linking.openURL(mailtoUrl);
       } else {
-        Alert.alert("Email Not Available", "Please send an email to support@ermate.app from your email client.");
+        Alert.alert("Email Not Available", "Please send an email to ermateapp@gmail.com from your email client.");
       }
     } catch {
-      Alert.alert("Email Not Available", "Please send an email to support@ermate.app from your email client.");
+      Alert.alert("Email Not Available", "Please send an email to ermateapp@gmail.com from your email client.");
     }
   };
 

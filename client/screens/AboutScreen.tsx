@@ -6,24 +6,26 @@ import {
   ScrollView,
   Pressable,
   Alert,
-  Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { Feather } from "@expo/vector-icons";
 import * as Linking from "expo-linking";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, Typography } from "@/constants/theme";
+import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 const APP_VERSION = "1.0.0";
-const BUILD_NUMBER = "2026.02.06";
+const BUILD_NUMBER = "2026.06.30";
 
 const TECH_STACK = [
   { label: "Frontend", value: "React Native + Expo SDK 54" },
   { label: "Backend", value: "Express.js + TypeScript" },
   { label: "Database", value: "PostgreSQL" },
   { label: "AI Engine", value: "OpenAI GPT-4o" },
-  { label: "Voice", value: "Whisper AI" },
+  { label: "Voice", value: "Sarvam AI + Whisper" },
 ];
 
 const OPEN_SOURCE_LIBS = [
@@ -36,12 +38,27 @@ const OPEN_SOURCE_LIBS = [
   { name: "React Native Reanimated", license: "MIT" },
 ];
 
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+
 export default function AboutScreen() {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const navigation = useNavigation<NavigationProp>();
 
-  const handleOpenLink = (url: string, label: string) => {
+  const handleOpenLink = (label: string) => {
+    if (label === "Privacy Policy") {
+      navigation.navigate("Privacy");
+      return;
+    }
+    if (label === "Terms of Service" || label === "HIPAA Compliance") {
+      const subject = encodeURIComponent(`ErMate ${label} Enquiry`);
+      const mailtoUrl = `mailto:ermateapp@gmail.com?subject=${subject}`;
+      Linking.openURL(mailtoUrl).catch(() =>
+        Alert.alert(label, `For ${label} enquiries, please email ermateapp@gmail.com.`)
+      );
+      return;
+    }
     Alert.alert(label, "This page will be available soon. Stay tuned!");
   };
 
@@ -146,7 +163,7 @@ export default function AboutScreen() {
                 { opacity: pressed ? 0.7 : 1 },
                 index < 2 ? { borderBottomWidth: 1, borderBottomColor: theme.border } : null,
               ]}
-              onPress={() => handleOpenLink("", item.label)}
+              onPress={() => handleOpenLink(item.label)}
             >
               <Feather name={item.icon as any} size={18} color={theme.textSecondary} />
               <Text style={[styles.legalLabel, { color: theme.text }]}>{item.label}</Text>

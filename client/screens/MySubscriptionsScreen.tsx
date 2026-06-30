@@ -185,7 +185,7 @@ export default function MySubscriptionsScreen() {
       "Leave Department",
       "Department removal is managed by your HOD. You can email support if you need help.",
       [
-        { text: "Email Support", onPress: () => Linking.openURL("mailto:support@ermate.app?subject=Department removal request") },
+        { text: "Email Support", onPress: () => Linking.openURL("mailto:ermateapp@gmail.com?subject=Department removal request") },
         { text: "OK", style: "cancel" },
       ]
     );
@@ -194,7 +194,7 @@ export default function MySubscriptionsScreen() {
       "Manage Individual Pro",
       "To cancel or change your subscription, contact our support team.",
       [
-        { text: "Email Support", onPress: () => Linking.openURL("mailto:support@ermate.app?subject=Manage%20my%20Individual%20Pro%20subscription") },
+        { text: "Email Support", onPress: () => Linking.openURL("mailto:ermateapp@gmail.com?subject=Manage%20my%20Individual%20Pro%20subscription") },
         { text: "Close", style: "cancel" },
       ]
     );
@@ -581,7 +581,7 @@ export default function MySubscriptionsScreen() {
         onPress={() => (navigation as any).navigate("HelpSupport")}
       >
         <Text style={[styles.helpText, { color: C.faint }]}>Questions?</Text>
-        <Text style={[styles.helpLink, { color: C.green }]}>support@ermate.app</Text>
+        <Text style={[styles.helpLink, { color: C.green }]}>ermateapp@gmail.com</Text>
         <Feather name="arrow-right" size={13} color={C.green} />
       </Pressable>
     </ScrollView>
