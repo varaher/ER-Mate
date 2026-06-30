@@ -76,20 +76,35 @@ export default function AdminDashboardScreen() {
   };
 
   const handleForceLogout = (session: any) => {
-    Alert.alert("Force Logout", "End this doctor's shift session? They will be notified.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Force Logout", style: "destructive", onPress: async () => {
-          setForcingOut(session.id);
-          await fetch(`${getApiUrl()}/api/shifts/sessions/${session.id}/force-logout`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          });
-          setForcingOut(null);
-          loadAdmin(true);
+    const name = getMemberName(session.userId);
+    Alert.alert(
+      "End Shift Session",
+      `Remove ${name} from the active shift? They can check back in when ready.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "End Session",
+          style: "destructive",
+          onPress: async () => {
+            setForcingOut(session.id);
+            try {
+              const res = await fetch(`${getApiUrl()}/api/shifts/sessions/${session.id}/force-logout`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+              });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) {
+                Alert.alert("Error", data.error || "Could not end session. Please try again.");
+              }
+            } catch {
+              Alert.alert("Error", "Network error. Please check your connection and try again.");
+            }
+            setForcingOut(null);
+            loadAdmin(true);
+          },
         },
-      },
-    ]);
+      ]
+    );
   };
 
   const handleAssignMember = async (shiftId: number) => {
@@ -230,7 +245,7 @@ export default function AdminDashboardScreen() {
                   {forcingOut === sess.id ? (
                     <ActivityIndicator size="small" color={theme.danger} />
                   ) : (
-                    <Text style={[styles.forceBtnText, { color: theme.danger }]}>Force Out</Text>
+                    <Text style={[styles.forceBtnText, { color: theme.danger }]}>End Shift</Text>
                   )}
                 </Pressable>
               </View>

@@ -157,9 +157,13 @@ export function registerShiftRoutes(app: Express) {
         .update(shiftSessions)
         .set({ status: "force_logout", forceLogoutBy: userId, forceLogoutAt: new Date(), checkedOutAt: new Date() })
         .where(eq(shiftSessions.id, sessionId));
-      const tokenRows = await db.select({ token: pushTokens.token }).from(pushTokens).where(eq(pushTokens.userId, sess.userId));
-      if (tokenRows.length) {
-        await sendPushToMany(tokenRows.map((r) => r.token), "Shift Ended by Admin", "Your shift session was ended by the HOD. Please check in again when ready.", { type: "force_logout" });
+      try {
+        const tokenRows = await db.select({ token: pushTokens.token }).from(pushTokens).where(eq(pushTokens.userId, sess.userId));
+        if (tokenRows.length) {
+          await sendPushToMany(tokenRows.map((r) => r.token), "Shift Ended by Admin", "Your shift session was ended by the HOD. Please check in again when ready.", { type: "force_logout" });
+        }
+      } catch (pushErr) {
+        console.warn("[Shifts] Force logout push failed (non-fatal):", pushErr);
       }
       res.json({ success: true });
     } catch (e) {
