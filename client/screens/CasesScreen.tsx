@@ -592,10 +592,24 @@ export default function CasesScreen() {
           <View style={styles.sectionHeaderRow}>
             <View style={[styles.sectionDot, { backgroundColor: theme.primary }]} />
             <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
-              SHIFT CASES ({shiftCases.length})
+              {isHOD ? "ALL SHIFT CASES" : "RESIDENTS' CASES"} ({shiftCases.filter((sc) => !sc.isOwn).length} others · {shiftCases.filter((sc) => sc.isOwn).length} yours)
             </Text>
           </View>
           {shiftCases.map((sc) => renderShiftCase(sc))}
+          <View style={[styles.sectionDivider, { backgroundColor: theme.border }]} />
+        </View>
+      ) : null}
+      {onShift && isConsultantOrHOD && shiftCases.length === 0 ? (
+        <View style={{ paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg }}>
+          <View style={styles.sectionHeaderRow}>
+            <View style={[styles.sectionDot, { backgroundColor: theme.textMuted }]} />
+            <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
+              {isHOD ? "ALL SHIFT CASES" : "RESIDENTS' CASES"} (0)
+            </Text>
+          </View>
+          <Text style={{ fontSize: 13, color: theme.textMuted, paddingBottom: Spacing.md }}>
+            No cases registered in this shift yet.
+          </Text>
           <View style={[styles.sectionDivider, { backgroundColor: theme.border }]} />
         </View>
       ) : null}

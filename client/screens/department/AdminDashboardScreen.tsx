@@ -133,6 +133,22 @@ export default function AdminDashboardScreen() {
   const formatRole = (role: string) =>
     role === "hod" ? "HOD" : role.charAt(0).toUpperCase() + role.slice(1);
 
+  const formatCaseTime = (ts: string | null | undefined): string => {
+    if (!ts) return "";
+    const d = new Date(ts);
+    const mon = d.toLocaleString("en-IN", { month: "short" });
+    const day = d.getDate();
+    const h = d.getHours().toString().padStart(2, "0");
+    const m = d.getMinutes().toString().padStart(2, "0");
+    return `${day} ${mon} · ${h}:${m}`;
+  };
+
+  const ROLE_COLORS: Record<string, { bg: string; text: string }> = {
+    consultant: { bg: "#dbeafe", text: "#1d4ed8" },
+    resident: { bg: "#f3f4f6", text: "#374151" },
+    hod: { bg: "#fef3c7", text: "#92400e" },
+  };
+
   const shiftStats = shifts.map((shift) => {
     const sessions = activeSessions.filter((s) => s.shiftId === shift.id);
     const consultants = sessions.filter((s) => s.roleForShift === "consultant").length;
@@ -185,7 +201,7 @@ export default function AdminDashboardScreen() {
       </View>
 
       <Text style={[styles.sectionTitle, { color: theme.textSecondary, marginTop: Spacing.lg }]}>
-        DOCTORS ON SHIFT ({activeSessions.length})
+        LIVE CHECK-INS ({activeSessions.length})
       </Text>
       {loading ? <ActivityIndicator color={theme.primary} /> : activeSessions.length === 0 ? (
         <View style={[styles.emptyBox, { backgroundColor: theme.card }]}>
@@ -226,34 +242,57 @@ export default function AdminDashboardScreen() {
       {allShiftCases.length > 0 ? (
         <>
           <Text style={[styles.sectionTitle, { color: theme.textSecondary, marginTop: Spacing.lg }]}>
-            ACTIVE CASES ({allShiftCases.length})
+            ALL DEPARTMENT CASES ({allShiftCases.length})
           </Text>
           <View style={[styles.card, { backgroundColor: theme.card }]}>
             {allShiftCases.map((c, idx) => {
               const priorityColors: Record<number, string> = { 1: "#ef4444", 2: "#f97316", 3: "#eab308", 4: "#22c55e", 5: "#3b82f6" };
               const color = priorityColors[c.triagePriority] || "#9ca3af";
+              const roleStyle = ROLE_COLORS[c.roleForShift] || ROLE_COLORS.resident;
+              const shiftColor = SHIFT_COLORS[c.shiftName] || theme.primary;
               return (
                 <View key={c.id} style={[styles.caseRow, { borderBottomColor: theme.border, borderBottomWidth: idx < allShiftCases.length - 1 ? 1 : 0 }]}>
                   <View style={[styles.casePriorityBar, { backgroundColor: color }]} />
                   <View style={{ flex: 1, paddingLeft: Spacing.sm }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 2 }}>
+                      {c.triagePriority ? (
+                        <View style={[styles.pBadge, { backgroundColor: color + "22" }]}>
+                          <Text style={[styles.pText, { color }]}>P{c.triagePriority}</Text>
+                        </View>
+                      ) : null}
+                      {c.shiftName ? (
+                        <View style={[styles.shiftBadge, { backgroundColor: shiftColor + "22" }]}>
+                          <Text style={[styles.shiftBadgeText, { color: shiftColor }]}>{c.shiftName}</Text>
+                        </View>
+                      ) : null}
+                      {c.roleForShift ? (
+                        <View style={[styles.roleBadge, { backgroundColor: roleStyle.bg }]}>
+                          <Text style={[styles.roleBadgeText, { color: roleStyle.text }]}>
+                            {c.roleForShift === "consultant" ? "Consultant" : c.roleForShift === "hod" ? "HOD" : "Resident"}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
                     <Text style={[styles.caseName, { color: theme.text }]} numberOfLines={1}>
-                      {c.patientName || "Unknown patient"}
-                      {c.bedNumber ? <Text style={{ color: theme.textMuted }}> · Bed {c.bedNumber}</Text> : null}
+                      {c.patientName || "Unknown patient"}{c.bedNumber ? `  ·  Bed ${c.bedNumber}` : ""}
                     </Text>
                     <Text style={[styles.caseMeta, { color: theme.textSecondary }]} numberOfLines={1}>
-                      {c.chiefComplaint || "—"} · {c.shiftName || "Shift"} · {c.doctorName || c.doctorUserId || "Unknown"}
+                      {c.chiefComplaint || "—"}
                     </Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2, flexWrap: "wrap" }}>
+                      <Text style={[styles.caseDoctor, { color: theme.textMuted }]}>
+                        {c.doctorName || c.doctorUserId || "Unknown doctor"}
+                      </Text>
+                      {c.createdAt ? (
+                        <Text style={[styles.caseTime, { color: theme.textMuted }]}>{formatCaseTime(c.createdAt)}</Text>
+                      ) : null}
+                      {c.consultantReviewedBy ? (
+                        <View style={[styles.reviewedBadge, { backgroundColor: "#d1fae5" }]}>
+                          <Text style={styles.reviewedText}>Reviewed</Text>
+                        </View>
+                      ) : null}
+                    </View>
                   </View>
-                  {c.consultantReviewedBy ? (
-                    <View style={[styles.reviewedBadge, { backgroundColor: "#d1fae5" }]}>
-                      <Text style={styles.reviewedText}>Reviewed</Text>
-                    </View>
-                  ) : null}
-                  {c.triagePriority ? (
-                    <View style={[styles.pBadge, { backgroundColor: color + "22" }]}>
-                      <Text style={[styles.pText, { color }]}>P{c.triagePriority}</Text>
-                    </View>
-                  ) : null}
                 </View>
               );
             })}
@@ -367,14 +406,20 @@ const styles = StyleSheet.create({
   onShiftDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#10b981" },
   onShiftText: { fontSize: 12, fontWeight: "700", color: "#065f46" },
   offShiftText: { fontSize: 12 },
-  caseRow: { flexDirection: "row", alignItems: "center", paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, gap: 8, overflow: "hidden" },
-  casePriorityBar: { width: 4, height: 36, borderRadius: 2 },
+  caseRow: { flexDirection: "row", alignItems: "flex-start", paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, gap: 8, overflow: "hidden" },
+  casePriorityBar: { width: 4, borderRadius: 2, alignSelf: "stretch", minHeight: 50 },
   caseName: { fontSize: 14, fontWeight: "600" },
-  caseMeta: { fontSize: 12, marginTop: 2 },
+  caseMeta: { fontSize: 12, marginTop: 1 },
+  caseDoctor: { fontSize: 11, fontWeight: "600" },
+  caseTime: { fontSize: 11 },
   reviewedBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   reviewedText: { fontSize: 10, fontWeight: "700", color: "#065f46" },
   pBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   pText: { fontSize: 11, fontWeight: "700" },
+  shiftBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  shiftBadgeText: { fontSize: 10, fontWeight: "700" },
+  roleBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  roleBadgeText: { fontSize: 10, fontWeight: "700" },
   assignBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 6 },
   assignBtnText: { fontSize: 11, fontWeight: "700" },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", paddingHorizontal: Spacing.lg },

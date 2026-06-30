@@ -362,7 +362,8 @@ export default function ManageRosterScreen() {
   };
 
   const handleRemoveRotaMember = (assignment: any) => {
-    Alert.alert("Remove from Rota", "Remove this member from this shift's rota?", [
+    const name = getMemberName(assignment.memberUserId);
+    Alert.alert("Remove from Rota", `Remove ${name} from this shift's schedule?`, [
       { text: "Cancel", style: "cancel" },
       { text: "Remove", style: "destructive", onPress: async () => {
         if (!department || !token) return;
@@ -371,6 +372,7 @@ export default function ManageRosterScreen() {
           const data = await res.json().catch(() => ({}));
           if (!res.ok) { Alert.alert("Error", data.error || "Failed to remove from rota"); return; }
           setRotaAssignments((prev) => prev.filter((a) => a.id !== assignment.id));
+          loadRota();
         } catch { Alert.alert("Error", "Network error. Please try again."); }
       }},
     ]);
@@ -454,6 +456,9 @@ export default function ManageRosterScreen() {
           </Pressable>
         ) : null}
       </View>
+      <Text style={[styles.rotaNote, { color: theme.textMuted }]}>
+        Roster = who is scheduled. Live check-ins are shown in the HOD Dashboard.
+      </Text>
 
       {rotaShifts.length === 0 ? (
         <View style={[styles.emptyShift, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -472,7 +477,7 @@ export default function ManageRosterScreen() {
                 <View style={[styles.shiftDot, { backgroundColor: color }]} />
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.shiftName, { color: theme.text }]}>{shift.name}</Text>
-                  <Text style={[styles.shiftTime, { color: theme.textSecondary }]}>{shift.startTime} – {shift.endTime}  ·  {shiftAssignments.length} assigned</Text>
+                  <Text style={[styles.shiftTime, { color: theme.textSecondary }]}>{shift.startTime} – {shift.endTime}  ·  {shiftAssignments.length} rostered</Text>
                 </View>
                 {isHOD ? (
                   <View style={{ flexDirection: "row", gap: 6 }}>
@@ -924,6 +929,7 @@ const styles = StyleSheet.create({
   memberPickRow: { flexDirection: "row", alignItems: "center", padding: Spacing.sm, borderRadius: 10, marginBottom: 6, gap: 10 },
   extraTimeToggle: { flexDirection: "row", alignItems: "center", gap: 8, padding: Spacing.sm, borderRadius: 10, marginTop: Spacing.sm },
   extraTimeLabel: { flex: 1, fontSize: 13, fontWeight: "600" },
+  rotaNote: { fontSize: 11, marginBottom: Spacing.sm, fontStyle: "italic" },
   toggleBtn: { width: 42, height: 24, borderRadius: 12, position: "relative" },
   toggleThumb: { position: "absolute", top: 2, width: 20, height: 20, borderRadius: 10, backgroundColor: "#fff" },
   clearExtra: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", marginTop: 6 },
