@@ -822,7 +822,6 @@
 <script src="https://unpkg.com/qr-code-styling@1.6.0/lib/qr-code-styling.js"></script>
 <script>
   const API_BASE = window.location.origin;
-  const EXTERNAL_API = 'https://er-emr-backend.onrender.com/api';
   let allCases = [];
   let authToken = null;
   let currentUser = null;
@@ -1031,7 +1030,11 @@
     container.innerHTML = '<div class="loading-state"><div class="spinner"></div><div class="loading-text">Loading cases...</div></div>';
 
     try {
-      const res = await fetch(`${EXTERNAL_API}/cases`, {
+      const params = new URLSearchParams();
+      if (currentUser?.id) params.set('userId', currentUser.id);
+      if (currentUser?.email) params.set('email', currentUser.email);
+      const qs = params.toString() ? '?' + params.toString() : '';
+      const res = await fetch(`${API_BASE}/api/proxy/cases${qs}`, {
         headers: {
           'Authorization': `Bearer ${authToken}`,
           'Content-Type': 'application/json'
