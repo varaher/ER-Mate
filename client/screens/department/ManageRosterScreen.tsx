@@ -270,9 +270,14 @@ export default function ManageRosterScreen() {
       { text: "Cancel", style: "cancel" },
       { text: "Remove", style: "destructive", onPress: async () => {
         if (!department || !token) return;
-        await fetch(`${getApiUrl()}/api/department/${department.id}/members/${member.userId}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
-        loadRoster(true);
-        refreshDept();
+        try {
+          const res = await fetch(`${getApiUrl()}/api/department/${department.id}/members/${member.userId}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) { Alert.alert("Error", data.error || "Failed to remove member"); return; }
+          setMembers((prev) => prev.filter((m) => m.userId !== member.userId));
+          await loadRoster(true);
+          refreshDept();
+        } catch { Alert.alert("Error", "Network error. Please try again."); }
       }},
     ]);
   };
@@ -327,9 +332,14 @@ export default function ManageRosterScreen() {
       { text: "Cancel", style: "cancel" },
       { text: "Delete", style: "destructive", onPress: async () => {
         if (!department || !token) return;
-        await fetch(`${getApiUrl()}/api/department/${department.id}/shifts/${shift.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
-        loadRota();
-        refreshDept();
+        try {
+          const res = await fetch(`${getApiUrl()}/api/department/${department.id}/shifts/${shift.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) { Alert.alert("Error", data.error || "Failed to delete shift"); return; }
+          setRotaShifts((prev) => prev.filter((s) => s.id !== shift.id));
+          setRotaAssignments((prev) => prev.filter((a) => a.shiftId !== shift.id));
+          refreshDept();
+        } catch { Alert.alert("Error", "Network error. Please try again."); }
       }},
     ]);
   };
@@ -356,8 +366,12 @@ export default function ManageRosterScreen() {
       { text: "Cancel", style: "cancel" },
       { text: "Remove", style: "destructive", onPress: async () => {
         if (!department || !token) return;
-        await fetch(`${getApiUrl()}/api/department/${department.id}/rota/${assignment.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
-        loadRota();
+        try {
+          const res = await fetch(`${getApiUrl()}/api/department/${department.id}/rota/${assignment.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) { Alert.alert("Error", data.error || "Failed to remove from rota"); return; }
+          setRotaAssignments((prev) => prev.filter((a) => a.id !== assignment.id));
+        } catch { Alert.alert("Error", "Network error. Please try again."); }
       }},
     ]);
   };
