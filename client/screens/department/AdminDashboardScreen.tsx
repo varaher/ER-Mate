@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   RefreshControl,
+  Modal,
 } from "react-native";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -35,6 +36,8 @@ export default function AdminDashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [forcingOut, setForcingOut] = useState<number | null>(null);
+  const [assignTarget, setAssignTarget] = useState<{ userId: string; name: string; role: string } | null>(null);
+  const [assigningShiftId, setAssigningShiftId] = useState<number | null>(null);
 
   const isFocusedRef = useRef(false);
 
@@ -89,6 +92,29 @@ export default function AdminDashboardScreen() {
     ]);
   };
 
+  const handleAssignMember = async (shiftId: number) => {
+    if (!assignTarget || !token) return;
+    setAssigningShiftId(shiftId);
+    try {
+      const res = await fetch(`${getApiUrl()}/api/shifts/${shiftId}/assign-member`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ targetUserId: assignTarget.userId, roleForShift: assignTarget.role }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setAssignTarget(null);
+        loadAdmin(true);
+        Alert.alert("Assigned", `${assignTarget.name} has been checked in to the shift.`);
+      } else {
+        Alert.alert("Error", data.error || "Could not assign member");
+      }
+    } catch {
+      Alert.alert("Error", "Network error");
+    }
+    setAssigningShiftId(null);
+  };
+
   const SHIFT_COLORS: Record<string, string> = { Morning: "#f59e0b", Evening: "#6366f1", Night: "#1e293b" };
 
   const getShiftName = (shiftId: number) => shifts.find((s) => s.id === shiftId)?.name || "Unknown";
@@ -115,8 +141,9 @@ export default function AdminDashboardScreen() {
   });
 
   return (
+    <View style={{ flex: 1, backgroundColor: theme.backgroundDefault }}>
     <ScrollView
-      style={{ flex: 1, backgroundColor: theme.backgroundDefault }}
+      style={{ flex: 1 }}
       contentContainerStyle={{ paddingTop: headerHeight + Spacing.lg, paddingHorizontal: Spacing.lg, paddingBottom: 60 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadAdmin(); }} />}
     >
@@ -251,12 +278,59 @@ export default function AdminDashboardScreen() {
                 <Text style={styles.onShiftText}>On Shift</Text>
               </View>
             ) : (
-              <Text style={[styles.offShiftText, { color: theme.textMuted }]}>Off</Text>
+              <Pressable
+                style={({ pressed }) => [styles.assignBtn, { backgroundColor: theme.primaryLight, opacity: pressed ? 0.7 : 1 }]}
+                onPress={() => setAssignTarget({ userId: m.userId, name: m.name || m.email?.split("@")[0] || "Member", role: m.role === "hod" ? "consultant" : m.role })}
+              >
+                <Feather name="user-plus" size={12} color={theme.primary} />
+                <Text style={[styles.assignBtnText, { color: theme.primary }]}>Assign</Text>
+              </Pressable>
             )}
           </View>
         ))}
       </View>
     </ScrollView>
+
+      <Modal visible={!!assignTarget} transparent animationType="fade" onRequestClose={() => setAssignTarget(null)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalSheet, { backgroundColor: theme.card }]}>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>Assign to Shift</Text>
+            <Text style={[styles.modalSub, { color: theme.textSecondary }]}>
+              Checking in {assignTarget?.name} as {assignTarget?.role === "consultant" ? "Consultant" : "Resident"}
+            </Text>
+            <Text style={[styles.modalPickLabel, { color: theme.textSecondary }]}>Select shift:</Text>
+            {shifts.map((shift) => {
+              const color = SHIFT_COLORS[shift.name] || theme.primary;
+              const isAssigning = assigningShiftId === shift.id;
+              return (
+                <Pressable
+                  key={shift.id}
+                  style={({ pressed }) => [styles.shiftPickRow, { backgroundColor: theme.backgroundSecondary, borderLeftColor: color, opacity: pressed ? 0.75 : 1 }]}
+                  onPress={() => handleAssignMember(shift.id)}
+                  disabled={!!assigningShiftId}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.shiftPickName, { color: theme.text }]}>{shift.name}</Text>
+                    <Text style={[styles.shiftPickTime, { color: theme.textSecondary }]}>{shift.startTime}–{shift.endTime}</Text>
+                  </View>
+                  {isAssigning ? (
+                    <ActivityIndicator size="small" color={color} />
+                  ) : (
+                    <Feather name="arrow-right" size={18} color={color} />
+                  )}
+                </Pressable>
+              );
+            })}
+            <Pressable
+              style={({ pressed }) => [styles.modalCancelBtn, { borderColor: theme.border, opacity: pressed ? 0.7 : 1 }]}
+              onPress={() => setAssignTarget(null)}
+            >
+              <Text style={[styles.modalCancelText, { color: theme.textSecondary }]}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 }
 
@@ -301,4 +375,16 @@ const styles = StyleSheet.create({
   reviewedText: { fontSize: 10, fontWeight: "700", color: "#065f46" },
   pBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   pText: { fontSize: 11, fontWeight: "700" },
+  assignBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 6 },
+  assignBtnText: { fontSize: 11, fontWeight: "700" },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", paddingHorizontal: Spacing.lg },
+  modalSheet: { width: "100%", borderRadius: BorderRadius.lg, padding: Spacing.lg, gap: Spacing.sm },
+  modalTitle: { fontSize: 18, fontWeight: "800", marginBottom: 2 },
+  modalSub: { fontSize: 13, marginBottom: Spacing.sm },
+  modalPickLabel: { fontSize: 11, fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 4 },
+  shiftPickRow: { flexDirection: "row", alignItems: "center", padding: Spacing.md, borderRadius: BorderRadius.md, borderLeftWidth: 4 },
+  shiftPickName: { fontSize: 15, fontWeight: "700" },
+  shiftPickTime: { fontSize: 12, marginTop: 2 },
+  modalCancelBtn: { marginTop: Spacing.sm, padding: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1, alignItems: "center" },
+  modalCancelText: { fontSize: 14, fontWeight: "600" },
 });

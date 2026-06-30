@@ -61,6 +61,7 @@ interface DepartmentContextType {
   checkIn: (shiftId: number, role: string) => Promise<{ success: boolean; error?: string }>;
   checkOut: (skipCheck?: boolean) => Promise<{ success: boolean; error?: string; pendingCases?: number }>;
   dismissShiftSelect: () => void;
+  triggerShiftSelect: () => void;
 }
 
 const DepartmentContext = createContext<DepartmentContextType | undefined>(undefined);
@@ -198,6 +199,11 @@ export function DepartmentProvider({ children }: { children: ReactNode }) {
     setShowShiftSelect(false);
   }, []);
 
+  const triggerShiftSelect = useCallback(() => {
+    setDismissed(false);
+    setShowShiftSelect(true);
+  }, []);
+
   const isHOD = membership?.role === "hod";
   const isInDepartment = !!department && !!membership;
 
@@ -219,6 +225,7 @@ export function DepartmentProvider({ children }: { children: ReactNode }) {
         checkIn,
         checkOut,
         dismissShiftSelect,
+        triggerShiftSelect,
       }}
     >
       {children}

@@ -57,7 +57,7 @@ export default function ProfileScreen() {
   const [roleSaving, setRoleSaving] = useState(false);
 
   const isGoogleUser = authMethod === "google";
-  const { department, membership, isHOD, shiftSession, activeShift, checkOut, refresh: refreshDept, incomingCount } = useDepartment();
+  const { department, membership, isHOD, shiftSession, activeShift, checkOut, refresh: refreshDept, incomingCount, triggerShiftSelect } = useDepartment();
   const [localPlan, setLocalPlan] = useState<string | null>(null);
 
   useEffect(() => {
@@ -325,7 +325,19 @@ export default function ProfileScreen() {
                 </Pressable>
               </>
             ) : null}
-            {shiftSession ? (
+            {!shiftSession ? (
+              <Pressable
+                style={({ pressed }) => [styles.menuItem, { borderTopWidth: 1, borderTopColor: theme.border, opacity: pressed ? 0.7 : 1 }]}
+                onPress={triggerShiftSelect}
+              >
+                <Feather name="clock" size={20} color={theme.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.menuLabel, { color: theme.primary }]}>Select Shift</Text>
+                  <Text style={[{ fontSize: 12, color: theme.textSecondary }]}>Check in to your current shift</Text>
+                </View>
+                <Feather name="chevron-right" size={20} color={theme.primary} />
+              </Pressable>
+            ) : (
               <Pressable
                 style={({ pressed }) => [styles.menuItem, { borderTopWidth: 1, borderTopColor: theme.border, opacity: pressed ? 0.7 : 1 }]}
                 onPress={handleCheckOut}
@@ -333,7 +345,7 @@ export default function ProfileScreen() {
                 <Feather name="log-out" size={20} color={theme.danger} />
                 <Text style={[styles.menuLabel, { color: theme.danger }]}>End Shift</Text>
               </Pressable>
-            ) : null}
+            )}
           </View>
         ) : (
           <Pressable

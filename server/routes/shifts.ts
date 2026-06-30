@@ -168,6 +168,47 @@ export function registerShiftRoutes(app: Express) {
     }
   });
 
+  // ── POST /api/shifts/:shiftId/assign-member (HOD only) ──────
+  app.post("/api/shifts/:shiftId/assign-member", async (req: Request, res: Response) => {
+    const hodUserId = extractUserId(req);
+    if (!hodUserId) return res.status(401).json({ error: "Unauthorized" });
+    const db = getDb();
+    if (!db) return res.status(503).json({ error: "DB unavailable" });
+    try {
+      const shiftId = parseInt(req.params.shiftId);
+      const { targetUserId, roleForShift } = req.body;
+      if (!targetUserId || !roleForShift) return res.status(400).json({ error: "targetUserId and roleForShift required" });
+      const shift = await db.select().from(shifts).where(eq(shifts.id, shiftId)).limit(1);
+      if (!shift.length) return res.status(404).json({ error: "Shift not found" });
+      const s = shift[0];
+      const hodMem = await db.select().from(departmentMembers)
+        .where(and(eq(departmentMembers.userId, hodUserId), eq(departmentMembers.departmentId, s.departmentId), eq(departmentMembers.role, "hod"), eq(departmentMembers.status, "active")))
+        .limit(1);
+      if (!hodMem.length) return res.status(403).json({ error: "HOD only" });
+      const existing = await db.select().from(shiftSessions)
+        .where(and(eq(shiftSessions.userId, targetUserId), eq(shiftSessions.status, "active")))
+        .limit(1);
+      if (existing.length) return res.status(400).json({ error: "Member already on shift" });
+      const activeSessions = await db.select().from(shiftSessions)
+        .where(and(eq(shiftSessions.shiftId, shiftId), eq(shiftSessions.status, "active")));
+      const consultantsActive = activeSessions.filter((ss) => ss.roleForShift === "consultant").length;
+      const residentsActive = activeSessions.filter((ss) => ss.roleForShift === "resident").length;
+      if (roleForShift === "consultant" && consultantsActive >= (s.maxConsultants ?? 2)) {
+        return res.status(409).json({ error: "Consultant slots full" });
+      }
+      if (roleForShift === "resident" && residentsActive >= (s.maxResidents ?? 6)) {
+        return res.status(409).json({ error: "Resident slots full" });
+      }
+      const [session] = await db.insert(shiftSessions)
+        .values({ shiftId, departmentId: s.departmentId, userId: targetUserId, roleForShift, status: "active" })
+        .returning();
+      res.json({ success: true, session });
+    } catch (e) {
+      console.error("[Shifts] Assign member error:", e);
+      res.status(500).json({ error: "Failed to assign member" });
+    }
+  });
+
   // ── POST /api/handover/create ────────────────────────────────
   app.post("/api/handover/create", async (req: Request, res: Response) => {
     const userId = extractUserId(req);
