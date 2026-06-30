@@ -1,0 +1,619 @@
+import { useState } from "react";
+
+// ── Design tokens ──────────────────────────────────────────────────────────
+const C = {
+  green:       "#1DB870",
+  greenDark:   "#15924F",
+  greenLight:  "rgba(29,184,112,0.1)",
+  greenBorder: "rgba(29,184,112,0.22)",
+  purple:      "#7C6AF6",
+  purpleLight: "rgba(124,106,246,0.1)",
+  ink:         "#0B0F14",
+  inkSoft:     "#1E2530",
+  muted:       "#6B7280",
+  faint:       "#9CA3AF",
+  border:      "#E8EAED",
+  surface:     "#F7F8FA",
+  white:       "#FFFFFF",
+  orange:      "#F59E0B",
+  orangeLight: "rgba(245,158,11,0.1)",
+  red:         "#EF4444",
+  redLight:    "rgba(239,68,68,0.08)",
+};
+
+const SHIFTS = [
+  { id: "morning", label: "Morning", time: "06–14", color: C.orange },
+  { id: "evening", label: "Evening", time: "14–22", color: C.purple },
+  { id: "night",   label: "Night",   time: "22–06", color: C.ink },
+];
+
+const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+const DAY_DATES = ["13","14","15","16","17","18","19"];
+
+const TEAM = [
+  { id: 1, name: "Dr. Priya",  role: "resident",   initial: "P", color: C.green },
+  { id: 2, name: "Dr. Rahul",  role: "resident",   initial: "R", color: C.green },
+  { id: 3, name: "Dr. Arun",   role: "consultant",  initial: "A", color: C.purple },
+  { id: 4, name: "Dr. Meena",  role: "consultant",  initial: "M", color: C.purple },
+  { id: 5, name: "Dr. Sanjay", role: "resident",   initial: "S", color: C.green },
+];
+
+// Mock rota data: { "mon-morning": [personId, ...] }
+const initialRota = {
+  "Mon-morning": [1],
+  "Mon-evening": [3],
+  "Mon-night":   [],
+  "Tue-morning": [],
+  "Tue-evening": [4],
+  "Tue-night":   [5],
+  "Wed-morning": [1],
+  "Wed-evening": [],
+  "Wed-night":   [5],
+  "Thu-morning": [2],
+  "Thu-evening": [3],
+  "Thu-night":   [],
+  "Fri-morning": [],
+  "Fri-evening": [4],
+  "Fri-night":   [5],
+  "Sat-morning": [1],
+  "Sat-evening": [],
+  "Sat-night":   [],
+  "Sun-morning": [],
+  "Sun-evening": [3],
+  "Sun-night":   [5],
+};
+
+// ── Icons ──────────────────────────────────────────────────────────────────
+const Back = () => (
+  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+    <path d="M13 4L7 10L13 16" stroke={C.ink} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+const PlusIcon = ({ color = C.green }) => (
+  <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+    <path d="M6.5 1.5v9.5M1.5 6.5h10" stroke={color} strokeWidth="1.8" strokeLinecap="round"/>
+  </svg>
+);
+const CloseIcon = ({ color = C.faint }) => (
+  <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
+    <path d="M1 1l7 7M8 1L1 8" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
+  </svg>
+);
+const ClockIcon = ({ color = C.faint }) => (
+  <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+    <circle cx="6.5" cy="6.5" r="5.5" stroke={color} strokeWidth="1.2"/>
+    <path d="M6.5 3.5V6.5L8.5 8.5" stroke={color} strokeWidth="1.2" strokeLinecap="round"/>
+  </svg>
+);
+const CheckIcon = ({ color = C.green }) => (
+  <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+    <circle cx="6.5" cy="6.5" r="6" fill={color} fillOpacity="0.15"/>
+    <path d="M3.8 6.7L5.6 8.5L9.2 4.5" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+const PeopleIcon = ({ color = "white" }) => (
+  <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+    <circle cx="7" cy="6" r="3" stroke={color} strokeWidth="1.4"/>
+    <circle cx="14" cy="6" r="2.5" stroke={color} strokeWidth="1.3"/>
+    <path d="M1 17c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke={color} strokeWidth="1.4" strokeLinecap="round"/>
+    <path d="M14 11c2.2 0 4 1.8 4 4" stroke={color} strokeWidth="1.3" strokeLinecap="round"/>
+  </svg>
+);
+
+// ── Cell content — shows assigned doctors ───────────────────────────────────
+function RotaCell({ shiftId, day, assignedIds, onTap, isToday, isPast }) {
+  const people = assignedIds.map(id => TEAM.find(p => p.id === id)).filter(Boolean);
+  const isEmpty = people.length === 0;
+
+  return (
+    <button
+      onClick={() => onTap(shiftId, day)}
+      style={{
+        width: "100%", minHeight: 58,
+        background: isToday ? C.greenLight : C.white,
+        border: `1.5px solid ${isToday ? C.greenBorder : C.border}`,
+        borderRadius: 10, padding: "6px 5px",
+        cursor: "pointer", fontFamily: "inherit",
+        opacity: isPast ? 0.55 : 1,
+        display: "flex", flexDirection: "column", gap: 3,
+        alignItems: "center", justifyContent: "center",
+        transition: "all 0.15s",
+      }}
+    >
+      {isEmpty ? (
+        <div style={{
+          width: 22, height: 22, borderRadius: "50%",
+          border: `1.5px dashed ${C.border}`,
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <PlusIcon color={C.faint} />
+        </div>
+      ) : (
+        <div style={{ display: "flex", gap: -4 }}>
+          {people.slice(0, 2).map((p, i) => (
+            <div key={p.id} style={{
+              width: 22, height: 22, borderRadius: "50%",
+              background: p.color, color: "white",
+              fontSize: 9, fontWeight: 800,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              marginLeft: i > 0 ? -6 : 0,
+              border: "1.5px solid white",
+            }}>{p.initial}</div>
+          ))}
+          {people.length > 2 && (
+            <div style={{
+              width: 22, height: 22, borderRadius: "50%",
+              background: C.surface, color: C.muted,
+              fontSize: 8, fontWeight: 800,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              marginLeft: -6, border: "1.5px solid white",
+            }}>+{people.length - 2}</div>
+          )}
+        </div>
+      )}
+    </button>
+  );
+}
+
+// ── Assignment sheet — slides up when tapping a cell ────────────────────────
+function AssignSheet({ shift, day, date, assignedIds, onAssign, onRemove, onClose }) {
+  const assigned = assignedIds.map(id => TEAM.find(p => p.id === id)).filter(Boolean);
+  const available = TEAM.filter(p => !assignedIds.includes(p.id));
+  const shiftData = SHIFTS.find(s => s.id === shift);
+
+  return (
+    <div style={{
+      position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)",
+      display: "flex", alignItems: "flex-end", zIndex: 50,
+    }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: C.white, borderRadius: "20px 20px 0 0",
+        padding: "20px 18px 28px", width: "100%", maxHeight: "75%", overflowY: "auto",
+      }}>
+        <div style={{ width: 36, height: 4, background: C.border, borderRadius: 99, margin: "0 auto 16px" }}/>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+          <div style={{
+            width: 8, height: 8, borderRadius: "50%",
+            background: shiftData.color,
+          }}/>
+          <span style={{ fontSize: 16, fontWeight: 800, color: C.ink }}>
+            {shiftData.label} · {day}
+          </span>
+        </div>
+        <div style={{ fontSize: 12, color: C.faint, marginBottom: 18 }}>
+          {shiftData.time} · {date}
+        </div>
+
+        {/* Currently assigned */}
+        {assigned.length > 0 && (
+          <div style={{ marginBottom: 18 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 0.8,
+              textTransform: "uppercase", marginBottom: 10 }}>
+              Assigned ({assigned.length})
+            </div>
+            {assigned.map(p => (
+              <div key={p.id} style={{
+                display: "flex", alignItems: "center", gap: 10,
+                background: C.surface, borderRadius: 11, padding: "10px 12px", marginBottom: 8,
+              }}>
+                <div style={{
+                  width: 32, height: 32, borderRadius: "50%",
+                  background: p.color, color: "white", fontSize: 13, fontWeight: 800,
+                  display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                }}>{p.initial}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>{p.name}</div>
+                  <div style={{ fontSize: 11, color: C.faint, textTransform: "capitalize" }}>{p.role}</div>
+                </div>
+                <button onClick={() => onRemove(p.id)} style={{
+                  background: C.redLight, border: "none", borderRadius: 8,
+                  width: 28, height: 28, cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  <CloseIcon color={C.red}/>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Available to assign */}
+        <div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 0.8,
+            textTransform: "uppercase", marginBottom: 10 }}>
+            Add to this shift
+          </div>
+          {available.length === 0 ? (
+            <div style={{ fontSize: 12, color: C.faint, padding: "12px 0", textAlign: "center" }}>
+              All team members are already assigned
+            </div>
+          ) : available.map(p => (
+            <button key={p.id} onClick={() => onAssign(p.id)} style={{
+              width: "100%", display: "flex", alignItems: "center", gap: 10,
+              background: C.white, border: `1.5px solid ${C.border}`, borderRadius: 11,
+              padding: "10px 12px", marginBottom: 8, cursor: "pointer", fontFamily: "inherit",
+              textAlign: "left",
+            }}>
+              <div style={{
+                width: 32, height: 32, borderRadius: "50%",
+                background: p.color, color: "white", fontSize: 13, fontWeight: 800,
+                display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+              }}>{p.initial}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>{p.name}</div>
+                <div style={{ fontSize: 11, color: C.faint, textTransform: "capitalize" }}>{p.role}</div>
+              </div>
+              <div style={{
+                background: C.greenLight, borderRadius: 8, padding: "5px 11px",
+                fontSize: 11, fontWeight: 700, color: C.greenDark,
+              }}>Assign</div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// SCREEN 1 — HOD: Manage Rota (week grid)
+// ══════════════════════════════════════════════════════════════════════════
+function ManageRotaScreen({ onBack, onSwitchView }) {
+  const [rota, setRota] = useState(initialRota);
+  const [sheet, setSheet] = useState(null); // { shiftId, day }
+  const [weekOffset, setWeekOffset] = useState(0);
+
+  const handleCellTap = (shiftId, day) => {
+    setSheet({ shiftId, day });
+  };
+
+  const handleAssign = (personId) => {
+    const key = `${sheet.day}-${sheet.shiftId}`;
+    setRota(prev => ({
+      ...prev,
+      [key]: [...(prev[key] || []), personId],
+    }));
+  };
+
+  const handleRemove = (personId) => {
+    const key = `${sheet.day}-${sheet.shiftId}`;
+    setRota(prev => ({
+      ...prev,
+      [key]: (prev[key] || []).filter(id => id !== personId),
+    }));
+  };
+
+  const openSlots = Object.values(rota).filter(arr => arr.length === 0).length;
+  const totalSlots = DAYS.length * SHIFTS.length;
+
+  return (
+    <div style={{ background: C.surface, height: "100%", display: "flex", flexDirection: "column", position: "relative" }}>
+
+      {/* Header */}
+      <div style={{
+        background: C.white, borderBottom: `1px solid ${C.border}`,
+        padding: "14px 16px", display: "flex", alignItems: "center", gap: 10,
+      }}>
+        <button onClick={onBack} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex" }}><Back/></button>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: C.ink }}>Manage Rota</div>
+          <div style={{ fontSize: 11, color: C.faint }}>City Emergency · {openSlots} of {totalSlots} slots open</div>
+        </div>
+        <button onClick={onSwitchView} style={{
+          background: C.greenLight, border: `1px solid ${C.greenBorder}`,
+          borderRadius: 9, padding: "7px 12px", fontSize: 11, fontWeight: 700,
+          color: C.greenDark, cursor: "pointer", fontFamily: "inherit",
+        }}>My View</button>
+      </div>
+
+      {/* Week nav */}
+      <div style={{
+        background: C.white, borderBottom: `1px solid ${C.border}`,
+        padding: "10px 16px", display: "flex", alignItems: "center", justifyContent: "space-between",
+      }}>
+        <button onClick={() => setWeekOffset(w => w - 1)} style={{
+          background: C.surface, border: "none", borderRadius: 8, width: 30, height: 30,
+          cursor: "pointer", fontSize: 14, color: C.muted,
+        }}>‹</button>
+        <span style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>
+          {weekOffset === 0 ? "This Week" : weekOffset > 0 ? `${weekOffset} week${weekOffset>1?"s":""} ahead` : `${-weekOffset} week${weekOffset<-1?"s":""} ago`}
+          {" · Jul 13–19"}
+        </span>
+        <button onClick={() => setWeekOffset(w => w + 1)} style={{
+          background: C.surface, border: "none", borderRadius: 8, width: 30, height: 30,
+          cursor: "pointer", fontSize: 14, color: C.muted,
+        }}>›</button>
+      </div>
+
+      {/* Grid */}
+      <div style={{ flex: 1, overflow: "auto", padding: "14px 10px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "44px repeat(7, 1fr)", gap: 5, minWidth: 560 }}>
+
+          {/* Day headers */}
+          <div></div>
+          {DAYS.map((d, i) => (
+            <div key={d} style={{ textAlign: "center", paddingBottom: 6 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: i === 1 ? C.green : C.faint }}>{d}</div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: i === 1 ? C.green : C.inkSoft }}>{DAY_DATES[i]}</div>
+            </div>
+          ))}
+
+          {/* Shift rows */}
+          {SHIFTS.map(shift => (
+            <>
+              <div key={shift.id + "-label"} style={{
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                gap: 3,
+              }}>
+                <div style={{ width: 7, height: 7, borderRadius: "50%", background: shift.color }}/>
+                <span style={{ fontSize: 8.5, fontWeight: 700, color: C.muted, writingMode: "horizontal-tb" }}>
+                  {shift.label.slice(0,3)}
+                </span>
+              </div>
+              {DAYS.map((day, i) => (
+                <RotaCell
+                  key={`${day}-${shift.id}`}
+                  shiftId={shift.id}
+                  day={day}
+                  assignedIds={rota[`${day}-${shift.id}`] || []}
+                  onTap={handleCellTap}
+                  isToday={i === 1}
+                  isPast={i === 0}
+                />
+              ))}
+            </>
+          ))}
+        </div>
+      </div>
+
+      {/* Legend */}
+      <div style={{
+        background: C.white, borderTop: `1px solid ${C.border}`,
+        padding: "10px 16px", display: "flex", gap: 16, justifyContent: "center",
+      }}>
+        {SHIFTS.map(s => (
+          <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <div style={{ width: 7, height: 7, borderRadius: "50%", background: s.color }}/>
+            <span style={{ fontSize: 10, color: C.muted }}>{s.label} {s.time}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Assignment sheet */}
+      {sheet && (
+        <AssignSheet
+          shift={sheet.shiftId}
+          day={sheet.day}
+          date={`Jul ${DAY_DATES[DAYS.indexOf(sheet.day)]}`}
+          assignedIds={rota[`${sheet.day}-${sheet.shiftId}`] || []}
+          onAssign={handleAssign}
+          onRemove={handleRemove}
+          onClose={() => setSheet(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// SCREEN 2 — DOCTOR: My Rota (claim open shifts)
+// ══════════════════════════════════════════════════════════════════════════
+function MyRotaScreen({ onBack, onSwitchView }) {
+  const [rota, setRota] = useState(initialRota);
+  const myId = 1; // Dr. Priya, viewing as a resident
+
+  const handleClaim = (key) => {
+    setRota(prev => ({ ...prev, [key]: [...(prev[key] || []), myId] }));
+  };
+  const handleUnclaim = (key) => {
+    setRota(prev => ({ ...prev, [key]: (prev[key] || []).filter(id => id !== myId) }));
+  };
+
+  const myShifts = [];
+  const openShifts = [];
+  Object.entries(rota).forEach(([key, ids]) => {
+    const [day, shiftId] = key.split("-");
+    const shift = SHIFTS.find(s => s.id === shiftId);
+    if (ids.includes(myId)) {
+      myShifts.push({ key, day, shift });
+    } else if (ids.length === 0) {
+      openShifts.push({ key, day, shift });
+    }
+  });
+
+  return (
+    <div style={{ background: C.surface, height: "100%", display: "flex", flexDirection: "column" }}>
+
+      <div style={{
+        background: C.white, borderBottom: `1px solid ${C.border}`,
+        padding: "14px 16px", display: "flex", alignItems: "center", gap: 10,
+      }}>
+        <button onClick={onBack} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex" }}><Back/></button>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: C.ink }}>My Rota</div>
+          <div style={{ fontSize: 11, color: C.faint }}>City Emergency · Dr. Priya · Resident</div>
+        </div>
+        <button onClick={onSwitchView} style={{
+          background: C.greenLight, border: `1px solid ${C.greenBorder}`,
+          borderRadius: 9, padding: "7px 12px", fontSize: 11, fontWeight: 700,
+          color: C.greenDark, cursor: "pointer", fontFamily: "inherit",
+        }}>HOD View</button>
+      </div>
+
+      <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
+
+        {/* My upcoming shifts */}
+        <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 0.8,
+          textTransform: "uppercase", marginBottom: 10 }}>
+          My upcoming shifts ({myShifts.length})
+        </div>
+        {myShifts.length === 0 ? (
+          <div style={{
+            background: C.white, border: `1.5px dashed ${C.border}`, borderRadius: 14,
+            padding: "20px", textAlign: "center", marginBottom: 22,
+          }}>
+            <div style={{ fontSize: 24, marginBottom: 6 }}>📅</div>
+            <div style={{ fontSize: 13, color: C.faint }}>No shifts assigned yet — claim one below</div>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 22 }}>
+            {myShifts.map(({ key, day, shift }) => (
+              <div key={key} style={{
+                background: C.white, border: `2px solid ${C.greenBorder}`, borderRadius: 13,
+                padding: "12px 14px", display: "flex", alignItems: "center", gap: 12,
+              }}>
+                <div style={{
+                  width: 38, height: 38, borderRadius: 10, background: C.greenLight,
+                  display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                }}>
+                  <CheckIcon/>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>{shift.label} · {day}</div>
+                  <div style={{ fontSize: 11, color: C.faint }}>{shift.time}</div>
+                </div>
+                <button onClick={() => handleUnclaim(key)} style={{
+                  background: "none", border: `1px solid ${C.border}`, borderRadius: 8,
+                  padding: "6px 11px", fontSize: 11, fontWeight: 600, color: C.muted,
+                  cursor: "pointer", fontFamily: "inherit",
+                }}>Release</button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Open shifts to claim */}
+        <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 0.8,
+          textTransform: "uppercase", marginBottom: 10 }}>
+          Open shifts — claim one ({openShifts.length})
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {openShifts.slice(0, 8).map(({ key, day, shift }) => (
+            <div key={key} style={{
+              background: C.white, border: `1.5px solid ${C.border}`, borderRadius: 13,
+              padding: "12px 14px", display: "flex", alignItems: "center", gap: 12,
+            }}>
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: shift.color, flexShrink: 0 }}/>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>{shift.label} · {day}</div>
+                <div style={{ fontSize: 11, color: C.faint }}>{shift.time} · Unassigned</div>
+              </div>
+              <button onClick={() => handleClaim(key)} style={{
+                background: `linear-gradient(135deg,${C.green},${C.greenDark})`,
+                border: "none", borderRadius: 9, padding: "7px 14px",
+                fontSize: 12, fontWeight: 700, color: "white", cursor: "pointer", fontFamily: "inherit",
+              }}>Claim</button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// SCREEN 3 — Auto-logout warning (shown during active shift)
+// ══════════════════════════════════════════════════════════════════════════
+function AutoLogoutWarning({ onHandover, onDismiss }) {
+  return (
+    <div style={{
+      position: "absolute", top: 60, left: 16, right: 16, zIndex: 40,
+      background: C.orangeLight, border: `1.5px solid rgba(245,158,11,0.3)`,
+      borderRadius: 14, padding: "14px 16px",
+      display: "flex", gap: 12, alignItems: "flex-start",
+      boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
+    }}>
+      <div style={{
+        width: 32, height: 32, borderRadius: "50%", background: "rgba(245,158,11,0.15)",
+        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+      }}><ClockIcon color={C.orange}/></div>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#92400E", marginBottom: 3 }}>
+          Shift ends in 5 minutes
+        </div>
+        <div style={{ fontSize: 12, color: "#B45309", lineHeight: 1.5, marginBottom: 10 }}>
+          You have 2 cases not handed over. Auto-logout happens 30 min after shift end.
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={onHandover} style={{
+            background: C.orange, border: "none", borderRadius: 8, padding: "8px 14px",
+            fontSize: 12, fontWeight: 700, color: "white", cursor: "pointer", fontFamily: "inherit",
+          }}>Hand over now</button>
+          <button onClick={onDismiss} style={{
+            background: "none", border: "none", padding: "8px 4px",
+            fontSize: 12, fontWeight: 600, color: "#92400E", cursor: "pointer", fontFamily: "inherit",
+          }}>Dismiss</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// MAIN SHELL
+// ══════════════════════════════════════════════════════════════════════════
+export default function RotaSystem() {
+  const [view, setView] = useState("hod"); // "hod" | "doctor"
+  const [showWarning, setShowWarning] = useState(true);
+
+  return (
+    <div style={{
+      fontFamily: "'DM Sans','Helvetica Neue',sans-serif",
+      background: "#D8DBD8", minHeight: "100vh",
+      display: "flex", flexDirection: "column", alignItems: "center",
+      padding: "20px 0 40px", gap: 16,
+    }}>
+      <div style={{ textAlign: "center" }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#6B7280" }}>ErMate · Rota System</div>
+        <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>
+          Tap a cell to assign · Tap "My View" / "HOD View" to switch
+        </div>
+      </div>
+
+      <div style={{
+        width: 390, background: "#0B0F14", borderRadius: 48, padding: 12,
+        boxShadow: "0 40px 80px rgba(0,0,0,0.3),0 0 0 1px rgba(255,255,255,0.06)",
+        flexShrink: 0,
+      }}>
+        <div style={{
+          background: "#F7F8FA", borderRadius: 38, overflow: "hidden",
+          height: 780, position: "relative",
+        }}>
+          {view === "hod" ? (
+            <ManageRotaScreen onBack={() => {}} onSwitchView={() => setView("doctor")}/>
+          ) : (
+            <>
+              <MyRotaScreen onBack={() => {}} onSwitchView={() => setView("hod")}/>
+              {showWarning && (
+                <AutoLogoutWarning
+                  onHandover={() => setShowWarning(false)}
+                  onDismiss={() => setShowWarning(false)}
+                />
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      <div style={{
+        background: "white", borderRadius: 16, padding: "16px 20px",
+        maxWidth: 390, width: "100%", border: "1px solid #E8EAED",
+      }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: "#9CA3AF", letterSpacing: 1,
+          textTransform: "uppercase", marginBottom: 10 }}>What this shows</div>
+        {[
+          "HOD View — week grid, tap any cell to assign or remove doctors",
+          "My View — doctor sees their shifts + open slots to self-claim",
+          "Tap Claim to self-assign, Release to give up a claimed shift",
+          "Orange banner — auto-logout warning shown 5 min before shift end",
+        ].map((s,i) => (
+          <div key={i} style={{ display: "flex", gap: 8, marginBottom: i<3?7:0 }}>
+            <span style={{ color: "#1DB870" }}>→</span>
+            <span style={{ fontSize: 12, color: "#6B7280", lineHeight: 1.5 }}>{s}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

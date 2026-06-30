@@ -664,17 +664,22 @@ export function registerDepartmentRoutes(app: Express) {
     if (!db) return res.status(503).json({ error: "DB unavailable" });
     try {
       const departmentId = parseInt(req.params.id);
-      const hodCheck = await db.select().from(departmentMembers)
-        .where(and(eq(departmentMembers.userId, userId), eq(departmentMembers.departmentId, departmentId), eq(departmentMembers.role, "hod"), eq(departmentMembers.status, "active")))
+      const memberCheck = await db.select().from(departmentMembers)
+        .where(and(eq(departmentMembers.userId, userId), eq(departmentMembers.departmentId, departmentId), eq(departmentMembers.status, "active")))
         .limit(1);
-      if (!hodCheck.length) return res.status(403).json({ error: "HOD only" });
-      const { shiftId, memberUserId, roleForShift, customEndTime, notes } = req.body;
+      if (!memberCheck.length) return res.status(403).json({ error: "Not a department member" });
+      const isHOD = memberCheck[0].role === "hod";
+      const { shiftId, memberUserId, roleForShift, dayOfWeek } = req.body;
       if (!shiftId || !memberUserId) return res.status(400).json({ error: "shiftId and memberUserId required" });
-      const existing = await db.select().from(rotaAssignments)
-        .where(and(eq(rotaAssignments.shiftId, shiftId), eq(rotaAssignments.memberUserId, memberUserId), eq(rotaAssignments.departmentId, departmentId)))
-        .limit(1);
-      if (existing.length) return res.status(400).json({ error: "Member already assigned to this shift" });
-      const [assignment] = await db.insert(rotaAssignments).values({ departmentId, shiftId, memberUserId, roleForShift, customEndTime: customEndTime || null, notes: notes || null }).returning();
+      const isSelfAssign = memberUserId === userId;
+      if (!isSelfAssign && !isHOD) return res.status(403).json({ error: "Only HOD can assign others" });
+      const dayOfWeekVal = (dayOfWeek !== undefined && dayOfWeek !== null) ? parseInt(dayOfWeek) : null;
+      const whereClause = dayOfWeekVal !== null
+        ? and(eq(rotaAssignments.shiftId, shiftId), eq(rotaAssignments.memberUserId, memberUserId), eq(rotaAssignments.departmentId, departmentId), eq(rotaAssignments.dayOfWeek, dayOfWeekVal))
+        : and(eq(rotaAssignments.shiftId, shiftId), eq(rotaAssignments.memberUserId, memberUserId), eq(rotaAssignments.departmentId, departmentId));
+      const existing = await db.select().from(rotaAssignments).where(whereClause).limit(1);
+      if (existing.length) return res.status(400).json({ error: "Already assigned to this shift on this day" });
+      const [assignment] = await db.insert(rotaAssignments).values({ departmentId, shiftId, memberUserId, roleForShift, dayOfWeek: dayOfWeekVal }).returning();
       res.json({ success: true, assignment });
     } catch (e) {
       res.status(500).json({ error: "Failed to add rota assignment" });
@@ -715,7 +720,13 @@ export function registerDepartmentRoutes(app: Express) {
       const hodCheck = await db.select().from(departmentMembers)
         .where(and(eq(departmentMembers.userId, userId), eq(departmentMembers.departmentId, departmentId), eq(departmentMembers.role, "hod"), eq(departmentMembers.status, "active")))
         .limit(1);
-      if (!hodCheck.length) return res.status(403).json({ error: "HOD only" });
+      if (!hodCheck.length) {
+        // Allow self-removal (member releasing their own assignment)
+        const own = await db.select().from(rotaAssignments)
+          .where(and(eq(rotaAssignments.id, assignmentId), eq(rotaAssignments.memberUserId, userId), eq(rotaAssignments.departmentId, departmentId)))
+          .limit(1);
+        if (!own.length) return res.status(403).json({ error: "HOD only" });
+      }
       await db.delete(rotaAssignments).where(and(eq(rotaAssignments.id, assignmentId), eq(rotaAssignments.departmentId, departmentId)));
       res.json({ success: true });
     } catch (e) {

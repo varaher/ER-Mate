@@ -1,0 +1,157 @@
+Yes — but only if your developer builds it that way. Right now in the design I sent, the week navigation buttons (‹ ›) are cosmetic — they don't actually load different data yet. Let me be precise about what needs to happen.
+
+---
+
+## How the Rolling Week Should Work
+
+```
+Week doesn't "reset" — it's always a rolling window
+
+Today is Mon Jul 13
+         ↓
+Grid shows: Mon 13 → Sun 19 (this week)
+         ↓
+7 days pass
+         ↓
+Today is now Mon Jul 20
+         ↓
+Grid automatically shows: Mon 20 → Sun 26
+         ↓
+HOD can still tap ‹ to go back and see 
+last week's rota (read-only, for reference)
+HOD can tap › to plan 2-3 weeks ahead
+```
+
+---
+
+## What Needs to Be Built — Backend
+
+```typescript
+// The rota_assignments table already has a "date" field
+// Querying is just a date-range filter:
+
+GET /api/department/:id/rota?startDate=2026-07-13&endDate=2026-07-19
+
+// Backend logic:
+async function getRotaForWeek(deptId, startDate, endDate) {
+  return await db.select()
+    .from(rotaAssignments)
+    .where(
+      and(
+        eq(rotaAssignments.departmentId, deptId),
+        gte(rotaAssignments.date, startDate),
+        lte(rotaAssignments.date, endDate)
+      )
+    );
+}
+
+// No special "reset" logic needed —
+// each week is just a different date range
+// queried from the same table
+```
+
+---
+
+## What Needs to Be Built — Frontend
+
+```typescript
+// In ManageRotaScreen.tsx
+
+const [weekStart, setWeekStart] = useState(getMonday(new Date()));
+
+function getMonday(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  return new Date(d.setDate(diff));
+}
+
+function getWeekDates(monday) {
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(monday);
+    d.setDate(d.getDate() + i);
+    return d;
+  });
+}
+
+// When ‹ or › tapped:
+const goToPrevWeek = () => {
+  const prev = new Date(weekStart);
+  prev.setDate(prev.getDate() - 7);
+  setWeekStart(prev);
+  fetchRota(prev); // re-fetch from backend for new range
+};
+
+const goToNextWeek = () => {
+  const next = new Date(weekStart);
+  next.setDate(next.getDate() + 7);
+  setWeekStart(next);
+  fetchRota(next);
+};
+
+// On mount and whenever weekStart changes:
+useEffect(() => {
+  fetchRota(weekStart);
+}, [weekStart]);
+```
+
+---
+
+## What This Means Practically
+
+```
+Doctors can claim shifts for THIS week 
+and FUTURE weeks (2-3 weeks ahead)
+
+HOD plans ahead — doesn't have to do 
+this every Monday morning
+
+Past weeks remain visible (read-only)
+for handover/audit purposes
+
+The grid auto-advances — when Monday 
+arrives, opening the app shows the 
+new current week automatically
+```
+
+---
+
+## One Decision You Need to Make
+
+**How far ahead should HOD be able to plan?**
+
+```
+Option A — Unlimited
+  HOD can navigate forward indefinitely
+  Simple, but doctors might forget 
+  far-future assignments
+
+Option B — Limit to 4 weeks ahead
+  HOD plans a month at a time
+  Prevents over-planning, keeps 
+  rota relevant and current
+
+Recommendation: Option B — 4 weeks ahead, 
+8 weeks back (for reference/audit)
+```
+
+---
+
+**Tell your developer:**
+
+```
+The week grid needs to:
+1. Default to current week on load
+   (Monday of today's week)
+2. ‹ › buttons fetch and display 
+   adjacent week's data from backend
+3. Limit navigation: 8 weeks back, 
+   4 weeks forward
+4. Today's date highlighted in green 
+   (already in the design)
+5. Past days within the current week 
+   shown at 55% opacity (already in 
+   the design, just needs real date logic)
+```
+
+This is straightforward — the grid UI is already built, this is just wiring it to real dates instead of the static mock week.

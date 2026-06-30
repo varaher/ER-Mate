@@ -166,6 +166,8 @@ export async function ensureDepartmentTables(): Promise<void> {
       ALTER TABLE shift_sessions ADD COLUMN IF NOT EXISTS force_logout_by TEXT;
       ALTER TABLE shift_sessions ADD COLUMN IF NOT EXISTS force_logout_at TIMESTAMP;
 
+      ALTER TABLE rota_assignments ADD COLUMN IF NOT EXISTS day_of_week INTEGER;
+
       ALTER TABLE case_overlays ADD COLUMN IF NOT EXISTS handover_status TEXT DEFAULT 'active';
       ALTER TABLE case_overlays ADD COLUMN IF NOT EXISTS handed_over_to_shift_id INTEGER;
       ALTER TABLE case_overlays ADD COLUMN IF NOT EXISTS handed_over_by_user_id TEXT;
