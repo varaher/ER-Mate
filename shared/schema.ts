@@ -286,6 +286,7 @@ export const rotaAssignments = pgTable("rota_assignments", {
   memberUserId: text("member_user_id").notNull(),
   roleForShift: text("role_for_shift"),
   dayOfWeek: integer("day_of_week"),
+  date: text("date"),
   customEndTime: text("custom_end_time"),
   notes: text("notes"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`),

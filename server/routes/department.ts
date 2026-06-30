@@ -1,6 +1,6 @@
 import type { Express, Request, Response } from "express";
 import crypto from "crypto";
-import { eq, and, desc, or } from "drizzle-orm";
+import { eq, and, desc, or, gte, lte } from "drizzle-orm";
 import { getDb, getPool } from "../db";
 import { extractUserId } from "../lib/auth";
 import { sendPushNotification } from "../services/pushService";
@@ -566,6 +566,7 @@ export function registerDepartmentRoutes(app: Express) {
   });
 
   // ── GET /api/department/:id/rota ─────────────────────────────
+  // Optional query params: ?startDate=2026-07-14&endDate=2026-07-20
   app.get("/api/department/:id/rota", async (req: Request, res: Response) => {
     const userId = extractUserId(req);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
@@ -573,9 +574,13 @@ export function registerDepartmentRoutes(app: Express) {
     if (!db) return res.status(503).json({ error: "DB unavailable" });
     try {
       const departmentId = parseInt(req.params.id);
+      const { startDate, endDate } = req.query as { startDate?: string; endDate?: string };
+      const assignmentWhere = startDate && endDate
+        ? and(eq(rotaAssignments.departmentId, departmentId), gte(rotaAssignments.date, startDate), lte(rotaAssignments.date, endDate))
+        : eq(rotaAssignments.departmentId, departmentId);
       const [deptShifts, assignments, members] = await Promise.all([
         db.select().from(shifts).where(eq(shifts.departmentId, departmentId)),
-        db.select().from(rotaAssignments).where(eq(rotaAssignments.departmentId, departmentId)),
+        db.select().from(rotaAssignments).where(assignmentWhere),
         db.select().from(departmentMembers).where(and(eq(departmentMembers.departmentId, departmentId), eq(departmentMembers.status, "active"))),
       ]);
       res.json({ shifts: deptShifts, assignments, members });
@@ -669,17 +674,15 @@ export function registerDepartmentRoutes(app: Express) {
         .limit(1);
       if (!memberCheck.length) return res.status(403).json({ error: "Not a department member" });
       const isHOD = memberCheck[0].role === "hod";
-      const { shiftId, memberUserId, roleForShift, dayOfWeek } = req.body;
-      if (!shiftId || !memberUserId) return res.status(400).json({ error: "shiftId and memberUserId required" });
+      const { shiftId, memberUserId, roleForShift, date } = req.body;
+      if (!shiftId || !memberUserId || !date) return res.status(400).json({ error: "shiftId, memberUserId and date required" });
       const isSelfAssign = memberUserId === userId;
       if (!isSelfAssign && !isHOD) return res.status(403).json({ error: "Only HOD can assign others" });
-      const dayOfWeekVal = (dayOfWeek !== undefined && dayOfWeek !== null) ? parseInt(dayOfWeek) : null;
-      const whereClause = dayOfWeekVal !== null
-        ? and(eq(rotaAssignments.shiftId, shiftId), eq(rotaAssignments.memberUserId, memberUserId), eq(rotaAssignments.departmentId, departmentId), eq(rotaAssignments.dayOfWeek, dayOfWeekVal))
-        : and(eq(rotaAssignments.shiftId, shiftId), eq(rotaAssignments.memberUserId, memberUserId), eq(rotaAssignments.departmentId, departmentId));
-      const existing = await db.select().from(rotaAssignments).where(whereClause).limit(1);
-      if (existing.length) return res.status(400).json({ error: "Already assigned to this shift on this day" });
-      const [assignment] = await db.insert(rotaAssignments).values({ departmentId, shiftId, memberUserId, roleForShift, dayOfWeek: dayOfWeekVal }).returning();
+      const existing = await db.select().from(rotaAssignments)
+        .where(and(eq(rotaAssignments.shiftId, shiftId), eq(rotaAssignments.memberUserId, memberUserId), eq(rotaAssignments.departmentId, departmentId), eq(rotaAssignments.date, date)))
+        .limit(1);
+      if (existing.length) return res.status(400).json({ error: "Already assigned to this shift on this date" });
+      const [assignment] = await db.insert(rotaAssignments).values({ departmentId, shiftId, memberUserId, roleForShift, date }).returning();
       res.json({ success: true, assignment });
     } catch (e) {
       res.status(500).json({ error: "Failed to add rota assignment" });

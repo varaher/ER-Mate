@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -29,25 +29,42 @@ import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
+// ── Constants ───────────────────────────────────────────────────────────────
 const ROLE_DISPLAY: Record<string, string> = { hod: "HOD", consultant: "Consultant", resident: "Resident" };
 const SHIFT_ROW_COLORS = ["#F59E0B", "#7C6AF6", "#374151", "#3b82f6", "#10b981"];
 const MEMBER_ROLE_COLORS: Record<string, string> = { hod: "#7C6AF6", consultant: "#7C6AF6", resident: "#10b981" };
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const MONTH_LABELS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-
 const SCREEN_W = Dimensions.get("window").width;
 const H_PAD = Spacing.lg;
 const LEFT_COL = 44;
 const DAY_COL = Math.max(38, Math.floor((SCREEN_W - H_PAD * 2 - LEFT_COL) / 7));
 const CELL_H = 62;
-const DAY_H = 50;
 
-function getWeekDays(weekOffset: number) {
+// Navigation limits
+const WEEKS_BACK = 8;
+const WEEKS_FORWARD = 4;
+
+// ── Date helpers ─────────────────────────────────────────────────────────────
+function getMonday(d: Date): Date {
+  const date = new Date(d);
+  const day = date.getDay(); // 0=Sun, 1=Mon..6=Sat
+  const diff = day === 0 ? -6 : 1 - day;
+  date.setDate(date.getDate() + diff);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function formatDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
+function getWeekDates(monday: Date) {
   const today = new Date();
-  const dow = today.getDay();
-  const daysFromMon = dow === 0 ? 6 : dow - 1;
-  const monday = new Date(today);
-  monday.setDate(today.getDate() - daysFromMon + weekOffset * 7);
+  today.setHours(0, 0, 0, 0);
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(monday);
     d.setDate(monday.getDate() + i);
@@ -55,13 +72,14 @@ function getWeekDays(weekOffset: number) {
       label: DAY_LABELS[i],
       dateNum: d.getDate(),
       month: MONTH_LABELS[d.getMonth()],
-      dayIndex: i,
+      dateStr: formatDate(d),
       isToday: d.toDateString() === today.toDateString(),
+      isPast: d < today,
     };
   });
 }
 
-// ── Time picker modal ───────────────────────────────────────────────────────
+// ── Time picker modal ────────────────────────────────────────────────────────
 function TimeStepModal({
   visible, value, title, onConfirm, onClose, theme,
 }: {
@@ -71,7 +89,7 @@ function TimeStepModal({
   const [h, setH] = useState(0);
   const [m, setM] = useState(0);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (visible && value) {
       const parts = value.split(":").map(Number);
       setH(isNaN(parts[0]) ? 0 : parts[0]);
@@ -88,21 +106,21 @@ function TimeStepModal({
           <Text style={[tStyles.title, { color: theme.text }]}>{title}</Text>
           <View style={tStyles.row}>
             <View style={tStyles.wheel}>
-              <Pressable onPress={() => setH((prev) => (prev + 1) % 24)} style={tStyles.arrow}>
+              <Pressable onPress={() => setH((p) => (p + 1) % 24)} style={tStyles.arrow}>
                 <Feather name="chevron-up" size={24} color={theme.primary} />
               </Pressable>
               <Text style={[tStyles.digit, { color: theme.text }]}>{pad(h)}</Text>
-              <Pressable onPress={() => setH((prev) => (prev - 1 + 24) % 24)} style={tStyles.arrow}>
+              <Pressable onPress={() => setH((p) => (p - 1 + 24) % 24)} style={tStyles.arrow}>
                 <Feather name="chevron-down" size={24} color={theme.primary} />
               </Pressable>
             </View>
             <Text style={[tStyles.colon, { color: theme.text }]}>:</Text>
             <View style={tStyles.wheel}>
-              <Pressable onPress={() => setM((prev) => (prev + 5) % 60)} style={tStyles.arrow}>
+              <Pressable onPress={() => setM((p) => (p + 5) % 60)} style={tStyles.arrow}>
                 <Feather name="chevron-up" size={24} color={theme.primary} />
               </Pressable>
               <Text style={[tStyles.digit, { color: theme.text }]}>{pad(m)}</Text>
-              <Pressable onPress={() => setM((prev) => (prev - 5 + 60) % 60)} style={tStyles.arrow}>
+              <Pressable onPress={() => setM((p) => (p - 5 + 60) % 60)} style={tStyles.arrow}>
                 <Feather name="chevron-down" size={24} color={theme.primary} />
               </Pressable>
             </View>
@@ -135,11 +153,12 @@ const tStyles = StyleSheet.create({
   confirm: { flex: 1, padding: 14, borderRadius: 12, alignItems: "center" },
 });
 
-// ── Rota grid cell ──────────────────────────────────────────────────────────
+// ── Grid cell ─────────────────────────────────────────────────────────────────
 function RotaGridCell({
-  assignments, rotaMembers, isToday, onTap, theme,
+  assignments, rotaMembers, isToday, isPast, onTap, theme,
 }: {
-  assignments: any[]; rotaMembers: any[]; isToday: boolean; onTap: () => void; theme: any;
+  assignments: any[]; rotaMembers: any[]; isToday: boolean;
+  isPast: boolean; onTap: () => void; theme: any;
 }) {
   const assigned = assignments
     .map((a) => rotaMembers.find((m) => m.userId === a.memberUserId))
@@ -158,7 +177,7 @@ function RotaGridCell({
         margin: 2,
         alignItems: "center",
         justifyContent: "center",
-        opacity: pressed ? 0.72 : 1,
+        opacity: pressed ? 0.65 : isPast ? 0.45 : 1,
       })}
     >
       {assigned.length === 0 ? (
@@ -200,12 +219,19 @@ function RotaGridCell({
   );
 }
 
-// ── Assign sheet (bottom modal) ─────────────────────────────────────────────
+// ── Assign sheet (bottom modal) ──────────────────────────────────────────────
+type GridSheet = {
+  shiftId: number;
+  dateStr: string;
+  dayLabel: string;
+  dateLabel: string;
+} | null;
+
 function AssignSheet({
   visible, gridSheet, rotaShifts, rotaAssignments, rotaMembers,
   theme, isHOD, onAssign, onRemove, onClose, assigningId, removingId,
 }: {
-  visible: boolean; gridSheet: { shiftId: number; dayIndex: number } | null;
+  visible: boolean; gridSheet: GridSheet;
   rotaShifts: any[]; rotaAssignments: any[]; rotaMembers: any[];
   theme: any; isHOD: boolean;
   onAssign: (userId: string) => void; onRemove: (assignmentId: number) => void;
@@ -218,7 +244,7 @@ function AssignSheet({
   const shiftColor = SHIFT_ROW_COLORS[shiftIdx % SHIFT_ROW_COLORS.length];
 
   const cellAssignments = rotaAssignments.filter(
-    (a) => a.shiftId === gridSheet.shiftId && a.dayOfWeek === gridSheet.dayIndex,
+    (a) => a.shiftId === gridSheet.shiftId && a.date === gridSheet.dateStr,
   );
   const assignedUserIds = new Set(cellAssignments.map((a) => a.memberUserId));
   const assignedMembers = cellAssignments.map((a) => ({
@@ -236,11 +262,11 @@ function AssignSheet({
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 4 }}>
             <View style={{ width: 9, height: 9, borderRadius: 4.5, backgroundColor: shiftColor }} />
             <Text style={[asStyles.sheetTitle, { color: theme.text }]}>
-              {shift?.name || "Shift"} · {DAY_LABELS[gridSheet.dayIndex]}
+              {shift?.name || "Shift"} · {gridSheet.dayLabel}
             </Text>
           </View>
           <Text style={[asStyles.sheetSub, { color: theme.textMuted }]}>
-            {shift?.startTime}–{shift?.endTime}
+            {shift?.startTime}–{shift?.endTime} · {gridSheet.dateLabel}
           </Text>
 
           <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }} contentContainerStyle={{ paddingBottom: 16 }}>
@@ -270,11 +296,9 @@ function AssignSheet({
                         onPress={() => onRemove(assignment.id)}
                         disabled={removingId === assignment.id}
                       >
-                        {removingId === assignment.id ? (
-                          <ActivityIndicator size="small" color="#ef4444" />
-                        ) : (
-                          <Feather name="x" size={15} color="#ef4444" />
-                        )}
+                        {removingId === assignment.id
+                          ? <ActivityIndicator size="small" color="#ef4444" />
+                          : <Feather name="x" size={15} color="#ef4444" />}
                       </Pressable>
                     )}
                   </View>
@@ -289,38 +313,42 @@ function AssignSheet({
                   <Text style={[asStyles.emptyNote, { color: theme.textMuted }]}>
                     All team members assigned to this slot
                   </Text>
-                ) : (
-                  availableMembers.map((member) => (
-                    <Pressable
-                      key={member.userId}
-                      style={({ pressed }) => [asStyles.availRow, { backgroundColor: theme.backgroundDefault, borderColor: theme.border, opacity: pressed ? 0.7 : 1 }]}
-                      onPress={() => onAssign(member.userId)}
-                      disabled={!!assigningId}
-                    >
-                      <View style={[asStyles.avatar, { backgroundColor: MEMBER_ROLE_COLORS[member.role] || "#10b981" }]}>
-                        <Text style={asStyles.avatarText}>
-                          {(member.name || member.email || "?").charAt(0).toUpperCase()}
-                        </Text>
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[asStyles.memberName, { color: theme.text }]} numberOfLines={1}>
-                          {member.name || member.email?.split("@")[0] || "Unknown"}
-                        </Text>
-                        <Text style={[asStyles.memberRole, { color: theme.textMuted }]}>
-                          {ROLE_DISPLAY[member.role] || member.role}
-                        </Text>
-                      </View>
-                      {assigningId === member.userId ? (
-                        <ActivityIndicator size="small" color="#1DB870" />
-                      ) : (
+                ) : availableMembers.map((member) => (
+                  <Pressable
+                    key={member.userId}
+                    style={({ pressed }) => [asStyles.availRow, { backgroundColor: theme.backgroundDefault, borderColor: theme.border, opacity: pressed ? 0.7 : 1 }]}
+                    onPress={() => onAssign(member.userId)}
+                    disabled={!!assigningId}
+                  >
+                    <View style={[asStyles.avatar, { backgroundColor: MEMBER_ROLE_COLORS[member.role] || "#10b981" }]}>
+                      <Text style={asStyles.avatarText}>
+                        {(member.name || member.email || "?").charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[asStyles.memberName, { color: theme.text }]} numberOfLines={1}>
+                        {member.name || member.email?.split("@")[0] || "Unknown"}
+                      </Text>
+                      <Text style={[asStyles.memberRole, { color: theme.textMuted }]}>
+                        {ROLE_DISPLAY[member.role] || member.role}
+                      </Text>
+                    </View>
+                    {assigningId === member.userId
+                      ? <ActivityIndicator size="small" color="#1DB870" />
+                      : (
                         <View style={asStyles.assignBadge}>
                           <Text style={asStyles.assignBadgeText}>Assign</Text>
                         </View>
                       )}
-                    </Pressable>
-                  ))
-                )}
+                  </Pressable>
+                ))}
               </>
+            )}
+
+            {!isHOD && assignedMembers.length === 0 && (
+              <Text style={[asStyles.emptyNote, { color: theme.textMuted, textAlign: "center", paddingVertical: 12 }]}>
+                No one assigned to this slot yet
+              </Text>
             )}
           </ScrollView>
         </Pressable>
@@ -372,11 +400,20 @@ export default function ManageRosterScreen() {
   const [rotaShifts, setRotaShifts] = useState<any[]>([]);
   const [rotaAssignments, setRotaAssignments] = useState<any[]>([]);
   const [rotaMembers, setRotaMembers] = useState<any[]>([]);
+  const [rotaLoading, setRotaLoading] = useState(false);
+
+  // ── Week navigation (date-based) ──
+  const [weekStart, setWeekStart] = useState<Date>(() => getMonday(new Date()));
+  const todayMonday = getMonday(new Date());
+  const minWeek = new Date(todayMonday); minWeek.setDate(minWeek.getDate() - WEEKS_BACK * 7);
+  const maxWeek = new Date(todayMonday); maxWeek.setDate(maxWeek.getDate() + WEEKS_FORWARD * 7);
+  const canGoBack = weekStart > minWeek;
+  const canGoForward = weekStart < maxWeek;
+  const isCurrentWeek = weekStart.toDateString() === todayMonday.toDateString();
 
   // ── Grid UI ──
-  const [weekOffset, setWeekOffset] = useState(0);
   const [viewMode, setViewMode] = useState<"hod" | "my">("hod");
-  const [gridSheet, setGridSheet] = useState<{ shiftId: number; dayIndex: number } | null>(null);
+  const [gridSheet, setGridSheet] = useState<GridSheet>(null);
   const [assigningId, setAssigningId] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<number | null>(null);
   const [showShiftMgmt, setShowShiftMgmt] = useState(false);
@@ -399,31 +436,67 @@ export default function ManageRosterScreen() {
     department?.hodUserId === (user as any)?.id;
 
   const myId = (user as any)?.id;
-  const weekDays = getWeekDays(weekOffset);
+
+  // ── Computed week data ──
+  const weekDays = getWeekDates(weekStart);
   const [firstDay, lastDay] = [weekDays[0], weekDays[6]];
-  const weekLabel = weekOffset === 0 ? "This Week" : weekOffset > 0 ? `+${weekOffset}w` : `${weekOffset}w`;
+  const weekLabel = (() => {
+    const diffMs = weekStart.getTime() - todayMonday.getTime();
+    const diffWeeks = Math.round(diffMs / (7 * 24 * 60 * 60 * 1000));
+    if (diffWeeks === 0) return "This Week";
+    if (diffWeeks === 1) return "Next Week";
+    if (diffWeeks === -1) return "Last Week";
+    if (diffWeeks > 0) return `+${diffWeeks} weeks`;
+    return `${diffWeeks} weeks`;
+  })();
   const weekRange = `${firstDay.dateNum} ${firstDay.month} – ${lastDay.dateNum} ${lastDay.month}`;
 
-  const getCellAssignments = (shiftId: number, dayIndex: number) =>
-    rotaAssignments.filter((a) => a.shiftId === shiftId && a.dayOfWeek === dayIndex);
+  const getCellAssignments = (shiftId: number, dateStr: string) =>
+    rotaAssignments.filter((a) => a.shiftId === shiftId && a.date === dateStr);
 
+  // ── My schedule helpers ──
   const myWeekAssignments = weekDays.flatMap((day) =>
     rotaAssignments
-      .filter((a) => a.memberUserId === myId && a.dayOfWeek === day.dayIndex)
+      .filter((a) => a.memberUserId === myId && a.date === day.dateStr)
       .map((a) => ({ ...a, shift: rotaShifts.find((s) => s.id === a.shiftId), day }))
       .filter((x) => x.shift),
   );
 
-  const openSlotsThisWeek = weekDays.flatMap((day) =>
-    rotaShifts
-      .filter((shift) => getCellAssignments(shift.id, day.dayIndex).length === 0)
-      .map((shift) => ({ shift, day })),
-  );
+  // Open slots: only future/today days, no one assigned
+  const openSlotsForClaiming = weekDays
+    .filter((day) => !day.isPast)
+    .flatMap((day) =>
+      rotaShifts
+        .filter((shift) => {
+          const cell = getCellAssignments(shift.id, day.dateStr);
+          return cell.length === 0 && !cell.some((a: any) => a.memberUserId === myId);
+        })
+        .map((shift) => ({ shift, day })),
+    );
 
-  useFocusEffect(useCallback(() => {
-    loadRoster();
-    loadRota();
-  }, [department?.id]));
+  // ── Load functions ──
+  const loadRota = useCallback(async (ws?: Date) => {
+    if (!department || !token) return;
+    const start = ws ?? weekStart;
+    const endDay = new Date(start);
+    endDay.setDate(start.getDate() + 6);
+    const startDate = formatDate(start);
+    const endDate = formatDate(endDay);
+    setRotaLoading(true);
+    try {
+      const res = await fetch(
+        `${getApiUrl()}/api/department/${department.id}/rota?startDate=${startDate}&endDate=${endDate}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setRotaShifts(data.shifts || []);
+        setRotaAssignments(data.assignments || []);
+        setRotaMembers(data.members || []);
+      }
+    } catch {}
+    setRotaLoading(false);
+  }, [department?.id, token, weekStart]);
 
   const loadRoster = async (silent = false) => {
     if (!department || !token) { setLoading(false); return; }
@@ -442,19 +515,33 @@ export default function ManageRosterScreen() {
     setRefreshing(false);
   };
 
-  const loadRota = async () => {
-    if (!department || !token) return;
-    try {
-      const res = await fetch(`${getApiUrl()}/api/department/${department.id}/rota`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setRotaShifts(data.shifts || []);
-        setRotaAssignments(data.assignments || []);
-        setRotaMembers(data.members || []);
-      }
-    } catch {}
+  useFocusEffect(useCallback(() => {
+    loadRoster();
+    loadRota(weekStart);
+  }, [department?.id]));
+
+  // Re-fetch rota when weekStart changes
+  useEffect(() => {
+    if (department && token) loadRota(weekStart);
+  }, [weekStart, department?.id]);
+
+  // ── Navigation ──
+  const goToPrevWeek = () => {
+    if (!canGoBack) return;
+    const prev = new Date(weekStart);
+    prev.setDate(prev.getDate() - 7);
+    setWeekStart(prev);
+  };
+
+  const goToNextWeek = () => {
+    if (!canGoForward) return;
+    const next = new Date(weekStart);
+    next.setDate(next.getDate() + 7);
+    setWeekStart(next);
+  };
+
+  const goToCurrentWeek = () => {
+    setWeekStart(getMonday(new Date()));
   };
 
   // ── Invite link handlers ──
@@ -467,7 +554,7 @@ export default function ManageRosterScreen() {
 
   const handleWhatsApp = () => {
     if (!inviteLink) return;
-    const msg = `Join our ER team on ErMate!\n\nTap the link below, sign in, and fill in your name and role.\n\n${inviteLink}`;
+    const msg = `Join our ER team on ErMate!\n\nTap the link, sign in, and fill in your name and role.\n\n${inviteLink}`;
     const url = `whatsapp://send?text=${encodeURIComponent(msg)}`;
     Linking.canOpenURL(url).then((ok) => {
       if (ok) Linking.openURL(url);
@@ -477,8 +564,7 @@ export default function ManageRosterScreen() {
 
   const handleShare = () => {
     if (!inviteLink) return;
-    const msg = `Join our ER team on ErMate!\n\n${inviteLink}`;
-    Share.share({ message: msg, title: "Join ErMate Team" });
+    Share.share({ message: `Join our ER team on ErMate!\n\n${inviteLink}`, title: "Join ErMate Team" });
   };
 
   const handleRegenerate = () => {
@@ -502,7 +588,7 @@ export default function ManageRosterScreen() {
     ]);
   };
 
-  // ── Member management handlers ──
+  // ── Member management ──
   const handleApprove = async (member: any) => {
     if (!token) return;
     setApprovingId(member.id);
@@ -550,8 +636,7 @@ export default function ManageRosterScreen() {
             const data = await res.json().catch(() => ({}));
             if (!res.ok) { Alert.alert("Error", data.error || "Failed to remove"); return; }
             setMembers((prev) => prev.filter((m) => m.userId !== member.userId));
-            loadRoster(true);
-            refreshDept();
+            loadRoster(true); refreshDept();
           } catch { Alert.alert("Error", "Network error"); }
         },
       },
@@ -569,7 +654,7 @@ export default function ManageRosterScreen() {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           shiftId: gridSheet.shiftId, memberUserId,
-          roleForShift: member?.role, dayOfWeek: gridSheet.dayIndex,
+          roleForShift: member?.role, date: gridSheet.dateStr,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -593,14 +678,14 @@ export default function ManageRosterScreen() {
     setRemovingId(null);
   };
 
-  const handleClaim = async (shiftId: number, dayIndex: number) => {
+  const handleClaim = async (shiftId: number, dateStr: string) => {
     if (!department || !token || !myId) return;
     const member = rotaMembers.find((m) => m.userId === myId);
     try {
       const res = await fetch(`${getApiUrl()}/api/department/${department.id}/rota`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ shiftId, memberUserId: myId, roleForShift: member?.role, dayOfWeek: dayIndex }),
+        body: JSON.stringify({ shiftId, memberUserId: myId, roleForShift: member?.role, date: dateStr }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) setRotaAssignments((prev) => [...prev, data.assignment]);
@@ -629,22 +714,15 @@ export default function ManageRosterScreen() {
 
   // ── Shift management ──
   const openEditShift = (shift: any) => {
-    setEditingShift(shift);
-    setEditName(shift.name);
-    setEditStart(shift.startTime);
-    setEditEnd(shift.endTime);
-    setEditMaxCon(String(shift.maxConsultants ?? 2));
-    setEditMaxRes(String(shift.maxResidents ?? 6));
+    setEditingShift(shift); setEditName(shift.name);
+    setEditStart(shift.startTime); setEditEnd(shift.endTime);
+    setEditMaxCon(String(shift.maxConsultants ?? 2)); setEditMaxRes(String(shift.maxResidents ?? 6));
     setEditShiftModal(true);
   };
 
   const openAddShift = () => {
-    setEditingShift(null);
-    setEditName(`Shift ${rotaShifts.length + 1}`);
-    setEditStart("08:00");
-    setEditEnd("16:00");
-    setEditMaxCon("2");
-    setEditMaxRes("6");
+    setEditingShift(null); setEditName(`Shift ${rotaShifts.length + 1}`);
+    setEditStart("08:00"); setEditEnd("16:00"); setEditMaxCon("2"); setEditMaxRes("6");
     setEditShiftModal(true);
   };
 
@@ -664,7 +742,7 @@ export default function ManageRosterScreen() {
         }),
       });
       const data = await res.json();
-      if (res.ok) { setEditShiftModal(false); loadRota(); refreshDept(); }
+      if (res.ok) { setEditShiftModal(false); loadRota(weekStart); refreshDept(); }
       else Alert.alert("Error", data.error || "Failed to save shift");
     } catch { Alert.alert("Error", "Network error"); }
     setSavingShift(false);
@@ -695,6 +773,12 @@ export default function ManageRosterScreen() {
   const hodMember = members.find((m) => m.role === "hod");
   const pendingMembers = members.filter((m) => m.status === "pending");
 
+  // Stats for subtitle
+  const totalSlots = rotaShifts.length * 7;
+  const filledSlots = rotaShifts.reduce((acc, s) =>
+    acc + weekDays.filter((d) => getCellAssignments(s.id, d.dateStr).length > 0).length, 0);
+  const openSlots = totalSlots - filledSlots;
+
   if (!department) {
     return (
       <View style={[styles.center, { backgroundColor: theme.backgroundDefault }]}>
@@ -703,23 +787,20 @@ export default function ManageRosterScreen() {
     );
   }
 
-  // ── Count open slots for header subtitle ──
-  const totalSlots = rotaShifts.length * 7;
-  const filledSlots = rotaShifts.reduce((acc, s) =>
-    acc + weekDays.filter((d) => getCellAssignments(s.id, d.dayIndex).length > 0).length, 0);
-  const openSlots = totalSlots - filledSlots;
-
   return (
     <View style={{ flex: 1, backgroundColor: theme.backgroundDefault }}>
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingTop: headerHeight + Spacing.lg, paddingHorizontal: H_PAD, paddingBottom: 80 }}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadRoster(); loadRota(); }} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => { setRefreshing(true); loadRoster(); loadRota(weekStart); }}
+          />
         }
       >
 
-        {/* ── Invite Link Card ── */}
+        {/* ── Invite Link ── */}
         {inviteLink ? (
           <>
             <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>TEAM INVITE LINK</Text>
@@ -754,17 +835,16 @@ export default function ManageRosterScreen() {
           </>
         ) : null}
 
-        {/* ── Rota Section Header ── */}
+        {/* ── Rota header ── */}
         <View style={[styles.rotaHeader, { marginTop: inviteLink ? Spacing.xl : 0 }]}>
           <View>
             <Text style={[styles.sectionTitle, { color: theme.textSecondary, marginBottom: 2 }]}>WEEKLY ROTA</Text>
             {rotaShifts.length > 0 && (
               <Text style={[styles.rotaSubtitle, { color: theme.textMuted }]}>
-                {openSlots > 0 ? `${openSlots} of ${totalSlots} slots open this week` : "All slots filled this week"}
+                {openSlots > 0 ? `${openSlots} of ${totalSlots} slots open` : "All slots filled"}
               </Text>
             )}
           </View>
-          {/* View toggle */}
           <View style={[styles.toggleRow, { backgroundColor: theme.backgroundSecondary }]}>
             <Pressable
               style={[styles.toggleBtn, viewMode === "hod" && { backgroundColor: theme.card }]}
@@ -785,50 +865,65 @@ export default function ManageRosterScreen() {
           </View>
         </View>
 
-        {/* ── Week Navigation ── */}
+        {/* ── Week navigation ── */}
         <View style={[styles.weekNav, { backgroundColor: theme.card, borderColor: theme.border }]}>
           <Pressable
-            onPress={() => setWeekOffset((w) => w - 1)}
-            style={({ pressed }) => [styles.weekNavBtn, { backgroundColor: theme.backgroundSecondary, opacity: pressed ? 0.7 : 1 }]}
+            onPress={goToPrevWeek}
+            disabled={!canGoBack}
+            style={({ pressed }) => [styles.weekNavBtn, { backgroundColor: theme.backgroundSecondary, opacity: !canGoBack ? 0.3 : pressed ? 0.7 : 1 }]}
           >
             <Feather name="chevron-left" size={18} color={theme.text} />
           </Pressable>
-          <View style={{ alignItems: "center" }}>
-            <Text style={[styles.weekLabel, { color: theme.text }]}>{weekLabel}</Text>
+
+          <Pressable onPress={goToCurrentWeek} style={{ alignItems: "center" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Text style={[styles.weekLabel, { color: theme.text }]}>{weekLabel}</Text>
+              {!isCurrentWeek && (
+                <View style={[styles.todayChip, { backgroundColor: theme.primaryLight }]}>
+                  <Text style={[styles.todayChipText, { color: theme.primary }]}>Today</Text>
+                </View>
+              )}
+            </View>
             <Text style={[styles.weekRange, { color: theme.textMuted }]}>{weekRange}</Text>
-          </View>
+          </Pressable>
+
           <Pressable
-            onPress={() => setWeekOffset((w) => w + 1)}
-            style={({ pressed }) => [styles.weekNavBtn, { backgroundColor: theme.backgroundSecondary, opacity: pressed ? 0.7 : 1 }]}
+            onPress={goToNextWeek}
+            disabled={!canGoForward}
+            style={({ pressed }) => [styles.weekNavBtn, { backgroundColor: theme.backgroundSecondary, opacity: !canGoForward ? 0.3 : pressed ? 0.7 : 1 }]}
           >
             <Feather name="chevron-right" size={18} color={theme.text} />
           </Pressable>
         </View>
 
-        {/* ════════════════ HOD GRID VIEW ════════════════ */}
+        {/* ═════════════ HOD GRID VIEW ═════════════ */}
         {viewMode === "hod" && (
           <View style={[styles.gridCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            {rotaShifts.length === 0 ? (
+            {rotaLoading ? (
+              <View style={styles.gridEmpty}>
+                <ActivityIndicator color={theme.primary} />
+              </View>
+            ) : rotaShifts.length === 0 ? (
               <View style={styles.gridEmpty}>
                 <Feather name="calendar" size={30} color={theme.textMuted} />
                 <Text style={[styles.gridEmptyTitle, { color: theme.textSecondary }]}>No shifts configured</Text>
                 {isHOD && (
                   <Text style={[styles.gridEmptySub, { color: theme.textMuted }]}>
-                    Add shifts below to start building the rota
+                    Use Shift Configuration below to add shifts
                   </Text>
                 )}
               </View>
             ) : (
               <>
-                {/* Day headers */}
+                {/* Day header row */}
                 <View style={styles.gridRow}>
                   <View style={{ width: LEFT_COL }} />
                   {weekDays.map((day) => (
-                    <View key={day.dayIndex} style={{ width: DAY_COL, alignItems: "center" }}>
-                      <Text style={[styles.dayLabel, { color: day.isToday ? "#1DB870" : theme.textMuted }]}>
+                    <View key={day.dateStr} style={{ width: DAY_COL, alignItems: "center" }}>
+                      <Text style={[styles.dayLabel, { color: day.isToday ? "#1DB870" : day.isPast ? theme.textMuted + "99" : theme.textMuted }]}>
                         {day.label}
                       </Text>
-                      <Text style={[styles.dayDate, { color: day.isToday ? "#1DB870" : theme.text }]}>
+                      <Text style={[styles.dayDate, { color: day.isToday ? "#1DB870" : day.isPast ? theme.text + "66" : theme.text }]}>
                         {day.dateNum}
                       </Text>
                     </View>
@@ -839,28 +934,32 @@ export default function ManageRosterScreen() {
                 {rotaShifts.map((shift, sIdx) => {
                   const shiftColor = SHIFT_ROW_COLORS[sIdx % SHIFT_ROW_COLORS.length];
                   return (
-                    <View key={shift.id} style={[styles.gridRow, sIdx < rotaShifts.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.border + "55" }]}>
-                      {/* Shift label */}
+                    <View
+                      key={shift.id}
+                      style={[styles.gridRow, sIdx < rotaShifts.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.border + "55" }]}
+                    >
                       <View style={[styles.shiftLabelCol, { width: LEFT_COL }]}>
                         <View style={[styles.shiftDot, { backgroundColor: shiftColor }]} />
                         <Text style={[styles.shiftLabelText, { color: theme.textMuted }]} numberOfLines={2}>
                           {shift.name.length > 5 ? shift.name.slice(0, 3) : shift.name}
                         </Text>
                       </View>
-                      {/* Cells */}
-                      {weekDays.map((day) => {
-                        const cellA = getCellAssignments(shift.id, day.dayIndex);
-                        return (
-                          <RotaGridCell
-                            key={day.dayIndex}
-                            assignments={cellA}
-                            rotaMembers={rotaMembers}
-                            isToday={day.isToday}
-                            onTap={() => setGridSheet({ shiftId: shift.id, dayIndex: day.dayIndex })}
-                            theme={theme}
-                          />
-                        );
-                      })}
+                      {weekDays.map((day) => (
+                        <RotaGridCell
+                          key={day.dateStr}
+                          assignments={getCellAssignments(shift.id, day.dateStr)}
+                          rotaMembers={rotaMembers}
+                          isToday={day.isToday}
+                          isPast={day.isPast}
+                          onTap={() => setGridSheet({
+                            shiftId: shift.id,
+                            dateStr: day.dateStr,
+                            dayLabel: day.label,
+                            dateLabel: `${day.dateNum} ${day.month}`,
+                          })}
+                          theme={theme}
+                        />
+                      ))}
                     </View>
                   );
                 })}
@@ -881,63 +980,54 @@ export default function ManageRosterScreen() {
           </View>
         )}
 
-        {/* ════════════════ MY SHIFTS VIEW ════════════════ */}
+        {/* ═════════════ MY SHIFTS VIEW ═════════════ */}
         {viewMode === "my" && (
           <View>
-            {/* My upcoming shifts */}
             <Text style={[styles.myViewLabel, { color: theme.textMuted }]}>
               MY SHIFTS THIS WEEK ({myWeekAssignments.length})
             </Text>
             {myWeekAssignments.length === 0 ? (
               <View style={[styles.myEmptyCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
                 <Text style={[styles.myEmptyText, { color: theme.textMuted }]}>No shifts assigned this week</Text>
-                {openSlotsThisWeek.length > 0 && (
+                {openSlotsForClaiming.length > 0 && (
                   <Text style={[styles.myEmptySub, { color: theme.textMuted }]}>Claim an open slot below</Text>
                 )}
               </View>
-            ) : (
-              myWeekAssignments.map((item) => {
-                const sIdx = rotaShifts.findIndex((s) => s.id === item.shiftId);
-                const shiftColor = SHIFT_ROW_COLORS[sIdx % SHIFT_ROW_COLORS.length];
-                return (
-                  <View key={item.id} style={[styles.myShiftCard, { backgroundColor: theme.card, borderColor: "rgba(29,184,112,0.3)" }]}>
-                    <View style={[styles.myShiftIcon, { backgroundColor: "rgba(29,184,112,0.1)" }]}>
-                      <Feather name="check-circle" size={18} color="#1DB870" />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.myShiftName, { color: theme.text }]}>
-                        {item.shift.name} · {item.day.label}
-                      </Text>
-                      <Text style={[styles.myShiftTime, { color: theme.textMuted }]}>
-                        {item.shift.startTime}–{item.shift.endTime} · {item.day.dateNum} {item.day.month}
-                      </Text>
-                    </View>
-                    <Pressable
-                      style={({ pressed }) => [styles.releaseBtn, { borderColor: theme.border, opacity: pressed ? 0.7 : 1 }]}
-                      onPress={() => handleRelease(item.id)}
-                    >
-                      <Text style={[styles.releaseBtnText, { color: theme.textMuted }]}>Release</Text>
-                    </Pressable>
+            ) : myWeekAssignments.map((item) => {
+              const sIdx = rotaShifts.findIndex((s) => s.id === item.shiftId);
+              return (
+                <View key={item.id} style={[styles.myShiftCard, { backgroundColor: theme.card, borderColor: "rgba(29,184,112,0.3)" }]}>
+                  <View style={[styles.myShiftIcon, { backgroundColor: "rgba(29,184,112,0.1)" }]}>
+                    <Feather name="check-circle" size={18} color="#1DB870" />
                   </View>
-                );
-              })
-            )}
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.myShiftName, { color: theme.text }]}>
+                      {item.shift.name} · {item.day.label}
+                    </Text>
+                    <Text style={[styles.myShiftTime, { color: theme.textMuted }]}>
+                      {item.shift.startTime}–{item.shift.endTime} · {item.day.dateNum} {item.day.month}
+                    </Text>
+                  </View>
+                  <Pressable
+                    style={({ pressed }) => [styles.releaseBtn, { borderColor: theme.border, opacity: pressed ? 0.7 : 1 }]}
+                    onPress={() => handleRelease(item.id)}
+                  >
+                    <Text style={[styles.releaseBtnText, { color: theme.textMuted }]}>Release</Text>
+                  </Pressable>
+                </View>
+              );
+            })}
 
-            {/* Open slots to claim */}
-            {openSlotsThisWeek.length > 0 && (
+            {openSlotsForClaiming.length > 0 && (
               <>
                 <Text style={[styles.myViewLabel, { color: theme.textMuted, marginTop: Spacing.lg }]}>
-                  OPEN SLOTS — CLAIM ONE ({openSlotsThisWeek.length})
+                  OPEN SLOTS — CLAIM ONE ({openSlotsForClaiming.length})
                 </Text>
-                {openSlotsThisWeek.slice(0, 10).map(({ shift, day }) => {
+                {openSlotsForClaiming.slice(0, 10).map(({ shift, day }) => {
                   const sIdx = rotaShifts.findIndex((s) => s.id === shift.id);
                   const shiftColor = SHIFT_ROW_COLORS[sIdx % SHIFT_ROW_COLORS.length];
-                  const alreadyClaimed = myWeekAssignments.some(
-                    (x) => x.shiftId === shift.id && x.dayOfWeek === day.dayIndex,
-                  );
-                  if (alreadyClaimed) return null;
                   return (
-                    <View key={`${day.dayIndex}-${shift.id}`} style={[styles.openSlotCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                    <View key={`${day.dateStr}-${shift.id}`} style={[styles.openSlotCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
                       <View style={[styles.shiftDot, { backgroundColor: shiftColor, margin: 0, marginRight: 4 }]} />
                       <View style={{ flex: 1 }}>
                         <Text style={[styles.myShiftName, { color: theme.text }]}>
@@ -949,7 +1039,7 @@ export default function ManageRosterScreen() {
                       </View>
                       <Pressable
                         style={({ pressed }) => [styles.claimBtn, { opacity: pressed ? 0.8 : 1 }]}
-                        onPress={() => handleClaim(shift.id, day.dayIndex)}
+                        onPress={() => handleClaim(shift.id, day.dateStr)}
                       >
                         <Text style={styles.claimBtnText}>Claim</Text>
                       </Pressable>
@@ -961,7 +1051,7 @@ export default function ManageRosterScreen() {
           </View>
         )}
 
-        {/* ── Shift Management (HOD only, collapsible) ── */}
+        {/* ── Shift Configuration (HOD only, collapsible) ── */}
         {isHOD && (
           <View style={{ marginTop: Spacing.lg }}>
             <Pressable
@@ -983,25 +1073,16 @@ export default function ManageRosterScreen() {
                         {shift.startTime}–{shift.endTime}
                       </Text>
                     </View>
-                    <Pressable
-                      style={[styles.iconBtnSm, { backgroundColor: theme.primaryLight }]}
-                      onPress={() => openEditShift(shift)}
-                    >
+                    <Pressable style={[styles.iconBtnSm, { backgroundColor: theme.primaryLight }]} onPress={() => openEditShift(shift)}>
                       <Feather name="edit-2" size={13} color={theme.primary} />
                     </Pressable>
-                    <Pressable
-                      style={[styles.iconBtnSm, { backgroundColor: theme.dangerLight || "#fee2e2" }]}
-                      onPress={() => deleteShift(shift)}
-                    >
+                    <Pressable style={[styles.iconBtnSm, { backgroundColor: theme.dangerLight || "#fee2e2" }]} onPress={() => deleteShift(shift)}>
                       <Feather name="trash-2" size={13} color={theme.danger} />
                     </Pressable>
                   </View>
                 ))}
                 {rotaShifts.length < 5 && (
-                  <Pressable
-                    style={[styles.addShiftBtn, { borderColor: theme.primary + "40" }]}
-                    onPress={openAddShift}
-                  >
+                  <Pressable style={[styles.addShiftBtn, { borderColor: theme.primary + "40" }]} onPress={openAddShift}>
                     <Feather name="plus" size={15} color={theme.primary} />
                     <Text style={[styles.addShiftText, { color: theme.primary }]}>Add Shift</Text>
                   </Pressable>
@@ -1232,12 +1313,12 @@ export default function ManageRosterScreen() {
   );
 }
 
+// ── StyleSheet ────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   sectionTitle: { fontSize: 11, fontWeight: "700", letterSpacing: 0.8, marginBottom: Spacing.sm },
   sectionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: Spacing.sm },
 
-  // Invite link
   linkCard: { borderRadius: BorderRadius.lg, borderWidth: 1, padding: Spacing.md, marginBottom: 0 },
   linkText: { fontSize: 12, marginBottom: Spacing.sm },
   linkActions: { flexDirection: "row", gap: 8, marginBottom: Spacing.sm },
@@ -1246,20 +1327,19 @@ const styles = StyleSheet.create({
   regenRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   regenText: { fontSize: 11 },
 
-  // Rota header
   rotaHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: Spacing.sm },
   rotaSubtitle: { fontSize: 11 },
   toggleRow: { flexDirection: "row", borderRadius: 10, padding: 3, gap: 2 },
   toggleBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
   toggleBtnText: { fontSize: 12, fontWeight: "700" },
 
-  // Week nav
   weekNav: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderRadius: 12, borderWidth: 1, paddingHorizontal: Spacing.sm, paddingVertical: Spacing.sm, marginBottom: Spacing.sm },
   weekNavBtn: { width: 34, height: 34, borderRadius: 9, alignItems: "center", justifyContent: "center" },
   weekLabel: { fontSize: 13, fontWeight: "700" },
   weekRange: { fontSize: 11, marginTop: 1 },
+  todayChip: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
+  todayChipText: { fontSize: 10, fontWeight: "700" },
 
-  // Grid
   gridCard: { borderRadius: 14, borderWidth: 1, overflow: "hidden", marginBottom: Spacing.md },
   gridEmpty: { padding: 32, alignItems: "center", gap: 8 },
   gridEmptyTitle: { fontSize: 14, fontWeight: "600" },
@@ -1275,7 +1355,6 @@ const styles = StyleSheet.create({
   legendDot: { width: 6, height: 6, borderRadius: 3 },
   legendText: { fontSize: 9 },
 
-  // My shifts view
   myViewLabel: { fontSize: 10, fontWeight: "700", letterSpacing: 0.8, marginBottom: Spacing.sm },
   myEmptyCard: { borderRadius: 12, borderWidth: 1.5, borderStyle: "dashed", padding: 20, alignItems: "center", marginBottom: Spacing.sm },
   myEmptyText: { fontSize: 13 },
@@ -1290,7 +1369,6 @@ const styles = StyleSheet.create({
   claimBtn: { backgroundColor: "#1DB870", borderRadius: 9, paddingHorizontal: 14, paddingVertical: 7 },
   claimBtnText: { color: "#fff", fontSize: 12, fontWeight: "700" },
 
-  // Shift management section
   shiftMgmtHeader: { flexDirection: "row", alignItems: "center", gap: 10, borderRadius: 12, borderWidth: 1, padding: Spacing.md },
   shiftMgmtTitle: { flex: 1, fontSize: 14, fontWeight: "600" },
   shiftMgmtBody: { borderRadius: 12, borderWidth: 1, borderTopWidth: 0, borderTopLeftRadius: 0, borderTopRightRadius: 0, paddingVertical: Spacing.sm },
@@ -1301,7 +1379,6 @@ const styles = StyleSheet.create({
   addShiftBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, margin: Spacing.md, borderRadius: 10, borderWidth: 1.5, borderStyle: "dashed", padding: Spacing.sm },
   addShiftText: { fontSize: 13, fontWeight: "600" },
 
-  // Members
   card: { borderRadius: BorderRadius.lg, overflow: "hidden", marginBottom: Spacing.sm },
   memberRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, borderBottomWidth: 1 },
   avatar: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
@@ -1318,7 +1395,6 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 15, fontWeight: "600" },
   emptyText: { fontSize: 13, textAlign: "center" },
 
-  // Edit shift modal
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
   modalSheet: { borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 24, paddingBottom: 36 },
   modalHandle: { width: 38, height: 4, borderRadius: 99, alignSelf: "center", marginBottom: 18 },
