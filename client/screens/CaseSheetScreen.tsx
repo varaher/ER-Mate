@@ -563,6 +563,7 @@ export default function CaseSheetScreen() {
   const caseStartRef = useRef<number>(Date.now());
   const [dictationCompletion, setDictationCompletion] = useState<DictationCompletion | null>(null);
   const [showDictationResult, setShowDictationResult] = useState(false);
+  const [showChatModal, setShowChatModal] = useState(false);
   const [showHoldModal, setShowHoldModal] = useState(false);
   const [pendingSwitchDraft, setPendingSwitchDraft] = useState<DraftCase | null>(null);
   const [holdAndNewMode, setHoldAndNewMode] = useState(false);
@@ -2271,7 +2272,9 @@ export default function CaseSheetScreen() {
           </View>
           <View style={styles.headerRight}>
             <Pressable style={styles.headerIcon}><Feather name="settings" size={20} color={theme.textSecondary} /></Pressable>
-            <Pressable style={styles.headerIcon}><Feather name="mic" size={20} color={theme.textSecondary} /></Pressable>
+            <Pressable style={styles.headerIcon} onPress={() => setShowChatModal(true)}>
+              <Feather name="message-circle" size={20} color="#7c3aed" />
+            </Pressable>
           </View>
         </View>
         {isResumed && (
@@ -2326,29 +2329,18 @@ export default function CaseSheetScreen() {
       <KeyboardAwareScrollViewCompat contentContainerStyle={[styles.content, { paddingBottom: 100 }]} showsVerticalScrollIndicator={false}>
         {activeTab === "patient" && (
           <>
-            {!(formData.sample.eventsHopi || formData.sample.signsSymptoms || formData.sample.pastMedicalHistory) ? (
-              <View style={[styles.card, { backgroundColor: theme.card, borderLeftWidth: 3, borderLeftColor: theme.primary }]}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginBottom: Spacing.md }}>
-                  <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#7c3aed', justifyContent: "center", alignItems: "center" }}>
-                    <Feather name="message-circle" size={20} color="#FFFFFF" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.cardTitle, { color: theme.text }]}>AI Scribe</Text>
-                    <Text style={[styles.cardSubtitle, { color: theme.textSecondary }]}>Speak or type the case — fields fill automatically</Text>
-                  </View>
-                </View>
-                <CaseChat
-                  onDataExtracted={handleSmartDictation}
-                  patientContext={{
-                    name: caseData?.patient?.name,
-                    age: caseData?.patient?.age ? parseFloat(caseData.patient.age) : undefined,
-                    sex: caseData?.patient?.sex,
-                    chiefComplaint: caseData?.presenting_complaint?.text,
-                    caseType: 'adult',
-                  }}
-                />
-              </View>
-            ) : null}
+            <View style={[styles.card, { backgroundColor: theme.card, borderLeftWidth: 3, borderLeftColor: '#7c3aed' }]}>
+              <CaseChat
+                onDataExtracted={handleSmartDictation}
+                patientContext={{
+                  name: caseData?.patient?.name,
+                  age: caseData?.patient?.age ? parseFloat(caseData.patient.age) : undefined,
+                  sex: caseData?.patient?.sex,
+                  chiefComplaint: caseData?.presenting_complaint?.text,
+                  caseType: 'adult',
+                }}
+              />
+            </View>
             {caseData?.patient && (
               <View style={[styles.card, { backgroundColor: theme.card }]}>
                 <View style={styles.patientHeader}>
@@ -3108,15 +3100,13 @@ export default function CaseSheetScreen() {
         {activeTab === "history" && (
           <>
             <View style={styles.inputToolsRow}>
-              <VoiceRecorder
-                onExtractedData={handleVoiceExtraction}
-                patientContext={{
-                  age: caseData?.patient?.age ? parseFloat(caseData.patient.age) : undefined,
-                  sex: caseData?.patient?.sex,
-                  chiefComplaint: caseData?.presenting_complaint?.text,
-                }}
-                mode="full"
-              />
+              <Pressable
+                onPress={() => setShowChatModal(true)}
+                style={[styles.aiScribeToolBtn, { backgroundColor: '#7c3aed15', borderColor: '#7c3aed40' }]}
+              >
+                <Feather name="message-circle" size={16} color="#7c3aed" />
+                <Text style={[styles.aiScribeToolBtnText, { color: '#7c3aed' }]}>AI Scribe</Text>
+              </Pressable>
               <DocumentScanner
                 onDataExtracted={handleDocumentScanExtraction}
                 context={{
@@ -3535,15 +3525,13 @@ export default function CaseSheetScreen() {
         {activeTab === "notes" && (
           <>
             <View style={styles.inputToolsRow}>
-              <VoiceRecorder
-                onExtractedData={handleVoiceExtraction}
-                patientContext={{
-                  age: caseData?.patient?.age ? parseFloat(caseData.patient.age) : undefined,
-                  sex: caseData?.patient?.sex,
-                  chiefComplaint: caseData?.presenting_complaint?.text,
-                }}
-                mode="full"
-              />
+              <Pressable
+                onPress={() => setShowChatModal(true)}
+                style={[styles.aiScribeToolBtn, { backgroundColor: '#7c3aed15', borderColor: '#7c3aed40' }]}
+              >
+                <Feather name="message-circle" size={16} color="#7c3aed" />
+                <Text style={[styles.aiScribeToolBtnText, { color: '#7c3aed' }]}>AI Scribe</Text>
+              </Pressable>
               <DocumentScanner
                 onDataExtracted={handleDocumentScanExtraction}
                 context={{
@@ -3699,6 +3687,40 @@ export default function CaseSheetScreen() {
           navigation.navigate("Rounds", { caseId, lensId });
         }}
       />
+      <Modal
+        visible={showChatModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowChatModal(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: theme.background }}>
+          <View style={[styles.chatModalHeader, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.chatModalTitle, { color: theme.text }]}>AI Scribe</Text>
+              <Text style={[styles.chatModalSub, { color: theme.textSecondary }]}>
+                {caseData?.patient?.name ? `${caseData.patient.name} · ` : ''}Speak or type — fills case sheet automatically
+              </Text>
+            </View>
+            <Pressable onPress={() => setShowChatModal(false)} style={[styles.chatModalClose, { backgroundColor: theme.backgroundSecondary }]}>
+              <Feather name="x" size={18} color={theme.text} />
+            </Pressable>
+          </View>
+          <View style={{ flex: 1, padding: Spacing.md }}>
+            <CaseChat
+              onDataExtracted={(data) => {
+                handleSmartDictation(data);
+              }}
+              patientContext={{
+                name: caseData?.patient?.name,
+                age: caseData?.patient?.age ? parseFloat(caseData.patient.age) : undefined,
+                sex: caseData?.patient?.sex,
+                chiefComplaint: caseData?.presenting_complaint?.text,
+                caseType: 'adult',
+              }}
+            />
+          </View>
+        </View>
+      </Modal>
       <DictationResultModal
         visible={showDictationResult}
         completion={dictationCompletion}
@@ -3819,6 +3841,12 @@ const styles = StyleSheet.create({
   swipeHintText: { ...Typography.small },
   content: { paddingHorizontal: Spacing.md, paddingTop: 4, paddingBottom: Spacing.md },
   inputToolsRow: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginBottom: Spacing.sm },
+  aiScribeToolBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
+  aiScribeToolBtnText: { fontSize: 13, fontWeight: "600" },
+  chatModalHeader: { flexDirection: "row", alignItems: "center", padding: Spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, paddingTop: Spacing.lg },
+  chatModalTitle: { fontSize: 17, fontWeight: "700" },
+  chatModalSub: { fontSize: 12, marginTop: 2 },
+  chatModalClose: { width: 36, height: 36, borderRadius: 18, justifyContent: "center", alignItems: "center" },
   card: { padding: Spacing.md, borderRadius: BorderRadius.lg, marginBottom: Spacing.md },
   cardTitle: { ...Typography.h4, marginBottom: Spacing.md },
   patientHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
