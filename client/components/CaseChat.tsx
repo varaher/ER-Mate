@@ -186,6 +186,8 @@ export interface CaseChatProps {
     caseType?: string;
   };
   liveCase?: CaseData;
+  /** If set on mount, automatically renders a case note DocCard in the chat */
+  initialExtracted?: SmartDictationExtracted | null;
   disabled?: boolean;
 }
 
@@ -698,7 +700,7 @@ function countFields(extracted: SmartDictationExtracted): number {
 const AFTER_CASE_CHIPS = ['Prepare discharge summary', 'Add to treatment', 'Change priority', 'Referral letter'];
 const AFTER_DS_CHIPS   = ['Add allergy', 'Export PDF', 'Show differentials', 'Edit diagnosis'];
 
-export default function CaseChat({ onDataExtracted, patientContext, liveCase, disabled = false }: CaseChatProps) {
+export default function CaseChat({ onDataExtracted, patientContext, liveCase, initialExtracted, disabled = false }: CaseChatProps) {
   const [messages, setMessages]         = useState<ChatMessage[]>([]);
   const [inputText, setInputText]       = useState('');
   const [isRecording, setIsRecording]   = useState(false);
@@ -709,13 +711,30 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, di
   const [hasCaseNote, setHasCaseNote]   = useState(false);
   const [hasDs, setHasDs]               = useState(false);
 
-  const scrollRef       = useRef<ScrollView>(null);
-  const nativeRecRef    = useRef<Audio.Recording | null>(null);
-  const webRecRef       = useRef<{ mr: MediaRecorder | null; chunks: Blob[]; stream: MediaStream | null }>({ mr: null, chunks: [], stream: null });
-  const historyRef      = useRef<{ role: 'user' | 'assistant'; content: string }[]>([]);
-  const recTimerRef     = useRef<ReturnType<typeof setInterval> | null>(null);
-  const idRef           = useRef(0);
-  const recStartRef     = useRef(0);
+  const scrollRef           = useRef<ScrollView>(null);
+  const nativeRecRef        = useRef<Audio.Recording | null>(null);
+  const webRecRef           = useRef<{ mr: MediaRecorder | null; chunks: Blob[]; stream: MediaStream | null }>({ mr: null, chunks: [], stream: null });
+  const historyRef          = useRef<{ role: 'user' | 'assistant'; content: string }[]>([]);
+  const recTimerRef         = useRef<ReturnType<typeof setInterval> | null>(null);
+  const idRef               = useRef(0);
+  const recStartRef         = useRef(0);
+  const initialPushedRef    = useRef(false);
+
+  // Auto-show case note when opened post-dictation (VoiceRecorder path)
+  useEffect(() => {
+    if (initialExtracted && !initialPushedRef.current) {
+      initialPushedRef.current = true;
+      const fc = countFields(initialExtracted);
+      push({
+        role: 'assistant',
+        content: `Case note ready — ${fc} field${fc !== 1 ? 's' : ''} captured from your dictation.`,
+        type: 'case_update',
+        extracted: initialExtracted,
+        fieldCount: fc,
+      });
+      setHasCaseNote(true);
+    }
+  }, [initialExtracted]);
 
   const genId = () => `m${Date.now()}_${++idRef.current}`;
 

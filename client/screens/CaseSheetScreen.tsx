@@ -563,6 +563,7 @@ export default function CaseSheetScreen() {
   const caseStartRef = useRef<number>(Date.now());
   const [dictationCompletion, setDictationCompletion] = useState<DictationCompletion | null>(null);
   const [showDictationResult, setShowDictationResult] = useState(false);
+  const [pendingExtracted, setPendingExtracted] = useState<SmartDictationExtracted | null>(null);
   const [showChatModal, setShowChatModal] = useState(false);
   const [showHoldModal, setShowHoldModal] = useState(false);
   const [pendingSwitchDraft, setPendingSwitchDraft] = useState<DraftCase | null>(null);
@@ -2204,7 +2205,8 @@ export default function CaseSheetScreen() {
     }
     const completion = calculateDictationCompletion(data);
     setDictationCompletion(completion);
-    setShowDictationResult(true);
+    setPendingExtracted(data);
+    setShowChatModal(true);
     handleSave(true);
   };
 
@@ -3845,21 +3847,25 @@ export default function CaseSheetScreen() {
         visible={showChatModal}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setShowChatModal(false)}
+        onRequestClose={() => { setShowChatModal(false); setPendingExtracted(null); }}
       >
-        <View style={{ flex: 1, backgroundColor: theme.background }}>
-          <View style={[styles.chatModalHeader, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
+        <View style={{ flex: 1, backgroundColor: '#0F1419' }}>
+          <View style={[styles.chatModalHeader, { backgroundColor: '#0F1419', borderBottomColor: 'rgba(255,255,255,0.08)' }]}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.chatModalTitle, { color: theme.text }]}>AI Scribe</Text>
-              <Text style={[styles.chatModalSub, { color: theme.textSecondary }]}>
-                {caseData?.patient?.name ? `${caseData.patient.name} · ` : ''}Speak or type — fills case sheet automatically
+              <Text style={[styles.chatModalTitle, { color: '#FFFFFF' }]}>AI Scribe</Text>
+              <Text style={[styles.chatModalSub, { color: 'rgba(255,255,255,0.45)' }]}>
+                {caseData?.patient?.name ? `${caseData.patient.name} · ` : ''}Tap to dictate or type a command
               </Text>
             </View>
-            <Pressable onPress={() => setShowChatModal(false)} style={[styles.chatModalClose, { backgroundColor: theme.backgroundSecondary }]}>
-              <Feather name="x" size={18} color={theme.text} />
+            <Pressable
+              onPress={() => { setShowChatModal(false); setPendingExtracted(null); }}
+              style={[styles.chatModalClose, { backgroundColor: 'rgba(255,255,255,0.10)', flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12 }]}
+            >
+              <Feather name="edit-2" size={14} color="rgba(255,255,255,0.7)" />
+              <Text style={{ fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.7)' }}>Edit fields</Text>
             </Pressable>
           </View>
-          <View style={{ flex: 1, padding: Spacing.md }}>
+          <View style={{ flex: 1 }}>
             <CaseChat
               onDataExtracted={(data) => {
                 handleSmartDictation(data);
@@ -3872,6 +3878,7 @@ export default function CaseSheetScreen() {
                 caseType: 'adult',
               }}
               liveCase={liveCase}
+              initialExtracted={pendingExtracted}
             />
           </View>
         </View>

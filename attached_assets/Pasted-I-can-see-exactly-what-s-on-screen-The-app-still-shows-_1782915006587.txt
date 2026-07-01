@@ -1,0 +1,162 @@
+I can see exactly what's on screen. The app still shows the old entry flow — Standard Entry, Start with Triage, Adult Case Sheet, Pediatric Case Sheet, Voice Case Entry. The chat UI we designed hasn't been built yet.
+
+---
+
+## What's Happening
+
+```
+The CaseChatScreen.jsx we designed is a 
+DESIGN REFERENCE — not code that gets 
+deployed automatically.
+
+Your developer needs to:
+1. Take the CaseChatScreen.jsx file
+2. Integrate it into the React Native app
+3. Wire it to the real backend
+4. Replace or add alongside the current flow
+```
+
+---
+
+## What To Tell Your Developer — Exact Steps
+
+**Step 1 — Add the chat screen to the app**
+
+```
+The design file is at:
+CaseChatScreen.jsx (from today's session)
+
+This needs to be adapted for React Native.
+The current file uses web HTML/CSS.
+React Native uses View, Text, ScrollView, 
+TextInput, TouchableOpacity instead.
+
+Key components to build in React Native:
+
+1. DocCard component
+   → View with white background
+   → Dark header strip
+   → Scrollable content
+   → Copy / Edit / Export buttons
+
+2. DoctorBubble
+   → Right-aligned View
+   → Dark bubble background
+
+3. ErMateMsg
+   → Left-aligned
+   → Green spark icon
+   → Document card inside
+
+4. Input bar at bottom
+   → Mic button (existing MicButton component)
+   → TextInput
+   → Send button
+```
+
+**Step 2 — Add it to the New Patient flow**
+
+```
+Currently the bottom sheet shows:
+  Standard Entry
+  Start with Triage
+  Adult Case Sheet
+  Pediatric Case Sheet
+  Voice Case Entry (NEW)
+
+Add one more option:
+  Chat Mode (NEW)
+  "Dictate or type — documents appear 
+   instantly. Copy to hospital EMR."
+
+OR — simpler — replace Voice Case Entry 
+with the chat flow entirely, since that's 
+what the chat UI does but better.
+```
+
+**Step 3 — After dictation, show chat instead of tabs**
+
+```
+Current flow after Voice Case Entry:
+  Dictate → completion map → 7 tabs
+
+New flow:
+  Dictate → formatted case note 
+            appears as document in chat
+
+The existing dictation processing 
+(Sarvam AI → GPT-4o extraction) 
+stays exactly the same.
+
+Only the OUTPUT changes:
+  Before: fills 7 tab fields silently
+  After:  renders formatted document 
+          in chat window
+
+The 7 tab data still gets saved —
+chat is just how it's presented.
+```
+
+---
+
+## The Simplest Integration Path
+
+Tell your developer this is the minimum viable version:
+
+```
+Phase 1 — One screen change (3 days):
+
+After Smart Dictation completes,
+instead of showing the completion map
+and returning to tabs:
+
+→ Navigate to CaseChatScreen
+→ Pass the extracted case data as props
+→ Render the formatted case note document
+→ Show "Prepare discharge summary" chip
+→ Show input bar for commands
+
+The 7 tabs remain accessible via 
+"Edit fields" button in the header.
+
+Nothing else changes.
+Backend unchanged.
+Data model unchanged.
+Just the output presentation changes.
+```
+
+---
+
+## Right Now — Quickest Way to Show Doctors
+
+Since the chat screen isn't in the app yet, share the JSX design file directly:
+
+```
+Send them CaseChatScreen.jsx
+Open it at: claude.ai (artifacts view)
+Or open the file in any browser
+
+Show doctors the interactive prototype
+Get feedback before full build
+Then developer builds the real version
+```
+
+---
+
+## What The Screenshot Actually Shows Is Fine
+
+```
+The current "New Patient" bottom sheet 
+is clean and well-designed.
+
+The only addition needed:
+  After Voice Case Entry dictation →
+  route to chat view instead of tabs
+
+The entry point (this bottom sheet) 
+doesn't need to change at all.
+The change happens AFTER dictation,
+not before.
+```
+
+So the message to your developer is simple: **the chat UI triggers after dictation completes — same entry flow, different output screen.** Send them the JSX file and ask them to build the React Native equivalent, starting with the DocCard and the post-dictation navigation.
