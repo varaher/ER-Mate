@@ -3807,6 +3807,103 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  app.post("/api/voice/chat", async (req: Request, res: Response) => {
+    try {
+      const { messages, currentMessage, patientContext } = req.body;
+      if (!currentMessage || typeof currentMessage !== "string" || !currentMessage.trim()) {
+        return res.status(400).json({ error: "No message provided" });
+      }
+
+      const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
+      const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
+      if (!apiKey || !baseURL) {
+        return res.status(503).json({ error: "AI not configured" });
+      }
+
+      const OpenAI = (await import("openai")).default;
+      const openai = new OpenAI({ apiKey, baseURL });
+
+      const ctx = patientContext || {};
+      const patientLine = [
+        ctx.name ? `Name: ${ctx.name}` : null,
+        ctx.age ? `Age: ${ctx.age} years` : null,
+        ctx.sex ? `Sex: ${ctx.sex}` : null,
+        ctx.chiefComplaint ? `Chief Complaint: ${ctx.chiefComplaint}` : null,
+      ].filter(Boolean).join(", ") || "Unknown patient";
+
+      const systemPrompt = `You are ErMate AI — an emergency medicine clinical scribe embedded inside an ER EMR app.
+Current patient: ${patientLine}
+
+Your job: understand what the doctor dictates or asks and respond as JSON.
+
+RESPONSE FORMAT (respond ONLY as valid JSON, nothing else):
+{
+  "reply": "2-3 sentence clinical acknowledgment. Be brief and specific about what you captured or generated.",
+  "type": "case_update" | "discharge_summary" | "note" | "general",
+  "extracted": { ...clinical fields... } | null,
+  "specialContent": "full text for summaries/notes" | null
+}
+
+TYPE RULES:
+- "case_update": doctor dictates any clinical data → extract fields, set reply to confirm what was captured
+- "discharge_summary": doctor says "discharge summary", "DS", "summary" → generate a complete professional ER discharge summary in specialContent; set extracted to null
+- "note": doctor says "add a note", "note:", "clinical note" → put note text in specialContent AND in extracted.treatmentNotes
+- "general": questions, clarifications, greetings → answer briefly, extracted = null
+
+EXTRACTION SCHEMA (for case_update and note types, all fields optional):
+patientName, patientAge, patientSex, chiefComplaint, historyOfPresentIllness, onset, duration, progression,
+associatedSymptoms, negativeSymptoms, pastMedicalHistory, pastSurgicalHistory, allergies, currentMedications,
+familyHistory, socialHistory, menstrualHistory, treatmentNotes, investigationsOrdered, imagingOrdered,
+symptoms (string array), diagnosis (string array), differentialDiagnosis (string array),
+vitalsSuggested: { hr, bp, rr, spo2, temperature, grbs },
+examFindings: { general, cvs, respiratory, abdomen, cns, heent, musculoskeletal, skin },
+prescribedMedications: [{ name, dose, route, frequency }],
+prescribedInfusions: [{ name, dose, dilution, rate }],
+painDetails: { location, severity, character, onset, duration, aggravatingFactors, relievingFactors }
+
+REPLY EXAMPLES:
+- case_update: "Captured — chest pain onset 2 hours, BP 140/90, HR 95, SpO2 98%. History, vitals, and exam updated."
+- discharge_summary: "Here's the discharge summary for ${ctx.name || 'this patient'}."
+- note: "Note added: [note text]"
+
+Always use the conversation history for context (e.g. don't re-ask for info already mentioned).
+Keep replies SHORT (2-3 sentences max). Be clinical and direct.`;
+
+      const history: { role: "user" | "assistant"; content: string }[] = Array.isArray(messages) ? messages : [];
+      const chatMessages = [
+        { role: "system" as const, content: systemPrompt },
+        ...history.map((m: any) => ({ role: m.role as "user" | "assistant", content: String(m.content) })),
+        { role: "user" as const, content: currentMessage },
+      ];
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: chatMessages,
+        response_format: { type: "json_object" },
+        max_tokens: 1500,
+        temperature: 0.3,
+      });
+
+      const raw = completion.choices[0]?.message?.content || "{}";
+      let parsed: any = {};
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        parsed = { reply: "I processed your input but couldn't format the response. Please try again.", type: "general", extracted: null, specialContent: null };
+      }
+
+      res.json({
+        reply: parsed.reply || "Understood.",
+        type: parsed.type || "general",
+        extracted: parsed.extracted || null,
+        specialContent: parsed.specialContent || null,
+      });
+    } catch (error) {
+      console.error("[CaseChat] error:", error);
+      res.status(500).json({ error: (error as Error).message || "Chat failed" });
+    }
+  });
+
   app.post("/api/voice/save-case", async (req: Request, res: Response) => {
     try {
       const authHeader = req.headers.authorization;

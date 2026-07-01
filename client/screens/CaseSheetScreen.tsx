@@ -28,7 +28,8 @@ import { DropdownField } from "@/components/DropdownField";
 import { CheckboxGroup } from "@/components/CheckboxGroup";
 import { TextInputField } from "@/components/TextInputField";
 import { AIDiagnosisPanel } from "@/components/AIDiagnosisPanel";
-import SmartDictation, { SmartDictationExtracted } from "@/components/SmartDictation";
+import CaseChat from "@/components/CaseChat";
+import { SmartDictationExtracted } from "@/components/SmartDictation";
 import DictationResultModal, {
   calculateDictationCompletion,
   DictationCompletion,
@@ -2328,17 +2329,18 @@ export default function CaseSheetScreen() {
             {!(formData.sample.eventsHopi || formData.sample.signsSymptoms || formData.sample.pastMedicalHistory) ? (
               <View style={[styles.card, { backgroundColor: theme.card, borderLeftWidth: 3, borderLeftColor: theme.primary }]}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginBottom: Spacing.md }}>
-                  <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.primary, justifyContent: "center", alignItems: "center" }}>
-                    <Feather name="mic" size={20} color="#FFFFFF" />
+                  <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#7c3aed', justifyContent: "center", alignItems: "center" }}>
+                    <Feather name="message-circle" size={20} color="#FFFFFF" />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.cardTitle, { color: theme.text }]}>Speak This Case</Text>
-                    <Text style={[styles.cardSubtitle, { color: theme.textSecondary }]}>Talk naturally — ErMate fills the case sheet automatically</Text>
+                    <Text style={[styles.cardTitle, { color: theme.text }]}>AI Scribe</Text>
+                    <Text style={[styles.cardSubtitle, { color: theme.textSecondary }]}>Speak or type the case — fields fill automatically</Text>
                   </View>
                 </View>
-                <SmartDictation
+                <CaseChat
                   onDataExtracted={handleSmartDictation}
                   patientContext={{
+                    name: caseData?.patient?.name,
                     age: caseData?.patient?.age ? parseFloat(caseData.patient.age) : undefined,
                     sex: caseData?.patient?.sex,
                     chiefComplaint: caseData?.presenting_complaint?.text,
