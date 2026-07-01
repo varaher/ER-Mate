@@ -1,0 +1,826 @@
+import { useState, useRef, useEffect } from "react";
+
+// ── Tokens ─────────────────────────────────────────────────────────────────
+const C = {
+  green:      "#1DB870",
+  greenDark:  "#15924F",
+  greenLight: "rgba(29,184,112,0.1)",
+  greenBd:    "rgba(29,184,112,0.2)",
+  purple:     "#7C6AF6",
+  ink:        "#0B0F14",
+  inkSoft:    "#1E2530",
+  chat:       "#0F1419",   // chat background — deeper than ink
+  bubble:     "#1A2332",   // doctor message bubble
+  muted:      "#6B7280",
+  faint:      "#9CA3AF",
+  border:     "#E8EAED",
+  surface:    "#F7F8FA",
+  white:      "#FFFFFF",
+  orange:     "#F59E0B",
+  red:        "#EF4444",
+  docBg:      "#FFFFFF",   // document card — pure white, clinical
+  docBorder:  "#E0E4EA",
+};
+
+// ── Icons ──────────────────────────────────────────────────────────────────
+const MicIcon = ({ recording }) => (
+  <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+    <rect x="6" y="1" width="6" height="10" rx="3"
+      fill={recording ? C.red : C.green}/>
+    <path d="M3 9c0 3.3 2.7 6 6 6s6-2.7 6-6"
+      stroke={recording ? C.red : C.green} strokeWidth="1.5" strokeLinecap="round"/>
+    <path d="M9 15v2" stroke={recording ? C.red : C.green} strokeWidth="1.5" strokeLinecap="round"/>
+  </svg>
+);
+const CopyIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+    <rect x="4" y="4" width="8" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
+    <path d="M9 4V2.5A1.5 1.5 0 007.5 1h-5A1.5 1.5 0 001 2.5v5A1.5 1.5 0 002.5 9H4"
+      stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+  </svg>
+);
+const EditIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+    <path d="M9.5 1.5L11.5 3.5L4.5 10.5H2.5V8.5L9.5 1.5Z"
+      stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+const PdfIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+    <rect x="2" y="1" width="9" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
+    <path d="M4 5h5M4 7.5h3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+  </svg>
+);
+const BackIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+    <path d="M13 4L7 10L13 16" stroke={C.white} strokeWidth="1.8"
+      strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+const SaveIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+    <path d="M2 2h7.5L11 3.5V11a1 1 0 01-1 1H2a1 1 0 01-1-1V3a1 1 0 011-1z"
+      stroke="currentColor" strokeWidth="1.3"/>
+    <path d="M4 1v3h5V1M4 7v4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+  </svg>
+);
+const CheckIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+    <circle cx="7" cy="7" r="6.5" fill={C.green} fillOpacity="0.15"/>
+    <path d="M4 7.2L6 9.2L10 5" stroke={C.green} strokeWidth="1.5"
+      strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+const SparkIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+    <path d="M7 1l1.5 3.5L12 7l-3.5 1.5L7 13l-1.5-4.5L2 7l3.5-1.5L7 1z"
+      fill={C.green} fillOpacity="0.9"/>
+  </svg>
+);
+
+// ── Document card component ────────────────────────────────────────────────
+function DocCard({ type, title, icon, children, onCopy, onEdit, onExport, onSave }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    setCopied(true);
+    onCopy?.();
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div style={{
+      background: C.docBg,
+      borderRadius: 16,
+      border: `1px solid ${C.docBorder}`,
+      overflow: "hidden",
+      boxShadow: "0 4px 20px rgba(0,0,0,0.18), 0 1px 4px rgba(0,0,0,0.1)",
+      marginBottom: 4,
+    }}>
+      {/* Document header */}
+      <div style={{
+        background: type === "discharge"
+          ? "linear-gradient(135deg,#1E2530,#252E3D)"
+          : "linear-gradient(135deg,#0B0F14,#1A2332)",
+        padding: "11px 14px",
+        display: "flex", alignItems: "center", gap: 8,
+        borderBottom: `1px solid rgba(255,255,255,0.06)`,
+      }}>
+        <span style={{ fontSize: 14 }}>{icon}</span>
+        <span style={{ fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.9)",
+          letterSpacing: 0.3, flex: 1 }}>{title}</span>
+        <span style={{ fontSize: 9, fontWeight: 700, color: C.green,
+          background: C.greenLight, borderRadius: 4, padding: "2px 7px",
+          border: `1px solid ${C.greenBd}` }}>
+          {type === "discharge" ? "DISCHARGE" : "CASE NOTE"}
+        </span>
+      </div>
+
+      {/* Document body */}
+      <div style={{ padding: "14px 16px", fontFamily: "'Georgia',serif" }}>
+        {children}
+      </div>
+
+      {/* Action bar */}
+      <div style={{
+        borderTop: `1px solid ${C.docBorder}`,
+        padding: "9px 14px",
+        background: C.surface,
+        display: "flex", gap: 6,
+      }}>
+        <DocAction icon={<CopyIcon/>} label={copied ? "Copied ✓" : "Copy all"}
+          onClick={handleCopy} primary={!copied} done={copied}/>
+        {onEdit && <DocAction icon={<EditIcon/>} label="Edit" onClick={onEdit}/>}
+        {onExport && <DocAction icon={<PdfIcon/>} label="Export PDF" onClick={onExport}/>}
+        {onSave && <DocAction icon={<SaveIcon/>} label="Save" onClick={onSave}/>}
+      </div>
+    </div>
+  );
+}
+
+function DocAction({ icon, label, onClick, primary, done }) {
+  return (
+    <button onClick={onClick} style={{
+      display: "flex", alignItems: "center", gap: 5,
+      background: done ? C.greenLight : primary ? C.ink : "white",
+      border: `1px solid ${done ? C.greenBd : primary ? "transparent" : C.border}`,
+      borderRadius: 8, padding: "6px 11px",
+      fontSize: 11, fontWeight: 700,
+      color: done ? C.green : primary ? "white" : C.muted,
+      cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s",
+    }}>{icon}{label}</button>
+  );
+}
+
+// ── Case note document ─────────────────────────────────────────────────────
+function CaseNoteDoc({ onCopy, onEdit, onExport, onSave }) {
+  const field = (label, value, abnormal = false) => (
+    <div style={{ display: "flex", gap: 10, marginBottom: 5 }}>
+      <span style={{ fontSize: 11, color: C.faint, width: 90,
+        flexShrink: 0, fontFamily: "inherit" }}>{label}</span>
+      <span style={{ fontSize: 11.5, color: abnormal ? C.red : C.ink,
+        fontWeight: abnormal ? 600 : 400, fontFamily: "'Inter',sans-serif",
+        lineHeight: 1.5 }}>{value}</span>
+    </div>
+  );
+
+  const section = (title, children) => (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: 1.2,
+        textTransform: "uppercase", color: C.faint,
+        marginBottom: 7, paddingBottom: 4,
+        borderBottom: `1px solid ${C.border}`,
+        fontFamily: "'Inter',sans-serif" }}>{title}</div>
+      {children}
+    </div>
+  );
+
+  return (
+    <DocCard type="case" title="Emergency Case Note" icon="📋"
+      onCopy={onCopy} onEdit={onEdit} onExport={onExport} onSave={onSave}>
+
+      {/* Patient header */}
+      <div style={{ marginBottom: 14, paddingBottom: 12,
+        borderBottom: `1px solid ${C.border}` }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: C.ink,
+          marginBottom: 3, fontFamily: "'Inter',sans-serif" }}>
+          Abdulahad, 52M
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 10, fontWeight: 700, color: C.red,
+            background: "rgba(239,68,68,0.08)", borderRadius: 5,
+            padding: "2px 8px", fontFamily: "inherit" }}>P1 — IMMEDIATE</span>
+          <span style={{ fontSize: 10, color: C.faint,
+            fontFamily: "inherit" }}>01 Jul 2026 · 14:32</span>
+          <span style={{ fontSize: 10, color: C.faint,
+            fontFamily: "inherit" }}>City Emergency · Dr. Neeraj</span>
+        </div>
+      </div>
+
+      {section("Patient & Vitals",
+        <>
+          {field("Complaint", "Chest pain, 2 hours")}
+          {field("HR", "108 bpm", true)}
+          {field("BP", "94/60 mmHg", true)}
+          {field("SpO₂", "96%")}
+          {field("RR", "22/min", true)}
+          {field("GCS", "15/15")}
+          {field("GRBS", "186 mg/dL")}
+        </>
+      )}
+
+      {section("History (SAMPLE)",
+        <>
+          {field("Symptoms", "Crushing chest pain, radiation to jaw, 2 hours onset")}
+          {field("Allergies", "NKDA")}
+          {field("Medications", "Metformin 500mg BD, Amlodipine 5mg OD")}
+          {field("Past Hx", "T2DM × 6 years, Hypertension")}
+          {field("Last meal", "4 hours ago")}
+          {field("Events", "Sudden onset at rest, no exertion")}
+        </>
+      )}
+
+      {section("Primary Survey (ABCDE)",
+        <>
+          {field("Airway", "Patent, self-maintained")}
+          {field("Breathing", "SpO₂ 96%, bilateral equal air entry")}
+          {field("Circulation", "HR 108, BP 94/60, cool peripheries", true)}
+          {field("Disability", "GCS 15/15, pupils equal reacting")}
+          {field("Exposure", "No rash, no oedema")}
+        </>
+      )}
+
+      {section("Treatment Given",
+        <>
+          {field("Medications", "Aspirin 325mg oral, Morphine 5mg IV stat, Heparin 5000 IU IV")}
+          {field("IV Access", "18G right antecubital")}
+          {field("Fluids", "NS 500ml wide open")}
+          {field("ECG", "Done — ST elevation V1–V4")}
+          {field("Oxygen", "Nasal prongs 4L/min")}
+        </>
+      )}
+
+      {section("Impression",
+        <div style={{ fontSize: 12, color: C.ink, lineHeight: 1.6,
+          fontFamily: "'Inter',sans-serif" }}>
+          Probable STEMI — anterior. ECG shows ST elevation V1–V4.
+          Haemodynamically compromised. Referred to cardiology, cath lab activated.
+        </div>
+      )}
+    </DocCard>
+  );
+}
+
+// ── Discharge summary document ─────────────────────────────────────────────
+function DischargeSummaryDoc({ onCopy, onExport }) {
+  const row = (label, value) => (
+    <div style={{ display: "flex", gap: 10, marginBottom: 6 }}>
+      <span style={{ fontSize: 11, color: C.faint, width: 100,
+        flexShrink: 0, fontFamily: "inherit" }}>{label}</span>
+      <span style={{ fontSize: 11.5, color: C.ink,
+        fontFamily: "'Inter',sans-serif", lineHeight: 1.5 }}>{value}</span>
+    </div>
+  );
+
+  const section = (title, children) => (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: 1.2,
+        textTransform: "uppercase", color: C.faint, marginBottom: 7,
+        paddingBottom: 4, borderBottom: `1px solid ${C.border}`,
+        fontFamily: "'Inter',sans-serif" }}>{title}</div>
+      {children}
+    </div>
+  );
+
+  return (
+    <DocCard type="discharge" title="Discharge Summary" icon="📄"
+      onCopy={onCopy} onExport={onExport}>
+
+      <div style={{ marginBottom: 14, paddingBottom: 12,
+        borderBottom: `1px solid ${C.border}` }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: C.ink,
+          marginBottom: 3, fontFamily: "'Inter',sans-serif" }}>
+          Abdulahad, 52M
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 10, color: C.faint,
+            fontFamily: "inherit" }}>Presented: 01 Jul 2026 · 14:32</span>
+          <span style={{ fontSize: 10, color: C.faint,
+            fontFamily: "inherit" }}>City Emergency · Dr. Neeraj</span>
+        </div>
+      </div>
+
+      {section("Presenting Complaint",
+        <div style={{ fontSize: 12, color: C.ink, lineHeight: 1.6,
+          fontFamily: "'Inter',sans-serif" }}>
+          52-year-old male presenting with acute onset crushing central
+          chest pain radiating to the jaw, duration 2 hours, associated
+          with diaphoresis. Background of T2DM and hypertension.
+        </div>
+      )}
+
+      {section("Diagnosis",
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.ink,
+          fontFamily: "'Inter',sans-serif" }}>
+          Anterior STEMI — ST elevation V1–V4 on ECG
+        </div>
+      )}
+
+      {section("Treatment Given",
+        <>
+          {row("Aspirin", "325mg oral — given")}
+          {row("Morphine", "5mg IV stat — given")}
+          {row("Heparin", "5000 IU IV — given")}
+          {row("Oxygen", "4L/min via nasal prongs")}
+          {row("ECG", "ST elevation V1–V4 confirmed")}
+        </>
+      )}
+
+      {section("Disposition",
+        <>
+          {row("Decision", "Admitted — CCU")}
+          {row("Referred to", "Cardiology — cath lab activated")}
+          {row("Follow-up", "Cardiology OPD post-discharge")}
+          {row("Instructions", "Nil by mouth. Continuous cardiac monitoring.")}
+        </>
+      )}
+    </DocCard>
+  );
+}
+
+// ── Suggestion chips ───────────────────────────────────────────────────────
+function SuggestionChips({ onTap, suggestions }) {
+  return (
+    <div style={{ display: "flex", gap: 7, flexWrap: "wrap", padding: "6px 0 10px" }}>
+      {suggestions.map(s => (
+        <button key={s} onClick={() => onTap(s)} style={{
+          background: "rgba(255,255,255,0.06)",
+          border: "1px solid rgba(255,255,255,0.1)",
+          borderRadius: 99, padding: "7px 14px",
+          fontSize: 12, fontWeight: 500, color: "rgba(255,255,255,0.7)",
+          cursor: "pointer", fontFamily: "inherit",
+          transition: "all 0.15s",
+          whiteSpace: "nowrap",
+        }}>{s}</button>
+      ))}
+    </div>
+  );
+}
+
+// ── Recording animation ────────────────────────────────────────────────────
+function RecordingWave() {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ width: 8, height: 8, borderRadius: "50%",
+        background: C.red, animation: "pulse 1s ease-in-out infinite" }}/>
+      <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
+        {[20, 32, 16, 40, 24, 36, 12, 28].map((h, i) => (
+          <div key={i} style={{
+            width: 3, height: h, borderRadius: 2,
+            background: C.red, opacity: 0.8,
+            animation: `wave ${0.8 + i * 0.1}s ease-in-out infinite alternate`,
+            animationDelay: `${i * 0.08}s`,
+          }}/>
+        ))}
+      </div>
+      <span style={{ fontSize: 12, fontWeight: 700, color: C.red }}>Recording...</span>
+    </div>
+  );
+}
+
+// ── Message types ──────────────────────────────────────────────────────────
+function DoctorBubble({ text }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+      <div style={{
+        background: C.bubble,
+        border: "1px solid rgba(255,255,255,0.08)",
+        borderRadius: "16px 16px 4px 16px",
+        padding: "10px 14px", maxWidth: "75%",
+        fontSize: 13, color: "rgba(255,255,255,0.85)",
+        lineHeight: 1.5,
+      }}>{text}</div>
+    </div>
+  );
+}
+
+function SystemLabel({ text }) {
+  return (
+    <div style={{ textAlign: "center", margin: "8px 0" }}>
+      <span style={{ fontSize: 10, color: "rgba(255,255,255,0.25)",
+        fontWeight: 600, letterSpacing: 0.5 }}>{text}</span>
+    </div>
+  );
+}
+
+function ErMateResponse({ children }) {
+  return (
+    <div style={{ marginBottom: 6 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+        <div style={{ width: 22, height: 22, borderRadius: 6,
+          background: `linear-gradient(135deg,${C.green},${C.greenDark})`,
+          display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <SparkIcon/>
+        </div>
+        <span style={{ fontSize: 11, fontWeight: 700, color: C.green }}>ErMate</span>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function UpdateConfirmation({ text }) {
+  return (
+    <div style={{
+      background: "rgba(29,184,112,0.08)",
+      border: "1px solid rgba(29,184,112,0.2)",
+      borderRadius: 12, padding: "10px 14px",
+      display: "flex", alignItems: "center", gap: 9,
+      marginBottom: 4,
+    }}>
+      <CheckIcon/>
+      <span style={{ fontSize: 12.5, color: "rgba(255,255,255,0.8)",
+        lineHeight: 1.5 }}>{text}</span>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// MAIN CHAT SCREEN
+// ══════════════════════════════════════════════════════════════════════════
+export default function CaseChatScreen() {
+  const [step, setStep] = useState(0);
+  const [recording, setRecording] = useState(false);
+  const [input, setInput] = useState("");
+  const [toast, setToast] = useState(null);
+  const scrollRef = useRef(null);
+
+  const showToast = (msg) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2200);
+  };
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [step]);
+
+  const handleMic = () => {
+    if (step === 0) {
+      setRecording(true);
+      setStep(0.5);
+      setTimeout(() => {
+        setRecording(false);
+        setStep(1);
+      }, 2800);
+    }
+  };
+
+  const handleSend = () => {
+    const txt = input.trim().toLowerCase();
+    if (!txt) return;
+    setInput("");
+    if (txt.includes("discharge") && step >= 1) { setStep(2); return; }
+    if ((txt.includes("penicillin") || txt.includes("allergy") || txt.includes("add")) && step >= 2) { setStep(3); return; }
+    if (txt.includes("referral") && step >= 2) { setStep(4); return; }
+    if (step === 0) setStep(1);
+  };
+
+  const handleChip = (s) => {
+    setInput(s);
+    setTimeout(() => {
+      const txt = s.toLowerCase();
+      setInput("");
+      if (txt.includes("discharge")) { setStep(2); return; }
+      if (txt.includes("allergy") || txt.includes("add")) { setStep(3); return; }
+      if (txt.includes("referral")) { setStep(4); return; }
+    }, 100);
+  };
+
+  const suggestions = step >= 2
+    ? ["Add allergy — penicillin", "Referral letter to cardiology", "Export PDF", "Show differentials"]
+    : step >= 1
+    ? ["Prepare discharge summary", "Add to treatment", "Change priority to P2", "Referral letter"]
+    : [];
+
+  return (
+    <div style={{
+      fontFamily: "'Inter',-apple-system,sans-serif",
+      background: "#D6D8D5", minHeight: "100vh",
+      display: "flex", flexDirection: "column", alignItems: "center",
+      padding: "20px 0 40px", gap: 14,
+    }}>
+
+      {/* Keyframes */}
+      <style>{`
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+        @keyframes wave{from{transform:scaleY(0.4)}to{transform:scaleY(1)}}
+        @keyframes slideUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+        .msg-in{animation:slideUp 0.35s ease forwards}
+      `}</style>
+
+      <div style={{ textAlign: "center" }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#5A5E5A" }}>
+          ErMate · Chat-Style Case UI
+        </div>
+        <div style={{ fontSize: 11, color: "#8A8E8A", marginTop: 2 }}>
+          Tap 🎙 to dictate · Then type commands to generate documents
+        </div>
+      </div>
+
+      {/* Phone shell */}
+      <div style={{
+        width: 390, background: "#0B0F14", borderRadius: 48, padding: 12,
+        boxShadow: "0 40px 80px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.06)",
+        flexShrink: 0,
+      }}>
+        <div style={{
+          background: C.chat, borderRadius: 38,
+          overflow: "hidden", height: 780,
+          display: "flex", flexDirection: "column",
+          position: "relative",
+        }}>
+
+          {/* Header */}
+          <div style={{
+            background: "rgba(255,255,255,0.03)",
+            borderBottom: "1px solid rgba(255,255,255,0.07)",
+            padding: "14px 16px",
+            display: "flex", alignItems: "center", gap: 10, flexShrink: 0,
+          }}>
+            <button style={{ background: "none", border: "none",
+              cursor: "pointer", padding: 0, display: "flex" }}>
+              <BackIcon/>
+            </button>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: C.white }}>
+                Case #47
+              </div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>
+                Abdulahad · 52M · {step >= 1 ? "P1 · Chest pain" : "New case"}
+              </div>
+            </div>
+            {step >= 1 && (
+              <button style={{
+                background: "rgba(255,255,255,0.06)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                borderRadius: 9, padding: "6px 12px",
+                fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.6)",
+                cursor: "pointer", fontFamily: "inherit",
+              }}>Edit fields</button>
+            )}
+          </div>
+
+          {/* Chat area */}
+          <div ref={scrollRef} style={{
+            flex: 1, overflow: "auto", padding: "14px 14px 4px",
+            scrollBehavior: "smooth",
+          }}>
+
+            {/* Empty state */}
+            {step === 0 && !recording && (
+              <div style={{ display: "flex", flexDirection: "column",
+                alignItems: "center", justifyContent: "center", height: "100%",
+                gap: 14, textAlign: "center" }}>
+                <div style={{ width: 56, height: 56, borderRadius: 16,
+                  background: C.greenLight, border: `1px solid ${C.greenBd}`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 26 }}>🎙️</div>
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: C.white,
+                    marginBottom: 6 }}>Start by dictating</div>
+                  <div style={{ fontSize: 12.5, color: "rgba(255,255,255,0.35)",
+                    lineHeight: 1.6, maxWidth: 240 }}>
+                    Tap the mic and speak the case in any Indian language.
+                    The formatted case note will appear here.
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Recording */}
+            {step === 0.5 && (
+              <div className="msg-in" style={{ display: "flex",
+                flexDirection: "column", alignItems: "center",
+                justifyContent: "center", height: "100%", gap: 20 }}>
+                <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)" }}>
+                  Listening...
+                </div>
+                <RecordingWave/>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)",
+                  fontStyle: "italic", maxWidth: 260, textAlign: "center",
+                  lineHeight: 1.6 }}>
+                  "52 year old male, chest pain 2 hours, crushing, BP 94/60,
+                   HR 108, diabetic, gave aspirin and morphine IV..."
+                </div>
+              </div>
+            )}
+
+            {/* After dictation */}
+            {step >= 1 && (
+              <>
+                <DoctorBubble text="🎙 Voice dictation · 48 seconds · Malayalam + English"/>
+                <SystemLabel text="ErMate processed your dictation"/>
+
+                <ErMateResponse>
+                  <div className="msg-in" style={{ marginBottom: 4 }}>
+                    <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)",
+                      marginBottom: 10, lineHeight: 1.5 }}>
+                      Case note ready. 6 of 7 sections captured.
+                      Vitals, history, and treatment filled automatically.
+                    </div>
+                    <CaseNoteDoc
+                      onCopy={() => showToast("Case note copied to clipboard")}
+                      onEdit={() => {}}
+                      onExport={() => showToast("Exporting PDF...")}
+                      onSave={() => showToast("Saved to dashboard")}
+                    />
+                  </div>
+                </ErMateResponse>
+
+                {step === 1 && suggestions.length > 0 && (
+                  <div className="msg-in">
+                    <SuggestionChips onTap={handleChip} suggestions={suggestions}/>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Discharge summary */}
+            {step >= 2 && (
+              <>
+                <DoctorBubble text="Prepare discharge summary"/>
+                <ErMateResponse>
+                  <div className="msg-in" style={{ marginBottom: 4 }}>
+                    <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)",
+                      marginBottom: 10 }}>
+                      Discharge summary generated from your case note.
+                    </div>
+                    <DischargeSummaryDoc
+                      onCopy={() => showToast("Discharge summary copied")}
+                      onExport={() => showToast("Exporting PDF...")}
+                    />
+                  </div>
+                </ErMateResponse>
+                {step === 2 && (
+                  <div className="msg-in">
+                    <SuggestionChips onTap={handleChip} suggestions={suggestions}/>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Update confirmation */}
+            {step >= 3 && (
+              <>
+                <DoctorBubble text="Add allergy — penicillin"/>
+                <ErMateResponse>
+                  <div className="msg-in">
+                    <UpdateConfirmation
+                      text="Allergy updated: Penicillin added. Case note and discharge summary updated automatically."/>
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)",
+                      marginTop: 8 }}>
+                      Both documents reflect this change. Tap Copy again to get the latest version.
+                    </div>
+                  </div>
+                </ErMateResponse>
+                {step === 3 && (
+                  <div className="msg-in">
+                    <SuggestionChips onTap={handleChip} suggestions={suggestions}/>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Referral */}
+            {step >= 4 && (
+              <>
+                <DoctorBubble text="Referral letter to cardiology"/>
+                <ErMateResponse>
+                  <div className="msg-in">
+                    <DocCard type="referral" title="Referral Letter · Cardiology" icon="📨"
+                      onCopy={() => showToast("Referral letter copied")}
+                      onExport={() => showToast("Exporting PDF...")}>
+                      <div style={{ fontSize: 11.5, color: C.ink, lineHeight: 1.8,
+                        fontFamily: "'Inter',sans-serif" }}>
+                        <div style={{ marginBottom: 10, color: C.muted, fontSize: 10.5 }}>
+                          01 July 2026 · City Emergency Department
+                        </div>
+                        <p style={{ marginBottom: 10 }}>
+                          <strong>To:</strong> Consultant Cardiologist
+                        </p>
+                        <p style={{ marginBottom: 10 }}>
+                          We are referring <strong>Mr. Abdulahad, 52M</strong> with
+                          acute anterior STEMI (ST elevation V1–V4). Presented at 14:32
+                          with crushing chest pain × 2 hours. Background T2DM and hypertension.
+                        </p>
+                        <p style={{ marginBottom: 10 }}>
+                          <strong>Treatment given:</strong> Aspirin 325mg, Morphine 5mg IV,
+                          Heparin 5000 IU IV. Haemodynamically compromised on arrival.
+                          Cath lab activation requested.
+                        </p>
+                        <p>Kindly review and manage accordingly. Patient is on continuous
+                          cardiac monitoring.</p>
+                      </div>
+                    </DocCard>
+                  </div>
+                </ErMateResponse>
+              </>
+            )}
+
+          </div>
+
+          {/* Suggestions above input */}
+          {step >= 1 && step >= 4 && (
+            <div style={{ padding: "0 14px", flexShrink: 0 }}>
+              <SuggestionChips
+                onTap={handleChip}
+                suggestions={["Export all as PDF", "Save & close", "Add to notes"]}
+              />
+            </div>
+          )}
+
+          {/* Input bar */}
+          <div style={{
+            background: "rgba(255,255,255,0.03)",
+            borderTop: "1px solid rgba(255,255,255,0.07)",
+            padding: "10px 14px 14px", flexShrink: 0,
+          }}>
+            <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
+
+              {/* Mic button */}
+              <button onClick={handleMic} style={{
+                width: 42, height: 42, borderRadius: 12, border: "none",
+                background: step === 0
+                  ? `linear-gradient(135deg,${C.green},${C.greenDark})`
+                  : "rgba(29,184,112,0.1)",
+                cursor: "pointer", display: "flex",
+                alignItems: "center", justifyContent: "center",
+                flexShrink: 0,
+                boxShadow: step === 0 ? "0 4px 14px rgba(29,184,112,0.3)" : "none",
+              }}>
+                <MicIcon recording={recording}/>
+              </button>
+
+              {/* Text input */}
+              <div style={{ flex: 1, position: "relative" }}>
+                <input
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && handleSend()}
+                  placeholder={step === 0
+                    ? "Or type your case note..."
+                    : "Try: discharge summary, add allergy, referral letter..."}
+                  style={{
+                    width: "100%", background: "rgba(255,255,255,0.06)",
+                    border: "1px solid rgba(255,255,255,0.1)",
+                    borderRadius: 12, padding: "11px 14px",
+                    fontSize: 13, color: "rgba(255,255,255,0.85)",
+                    fontFamily: "inherit", outline: "none",
+                  }}
+                />
+              </div>
+
+              {/* Send button */}
+              <button onClick={handleSend} style={{
+                width: 42, height: 42, borderRadius: 12, border: "none",
+                background: input
+                  ? `linear-gradient(135deg,${C.green},${C.greenDark})`
+                  : "rgba(255,255,255,0.06)",
+                cursor: input ? "pointer" : "default",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                flexShrink: 0, fontSize: 16,
+                boxShadow: input ? "0 4px 14px rgba(29,184,112,0.3)" : "none",
+              }}>
+                <span style={{ color: input ? "white" : "rgba(255,255,255,0.25)" }}>↑</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Toast */}
+          {toast && (
+            <div style={{
+              position: "absolute", top: 70, left: "50%",
+              transform: "translateX(-50%)",
+              background: C.greenDark, color: "white",
+              fontSize: 12, fontWeight: 700,
+              padding: "8px 18px", borderRadius: 99,
+              boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
+              whiteSpace: "nowrap", zIndex: 100,
+              animation: "slideUp 0.25s ease",
+            }}>✓ {toast}</div>
+          )}
+
+        </div>
+      </div>
+
+      {/* Flow guide */}
+      <div style={{
+        background: "white", borderRadius: 16, padding: "16px 20px",
+        maxWidth: 390, width: "100%", border: "1px solid #E8EAED",
+      }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: "#9CA3AF",
+          letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>
+          Try the flow
+        </div>
+        {[
+          "Tap 🎙 mic — watch dictation processing",
+          "Case note appears as a clinical document",
+          "Tap 'Prepare discharge summary' chip",
+          "Discharge summary appears below",
+          "Tap 'Add allergy — penicillin'",
+          "Both documents update automatically",
+          "Tap 'Referral letter to cardiology'",
+          "Copy any document with one tap",
+        ].map((s,i) => (
+          <div key={i} style={{ display:"flex", gap:8, marginBottom: i<7?6:0 }}>
+            <span style={{ color: C.green, fontWeight: 700, flexShrink: 0 }}>{i+1}</span>
+            <span style={{ fontSize:12, color:"#6B7280", lineHeight:1.5 }}>{s}</span>
+          </div>
+        ))}
+      </div>
+
+    </div>
+  );
+}
