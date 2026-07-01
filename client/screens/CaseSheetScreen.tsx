@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -28,7 +28,7 @@ import { DropdownField } from "@/components/DropdownField";
 import { CheckboxGroup } from "@/components/CheckboxGroup";
 import { TextInputField } from "@/components/TextInputField";
 import { AIDiagnosisPanel } from "@/components/AIDiagnosisPanel";
-import CaseChat from "@/components/CaseChat";
+import CaseChat, { CaseData } from "@/components/CaseChat";
 import { SmartDictationExtracted } from "@/components/SmartDictation";
 import DictationResultModal, {
   calculateDictationCompletion,
@@ -1472,6 +1472,159 @@ export default function CaseSheetScreen() {
   //   return () => clearTimeout(autoSaveTimer);
   // }, [formData, examData, treatmentData, pastSurgicalHistory, otherHistory, abcdeStatus, modeOfArrival, isMLC, mlcDetails]);
 
+  // ── Unified CaseData — single source of truth for all CaseChat documents ──
+  const liveCase = useMemo<CaseData>(() => {
+    const arr = (v: string | string[] | undefined): string =>
+      Array.isArray(v) ? v.join(', ') : (v || '');
+
+    const gcsE = parseInt(formData.disability.gcsE) || 0;
+    const gcsV = parseInt(formData.disability.gcsV) || 0;
+    const gcsM = parseInt(formData.disability.gcsM) || 0;
+    const gcsTotal = gcsE + gcsV + gcsM;
+
+    const fmtMeds = () =>
+      treatmentData.medications
+        .map((m: any) => [m.name, m.dose, m.route].filter(Boolean).join(' '))
+        .filter(Boolean).join(', ');
+    const fmtInfusions = () =>
+      treatmentData.infusions
+        .map((i: any) => [i.name, i.dose, i.rate].filter(Boolean).join(' '))
+        .filter(Boolean).join(', ');
+
+    const airwayParts = [formData.airway.status, formData.airway.notes].filter(Boolean);
+    const breathingParts = [
+      formData.breathing.effort ? `WOB: ${formData.breathing.effort}` : '',
+      (formData.breathing as any).o2Device ? `O2: ${(formData.breathing as any).o2Device}` : '',
+      formData.breathing.notes,
+    ].filter(Boolean);
+    const circulationParts = [
+      (formData.circulation as any).capillaryRefill ? `CRT: ${(formData.circulation as any).capillaryRefill}` : '',
+      formData.circulation.notes,
+    ].filter(Boolean);
+    const disabilityParts = [
+      gcsTotal > 0 ? `GCS ${gcsTotal}` : '',
+      (formData.disability as any).avpu || '',
+      formData.disability.notes,
+    ].filter(Boolean);
+    const exposureParts = [
+      formData.exposure.temperature ? `Temp ${formData.exposure.temperature}\u00b0C` : '',
+      formData.exposure.notes,
+    ].filter(Boolean);
+
+    const proceduresList = [
+      ...(proceduresData.resuscitation || []),
+      ...(proceduresData.airway || []),
+      ...(proceduresData.vascular || []),
+      ...(proceduresData.chest || []),
+      ...(proceduresData.neuro || []),
+      ...(proceduresData.wound || []),
+      ...(proceduresData.ortho || []),
+      proceduresData.generalNotes && proceduresData.generalNotes !== 'Nil'
+        ? proceduresData.generalNotes : '',
+    ].filter(Boolean).join(', ');
+
+    return {
+      name: caseData?.patient?.name || '',
+      age: caseData?.patient?.age ? String(caseData.patient.age) : '',
+      sex: caseData?.patient?.sex || '',
+      priority: caseData?.triage_priority ? `P${caseData.triage_priority}` : '',
+      caseNumber: caseData?.case_number || '',
+      date: caseData?.created_at
+        ? new Date(caseData.created_at).toLocaleDateString()
+        : new Date().toLocaleDateString(),
+      doctorName: caseData?.patient?.doctor_name || '',
+      department: '',
+      vitals: {
+        hr: formData.circulation.hr || '',
+        bp: formData.circulation.bpSystolic && formData.circulation.bpDiastolic
+          ? `${formData.circulation.bpSystolic}/${formData.circulation.bpDiastolic}`
+          : (formData.circulation.bpSystolic || ''),
+        spo2: formData.breathing.spo2 || '',
+        rr: formData.breathing.rr || '',
+        temp: formData.exposure.temperature || '',
+        gcs: gcsTotal > 0 ? String(gcsTotal) : '',
+        grbs: formData.disability.glucose || '',
+      },
+      history: {
+        symptoms: formData.sample.signsSymptoms || '',
+        allergies: arr(formData.sample.allergies),
+        medications: formData.sample.medications || '',
+        pastHistory: arr(formData.sample.pastMedicalHistory),
+        lastMeal: formData.sample.lastMeal || '',
+        events: formData.sample.eventsHopi || '',
+        pastSurgical: pastSurgicalHistory || '',
+        other: otherHistory || '',
+      },
+      primary: {
+        airway: airwayParts.join(' — '),
+        breathing: breathingParts.join(' · '),
+        circulation: circulationParts.join(' · '),
+        disability: disabilityParts.join(' · '),
+        exposure: exposureParts.join(' · '),
+        ecg: [formData.adjuncts.ecgStatus, formData.adjuncts.ecgNotes].filter(Boolean).join(' — '),
+        abg: [formData.adjuncts.abgStatus, formData.adjuncts.abgInterpretation].filter(Boolean).join(' — '),
+      },
+      exam: {
+        general: [
+          examData.general.pallor     ? 'Pallor' : '',
+          examData.general.icterus    ? 'Icterus' : '',
+          examData.general.cyanosis   ? 'Cyanosis' : '',
+          examData.general.clubbing   ? 'Clubbing' : '',
+          examData.general.edema      ? 'Edema' : '',
+          examData.general.notes || '',
+        ].filter(Boolean).join(' · '),
+        cvs: [
+          examData.cvs.status && examData.cvs.status !== 'Normal' ? examData.cvs.status : '',
+          examData.cvs.murmurs || '',
+          examData.cvs.notes || '',
+        ].filter(Boolean).join(' — '),
+        respiratory: [
+          examData.respiratory.status && examData.respiratory.status !== 'Normal' ? examData.respiratory.status : '',
+          examData.respiratory.addedSounds || '',
+          examData.respiratory.notes || '',
+        ].filter(Boolean).join(' — '),
+        abdomen: [
+          examData.abdomen.status && examData.abdomen.status !== 'Normal' ? examData.abdomen.status : '',
+          examData.abdomen.organomegaly || '',
+          examData.abdomen.notes || '',
+        ].filter(Boolean).join(' — '),
+        neuro: [
+          formData.disability.notes || '',
+          (formData.disability as any).avpu ? `AVPU: ${(formData.disability as any).avpu}` : '',
+        ].filter(Boolean).join(' · '),
+        extremities: [
+          examData.extremities?.status && examData.extremities.status !== 'Normal'
+            ? examData.extremities.status : '',
+          (examData.extremities as any)?.notes || '',
+        ].filter(Boolean).join(' — '),
+      },
+      treatment: {
+        medications: fmtMeds(),
+        infusions: fmtInfusions(),
+        otherMedications: treatmentData.otherMedications || '',
+        ivFluids: treatmentData.ivFluids || '',
+        procedures: proceduresList,
+        labsOrdered: treatmentData.labsOrdered || '',
+        imaging: typeof treatmentData.imaging === 'string'
+          ? treatmentData.imaging
+          : Array.isArray(treatmentData.imaging)
+            ? (treatmentData.imaging as string[]).join(', ')
+            : '',
+      },
+      notes: treatmentData.addendumNotes || '',
+      disposition: {
+        diagnosis: treatmentData.primaryDiagnosis || '',
+        differentials: treatmentData.differentialDiagnoses || '',
+        decision: dispositionData.dispositionType || '',
+        admitTo: dispositionData.admitTo || '',
+        referTo: dispositionData.referTo || '',
+      },
+    };
+  }, [
+    caseData, formData, examData, treatmentData,
+    proceduresData, dispositionData, pastSurgicalHistory, otherHistory,
+  ]);
+
   const startVoiceRecording = async (fieldKey: string) => {
     try {
       const { status } = await Audio.requestPermissionsAsync();
@@ -2339,6 +2492,7 @@ export default function CaseSheetScreen() {
                   chiefComplaint: caseData?.presenting_complaint?.text,
                   caseType: 'adult',
                 }}
+                liveCase={liveCase}
               />
             </View>
             {caseData?.patient && (
@@ -3717,6 +3871,7 @@ export default function CaseSheetScreen() {
                 chiefComplaint: caseData?.presenting_complaint?.text,
                 caseType: 'adult',
               }}
+              liveCase={liveCase}
             />
           </View>
         </View>

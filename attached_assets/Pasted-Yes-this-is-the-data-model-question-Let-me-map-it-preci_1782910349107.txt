@@ -1,0 +1,395 @@
+Yes — this is the data model question. Let me map it precisely.
+
+---
+
+## The Mapping — Every Tab to Every Document
+
+```
+CASE SHEET TAB → FEEDS INTO → DOCUMENT SECTION
+```
+
+---
+
+### Patient Tab → feeds everywhere
+
+```
+Patient.name          → Case Note: Patient header
+                      → Discharge Summary: Patient name
+                      → Referral Letter: Patient name
+
+Patient.age           → Case Note: Patient header
+Patient.gender        → Case Note: Patient header
+Patient.priority      → Case Note: Priority badge
+Patient.vitals.HR     → Case Note: Vitals section
+                      → Discharge Summary: Presenting vitals
+Patient.vitals.BP     → Case Note: Vitals (red if abnormal)
+                      → Discharge Summary: Presenting vitals
+Patient.vitals.SpO2   → Case Note: Vitals
+Patient.vitals.RR     → Case Note: Vitals
+Patient.vitals.GCS    → Case Note: Primary Survey D
+Patient.vitals.GRBS   → Case Note: Primary Survey D
+Patient.vitals.Temp   → Case Note: Primary Survey E
+```
+
+---
+
+### History Tab (SAMPLE) → feeds case note + discharge + referral
+
+```
+History.symptoms      → Case Note: History — Symptoms
+                      → Discharge Summary: Presenting Complaint
+                      → Referral Letter: Reason for referral
+
+History.allergies     → Case Note: History — Allergies
+                      → Discharge Summary: Allergies section
+                      → Referral Letter: Allergies (critical)
+
+History.medications   → Case Note: History — Medications
+                      → Discharge Summary: Home medications
+
+History.pastHistory   → Case Note: History — Past Hx
+                      → Discharge Summary: Background history
+                      → Referral Letter: Relevant background
+
+History.lastMeal      → Case Note: History — Last meal
+                      → Discharge Summary: (omitted usually)
+
+History.events        → Case Note: History — Events
+                      → Discharge Summary: History of presenting
+History.familyHistory → Case Note: History — Family Hx
+History.socialHistory → Case Note: History — Social Hx
+```
+
+---
+
+### Primary Survey Tab → feeds case note
+
+```
+Primary.airway        → Case Note: ABCDE — A
+Primary.breathing     → Case Note: ABCDE — B
+Primary.circulation   → Case Note: ABCDE — C
+Primary.disability    → Case Note: ABCDE — D
+Primary.exposure      → Case Note: ABCDE — E
+Primary.ECG           → Case Note: Investigations
+                      → Discharge Summary: Investigations done
+Primary.ABG           → Case Note: Investigations
+                      → Discharge Summary: Investigations done
+```
+
+---
+
+### Examination Tab → feeds case note
+
+```
+Exam.general          → Case Note: Examination — General
+Exam.CVS              → Case Note: Examination — CVS
+Exam.respiratory      → Case Note: Examination — Respiratory
+Exam.abdomen          → Case Note: Examination — Abdomen
+Exam.neuro            → Case Note: Examination — Neurological
+Exam.psych            → Case Note: Examination — Psych screening
+```
+
+---
+
+### Treatment Tab → feeds case note + discharge + referral
+
+```
+Treatment.medications → Case Note: Treatment Given
+                      → Discharge Summary: Treatment Given
+                      → Referral Letter: Treatment given
+
+Treatment.procedures  → Case Note: Treatment — Procedures
+                      → Discharge Summary: Procedures done
+
+Treatment.IV          → Case Note: Treatment — IV access/fluids
+Treatment.oxygen      → Case Note: Treatment — Oxygen
+Treatment.consults    → Case Note: Treatment — Consults
+                      → Referral Letter: Reason for referral
+```
+
+---
+
+### Notes Tab → feeds case note
+
+```
+Notes.addendum        → Case Note: Clinical Notes section
+                      → Discharge Summary: Additional notes
+                        (if relevant)
+```
+
+---
+
+### Disposition Tab → feeds discharge + referral
+
+```
+Disposition.diagnosis   → Case Note: Impression
+                        → Discharge Summary: Diagnosis (main)
+                        → Referral Letter: Diagnosis
+
+Disposition.differentials→ Case Note: Differentials
+Disposition.plan        → Case Note: Plan
+                        → Discharge Summary: Plan/Instructions
+                        → Referral Letter: Plan
+
+Disposition.decision    → Discharge Summary: Disposition
+  (admit/discharge/
+   transfer/deceased)
+
+Disposition.referralSpc → Referral Letter: To (specialty)
+Disposition.followUp    → Discharge Summary: Follow-up
+Disposition.instructions→ Discharge Summary: Instructions to patient
+```
+
+---
+
+## The Complete Mapping as Code
+
+This is what your developer needs to build:
+
+```typescript
+// One source of truth — the case object
+interface CaseData {
+  // Patient
+  name: string;
+  age: number;
+  gender: string;
+  priority: "P1"|"P2"|"P3"|"P4"|"P5";
+  vitals: {
+    hr: string; bp: string; spo2: string;
+    rr: string; temp: string; gcs: string; grbs: string;
+  };
+
+  // History (SAMPLE)
+  history: {
+    symptoms: string;
+    allergies: string;
+    medications: string;
+    pastHistory: string;
+    lastMeal: string;
+    events: string;
+    familyHistory: string;
+    socialHistory: string;
+  };
+
+  // Primary Survey
+  primary: {
+    airway: string; breathing: string;
+    circulation: string; disability: string;
+    exposure: string; ecg: string; abg: string;
+  };
+
+  // Examination
+  exam: {
+    general: string; cvs: string; respiratory: string;
+    abdomen: string; neuro: string; psych: string;
+  };
+
+  // Treatment
+  treatment: {
+    medications: string; procedures: string;
+    ivAccess: string; fluids: string;
+    oxygen: string; consults: string;
+  };
+
+  // Notes
+  notes: { addendum: string; };
+
+  // Disposition
+  disposition: {
+    diagnosis: string; differentials: string;
+    plan: string;
+    decision: "admit"|"discharge"|"transfer"|"deceased";
+    referralSpecialty: string;
+    followUp: string;
+    instructions: string;
+  };
+
+  // Meta
+  doctorName: string;
+  department: string;
+  date: string;
+  caseNumber: string;
+}
+
+// ─────────────────────────────────────────────────
+// DOCUMENT GENERATORS — all fed from same CaseData
+// ─────────────────────────────────────────────────
+
+function generateCaseNote(c: CaseData): string {
+  return `
+EMERGENCY CASE NOTE
+Case #${c.caseNumber} · ${c.date}
+Doctor: ${c.doctorName} · ${c.department}
+
+PATIENT
+${c.name}, ${c.age}${c.gender} · ${c.priority}
+
+VITALS
+HR: ${c.vitals.hr} · BP: ${c.vitals.bp}
+SpO₂: ${c.vitals.spo2} · RR: ${c.vitals.rr}
+Temp: ${c.vitals.temp} · GCS: ${c.vitals.gcs}
+GRBS: ${c.vitals.grbs}
+
+HISTORY (SAMPLE)
+Symptoms:     ${c.history.symptoms}
+Allergies:    ${c.history.allergies}
+Medications:  ${c.history.medications}
+Past History: ${c.history.pastHistory}
+Last Meal:    ${c.history.lastMeal}
+Events:       ${c.history.events}
+
+PRIMARY SURVEY (ABCDE)
+A: ${c.primary.airway}
+B: ${c.primary.breathing}
+C: ${c.primary.circulation}
+D: ${c.primary.disability}
+E: ${c.primary.exposure}
+ECG: ${c.primary.ecg}
+
+EXAMINATION
+${c.exam.general}
+CVS: ${c.exam.cvs}
+Respiratory: ${c.exam.respiratory}
+Abdomen: ${c.exam.abdomen}
+Neurological: ${c.exam.neuro}
+
+TREATMENT GIVEN
+${c.treatment.medications}
+Procedures: ${c.treatment.procedures}
+IV Access: ${c.treatment.ivAccess}
+Fluids: ${c.treatment.fluids}
+Oxygen: ${c.treatment.oxygen}
+Consults: ${c.treatment.consults}
+
+CLINICAL NOTES
+${c.notes.addendum}
+
+IMPRESSION
+${c.disposition.diagnosis}
+
+DIFFERENTIALS
+${c.disposition.differentials}
+
+PLAN
+${c.disposition.plan}
+  `.trim();
+}
+
+function generateDischargeSummary(c: CaseData): string {
+  return `
+DISCHARGE SUMMARY
+${c.name}, ${c.age}${c.gender}
+Date: ${c.date} · ${c.department}
+Doctor: ${c.doctorName}
+
+PRESENTING COMPLAINT
+${c.history.symptoms}
+${c.history.events}
+
+BACKGROUND
+${c.history.pastHistory}
+Home medications: ${c.history.medications}
+Allergies: ${c.history.allergies}
+
+DIAGNOSIS
+${c.disposition.diagnosis}
+
+INVESTIGATIONS DONE
+ECG: ${c.primary.ecg}
+ABG: ${c.primary.abg}
+
+TREATMENT GIVEN
+${c.treatment.medications}
+${c.treatment.procedures}
+Oxygen: ${c.treatment.oxygen}
+
+DISPOSITION
+Decision: ${c.disposition.decision}
+${c.disposition.plan}
+
+FOLLOW-UP
+${c.disposition.followUp}
+
+INSTRUCTIONS
+${c.disposition.instructions}
+  `.trim();
+}
+
+function generateReferralLetter(c: CaseData, toSpecialty: string): string {
+  return `
+REFERRAL LETTER
+Date: ${c.date}
+From: ${c.doctorName}, ${c.department}
+To: Consultant ${toSpecialty}
+
+Re: ${c.name}, ${c.age}${c.gender}
+Allergies: ${c.history.allergies}
+
+Dear Dr.,
+
+We are referring the above patient presenting with:
+${c.history.symptoms}
+
+Background: ${c.history.pastHistory}
+
+Vitals on arrival:
+HR ${c.vitals.hr} · BP ${c.vitals.bp} · SpO₂ ${c.vitals.spo2}
+
+Treatment given:
+${c.treatment.medications}
+
+Diagnosis: ${c.disposition.diagnosis}
+
+${c.disposition.plan}
+
+Kindly review and manage accordingly.
+
+Dr. ${c.doctorName}
+${c.department}
+  `.trim();
+}
+```
+
+---
+
+## What This Means Practically
+
+```
+Doctor updates ANYTHING in any tab
+         ↓
+CaseData object updates
+         ↓
+All three documents regenerate automatically
+         ↓
+Doctor taps Copy on any document
+         ↓
+Gets the latest version with all updates
+
+Example:
+  Doctor adds penicillin allergy via chat
+  → history.allergies = "Penicillin"
+  → Case note regenerates with penicillin
+  → Discharge summary regenerates with penicillin
+  → Referral letter regenerates with penicillin
+  → All three are in sync
+  → Doctor copies any of them — always accurate
+```
+
+---
+
+## The Key Principle — One Source, Many Outputs
+
+```
+CaseData object
+      │
+      ├── generateCaseNote()      → 📋 Case Note
+      ├── generateDischargeSummary() → 📄 Discharge Summary
+      ├── generateReferralLetter()   → 📨 Referral Letter
+      └── generateTransferNote()     → 🚑 Transfer Note (future)
+
+Change the data once.
+All documents update.
+Doctor never manually updates a document.
+```
+
+This is the core architecture — one data object, multiple document renderers all reading from it. Tell your developer: **CaseData is the single source of truth. No document stores its own data. All documents are generated on demand from CaseData.**

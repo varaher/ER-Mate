@@ -16,6 +16,131 @@ import { Feather } from '@expo/vector-icons';
 import { getApiUrl } from '@/lib/query-client';
 import { SmartDictationExtracted } from './SmartDictation';
 
+// ── CaseData — single source of truth for all documents ──────────────────────
+export interface CaseData {
+  name: string;
+  age: string;
+  sex: string;
+  priority: string;
+  caseNumber: string;
+  date: string;
+  doctorName: string;
+  department: string;
+  vitals: {
+    hr: string; bp: string; spo2: string;
+    rr: string; temp: string; gcs: string; grbs: string;
+  };
+  history: {
+    symptoms: string; allergies: string; medications: string;
+    pastHistory: string; lastMeal: string; events: string;
+    pastSurgical: string; other: string;
+  };
+  primary: {
+    airway: string; breathing: string; circulation: string;
+    disability: string; exposure: string; ecg: string; abg: string;
+  };
+  exam: {
+    general: string; cvs: string; respiratory: string;
+    abdomen: string; neuro: string; extremities: string;
+  };
+  treatment: {
+    medications: string; infusions: string; otherMedications: string;
+    ivFluids: string; procedures: string; labsOrdered: string; imaging: string;
+  };
+  notes: string;
+  disposition: {
+    diagnosis: string; differentials: string;
+    decision: string; admitTo: string; referTo: string;
+  };
+}
+
+// ── Document generators — pure functions of CaseData ─────────────────────────
+export function generateCaseNote(c: CaseData): string {
+  const L: string[] = ['EMERGENCY CASE NOTE'];
+  if (c.caseNumber) L.push(`Case #${c.caseNumber} · ${c.date}`);
+  if (c.doctorName) L.push(`Doctor: ${c.doctorName}${c.department ? ` · ${c.department}` : ''}`);
+  L.push('');
+  L.push('PATIENT');
+  L.push(`${c.name || '—'}${c.age ? `, ${c.age}` : ''}${c.sex ? ` ${c.sex}` : ''}${c.priority ? ` · ${c.priority}` : ''}`);
+  const v = c.vitals;
+  const vp = [v.hr && `HR: ${v.hr}`, v.bp && `BP: ${v.bp}`, v.spo2 && `SpO₂: ${v.spo2}`, v.rr && `RR: ${v.rr}`, v.temp && `Temp: ${v.temp}`, v.gcs && `GCS: ${v.gcs}`, v.grbs && `GRBS: ${v.grbs}`].filter(Boolean);
+  if (vp.length) { L.push(''); L.push('VITALS'); L.push(vp.join(' · ')); }
+  const h = c.history;
+  const hp = [h.symptoms && `Symptoms: ${h.symptoms}`, h.events && `Events: ${h.events}`, h.allergies && `Allergies: ${h.allergies}`, h.medications && `Medications: ${h.medications}`, h.pastHistory && `Past Hx: ${h.pastHistory}`, h.lastMeal && `Last meal: ${h.lastMeal}`, h.pastSurgical && `Past surgical: ${h.pastSurgical}`, h.other && `Other: ${h.other}`].filter(Boolean);
+  if (hp.length) { L.push(''); L.push('HISTORY (SAMPLE)'); hp.forEach(x => L.push(x!)); }
+  const p = c.primary;
+  const pp = [p.airway && `A: ${p.airway}`, p.breathing && `B: ${p.breathing}`, p.circulation && `C: ${p.circulation}`, p.disability && `D: ${p.disability}`, p.exposure && `E: ${p.exposure}`, p.ecg && `ECG: ${p.ecg}`, p.abg && `ABG: ${p.abg}`].filter(Boolean);
+  if (pp.length) { L.push(''); L.push('PRIMARY SURVEY (ABCDE)'); pp.forEach(x => L.push(x!)); }
+  const e = c.exam;
+  const ep = [e.general && `General: ${e.general}`, e.cvs && `CVS: ${e.cvs}`, e.respiratory && `Resp: ${e.respiratory}`, e.abdomen && `Abdomen: ${e.abdomen}`, e.neuro && `Neuro: ${e.neuro}`, e.extremities && `Extremities: ${e.extremities}`].filter(Boolean);
+  if (ep.length) { L.push(''); L.push('EXAMINATION'); ep.forEach(x => L.push(x!)); }
+  const t = c.treatment;
+  const tp = [t.medications && `Medications: ${t.medications}`, t.infusions && `Infusions: ${t.infusions}`, t.ivFluids && `IV Fluids: ${t.ivFluids}`, t.procedures && `Procedures: ${t.procedures}`, t.labsOrdered && `Labs: ${t.labsOrdered}`, t.imaging && `Imaging: ${t.imaging}`].filter(Boolean);
+  if (tp.length) { L.push(''); L.push('TREATMENT GIVEN'); tp.forEach(x => L.push(x!)); }
+  if (c.notes) { L.push(''); L.push('NOTES'); L.push(c.notes); }
+  const d = c.disposition;
+  if (d.diagnosis) { L.push(''); L.push('IMPRESSION'); L.push(d.diagnosis); }
+  if (d.differentials) { L.push(''); L.push('DIFFERENTIALS'); L.push(d.differentials); }
+  if (d.decision) { L.push(''); L.push('DISPOSITION'); L.push(`${d.decision}${d.admitTo ? ` — ${d.admitTo}` : ''}${d.referTo ? ` | Referral: ${d.referTo}` : ''}`); }
+  return L.join('\n');
+}
+
+export function generateDischargeSummary(c: CaseData): string {
+  const L: string[] = ['DISCHARGE SUMMARY'];
+  L.push(`${c.name || '—'}${c.age ? `, ${c.age}` : ''}${c.sex ? ` ${c.sex}` : ''}`);
+  if (c.date) L.push(`Date: ${c.date}${c.department ? ` · ${c.department}` : ''}`);
+  if (c.doctorName) L.push(`Doctor: ${c.doctorName}`);
+  L.push('');
+  L.push('PRESENTING COMPLAINT');
+  L.push([c.history.symptoms, c.history.events].filter(Boolean).join('\n') || 'Not documented');
+  L.push('');
+  L.push('BACKGROUND');
+  const bg = [c.history.pastHistory && `Past history: ${c.history.pastHistory}`, c.history.medications && `Home medications: ${c.history.medications}`, c.history.allergies && `Allergies: ${c.history.allergies}`, c.history.pastSurgical && `Past surgical: ${c.history.pastSurgical}`].filter(Boolean);
+  L.push(bg.join('\n') || 'Nil significant');
+  const v = c.vitals;
+  const vp = [v.hr && `HR ${v.hr}`, v.bp && `BP ${v.bp}`, v.spo2 && `SpO₂ ${v.spo2}`, v.rr && `RR ${v.rr}`, v.temp && `Temp ${v.temp}`, v.gcs && `GCS ${v.gcs}`].filter(Boolean);
+  if (vp.length) { L.push(''); L.push('VITALS ON ARRIVAL'); L.push(vp.join(' · ')); }
+  const inv = [c.primary.ecg && `ECG: ${c.primary.ecg}`, c.primary.abg && `ABG: ${c.primary.abg}`, c.treatment.labsOrdered && `Labs: ${c.treatment.labsOrdered}`, c.treatment.imaging && `Imaging: ${c.treatment.imaging}`].filter(Boolean);
+  if (inv.length) { L.push(''); L.push('INVESTIGATIONS'); inv.forEach(x => L.push(x!)); }
+  if (c.disposition.diagnosis) { L.push(''); L.push('DIAGNOSIS'); L.push(c.disposition.diagnosis); }
+  if (c.disposition.differentials) { L.push(''); L.push('DIFFERENTIALS'); L.push(c.disposition.differentials); }
+  const t = c.treatment;
+  const tp = [t.medications, t.infusions, t.ivFluids, t.procedures].filter(Boolean);
+  if (tp.length) { L.push(''); L.push('TREATMENT GIVEN'); tp.forEach(x => L.push(x!)); }
+  const d = c.disposition;
+  if (d.decision) { L.push(''); L.push('DISPOSITION'); L.push(`${d.decision}${d.admitTo ? ` — ${d.admitTo}` : ''}${d.referTo ? ` · Referral: ${d.referTo}` : ''}`); }
+  if (c.notes) { L.push(''); L.push('ADDITIONAL NOTES'); L.push(c.notes); }
+  return L.join('\n');
+}
+
+export function generateReferralLetter(c: CaseData): string {
+  const specialty = c.disposition.referTo || 'Relevant Specialty';
+  const L: string[] = ['REFERRAL LETTER'];
+  if (c.date) L.push(`Date: ${c.date}`);
+  if (c.doctorName) L.push(`From: ${c.doctorName}${c.department ? `, ${c.department}` : ''}`);
+  L.push(`To: Consultant ${specialty}`);
+  L.push('');
+  L.push(`Re: ${c.name || '—'}${c.age ? `, ${c.age}` : ''}${c.sex ? ` ${c.sex}` : ''}`);
+  if (c.history.allergies) L.push(`Allergies: ${c.history.allergies}`);
+  L.push('');
+  L.push('Dear Dr.,');
+  L.push('');
+  L.push('We are referring the above patient presenting with:');
+  L.push(c.history.symptoms || c.history.events || 'See attached case note');
+  if (c.history.pastHistory) { L.push(''); L.push(`Background: ${c.history.pastHistory}`); }
+  const v = c.vitals;
+  const vp = [v.hr && `HR ${v.hr}`, v.bp && `BP ${v.bp}`, v.spo2 && `SpO₂ ${v.spo2}`].filter(Boolean);
+  if (vp.length) { L.push(''); L.push(`Vitals on arrival: ${vp.join(' · ')}`); }
+  if (c.treatment.medications) { L.push(''); L.push(`Treatment given: ${c.treatment.medications}`); }
+  if (c.disposition.diagnosis) { L.push(''); L.push(`Diagnosis: ${c.disposition.diagnosis}`); }
+  L.push('');
+  L.push('Kindly review and manage accordingly.');
+  L.push('');
+  if (c.doctorName) { L.push(`Dr. ${c.doctorName}`); }
+  if (c.department) L.push(c.department);
+  return L.join('\n');
+}
+
 // ── Design tokens ────────────────────────────────────────────────────────────
 const C = {
   green:      '#1DB870',
@@ -43,7 +168,7 @@ interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  type: 'text' | 'case_update' | 'discharge_summary' | 'note' | 'error';
+  type: 'text' | 'case_update' | 'discharge_summary' | 'referral' | 'note' | 'error';
   extracted?: SmartDictationExtracted;
   specialContent?: string;
   fieldCount?: number;
@@ -60,6 +185,7 @@ export interface CaseChatProps {
     chiefComplaint?: string;
     caseType?: string;
   };
+  liveCase?: CaseData;
   disabled?: boolean;
 }
 
@@ -344,6 +470,115 @@ function CaseNoteBody({
   );
 }
 
+// ── LiveCaseNoteBody — renders CaseData (all tabs) in DocCard ─────────────────
+function LiveCaseNoteBody({ c }: { c: CaseData }) {
+  const v = c.vitals; const h = c.history; const p = c.primary;
+  const e = c.exam;   const t = c.treatment; const d = c.disposition;
+
+  const bpAbn  = (bp: string) => { const s = parseInt(bp.split('/')[0]); return s < 90 || s > 160; };
+  const hrAbn  = (hr: string) => { const n = parseInt(hr); return n > 100 || n < 60; };
+  const spo2Abn = (s: string) => parseInt(s) < 94;
+  const rrAbn  = (r: string)  => { const n = parseInt(r);  return n > 20  || n < 12; };
+
+  const hasVitals   = !!(v.hr || v.bp || v.spo2 || v.rr || v.temp || v.gcs || v.grbs);
+  const hasHistory  = !!(h.symptoms || h.events || h.allergies || h.medications || h.pastHistory || h.lastMeal || h.pastSurgical || h.other);
+  const hasPrimary  = !!(p.airway || p.breathing || p.circulation || p.disability || p.exposure || p.ecg || p.abg);
+  const hasExam     = !!(e.general || e.cvs || e.respiratory || e.abdomen || e.neuro || e.extremities);
+  const hasTreat    = !!(t.medications || t.infusions || t.ivFluids || t.procedures || t.labsOrdered || t.imaging || t.otherMedications);
+  const hasDx       = !!(d.diagnosis || d.differentials);
+
+  return (
+    <View>
+      <View style={s.docPatientHeader}>
+        <Text style={s.docPatientName}>
+          {c.name || 'Unknown'}{c.age ? `, ${c.age}` : ''}{c.sex ? ` ${c.sex[0]?.toUpperCase() || ''}` : ''}
+        </Text>
+        {c.priority ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+            <View style={{ backgroundColor: 'rgba(239,68,68,0.09)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 5 }}>
+              <Text style={{ fontSize: 10, fontWeight: '700', color: C.red }}>{c.priority}</Text>
+            </View>
+          </View>
+        ) : null}
+      </View>
+
+      {hasVitals ? (
+        <DocSection title="Vitals">
+          {v.hr   ? <DocField label="HR"    value={`${v.hr} bpm`}   abnormal={hrAbn(v.hr)} /> : null}
+          {v.bp   ? <DocField label="BP"    value={`${v.bp} mmHg`}  abnormal={bpAbn(v.bp)} /> : null}
+          {v.spo2 ? <DocField label="SpO₂"  value={`${v.spo2}%`}    abnormal={spo2Abn(v.spo2)} /> : null}
+          {v.rr   ? <DocField label="RR"    value={`${v.rr}/min`}   abnormal={rrAbn(v.rr)} /> : null}
+          {v.temp ? <DocField label="Temp"  value={`${v.temp}\u00b0C`} /> : null}
+          {v.gcs  ? <DocField label="GCS"   value={v.gcs} /> : null}
+          {v.grbs ? <DocField label="GRBS"  value={`${v.grbs} mg/dL`} /> : null}
+        </DocSection>
+      ) : null}
+
+      {hasHistory ? (
+        <DocSection title="History (SAMPLE)">
+          {h.symptoms    ? <DocField label="Symptoms"    value={h.symptoms} /> : null}
+          {h.events      ? <DocField label="Events"      value={h.events} /> : null}
+          {h.allergies   ? <DocField label="Allergies"   value={h.allergies} /> : null}
+          {h.medications ? <DocField label="Medications" value={h.medications} /> : null}
+          {h.pastHistory ? <DocField label="Past Hx"     value={h.pastHistory} /> : null}
+          {h.lastMeal    ? <DocField label="Last meal"   value={h.lastMeal} /> : null}
+          {h.pastSurgical? <DocField label="Past surgery" value={h.pastSurgical} /> : null}
+          {h.other       ? <DocField label="Other"       value={h.other} /> : null}
+        </DocSection>
+      ) : null}
+
+      {hasPrimary ? (
+        <DocSection title="Primary Survey (ABCDE)">
+          {p.airway      ? <DocField label="Airway"      value={p.airway} /> : null}
+          {p.breathing   ? <DocField label="Breathing"   value={p.breathing} /> : null}
+          {p.circulation ? <DocField label="Circulation" value={p.circulation} /> : null}
+          {p.disability  ? <DocField label="Disability"  value={p.disability} /> : null}
+          {p.exposure    ? <DocField label="Exposure"    value={p.exposure} /> : null}
+          {p.ecg         ? <DocField label="ECG"         value={p.ecg} /> : null}
+          {p.abg         ? <DocField label="ABG"         value={p.abg} /> : null}
+        </DocSection>
+      ) : null}
+
+      {hasExam ? (
+        <DocSection title="Examination">
+          {e.general     ? <DocField label="General"     value={e.general} /> : null}
+          {e.cvs         ? <DocField label="CVS"         value={e.cvs} /> : null}
+          {e.respiratory ? <DocField label="Resp"        value={e.respiratory} /> : null}
+          {e.abdomen     ? <DocField label="Abdomen"     value={e.abdomen} /> : null}
+          {e.neuro       ? <DocField label="Neuro"       value={e.neuro} /> : null}
+          {e.extremities ? <DocField label="Extremities" value={e.extremities} /> : null}
+        </DocSection>
+      ) : null}
+
+      {hasTreat ? (
+        <DocSection title="Treatment Given">
+          {t.medications      ? <DocField label="Medications" value={t.medications} /> : null}
+          {t.infusions        ? <DocField label="Infusions"   value={t.infusions} /> : null}
+          {t.otherMedications ? <DocField label="Other meds"  value={t.otherMedications} /> : null}
+          {t.ivFluids         ? <DocField label="IV Fluids"   value={t.ivFluids} /> : null}
+          {t.procedures       ? <DocField label="Procedures"  value={t.procedures} /> : null}
+          {t.labsOrdered      ? <DocField label="Labs"        value={t.labsOrdered} /> : null}
+          {t.imaging          ? <DocField label="Imaging"     value={t.imaging} /> : null}
+        </DocSection>
+      ) : null}
+
+      {c.notes ? (
+        <DocSection title="Notes">
+          <DocField label="" value={c.notes} />
+        </DocSection>
+      ) : null}
+
+      {hasDx ? (
+        <DocSection title="Impression">
+          {d.diagnosis     ? <DocField label="Diagnosis"     value={d.diagnosis} /> : null}
+          {d.differentials ? <DocField label="Differentials" value={d.differentials} /> : null}
+          {d.decision      ? <DocField label="Disposition"   value={`${d.decision}${d.admitTo ? ` — ${d.admitTo}` : ''}${d.referTo ? ` · Referral: ${d.referTo}` : ''}`} /> : null}
+        </DocSection>
+      ) : null}
+    </View>
+  );
+}
+
 // ── DocCard ───────────────────────────────────────────────────────────────────
 function DocCard({
   type,
@@ -463,7 +698,7 @@ function countFields(extracted: SmartDictationExtracted): number {
 const AFTER_CASE_CHIPS = ['Prepare discharge summary', 'Add to treatment', 'Change priority', 'Referral letter'];
 const AFTER_DS_CHIPS   = ['Add allergy', 'Export PDF', 'Show differentials', 'Edit diagnosis'];
 
-export default function CaseChat({ onDataExtracted, patientContext, disabled = false }: CaseChatProps) {
+export default function CaseChat({ onDataExtracted, patientContext, liveCase, disabled = false }: CaseChatProps) {
   const [messages, setMessages]         = useState<ChatMessage[]>([]);
   const [inputText, setInputText]       = useState('');
   const [isRecording, setIsRecording]   = useState(false);
@@ -556,6 +791,20 @@ export default function CaseChat({ onDataExtracted, patientContext, disabled = f
 
   const handleChip = (chip: string) => {
     setInputText('');
+    const lower = chip.toLowerCase();
+    if ((lower.includes('discharge summary') || lower.includes('discharge')) && liveCase) {
+      const dsText = generateDischargeSummary(liveCase);
+      push({ role: 'user', content: chip, type: 'text' });
+      push({ role: 'assistant', content: 'Discharge summary generated from your case data.', type: 'discharge_summary', specialContent: dsText });
+      setHasDs(true);
+      return;
+    }
+    if ((lower.includes('referral') || lower.includes('refer')) && liveCase) {
+      const refText = generateReferralLetter(liveCase);
+      push({ role: 'user', content: chip, type: 'text' });
+      push({ role: 'assistant', content: `Referral letter prepared${liveCase.disposition.referTo ? ` for ${liveCase.disposition.referTo}` : ''}.`, type: 'referral', specialContent: refText });
+      return;
+    }
     sendToAI(chip);
   };
 
@@ -710,26 +959,35 @@ export default function CaseChat({ onDataExtracted, patientContext, disabled = f
             );
           }
 
-          if (msg.type === 'case_update' && msg.extracted) {
+          if (msg.type === 'case_update') {
             const fc = msg.fieldCount ?? 0;
+            const useLive = !!liveCase;
             return (
               <React.Fragment key={msg.id}>
                 <SystemLabel text="ErMate processed your dictation" />
                 <ErMateResponse
-                  subtitle={`Case note ready · ${fc} field${fc !== 1 ? 's' : ''} captured`}
+                  subtitle={useLive
+                    ? 'Case note — live from all tabs'
+                    : `Case note ready · ${fc} field${fc !== 1 ? 's' : ''} captured`}
                 >
                   <DocCard
                     type="case"
                     title="Emergency Case Note"
                     tag="CASE NOTE"
                     onCopy={() => {
-                      const txt = buildCopyText(msg.extracted!, patientContext);
+                      const txt = useLive
+                        ? generateCaseNote(liveCase!)
+                        : buildCopyText(msg.extracted!, patientContext);
                       Clipboard.setStringAsync(txt);
                       showToast('Case note copied to clipboard');
                     }}
                     onSave={() => showToast('Saved to dashboard')}
                   >
-                    <CaseNoteBody extracted={msg.extracted} patientContext={patientContext} />
+                    {useLive
+                      ? <LiveCaseNoteBody c={liveCase!} />
+                      : msg.extracted
+                        ? <CaseNoteBody extracted={msg.extracted} patientContext={patientContext} />
+                        : null}
                   </DocCard>
                 </ErMateResponse>
               </React.Fragment>
@@ -737,21 +995,46 @@ export default function CaseChat({ onDataExtracted, patientContext, disabled = f
           }
 
           if (msg.type === 'discharge_summary' && msg.specialContent) {
+            const dsText = liveCase ? generateDischargeSummary(liveCase) : msg.specialContent;
             return (
               <React.Fragment key={msg.id}>
-                <ErMateResponse subtitle="Discharge summary generated from your case note.">
+                <ErMateResponse subtitle="Discharge summary generated from your case data.">
                   <DocCard
                     type="discharge"
                     title="Discharge Summary"
                     tag="DISCHARGE"
                     onCopy={() => {
-                      Clipboard.setStringAsync(msg.specialContent!);
+                      Clipboard.setStringAsync(dsText);
                       showToast('Discharge summary copied');
                     }}
                     onExport={() => showToast('Exporting PDF…')}
                   >
                     <View style={s.docFreeText}>
-                      <Text style={s.docFreeTextContent}>{msg.specialContent}</Text>
+                      <Text style={s.docFreeTextContent}>{dsText}</Text>
+                    </View>
+                  </DocCard>
+                </ErMateResponse>
+              </React.Fragment>
+            );
+          }
+
+          if (msg.type === 'referral' && msg.specialContent) {
+            const refText = liveCase ? generateReferralLetter(liveCase) : msg.specialContent;
+            return (
+              <React.Fragment key={msg.id}>
+                <ErMateResponse subtitle={`Referral letter${liveCase?.disposition.referTo ? ` — ${liveCase.disposition.referTo}` : ''}`}>
+                  <DocCard
+                    type="discharge"
+                    title="Referral Letter"
+                    tag="REFERRAL"
+                    onCopy={() => {
+                      Clipboard.setStringAsync(refText);
+                      showToast('Referral letter copied');
+                    }}
+                    onExport={() => showToast('Exporting PDF…')}
+                  >
+                    <View style={s.docFreeText}>
+                      <Text style={s.docFreeTextContent}>{refText}</Text>
                     </View>
                   </DocCard>
                 </ErMateResponse>
