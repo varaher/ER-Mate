@@ -169,7 +169,7 @@ export default function RootStackNavigator() {
             component={VoiceCaseSheetScreen}
             options={{
               presentation: "modal",
-              headerTitle: "Voice Case Entry",
+              headerShown: false,
             }}
           />
           <Stack.Screen
