@@ -205,14 +205,86 @@ export default function CaseChatScreen({ route, navigation }: Props) {
         },
         body: JSON.stringify({ extracted: data }),
       });
-      // Update local case name if dictation extracted one
-      if (data.patientName && data.patientName !== 'New Patient') {
-        setCaseData((prev: any) => prev
-          ? { ...prev, patient: { ...(prev.patient || {}), name: data.patientName } }
-          : prev
-        );
-      }
     } catch {}
+    // Merge extracted data into local caseData immediately so liveCase
+    // (and therefore discharge summary / case note) reflects the latest dictation
+    // without needing to re-fetch from the backend.
+    setCaseData((prev: any) => {
+      if (!prev) return prev;
+      const next = { ...prev };
+      // Patient demographics
+      if (data.patientName && data.patientName !== 'New Patient') {
+        next.patient = { ...(next.patient || {}), name: data.patientName };
+      }
+      if (data.patientAge) next.patient = { ...(next.patient || {}), age: data.patientAge };
+      if (data.patientSex) next.patient = { ...(next.patient || {}), sex: data.patientSex };
+      // Presenting complaint
+      if (data.chiefComplaint) {
+        next.presenting_complaint = { ...(next.presenting_complaint || {}), text: data.chiefComplaint };
+      }
+      // History — map to external backend shape that liveCase useMemo reads
+      const hist = { ...(next.history || {}) };
+      if (data.chiefComplaint) hist.signs_and_symptoms = data.chiefComplaint;
+      if (data.historyOfPresentIllness) hist.history_of_present_illness = data.historyOfPresentIllness;
+      if (data.associatedSymptoms) hist.associated_symptoms = data.associatedSymptoms;
+      if (data.allergies) {
+        hist.allergies = data.allergies.split(/[,;]+/).map((s: string) => s.trim()).filter(Boolean);
+      }
+      if (data.currentMedications) hist.current_medications = data.currentMedications;
+      if (data.pastMedicalHistory) {
+        hist.past_medical_history = Array.isArray(data.pastMedicalHistory)
+          ? (data.pastMedicalHistory as string[]).join(', ')
+          : String(data.pastMedicalHistory);
+      }
+      if (data.pastSurgicalHistory) hist.past_surgical_history = String(data.pastSurgicalHistory);
+      if (data.familyHistory) hist.family_history = data.familyHistory;
+      if (data.socialHistory) hist.social_history = data.socialHistory;
+      next.history = hist;
+      // Vitals — merge into presenting_vitals (first checked by liveCase useMemo)
+      const vs = data.vitalsSuggested || {};
+      if (vs.hr || vs.bp || vs.spo2 || vs.rr || vs.temperature || vs.grbs) {
+        const pv = { ...(next.presenting_vitals || {}) };
+        if (vs.hr) pv.hr = vs.hr;
+        if (vs.bp) {
+          const parts = String(vs.bp).split(/[/\\-]/);
+          if (parts[0]) pv.bp_systolic = parts[0].trim();
+          if (parts[1]) pv.bp_diastolic = parts[1].trim();
+        }
+        if (vs.spo2) pv.spo2 = vs.spo2;
+        if (vs.rr) pv.rr = vs.rr;
+        if (vs.temperature) pv.temperature = vs.temperature;
+        if (vs.grbs) pv.grbs = vs.grbs;
+        next.presenting_vitals = pv;
+      }
+      // Examination — structure matches what liveCase reads (exam.{section}.notes)
+      const ef = data.examFindings || {};
+      if (ef.general || ef.cvs || ef.respiratory || ef.abdomen || ef.cns) {
+        const exam = { ...(next.examination || next.exam || {}) };
+        if (ef.general) exam.general = { ...(exam.general || {}), notes: ef.general };
+        if (ef.cvs) exam.cvs = { ...(exam.cvs || {}), notes: ef.cvs };
+        if (ef.respiratory) exam.respiratory = { ...(exam.respiratory || {}), notes: ef.respiratory };
+        if (ef.abdomen) exam.abdomen = { ...(exam.abdomen || {}), notes: ef.abdomen };
+        if (ef.cns) exam.cns = { ...(exam.cns || {}), notes: ef.cns };
+        next.examination = exam;
+      }
+      // Treatment — medications and diagnosis
+      if (data.prescribedMedications?.length) {
+        const treat = { ...(next.treatment || {}) };
+        treat.medications = data.prescribedMedications.map((m: any) => ({
+          name: m.name, dose: m.dose || '', route: m.route || '', frequency: m.frequency || '',
+        }));
+        next.treatment = treat;
+      }
+      if (data.diagnosis?.length) {
+        const treat = { ...(next.treatment || {}) };
+        treat.primary_diagnosis = Array.isArray(data.diagnosis) ? data.diagnosis[0] : String(data.diagnosis);
+        if (data.differentialDiagnosis?.length) {
+          treat.differential_diagnoses = data.differentialDiagnosis;
+        }
+        next.treatment = treat;
+      }
+      return next;
+    });
   }, [activeCaseId]);
 
   // ── Render ─────────────────────────────────────────────────────────────────

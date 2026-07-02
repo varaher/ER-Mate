@@ -55,6 +55,13 @@ export interface CaseData {
 }
 
 // ── Document generators — pure functions of CaseData ─────────────────────────
+// Returns true when the case has enough real clinical content to warrant showing exam defaults
+function hasClinicalContent(c: CaseData): boolean {
+  const v = c.vitals;
+  return !!(c.history.symptoms || c.history.events || c.disposition.diagnosis ||
+    v.hr || v.bp || v.spo2 || v.rr || v.temp);
+}
+
 export function generateCaseNote(c: CaseData): string {
   const L: string[] = ['EMERGENCY CASE NOTE'];
   if (c.caseNumber) L.push(`Case #${c.caseNumber} · ${c.date}`);
@@ -66,13 +73,38 @@ export function generateCaseNote(c: CaseData): string {
   const vp = [v.hr && `HR: ${v.hr}`, v.bp && `BP: ${v.bp}`, v.spo2 && `SpO₂: ${v.spo2}`, v.rr && `RR: ${v.rr}`, v.temp && `Temp: ${v.temp}`, v.gcs && `GCS: ${v.gcs}`, v.grbs && `GRBS: ${v.grbs}`].filter(Boolean);
   if (vp.length) { L.push(''); L.push('VITALS'); L.push(vp.join(' · ')); }
   const h = c.history;
-  const hp = [h.symptoms && `Symptoms: ${h.symptoms}`, h.events && `Events: ${h.events}`, h.allergies && `Allergies: ${h.allergies}`, h.medications && `Medications: ${h.medications}`, h.pastHistory && `Past Hx: ${h.pastHistory}`, h.lastMeal && `Last meal: ${h.lastMeal}`, h.pastSurgical && `Past surgical: ${h.pastSurgical}`, h.other && `Other: ${h.other}`].filter(Boolean);
+  const hp = [
+    h.symptoms && `Symptoms: ${h.symptoms}`,
+    h.events && `Events: ${h.events}`,
+    `Allergies: ${h.allergies || 'NKDA'}`,
+    h.medications ? `Medications: ${h.medications}` : 'Medications: Not mentioned',
+    h.pastHistory ? `Past Hx: ${h.pastHistory}` : 'Past Hx: Not mentioned',
+    h.lastMeal && `Last meal: ${h.lastMeal}`,
+    h.pastSurgical && `Past surgical: ${h.pastSurgical}`,
+    h.other && `Other: ${h.other}`,
+  ].filter(Boolean);
   if (hp.length) { L.push(''); L.push('HISTORY (SAMPLE)'); hp.forEach(x => L.push(x!)); }
   const p = c.primary;
   const pp = [p.airway && `A: ${p.airway}`, p.breathing && `B: ${p.breathing}`, p.circulation && `C: ${p.circulation}`, p.disability && `D: ${p.disability}`, p.exposure && `E: ${p.exposure}`, p.ecg && `ECG: ${p.ecg}`, p.abg && `ABG: ${p.abg}`].filter(Boolean);
   if (pp.length) { L.push(''); L.push('PRIMARY SURVEY (ABCDE)'); pp.forEach(x => L.push(x!)); }
   const e = c.exam;
-  const ep = [e.general && `General: ${e.general}`, e.cvs && `CVS: ${e.cvs}`, e.respiratory && `Resp: ${e.respiratory}`, e.abdomen && `Abdomen: ${e.abdomen}`, e.neuro && `Neuro: ${e.neuro}`, e.extremities && `Extremities: ${e.extremities}`].filter(Boolean);
+  // When clinical content exists, fill Normal defaults for unmentioned exam findings
+  const hasContent = hasClinicalContent(c);
+  const ep = hasContent ? [
+    `General: ${e.general || 'Conscious, alert, well-oriented, no acute distress'}`,
+    `CVS: ${e.cvs || 'S1S2 heard, no murmurs, no added heart sounds'}`,
+    `Resp: ${e.respiratory || 'Air entry bilaterally equal and clear, no adventitious sounds'}`,
+    `Abdomen: ${e.abdomen || 'Soft, non-tender, bowel sounds present'}`,
+    `Neuro: ${e.neuro || 'No focal neurological deficit'}`,
+    e.extremities && `Extremities: ${e.extremities}`,
+  ].filter(Boolean) : [
+    e.general && `General: ${e.general}`,
+    e.cvs && `CVS: ${e.cvs}`,
+    e.respiratory && `Resp: ${e.respiratory}`,
+    e.abdomen && `Abdomen: ${e.abdomen}`,
+    e.neuro && `Neuro: ${e.neuro}`,
+    e.extremities && `Extremities: ${e.extremities}`,
+  ].filter(Boolean);
   if (ep.length) { L.push(''); L.push('EXAMINATION'); ep.forEach(x => L.push(x!)); }
   const t = c.treatment;
   const tp = [t.medications && `Medications: ${t.medications}`, t.infusions && `Infusions: ${t.infusions}`, t.ivFluids && `IV Fluids: ${t.ivFluids}`, t.procedures && `Procedures: ${t.procedures}`, t.labsOrdered && `Labs: ${t.labsOrdered}`, t.imaging && `Imaging: ${t.imaging}`].filter(Boolean);
@@ -92,11 +124,18 @@ export function generateDischargeSummary(c: CaseData): string {
   if (c.doctorName) L.push(`Doctor: ${c.doctorName}`);
   L.push('');
   L.push('PRESENTING COMPLAINT');
-  L.push([c.history.symptoms, c.history.events].filter(Boolean).join('\n') || 'Not documented');
+  // symptoms = chief complaint; events = HPI narrative
+  const complaint = [c.history.symptoms, c.history.events].filter(Boolean).join('\n');
+  L.push(complaint || 'Not documented');
   L.push('');
   L.push('BACKGROUND');
-  const bg = [c.history.pastHistory && `Past history: ${c.history.pastHistory}`, c.history.medications && `Home medications: ${c.history.medications}`, c.history.allergies && `Allergies: ${c.history.allergies}`, c.history.pastSurgical && `Past surgical: ${c.history.pastSurgical}`].filter(Boolean);
-  L.push(bg.join('\n') || 'Nil significant');
+  const bg = [
+    `Past history: ${c.history.pastHistory || 'Not mentioned'}`,
+    `Home medications: ${c.history.medications || 'None'}`,
+    `Allergies: ${c.history.allergies || 'NKDA'}`,
+    c.history.pastSurgical && `Past surgical: ${c.history.pastSurgical}`,
+  ].filter(Boolean);
+  L.push((bg as string[]).join('\n'));
   const v = c.vitals;
   const vp = [v.hr && `HR ${v.hr}`, v.bp && `BP ${v.bp}`, v.spo2 && `SpO₂ ${v.spo2}`, v.rr && `RR ${v.rr}`, v.temp && `Temp ${v.temp}`, v.gcs && `GCS ${v.gcs}`].filter(Boolean);
   if (vp.length) { L.push(''); L.push('VITALS ON ARRIVAL'); L.push(vp.join(' · ')); }

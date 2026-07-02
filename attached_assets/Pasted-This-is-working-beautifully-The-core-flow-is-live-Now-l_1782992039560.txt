@@ -1,0 +1,289 @@
+This is working beautifully. The core flow is live. Now let me address what you're asking.
+
+---
+
+## What I Can See
+
+```
+Image 1 — Case note working ✓
+  Dictation transcribed correctly ✓
+  Vitals populated ✓
+  Patient name shows "New Patient U" 
+  (name not spoken in dictation)
+
+Image 2 — Case note scrolled down ✓
+  Primary Survey showing ✓
+  ABCDE partially filled ✓
+  Copy all + Save buttons ✓
+
+Image 3 — Discharge summary ✓
+  Appears from "Prepare discharge summary" ✓
+  👍 👎 feedback working ✓
+  Show differentials working ✓
+  Suggestion chips at bottom ✓
+  BUT: "Presenting Complaint: Not documented"
+  ← This is wrong — patient DID present 
+    with fever, loose stools, vomiting
+
+Image 4 — Addendum working ✓
+  "Addendum · 16:59" with timestamp ✓
+  Updated treatment listed ✓
+  Copy all working ✓
+```
+
+---
+
+## Two Problems to Fix
+
+**Problem 1 — Missing fields not pulling from dictation**
+
+The discharge summary shows "Not documented" for presenting complaint even though the doctor clearly said "fever, loose stools, vomiting since 3 days." The data is in the case note but not flowing into the discharge summary correctly.
+
+**Problem 2 — Empty fields should show "Normal" not blank**
+
+Fields that weren't mentioned should default to "Normal" or "Within normal limits" — not just be empty.
+
+---
+
+## Tell Your Developer — Exact GPT-4o Prompt Changes
+
+**Fix 1 — Case note: never leave fields blank**
+
+```
+Update the GPT-4o system prompt for 
+case note generation.
+
+Find the prompt in server/routes.ts or
+server/services/voiceChat.ts
+
+Current behaviour:
+  If not mentioned → field is empty
+
+Change to:
+  If not mentioned → field shows 
+  "Not mentioned" for critical fields
+  OR "Normal" for examination fields
+
+Add this rule to the system prompt:
+
+"For every field in the case note:
+ - If the doctor mentioned it → use 
+   exact information
+ - If it's a vital sign not mentioned 
+   → leave blank (doctor must measure)
+ - If it's a history field not mentioned
+   → write 'Not mentioned'
+ - If it's an examination finding not 
+   mentioned → write 'Normal' 
+   (assumed normal unless stated)
+ - If it's a treatment field not mentioned
+   → write 'None given'
+ - NEVER leave presenting complaint empty
+   → Extract from symptoms mentioned
+ - NEVER leave impression empty
+   → Generate from available information"
+```
+
+**Fix 2 — Discharge summary: pull ALL data from case**
+
+```
+The discharge summary is generating 
+"Presenting Complaint: Not documented"
+even though the case note has the data.
+
+This means the discharge summary 
+generator is NOT reading from the 
+case note data.
+
+Fix the discharge summary prompt:
+
+"You are generating a discharge summary.
+ Use ALL of the following case data:
+ ${JSON.stringify(caseData)}
+ 
+ RULES:
+ 1. Presenting complaint MUST come from 
+    history.symptoms in the case data
+    NEVER write 'Not documented' if 
+    symptoms exist in the case
+    
+ 2. Background MUST come from 
+    history.pastHistory
+    
+ 3. Treatment given MUST list every 
+    medication from treatment.medications
+    
+ 4. If a field is truly empty in the 
+    case data, write 'Not recorded'
+    NOT 'Not documented' or 'Nil significant'
+    
+ 5. The discharge summary must be 
+    consistent with the case note —
+    no contradictions, no omissions"
+```
+
+---
+
+## Complete Field Mapping — What Should Appear
+
+Tell your developer to ensure every section appears in both documents:
+
+**Case Note — all sections must appear:**
+```
+PATIENT
+  Name · Age · Sex · Priority
+
+VITALS
+  HR · BP · SpO₂ · RR · Temp · GCS · GRBS
+  (blank if not measured, NOT "Normal")
+
+HISTORY (SAMPLE)
+  Symptoms      → from dictation
+  Allergies     → "Not mentioned" if absent
+  Medications   → list or "None"
+  Past History  → list or "Nil significant"
+  Last Meal     → time or "Not mentioned"
+  Events        → how it started
+
+PRIMARY SURVEY (ABCDE)
+  Airway        → "Patent" if not mentioned
+  Breathing     → findings or "Normal"
+  Circulation   → HR/BP or "Stable"
+  Disability    → GCS or "Alert"
+  Exposure      → findings or "Normal"
+
+EXAMINATION
+  General       → "Haemodynamically stable"
+                  if doctor said so
+  CVS           → "Normal" if not mentioned
+  Respiratory   → "Normal" if not mentioned
+  Abdomen       → "Normal" if not mentioned
+  Neuro         → "Normal" if not mentioned
+
+TREATMENT GIVEN
+  List every drug mentioned
+  "None given" if nothing mentioned
+
+IMPRESSION
+  Always generated — never blank
+  Based on symptoms + vitals
+
+PLAN
+  From dictation or "Symptomatic treatment"
+```
+
+**Discharge Summary — all sections must appear:**
+```
+PATIENT DETAILS
+  Name · Age · Sex · Date
+
+PRESENTING COMPLAINT      ← from symptoms
+  NEVER "Not documented"
+
+HISTORY OF PRESENTING ILLNESS
+  Full narrative from dictation
+
+BACKGROUND
+  Past history + medications
+
+VITALS ON ARRIVAL
+  All vitals from case note
+
+EXAMINATION FINDINGS
+  From case note examination
+
+INVESTIGATIONS
+  Any tests mentioned
+
+TREATMENT GIVEN
+  Every drug and procedure
+
+DIAGNOSIS
+  From impression
+
+DISPOSITION
+  Admit / Discharge / Transfer
+
+FOLLOW-UP
+  As stated or "As needed"
+
+INSTRUCTIONS
+  As stated or standard advice
+```
+
+---
+
+## The GPT-4o Prompt Update — Paste This to Developer
+
+```
+Add these rules to BOTH the case note
+AND discharge summary system prompts:
+
+---CASE NOTE RULES---
+You are ErMate, an emergency medicine 
+clinical AI. Generate a complete case note.
+
+NEVER omit a section.
+NEVER leave presenting complaint blank.
+NEVER leave impression blank.
+
+For missing information use:
+  Vitals not measured → blank (to be filled)
+  History not mentioned → "Not mentioned"
+  Examination not done → "Not examined"  
+  Examination done, normal → "Normal"
+  Treatment not given → "None given"
+
+Always generate an impression from 
+available information. If unsure, write
+"Working diagnosis pending further 
+assessment" — never leave it empty.
+
+---DISCHARGE SUMMARY RULES---
+You are generating a discharge summary
+from this case data:
+[inject full caseData JSON here]
+
+CRITICAL:
+- Presenting complaint MUST match 
+  history.symptoms from case data
+- Treatment MUST list all medications
+  from treatment section of case data  
+- NEVER write "Not documented" if the
+  information exists in the case data
+- Read ALL sections of the case data
+  before generating any section of 
+  the discharge summary
+- Every section must have content —
+  use "Not recorded" only if truly absent
+  from the case data
+```
+
+---
+
+## Summary of What's Working vs What Needs Fixing
+
+```
+WORKING PERFECTLY ✓
+  Chat interface — looks great
+  Dictation → transcription → case note
+  Addendum flow with timestamp
+  👍 👎 feedback
+  Discharge summary triggered by command
+  Differentials working
+  Copy all button
+  Suggestion chips
+
+NEEDS FIXING:
+  1. Discharge summary not reading 
+     all case data (shows "Not documented")
+     
+  2. Some fields empty instead of 
+     "Normal" where appropriate
+     
+  3. "New Patient Unknown" for name
+     → Extract from dictation if mentioned
+     → Or prompt doctor to add name
+```
+
+The app is working very well. These are refinements to the GPT-4o prompts — not structural changes. Your developer needs to update the system prompts in the server routes. That's it.

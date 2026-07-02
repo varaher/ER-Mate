@@ -385,30 +385,49 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       if (Object.keys(histFields).length > 0) updateBody.history = histFields;
 
       const primaryFields: Record<string, any> = {};
-      if (ex.heartRate) primaryFields.circulation_hr = ex.heartRate;
-      if (ex.bloodPressure) {
-        const bp = String(ex.bloodPressure).split(/[/\\-]/);
+      // Support both legacy flat fields (heartRate/bloodPressure) and SmartDictationExtracted shape (vitalsSuggested.*)
+      const vs = ex.vitalsSuggested || {};
+      const hrVal   = vs.hr   || ex.heartRate;
+      const bpVal   = vs.bp   || ex.bloodPressure;
+      const spo2Val = vs.spo2 || ex.spo2;
+      const rrVal   = vs.rr   || ex.respiratoryRate;
+      const tmpVal  = vs.temperature || ex.temperature;
+      const gcsVal  = vs.gcs  || ex.gcs;
+      const grbsVal = vs.grbs || ex.grbs;
+      if (hrVal)   primaryFields.circulation_hr = hrVal;
+      if (bpVal) {
+        const bp = String(bpVal).split(/[/\\-]/);
         if (bp[0]) primaryFields.circulation_bp_systolic = bp[0].trim();
         if (bp[1]) primaryFields.circulation_bp_diastolic = bp[1].trim();
       }
-      if (ex.spo2) primaryFields.breathing_spo2 = ex.spo2;
-      if (ex.respiratoryRate) primaryFields.breathing_rr = ex.respiratoryRate;
-      if (ex.temperature) primaryFields.exposure_temperature = ex.temperature;
-      if (ex.gcs) primaryFields.disability_gcs_total = ex.gcs;
+      if (spo2Val) primaryFields.breathing_spo2 = spo2Val;
+      if (rrVal)   primaryFields.breathing_rr = rrVal;
+      if (tmpVal)  primaryFields.exposure_temperature = tmpVal;
+      if (gcsVal)  primaryFields.disability_gcs_total = gcsVal;
+      if (grbsVal) primaryFields.disability_grbs = grbsVal;
       if (Object.keys(primaryFields).length > 0) updateBody.primary_assessment = primaryFields;
 
       const examFields: Record<string, any> = {};
-      if (ex.generalExamination) examFields.general = ex.generalExamination;
-      if (ex.cardiovascularExam) examFields.cardiovascular = ex.cardiovascularExam;
-      if (ex.respiratoryExam) examFields.respiratory = ex.respiratoryExam;
-      if (ex.abdomenExam) examFields.abdomen = ex.abdomenExam;
-      if (ex.cnsExam) examFields.cns = ex.cnsExam;
+      // Support both legacy flat fields and SmartDictationExtracted examFindings shape
+      const ef = ex.examFindings || {};
+      if (ef.general    || ex.generalExamination)  examFields.general        = ef.general    || ex.generalExamination;
+      if (ef.cvs        || ex.cardiovascularExam)  examFields.cardiovascular  = ef.cvs        || ex.cardiovascularExam;
+      if (ef.respiratory|| ex.respiratoryExam)     examFields.respiratory     = ef.respiratory|| ex.respiratoryExam;
+      if (ef.abdomen    || ex.abdomenExam)         examFields.abdomen         = ef.abdomen    || ex.abdomenExam;
+      if (ef.cns        || ex.cnsExam)             examFields.cns             = ef.cns        || ex.cnsExam;
+      if (ef.heent)                                examFields.heent           = ef.heent;
+      if (ef.musculoskeletal)                      examFields.musculoskeletal = ef.musculoskeletal;
       if (Object.keys(examFields).length > 0) updateBody.examination = examFields;
 
       const treatFields: Record<string, any> = {};
-      if (ex.medications?.length) treatFields.medications = ex.medications;
+      // Support both legacy medications and SmartDictationExtracted prescribedMedications
+      const medsData = ex.prescribedMedications || ex.medications;
+      if (medsData?.length) treatFields.medications = medsData;
+      const infsData = ex.prescribedInfusions || ex.infusions;
+      if (infsData?.length) treatFields.infusions = infsData;
       if (ex.procedures?.length) treatFields.procedures_performed = ex.procedures;
-      if (ex.investigations) treatFields.investigations_ordered = ex.investigations;
+      if (ex.investigationsOrdered || ex.investigations) treatFields.investigations_ordered = ex.investigationsOrdered || ex.investigations;
+      if (ex.imagingOrdered) treatFields.imaging = ex.imagingOrdered;
       if (Object.keys(treatFields).length > 0) updateBody.treatment = treatFields;
 
       if (ex.provisionalDiagnosis) updateBody.disposition = { provisional_diagnosis: ex.provisionalDiagnosis };
@@ -3944,6 +3963,17 @@ examFindings: { general, cvs, respiratory, abdomen, cns, heent, musculoskeletal,
 prescribedMedications: [{ name, dose, route, frequency }],
 prescribedInfusions: [{ name, dose, dilution, rate }],
 painDetails: { location, severity, character, onset, duration, aggravatingFactors, relievingFactors }
+
+FIELD DEFAULT RULES — apply whenever the dictation contains actual clinical content (chief complaint, vitals, or any examination finding is present):
+- examFindings.general: if not explicitly mentioned, default to "Conscious, alert, well-oriented, no acute distress"
+- examFindings.cvs: if not explicitly mentioned, default to "S1S2 heard, no murmurs, no added heart sounds"
+- examFindings.respiratory: if not explicitly mentioned, default to "Air entry bilaterally equal and clear, no adventitious sounds"
+- examFindings.abdomen: if not explicitly mentioned, default to "Soft, non-tender, bowel sounds present"
+- examFindings.cns: if not explicitly mentioned, default to "No focal neurological deficit"
+- allergies: if not mentioned, default to "NKDA"
+- familyHistory: if not mentioned, set to "Not mentioned"
+- socialHistory: if not mentioned, set to "Not mentioned"
+EXCEPTION: Do NOT apply exam defaults if the dictation is a pure question, greeting, or correction (type=general). Only apply when type=case_update or type=addendum.
 
 REPLY EXAMPLES:
 - case_update: "Captured — chest pain onset 2 hours, BP 140/90, HR 95, SpO2 98%. History, vitals, and impression updated."

@@ -1,0 +1,436 @@
+Perfect. Let me map the complete system before any code is written.
+
+---
+
+## The Three Pillars
+
+```
+PILLAR 1 — Identity
+  Every doctor logs in with their name
+  Name appears on every case they document
+  Name visible to HOD and consultants
+
+PILLAR 2 — Rota
+  HOD plans who works which shift
+  Monthly view — not just weekly
+  Doctors self-assign or HOD assigns
+
+PILLAR 3 — Case Visibility
+  Resident  → own cases only
+  Consultant → all cases on their shift
+  HOD        → all cases, all shifts,
+               all dates, with doctor names
+```
+
+---
+
+## Pillar 1 — Doctor Identity
+
+**The Problem Right Now:**
+
+```
+Cases show "New Patient Unknown"
+Doctor name not attached to cases
+HOD cannot see who documented what
+```
+
+**The Fix:**
+
+```
+When doctor logs in via Google:
+  Name pulled from Google profile ✓
+  Already stored in users table ✓
+
+When doctor logs in via email:
+  Name entered during registration ✓
+  Already stored ✓
+
+What's MISSING:
+  Doctor name not being attached
+  to cases when they are created
+  
+  Fix: when POST /api/cases is called,
+  attach req.user.name to the case
+  as doctorName field
+```
+
+**Tell developer:**
+
+```typescript
+// In POST /api/voice/chat or 
+// wherever cases are created:
+
+const newCase = {
+  ...extractedCaseData,
+  doctorName: req.user.name,      // ← ADD THIS
+  doctorId: req.user.id,          // ← ADD THIS
+  departmentId: req.user.departmentId, // ← ADD THIS
+  shiftId: currentShift?.id,      // ← ADD THIS
+  createdAt: new Date().toISOString(),
+};
+```
+
+---
+
+## Pillar 2 — Monthly Rota
+
+**What HOD Needs:**
+
+```
+Not just one week — full month view.
+
+JULY 2026
+─────────────────────────────────────────────
+         Mon  Tue  Wed  Thu  Fri  Sat  Sun
+─────────────────────────────────────────────
+Week 1
+Morning   P    —    P    R    —    P    —
+Evening   A    M    —    A    M    —    A
+Night     —    S    S    —    S    —    S
+
+Week 2
+Morning   P    R    P    —    R    P    —
+Evening   A    —    M    A    —    M    A
+Night     S    —    S    S    —    —    S
+...
+─────────────────────────────────────────────
+
+P = Dr. Priya (Resident)
+A = Dr. Arun (Consultant)  
+S = Dr. Sanjay (Resident)
+M = Dr. Meena (Consultant)
+R = Dr. Rahul (Resident)
+```
+
+**Navigation:**
+
+```
+‹ June 2026  |  July 2026  |  August 2026 ›
+
+Tap any cell → assign/remove doctor
+Tap doctor name → see their full month schedule
+```
+
+**Database:**
+
+```sql
+-- rota_assignments table
+-- Already designed earlier, just confirm:
+
+CREATE TABLE rota_assignments (
+  id          SERIAL PRIMARY KEY,
+  department_id INTEGER NOT NULL,
+  shift_id    INTEGER NOT NULL,
+  user_id     TEXT NOT NULL,
+  date        DATE NOT NULL,  -- specific date e.g. 2026-07-15
+  assigned_by TEXT,           -- HOD user id or 'self'
+  status      TEXT DEFAULT 'scheduled',
+  created_at  TIMESTAMP DEFAULT NOW(),
+  
+  UNIQUE(shift_id, user_id, date) -- one assignment per slot
+);
+```
+
+---
+
+## Pillar 3 — Case Visibility by Role
+
+**Resident View — MY CASES only:**
+
+```
+CASES TAB — Resident
+
+MY CASES TODAY
+─────────────────────────────
+🔴 Case #47 · 14:32
+   50M · Fever + loose stools
+   Evening Shift · In Progress
+
+🟡 Case #48 · 16:15
+   34F · Abdominal pain
+   Evening Shift · Completed
+─────────────────────────────
+
+Cannot see any other doctor's cases.
+```
+
+**Consultant View — ALL SHIFT CASES:**
+
+```
+CASES TAB — Consultant
+
+EVENING SHIFT · 14:00–22:00
+─────────────────────────────
+DR. NEERAJ (HOD)
+  No cases this shift
+
+DR. PRIYA (Resident)
+  🔴 Case #47 · 14:32 · 50M · Fever
+  🟡 Case #48 · 16:15 · 34F · Abd pain
+
+DR. RAHUL (Resident)
+  🔴 Case #49 · 15:00 · 28M · RTA
+  🟡 Case #50 · 15:45 · 62F · STEMI
+
+DR. SANJAY (Resident)
+  No cases yet
+
+[Review any case]  [Add consultant note]
+─────────────────────────────
+```
+
+**HOD View — ALL CASES, ALL SHIFTS, ALL TIME:**
+
+```
+HOD DASHBOARD — All Cases
+
+FILTER: [Date ▼] [Shift ▼] [Doctor ▼] [Status ▼]
+
+TODAY — 02 Jul 2026
+─────────────────────────────────────────────
+MORNING SHIFT (06:00–14:00)
+  Dr. Priya    3 cases   [View →]
+  Dr. Rahul    2 cases   [View →]
+
+EVENING SHIFT (14:00–22:00)
+  Dr. Sanjay   4 cases   [View →]
+  Dr. Meena    2 cases   [View →]
+  Dr. Arun     1 case    [View →]
+
+NIGHT SHIFT (22:00–06:00)
+  Dr. Joshua   0 cases
+─────────────────────────────────────────────
+
+CASE LIST (12 total today)
+─────────────────────────────────────────────
+14:32  Dr. Priya    50M  Fever+stools  P4  ✓
+15:00  Dr. Rahul    28M  RTA           P1  ⏳
+15:45  Dr. Meena    62F  STEMI         P1  ✓
+16:15  Dr. Priya    34F  Abd pain      P3  ✓
+16:59  Dr. Sanjay   45M  Chest pain    P2  ⏳
+...
+─────────────────────────────────────────────
+
+Tap any row → opens full case
+Tap doctor name → filters to their cases
+─────────────────────────────────────────────
+```
+
+---
+
+## Backend Routes Needed
+
+```typescript
+// 1. Cases filtered by role
+GET /api/department/:id/cases
+  ?date=2026-07-02
+  &shift=evening
+  &doctorId=xxx  (optional filter)
+
+// Server logic:
+if (role === 'resident') {
+  return cases where doctorId === req.user.id
+}
+if (role === 'consultant') {
+  return cases where shiftId === currentShift.id
+  AND date === today
+}
+if (role === 'hod') {
+  return ALL cases for department
+  filtered by query params
+}
+
+// 2. Monthly rota
+GET /api/department/:id/rota
+  ?month=2026-07
+  → returns all assignments for that month
+
+POST /api/department/:id/rota/assign
+  { shiftId, userId, date }
+  → HOD assigns a doctor
+
+POST /api/department/:id/rota/claim  
+  { shiftId, date }
+  → Doctor self-assigns
+
+DELETE /api/department/:id/rota/:assignmentId
+  → Remove assignment
+
+// 3. HOD dashboard cases
+GET /api/department/:id/all-cases
+  ?startDate=2026-07-01
+  &endDate=2026-07-31
+  → Full month, all doctors, all shifts
+  → Returns: date, time, doctorName,
+             patientAge, complaint, 
+             priority, status, shiftName
+```
+
+---
+
+## Registration — Doctor Name Must Be Captured
+
+**Current issue: cases show "Unknown"**
+
+```typescript
+// In the join department flow
+// (when doctor accepts invite link):
+
+// CURRENT — may not capture name properly:
+const joinRequest = {
+  userId: user.id,
+  role: selectedRole,
+  // name comes from Google or registration
+};
+
+// ENSURE this is stored in departmentMembers:
+const member = {
+  userId: user.id,
+  name: user.name,        // ← must be here
+  email: user.email,      // ← must be here
+  role: selectedRole,     // consultant/resident
+  departmentId: dept.id,
+  status: 'pending',
+};
+
+// And when creating a case via chat:
+const caseRecord = {
+  ...extractedData,
+  doctorId: req.user.id,
+  doctorName: req.user.name,   // ← from users table
+  shiftId: activeShift?.id,
+  shiftName: activeShift?.label,
+  date: new Date().toISOString().split('T')[0],
+};
+```
+
+---
+
+## HOD Dashboard — Complete Screen Spec
+
+```
+Screen: HOD Dashboard
+
+HEADER:
+  ← back    HOD Dashboard    [Manage Rota]
+
+SECTION 1 — TODAY AT A GLANCE
+  Date: Wednesday, 02 July 2026
+  
+  Morning    2 doctors · 5 cases
+  Evening    3 doctors · 7 cases  ← current
+  Night      0 doctors · 0 cases
+
+SECTION 2 — LIVE ON SHIFT
+  (same as current — who's checked in)
+  Dr. Neeraj  HOD · Morning · 8h 18m  [End]
+  Dr. DASH    Consultant · Evening · 3h [End]
+  ...
+
+SECTION 3 — CASES BY DOCTOR (today)
+  Expandable per doctor:
+  
+  ▼ DR. PRIYA — Evening — 3 cases
+    14:32  50M  Fever + stools    P4  ✓
+    16:15  34F  Abdominal pain   P3  ✓
+    17:45  22M  Head injury      P1  ⏳
+  
+  ▼ DR. RAHUL — Evening — 2 cases
+    15:00  28M  RTA              P1  ✓
+    16:00  45F  Chest pain       P2  ⏳
+
+SECTION 4 — DATE FILTER (for past cases)
+  [← Prev day]  02 Jul 2026  [Next day →]
+  Or: [Pick date 📅]
+  
+  Shows all cases for selected date
+  Same format as Section 3
+
+SECTION 5 — MONTHLY SUMMARY
+  Tap [View Monthly Report]
+  → Full month, downloadable PDF
+```
+
+---
+
+## Build Priority — In Order
+
+```
+WEEK 1:
+  Day 1 — Doctor name attached to 
+           every case on creation
+           (fixes "Unknown" immediately)
+  
+  Day 2 — Role-based case filtering:
+           Resident sees own cases only
+           Consultant sees shift cases
+           HOD sees all
+  
+  Day 3 — HOD Dashboard: cases by doctor
+           Grouped under each doctor name
+           With date/time/priority
+  
+  Day 4 — Date filter on HOD dashboard
+           ← Prev / Next day / Pick date
+  
+  Day 5 — Monthly rota: extend from 
+           weekly to monthly grid
+
+WEEK 2:
+  Day 1-2 — Consultant case review
+             Tap resident case → read only
+             Add consultant note
+  
+  Day 3   — HOD case detail view
+             Tap any case → full chat/note
+  
+  Day 4   — Monthly report PDF
+             Download all cases for a month
+  
+  Day 5   — Testing full role-based flow
+             Login as resident, consultant,
+             HOD — verify correct visibility
+```
+
+---
+
+## Test Plan — After Build
+
+```
+TEST 1 — Doctor name on cases:
+  Login as Dr. Priya
+  Create a case via chat
+  Login as HOD
+  Does case show "Dr. Priya" as author?
+
+TEST 2 — Resident restriction:
+  Login as Dr. Rahul (Resident)
+  Check Cases tab
+  Can he see Dr. Priya's cases? NO
+  Can he see his own cases? YES
+
+TEST 3 — Consultant visibility:
+  Login as Dr. DASH (Consultant)
+  Check Cases tab
+  Can he see all Evening shift cases? YES
+  Can he see Morning shift cases? NO
+
+TEST 4 — HOD sees everything:
+  Login as Dr. Neeraj (HOD)
+  HOD Dashboard
+  Can he see all cases, all shifts? YES
+  Can he filter by date? YES
+  Can he filter by doctor? YES
+  Can he tap any case and read it? YES
+
+TEST 5 — Monthly rota:
+  HOD taps Manage Rota
+  Does monthly grid appear?
+  Can HOD tap a cell and assign a doctor?
+  Does doctor see their assignment 
+  in My Rota?
+```
+
+---
+
+Send this full spec to your developer. The most urgent fix is **Day 1 — doctor name attached to every case**. That single change makes the HOD dashboard meaningful because currently all cases are anonymous.
