@@ -831,6 +831,23 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
     const t = inputText.trim();
     if (!t) return;
     setInputText('');
+    const lower = t.toLowerCase();
+    // Intercept local document commands — no AI credits consumed
+    if ((lower.includes('discharge summary') || lower.includes('discharge')) && liveCase) {
+      handleChip(t);
+      return;
+    }
+    if ((lower.includes('referral') || lower.includes('refer')) && liveCase) {
+      handleChip(t);
+      return;
+    }
+    if (lower.includes('case note') && liveCase) {
+      const noteText = generateCaseNote(liveCase);
+      push({ role: 'user', content: t, type: 'text' });
+      push({ role: 'assistant', content: 'Case note generated from your documented data.', type: 'case_update', extracted: undefined, fieldCount: 0 });
+      setHasCaseNote(true);
+      return;
+    }
     sendToAI(t);
   };
 

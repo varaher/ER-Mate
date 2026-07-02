@@ -1,0 +1,153 @@
+This is excellent. Your developer built the full CaseChatScreen as a proper navigation screen. Let me read exactly what was done and what to test.
+
+---
+
+## What Was Built
+
+```
+NEW FILE:
+client/screens/CaseChatScreen.tsx
+
+3 ENTRY POINTS into the screen:
+  1. Header — purple chat icon (top right 
+     of every case sheet tab)
+  2. History tab — "AI Scribe" button
+  3. Notes tab — "AI Scribe" button
+  4. After Smart Dictation completes — 
+     auto-navigates here directly
+
+WHAT THE SCREEN DOES:
+  Fetches real case data from API
+  Assembles liveCase from all fields
+  Shows dark chat UI
+  Back arrow returns to case sheet
+  Dictation inside chat saves back to API
+```
+
+---
+
+## Test This Right Now — Step by Step
+
+**Test 1 — Entry from case sheet header**
+```
+Open any existing case
+Look top-right for purple chat circle icon
+Tap it
+Does CaseChatScreen open?
+Does it show the case data (name, vitals)?
+```
+
+**Test 2 — After dictation**
+```
+Open any case
+Tap Smart Dictation mic
+Speak a case history
+Stop recording
+Does it navigate to CaseChatScreen automatically?
+Does the formatted case note appear?
+```
+
+**Test 3 — Commands in chat**
+```
+Once in CaseChatScreen with case data loaded:
+Type: "discharge summary"
+Does a discharge summary appear?
+
+Type: "add allergy penicillin"
+Does it confirm and update?
+
+Tap "Copy all" on any document
+Paste in Notes app — does full text appear?
+```
+
+**Test 4 — Back navigation**
+```
+Tap back arrow
+Does it return to the case sheet?
+Is the case data still there?
+```
+
+---
+
+## What To Tell Your Developer — Known Gaps
+
+Based on the build description, flag these for follow-up:
+
+**Gap 1 — AI credits check**
+```
+CaseChatScreen makes API calls.
+Currently AI Credits show 0 on your account.
+
+Before testing commands like 
+"discharge summary", fix credits first:
+
+UPDATE users SET ai_credits = 999
+WHERE email = 'ermateapp@gmail.com';
+```
+
+**Gap 2 — Command parser**
+```
+The screen was built but the description
+doesn't confirm whether these commands
+are wired yet:
+
+  "discharge summary" → generates doc?
+  "referral letter"   → generates doc?
+  "add allergy X"     → updates case?
+
+Test each one and report what happens.
+If they show "coming soon" or don't respond,
+the command parser needs to be built next.
+```
+
+**Gap 3 — Document copy button**
+```
+Verify the "Copy all" button actually
+copies plain text to clipboard.
+Paste into any text app to confirm.
+This is the most important feature
+for hospital EMR integration.
+```
+
+**Gap 4 — Dictation INSIDE the chat**
+```
+Developer mentioned: "If you dictate 
+inside the chat, it saves extracted 
+data back to the case via the API"
+
+Test this specifically:
+  Open CaseChatScreen
+  Tap mic inside the chat
+  Speak additional findings
+  Does it update the case note?
+  Does the document refresh?
+```
+
+---
+
+## Priority After Testing
+
+```
+Once you've tested all 4 scenarios,
+report back what works and what doesn't.
+
+Expected next build tasks:
+
+1. Command parser — if not already wired:
+   "discharge summary" → call existing
+   generateDischargeSummary() endpoint
+   
+2. Document rendering — case note as 
+   white clinical document card
+   (not plain text)
+
+3. Copy all button — clipboard copy
+   of formatted plain text
+
+4. Suggestion chips — quick tap options
+   appearing after each document
+```
+
+---
+
+Go test it now and send screenshots of what CaseChatScreen looks like when it opens. That'll tell us what's been built vs what still needs work.
