@@ -16,8 +16,9 @@ import type { SmartDictationExtracted } from '@/components/SmartDictation';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CaseChat'>;
 
-const DARK_BG = '#0F1419';
-const ACCENT  = '#7c3aed';
+const LIGHT_BG    = '#F4FAF7';
+const HEADER_BG   = '#15924F';
+const ACCENT      = '#1DB870';
 
 export default function CaseChatScreen({ route, navigation }: Props) {
   const { caseId: paramCaseId, patientName: paramPatientName } = route.params ?? {};
@@ -310,7 +311,7 @@ export default function CaseChatScreen({ route, navigation }: Props) {
   if (phase === 'init' || phase === 'loading') {
     return (
       <View style={[styles.root, { paddingTop: insets.top }]}>
-        <StatusBar barStyle="light-content" backgroundColor={DARK_BG} />
+        <StatusBar barStyle="light-content" backgroundColor={HEADER_BG} />
         {header}
         <View style={styles.center}>
           <ActivityIndicator color={ACCENT} size="large" />
@@ -325,7 +326,7 @@ export default function CaseChatScreen({ route, navigation }: Props) {
   if (phase === 'error') {
     return (
       <View style={[styles.root, { paddingTop: insets.top }]}>
-        <StatusBar barStyle="light-content" backgroundColor={DARK_BG} />
+        <StatusBar barStyle="light-content" backgroundColor={HEADER_BG} />
         {header}
         <View style={styles.center}>
           <Text style={styles.errorText}>{errorMsg}</Text>
@@ -345,7 +346,7 @@ export default function CaseChatScreen({ route, navigation }: Props) {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="light-content" backgroundColor={DARK_BG} />
+      <StatusBar barStyle="light-content" backgroundColor={HEADER_BG} />
       {header}
       <View style={{ flex: 1 }}>
         <CaseChat
@@ -367,17 +368,16 @@ export default function CaseChatScreen({ route, navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: DARK_BG },
+  root: { flex: 1, backgroundColor: LIGHT_BG },
   header: {
     paddingHorizontal: 20,
     paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: HEADER_BG,
   },
   headerTitle: { fontSize: 17, fontWeight: '700', color: '#FFFFFF', letterSpacing: 0.2 },
-  headerSub:   { fontSize: 13, color: 'rgba(255,255,255,0.45)', marginTop: 2 },
+  headerSub:   { fontSize: 13, color: 'rgba(255,255,255,0.70)', marginTop: 2 },
   center:      { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
-  loadingText: { fontSize: 14, color: 'rgba(255,255,255,0.45)' },
+  loadingText: { fontSize: 14, color: '#6B9E80' },
   errorText:   { fontSize: 15, color: '#ef4444', textAlign: 'center', paddingHorizontal: 32 },
-  retryText:   { fontSize: 14, color: '#7c3aed', fontWeight: '600' },
+  retryText:   { fontSize: 14, color: '#1DB870', fontWeight: '600' },
 });

@@ -1,0 +1,891 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// ErMate CaseChat — Emerald Light Theme
+// Drop this file into client/styles/caseChatTheme.ts
+// Then import into CaseChatScreen.tsx replacing the dark theme styles
+// ─────────────────────────────────────────────────────────────────────────────
+
+import { StyleSheet, Platform } from 'react-native';
+
+// ── Colour tokens ─────────────────────────────────────────────────────────────
+export const Colors = {
+  // Emerald greens — match the rest of the app
+  emerald:        '#1DB870',   // primary green
+  emeraldDark:    '#15924F',   // dark green (header, buttons)
+  emeraldDeep:    '#0D6B3A',   // deepest green (logo, key text)
+  emeraldMid:     '#25A464',   // mid green (secondary actions)
+  emeraldLight:   '#E8F8EE',   // very light green (bg tints)
+  emeraldTint:    '#F0FBF4',   // almost white green (chat bg)
+  emeraldBorder:  '#B8E8CB',   // green border
+  emeraldSubtle:  '#D4F0E0',   // subtle green (dividers, tags)
+
+  // UI neutrals
+  white:          '#FFFFFF',
+  bgChat:         '#F4FAF7',   // main chat background — warm green-white
+  bgCard:         '#FFFFFF',   // document card background
+  bgInput:        '#FFFFFF',   // input field
+  bgDoctorBubble: '#E8F5EE',   // doctor message bubble
+  bgSuggestion:   '#EFF9F3',   // suggestion chips
+  surface:        '#F9FEFC',   // subtle surface
+
+  // Text
+  textPrimary:    '#0D2B1A',   // near-black with green tint
+  textSecondary:  '#3D6B52',   // dark green-grey
+  textMuted:      '#6B9E80',   // muted green
+  textFaint:      '#9EC4AF',   // very faint
+  textOnGreen:    '#FFFFFF',   // white on green backgrounds
+
+  // Semantic
+  abnormal:       '#DC2626',   // red for abnormal vitals
+  abnormalBg:     '#FEF2F2',   // red tint background
+  warning:        '#D97706',   // amber for warnings
+  warningBg:      '#FFFBEB',   // amber tint
+  info:           '#0369A1',   // blue for info
+  infoBg:         '#F0F9FF',   // blue tint
+
+  // Document card header
+  docHeaderBg:    '#0D2B1A',   // deep green-black
+  docHeaderText:  '#FFFFFF',
+  docBadgeBg:     'rgba(29,184,112,0.2)',
+  docBadgeText:   '#1DB870',
+
+  // Borders
+  border:         '#D4E8DC',
+  borderLight:    '#E8F5EE',
+  borderDark:     '#B8D9C6',
+};
+
+// ── Typography scale ──────────────────────────────────────────────────────────
+export const Type = {
+  // Sizes
+  xs:   11,
+  sm:   12,
+  base: 14,
+  md:   15,
+  lg:   17,
+  xl:   20,
+  xxl:  24,
+
+  // Weights
+  regular:    '400' as const,
+  medium:     '500' as const,
+  semibold:   '600' as const,
+  bold:       '700' as const,
+  extrabold:  '800' as const,
+
+  // Line heights
+  tight:  1.3,
+  normal: 1.5,
+  loose:  1.7,
+};
+
+// ── Spacing ───────────────────────────────────────────────────────────────────
+export const Space = {
+  xs:  4,
+  sm:  8,
+  md:  12,
+  lg:  16,
+  xl:  20,
+  xxl: 28,
+};
+
+// ── Radius ────────────────────────────────────────────────────────────────────
+export const Radius = {
+  sm:   8,
+  md:   12,
+  lg:   16,
+  xl:   20,
+  full: 999,
+};
+
+// ── Shadows ───────────────────────────────────────────────────────────────────
+export const Shadow = {
+  card: Platform.select({
+    ios: {
+      shadowColor: '#0D6B3A',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.08,
+      shadowRadius: 8,
+    },
+    android: {
+      elevation: 3,
+    },
+  }),
+  docCard: Platform.select({
+    ios: {
+      shadowColor: '#0D2B1A',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.12,
+      shadowRadius: 16,
+    },
+    android: {
+      elevation: 6,
+    },
+  }),
+  input: Platform.select({
+    ios: {
+      shadowColor: '#1DB870',
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.15,
+      shadowRadius: 6,
+    },
+    android: {
+      elevation: 2,
+    },
+  }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MAIN STYLESHEET
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const chatStyles = StyleSheet.create({
+
+  // ── Screen container ──
+  screen: {
+    flex: 1,
+    backgroundColor: Colors.bgChat,
+  },
+
+  // ── Header ──────────────────────────────────────────────────────────────────
+  header: {
+    backgroundColor: Colors.emeraldDark,
+    paddingTop: Platform.OS === 'ios' ? 54 : 16,
+    paddingBottom: 14,
+    paddingHorizontal: Space.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderBottomWidth: 0,
+    // subtle bottom shadow in emerald
+    ...Platform.select({
+      ios: {
+        shadowColor: Colors.emeraldDeep,
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.2,
+        shadowRadius: 6,
+      },
+      android: { elevation: 4 },
+    }),
+  },
+  headerBackBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.sm,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerInfo: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: Type.md,
+    fontWeight: Type.bold,
+    color: Colors.textOnGreen,
+    letterSpacing: -0.3,
+  },
+  headerSubtitle: {
+    fontSize: Type.xs,
+    color: 'rgba(255,255,255,0.65)',
+    marginTop: 1,
+  },
+  headerEditBtn: {
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: Radius.sm,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  headerEditText: {
+    fontSize: Type.xs,
+    fontWeight: Type.semibold,
+    color: Colors.textOnGreen,
+  },
+
+  // ── Chat scroll area ─────────────────────────────────────────────────────────
+  chatScroll: {
+    flex: 1,
+    backgroundColor: Colors.bgChat,
+  },
+  chatContent: {
+    paddingHorizontal: Space.lg,
+    paddingTop: Space.lg,
+    paddingBottom: Space.md,
+    gap: Space.sm,
+  },
+
+  // ── Empty state ──────────────────────────────────────────────────────────────
+  emptyState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Space.xxl,
+    paddingVertical: 60,
+    gap: 16,
+  },
+  emptyIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 20,
+    backgroundColor: Colors.emeraldLight,
+    borderWidth: 1.5,
+    borderColor: Colors.emeraldBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyTitle: {
+    fontSize: Type.lg,
+    fontWeight: Type.bold,
+    color: Colors.textPrimary,
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    fontSize: Type.sm,
+    color: Colors.textMuted,
+    textAlign: 'center',
+    lineHeight: Type.base * Type.loose,
+  },
+  emptyHintCard: {
+    backgroundColor: Colors.white,
+    borderRadius: Radius.md,
+    padding: Space.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    gap: 8,
+    width: '100%',
+  },
+  emptyHintLabel: {
+    fontSize: Type.xs,
+    fontWeight: Type.bold,
+    color: Colors.emerald,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  emptyHintRow: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'flex-start',
+  },
+  emptyHintDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 99,
+    backgroundColor: Colors.emerald,
+    marginTop: 6,
+  },
+  emptyHintText: {
+    flex: 1,
+    fontSize: Type.sm,
+    color: Colors.textSecondary,
+    lineHeight: Type.base * Type.normal,
+  },
+
+  // ── System label (centre divider) ────────────────────────────────────────────
+  systemLabel: {
+    alignItems: 'center',
+    marginVertical: Space.xs,
+  },
+  systemLabelText: {
+    fontSize: Type.xs,
+    color: Colors.textFaint,
+    fontWeight: Type.medium,
+    letterSpacing: 0.3,
+  },
+
+  // ── Doctor message bubble (right) ────────────────────────────────────────────
+  doctorBubbleWrap: {
+    alignItems: 'flex-end',
+    marginVertical: 2,
+  },
+  doctorBubble: {
+    backgroundColor: Colors.bgDoctorBubble,
+    borderRadius: Radius.lg,
+    borderBottomRightRadius: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    maxWidth: '78%',
+    borderWidth: 1,
+    borderColor: Colors.emeraldBorder,
+  },
+  doctorBubbleText: {
+    fontSize: Type.base,
+    color: Colors.textPrimary,
+    lineHeight: Type.base * Type.normal,
+  },
+
+  // ── ErMate message (left) ────────────────────────────────────────────────────
+  ermateMsgWrap: {
+    marginVertical: 4,
+  },
+  ermateMsgHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  ermateAvatar: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    backgroundColor: Colors.emeraldDark,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ermateLabel: {
+    fontSize: Type.sm,
+    fontWeight: Type.bold,
+    color: Colors.emeraldDark,
+  },
+  ermateSubLabel: {
+    fontSize: Type.xs,
+    color: Colors.textMuted,
+  },
+
+  // ── Update confirmation message ──────────────────────────────────────────────
+  updateConfirm: {
+    backgroundColor: Colors.emeraldLight,
+    borderRadius: Radius.md,
+    padding: Space.md,
+    borderWidth: 1,
+    borderColor: Colors.emeraldBorder,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  updateConfirmText: {
+    flex: 1,
+    fontSize: Type.base,
+    color: Colors.emeraldDeep,
+    lineHeight: Type.base * Type.normal,
+    fontWeight: Type.medium,
+  },
+  updateNote: {
+    fontSize: Type.xs,
+    color: Colors.textMuted,
+    marginTop: 6,
+    lineHeight: Type.base * Type.normal,
+  },
+
+  // ── DOCUMENT CARD ────────────────────────────────────────────────────────────
+  docCard: {
+    backgroundColor: Colors.bgCard,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    overflow: 'hidden',
+    ...Shadow.docCard,
+    marginBottom: 4,
+  },
+
+  // Document card header (dark emerald bar)
+  docCardHeader: {
+    backgroundColor: Colors.docHeaderBg,
+    paddingHorizontal: Space.lg,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  docCardHeaderTitle: {
+    flex: 1,
+    fontSize: Type.sm,
+    fontWeight: Type.extrabold,
+    color: Colors.docHeaderText,
+    letterSpacing: 0.3,
+  },
+  docCardBadge: {
+    backgroundColor: Colors.docBadgeBg,
+    borderRadius: 6,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(29,184,112,0.3)',
+  },
+  docCardBadgeText: {
+    fontSize: 9,
+    fontWeight: Type.extrabold,
+    color: Colors.emerald,
+    letterSpacing: 0.8,
+  },
+
+  // Document card body (white, clinical)
+  docCardBody: {
+    padding: Space.lg,
+  },
+
+  // Patient header inside card
+  docPatientName: {
+    fontSize: Type.md,
+    fontWeight: Type.bold,
+    color: Colors.textPrimary,
+    marginBottom: 6,
+  },
+  docPatientMeta: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 14,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderLight,
+  },
+  docPriorityBadge: {
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  docPriorityP1: { backgroundColor: '#FEF2F2' },
+  docPriorityP2: { backgroundColor: '#FFF7ED' },
+  docPriorityP3: { backgroundColor: '#FEFCE8' },
+  docPriorityP4: { backgroundColor: Colors.emeraldLight },
+  docPriorityText: {
+    fontSize: Type.xs,
+    fontWeight: Type.bold,
+  },
+  docMetaText: {
+    fontSize: Type.xs,
+    color: Colors.textMuted,
+  },
+
+  // Section within document card
+  docSection: {
+    marginBottom: 14,
+  },
+  docSectionTitle: {
+    fontSize: 10,
+    fontWeight: Type.extrabold,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: Colors.textFaint,
+    marginBottom: 8,
+    paddingBottom: 5,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderLight,
+  },
+
+  // Field row
+  docFieldRow: {
+    flexDirection: 'row',
+    marginBottom: 5,
+    alignItems: 'flex-start',
+  },
+  docFieldLabel: {
+    fontSize: Type.sm,
+    color: Colors.textMuted,
+    width: 90,
+    flexShrink: 0,
+    paddingTop: 1,
+  },
+  docFieldValue: {
+    flex: 1,
+    fontSize: Type.sm,
+    color: Colors.textPrimary,
+    lineHeight: Type.base * Type.normal,
+    fontWeight: Type.medium,
+  },
+  docFieldValueNormal: {
+    flex: 1,
+    fontSize: Type.sm,
+    color: Colors.textSecondary,
+    lineHeight: Type.base * Type.normal,
+  },
+  docFieldValueAbnormal: {
+    flex: 1,
+    fontSize: Type.sm,
+    color: Colors.abnormal,
+    lineHeight: Type.base * Type.normal,
+    fontWeight: Type.semibold,
+  },
+  docFieldValueMissing: {
+    flex: 1,
+    fontSize: Type.sm,
+    color: Colors.textFaint,
+    lineHeight: Type.base * Type.normal,
+    fontStyle: 'italic',
+  },
+  docAbnormalBadge: {
+    marginLeft: 6,
+    alignSelf: 'center',
+  },
+  docAbnormalText: {
+    fontSize: 9,
+    color: Colors.abnormal,
+    fontWeight: Type.bold,
+  },
+
+  // Document narrative (for discharge summary paragraphs)
+  docNarrative: {
+    fontSize: Type.sm,
+    color: Colors.textPrimary,
+    lineHeight: Type.base * Type.loose,
+  },
+  docDiagnosis: {
+    fontSize: Type.md,
+    fontWeight: Type.bold,
+    color: Colors.textPrimary,
+  },
+
+  // Document card footer (actions)
+  docCardFooter: {
+    borderTopWidth: 1,
+    borderTopColor: Colors.borderLight,
+    backgroundColor: Colors.emeraldTint,
+    padding: Space.md,
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+
+  // Action buttons inside doc card
+  docActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: Colors.white,
+    borderRadius: Radius.sm,
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  docActionBtnPrimary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: Colors.emeraldDark,
+    borderRadius: Radius.sm,
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+  },
+  docActionBtnDone: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: Colors.emeraldLight,
+    borderRadius: Radius.sm,
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: Colors.emeraldBorder,
+  },
+  docActionText: {
+    fontSize: Type.xs,
+    fontWeight: Type.bold,
+    color: Colors.textSecondary,
+  },
+  docActionTextPrimary: {
+    fontSize: Type.xs,
+    fontWeight: Type.bold,
+    color: Colors.white,
+  },
+  docActionTextDone: {
+    fontSize: Type.xs,
+    fontWeight: Type.bold,
+    color: Colors.emeraldDark,
+  },
+
+  // ── Missing fields banner ────────────────────────────────────────────────────
+  missingBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: Colors.warningBg,
+    borderRadius: Radius.md,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    marginTop: 6,
+  },
+  missingBannerText: {
+    flex: 1,
+    fontSize: Type.xs,
+    color: '#92400E',
+    lineHeight: Type.base * Type.normal,
+  },
+  missingField: {
+    fontWeight: Type.bold,
+    color: '#B45309',
+  },
+
+  // ── Feedback prompt (👍 👎) ──────────────────────────────────────────────────
+  feedbackRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 8,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: Colors.borderLight,
+  },
+  feedbackLabel: {
+    flex: 1,
+    fontSize: Type.xs,
+    color: Colors.textMuted,
+  },
+  feedbackBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: Radius.sm,
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  feedbackBtnActive: {
+    backgroundColor: Colors.emeraldLight,
+    borderColor: Colors.emeraldBorder,
+  },
+  feedbackInput: {
+    marginTop: 8,
+    backgroundColor: Colors.white,
+    borderRadius: Radius.md,
+    padding: Space.md,
+    borderWidth: 1.5,
+    borderColor: Colors.emeraldBorder,
+    fontSize: Type.base,
+    color: Colors.textPrimary,
+    minHeight: 72,
+    textAlignVertical: 'top',
+  },
+  feedbackSubmitBtn: {
+    marginTop: 8,
+    backgroundColor: Colors.emeraldDark,
+    borderRadius: Radius.sm,
+    padding: 10,
+    alignItems: 'center',
+  },
+  feedbackSubmitText: {
+    fontSize: Type.sm,
+    fontWeight: Type.bold,
+    color: Colors.white,
+  },
+
+  // ── Suggestion chips ─────────────────────────────────────────────────────────
+  chipsScroll: {
+    marginVertical: 6,
+  },
+  chipsContent: {
+    paddingHorizontal: Space.lg,
+    gap: 8,
+    flexDirection: 'row',
+    paddingVertical: 2,
+  },
+  chip: {
+    backgroundColor: Colors.white,
+    borderRadius: Radius.full,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderWidth: 1.5,
+    borderColor: Colors.emeraldBorder,
+    flexShrink: 0,
+  },
+  chipText: {
+    fontSize: Type.sm,
+    fontWeight: Type.semibold,
+    color: Colors.emeraldDark,
+    whiteSpace: 'nowrap',
+  },
+
+  // ── Recording state ──────────────────────────────────────────────────────────
+  recordingWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 20,
+    paddingVertical: 40,
+  },
+  recordingLabel: {
+    fontSize: Type.sm,
+    color: Colors.textMuted,
+  },
+  recordingWaveRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  recordingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 99,
+    backgroundColor: Colors.abnormal,
+  },
+  recordingText: {
+    fontSize: Type.sm,
+    fontWeight: Type.bold,
+    color: Colors.abnormal,
+  },
+  recordingTranscript: {
+    fontSize: Type.sm,
+    color: Colors.textMuted,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    maxWidth: 280,
+    lineHeight: Type.base * Type.loose,
+    paddingHorizontal: Space.xxl,
+  },
+
+  // ── Input bar (bottom) ───────────────────────────────────────────────────────
+  inputBar: {
+    backgroundColor: Colors.white,
+    borderTopWidth: 1,
+    borderTopColor: Colors.borderLight,
+    paddingHorizontal: Space.lg,
+    paddingTop: 10,
+    paddingBottom: Platform.OS === 'ios' ? 28 : 14,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 10,
+    ...Platform.select({
+      ios: {
+        shadowColor: Colors.emeraldDeep,
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+      },
+      android: { elevation: 8 },
+    }),
+  },
+  micBtn: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: Colors.emeraldDark,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    ...Platform.select({
+      ios: {
+        shadowColor: Colors.emeraldDeep,
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.25,
+        shadowRadius: 8,
+      },
+      android: { elevation: 4 },
+    }),
+  },
+  micBtnRecording: {
+    backgroundColor: Colors.abnormal,
+  },
+  micBtnIdle: {
+    backgroundColor: Colors.emeraldDark,
+  },
+  textInput: {
+    flex: 1,
+    backgroundColor: Colors.bgInput,
+    borderRadius: Radius.lg,
+    paddingHorizontal: 14,
+    paddingTop: 11,
+    paddingBottom: 11,
+    fontSize: Type.base,
+    color: Colors.textPrimary,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    maxHeight: 100,
+    minHeight: 46,
+    textAlignVertical: 'top',
+  },
+  textInputFocused: {
+    borderColor: Colors.emerald,
+    ...Shadow.input,
+  },
+  sendBtn: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  sendBtnActive: {
+    backgroundColor: Colors.emeraldDark,
+    ...Platform.select({
+      ios: {
+        shadowColor: Colors.emeraldDeep,
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.25,
+        shadowRadius: 8,
+      },
+      android: { elevation: 4 },
+    }),
+  },
+  sendBtnInactive: {
+    backgroundColor: Colors.emeraldLight,
+  },
+  inputPlaceholderColor: Colors.textFaint,
+  transcribingLabel: {
+    fontSize: Type.sm,
+    color: Colors.emerald,
+    fontWeight: Type.semibold,
+  },
+
+  // ── Toast ────────────────────────────────────────────────────────────────────
+  toast: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 110 : 80,
+    alignSelf: 'center',
+    backgroundColor: Colors.emeraldDark,
+    paddingHorizontal: 18,
+    paddingVertical: 9,
+    borderRadius: Radius.full,
+    ...Platform.select({
+      ios: {
+        shadowColor: Colors.emeraldDeep,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+      },
+      android: { elevation: 8 },
+    }),
+  },
+  toastText: {
+    fontSize: Type.sm,
+    fontWeight: Type.bold,
+    color: Colors.white,
+  },
+
+  // ── Addendum card specific ───────────────────────────────────────────────────
+  addendumTimestamp: {
+    fontSize: Type.xs,
+    color: Colors.textFaint,
+    fontWeight: Type.semibold,
+    letterSpacing: 0.3,
+  },
+
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HOW TO USE IN CaseChatScreen.tsx
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// 1. Import at top of CaseChatScreen.tsx:
+//    import { chatStyles, Colors, Type, Space } from '../styles/caseChatTheme';
+//
+// 2. Replace every StyleSheet reference:
+//    OLD: styles.container  → NEW: chatStyles.screen
+//    OLD: styles.header     → NEW: chatStyles.header
+//    OLD: styles.chatBg     → NEW: chatStyles.chatScroll
+//    etc.
+//
+// 3. Key colour replacements:
+//    '#0F1419' (dark bg)    → Colors.bgChat
+//    '#1A2332' (bubble)     → Colors.bgDoctorBubble
+//    'rgba(255,255,255,0.x) → use Colors.textMuted / Colors.textFaint
+//    '#1DB870'              → Colors.emerald (same value, keeps consistency)
+//    '#0B0F14' (doc header) → Colors.docHeaderBg
+//    'white' input bg       → Colors.bgInput
+//
+// 4. Header background:
+//    OLD: '#0B0F14' or '#1A2332'
+//    NEW: Colors.emeraldDark  ('#15924F')
+//
+// 5. Doctor bubble:
+//    OLD: background '#1A2332', text 'rgba(255,255,255,0.85)'
+//    NEW: background Colors.bgDoctorBubble, text Colors.textPrimary
+//
+// 6. Input bar:
+//    OLD: background 'rgba(255,255,255,0.03)', dark
+//    NEW: background Colors.white, light
+//
+// ─────────────────────────────────────────────────────────────────────────────

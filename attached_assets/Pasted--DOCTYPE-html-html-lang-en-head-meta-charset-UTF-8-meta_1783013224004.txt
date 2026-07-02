@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>ErMate Chat — Emerald Theme</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --em:#1DB870; --em-dark:#15924F; --em-deep:#0D6B3A;
+  --em-light:#E8F8EE; --em-tint:#F4FAF7; --em-border:#B8E8CB;
+  --em-subtle:#D4F0E0; --em-badge:rgba(29,184,112,0.2);
+  --bg:#F4FAF7; --card:#FFFFFF; --bubble:#E8F5EE;
+  --text:#0D2B1A; --text2:#3D6B52; --muted:#6B9E80; --faint:#9EC4AF;
+  --border:#D4E8DC; --border-light:#E8F5EE;
+  --doc-header:#0D2B1A;
+  --warn:#D97706; --warn-bg:#FFFBEB;
+  --red:#DC2626; --red-bg:#FEF2F2;
+  --sans:'Inter',-apple-system,sans-serif;
+}
+html,body{height:100%;background:#C8D5CC;font-family:var(--sans);display:flex;align-items:center;justify-content:center;padding:24px 0 40px}
+
+.phone{width:390px;background:#1a1a1a;border-radius:48px;padding:12px;box-shadow:0 40px 80px rgba(0,0,0,0.4);flex-shrink:0}
+.screen{background:var(--bg);border-radius:38px;overflow:hidden;height:780px;display:flex;flex-direction:column;position:relative}
+
+/* Header */
+.header{background:var(--em-dark);padding:54px 16px 14px;display:flex;align-items:center;gap:12;flex-shrink:0;gap:10px}
+.hback{width:34px;height:34px;border-radius:9px;background:rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer}
+.hinfo{flex:1}
+.htitle{font-size:15px;font-weight:800;color:white;letter-spacing:-0.3px}
+.hsub{font-size:11px;color:rgba(255,255,255,0.6);margin-top:1px}
+.hedit{background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.2);border-radius:9px;padding:6px 12px;font-size:11px;font-weight:700;color:white;cursor:pointer;font-family:inherit}
+
+/* Chat area */
+.chat{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;scroll-behavior:smooth}
+
+/* System label */
+.sys-label{text-align:center;font-size:10px;color:var(--faint);font-weight:600;letter-spacing:0.3px;margin:2px 0}
+
+/* Doctor bubble */
+.doc-bub-wrap{display:flex;justify-content:flex-end}
+.doc-bub{background:var(--bubble);border:1px solid var(--em-border);border-radius:16px 16px 4px 16px;padding:10px 14px;max-width:78%;font-size:13px;color:var(--text);line-height:1.5}
+
+/* ErMate message */
+.er-msg{}
+.er-header{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.er-avatar{width:26px;height:26px;border-radius:8px;background:var(--em-dark);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:12px}
+.er-label{font-size:12px;font-weight:700;color:var(--em-dark)}
+.er-sublabel{font-size:11px;color:var(--muted)}
+
+/* Document card */
+.doc-card{background:var(--card);border-radius:16px;border:1px solid var(--border);overflow:hidden;box-shadow:0 4px 16px rgba(13,43,26,0.1);margin-bottom:2px}
+.doc-card-header{background:var(--doc-header);padding:12px 16px;display:flex;align-items:center;gap:10px}
+.doc-card-icon{font-size:14px}
+.doc-card-title{flex:1;font-size:12px;font-weight:800;color:white;letter-spacing:0.3px}
+.doc-badge{background:rgba(29,184,112,0.2);border:1px solid rgba(29,184,112,0.3);border-radius:6px;padding:3px 9px;font-size:9px;font-weight:800;color:var(--em);letter-spacing:0.8px}
+.doc-body{padding:16px}
+.doc-patient-name{font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px}
+.doc-meta{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border-light)}
+.p-badge{font-size:10px;font-weight:700;border-radius:6px;padding:3px 8px}
+.p4{background:var(--em-light);color:var(--em-deep)}
+.p1{background:var(--red-bg);color:var(--red)}
+.doc-meta-text{font-size:10px;color:var(--muted)}
+
+/* Section */
+.doc-section{margin-bottom:14px}
+.doc-section-title{font-size:9.5px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--faint);margin-bottom:8px;padding-bottom:5px;border-bottom:1px solid var(--border-light)}
+.doc-field{display:flex;gap:10px;margin-bottom:5px;align-items:flex-start}
+.doc-label{font-size:11px;color:var(--muted);width:88px;flex-shrink:0;padding-top:1px}
+.doc-value{font-size:11.5px;color:var(--text);line-height:1.5;font-weight:500}
+.doc-value.abnormal{color:var(--red);font-weight:700}
+.doc-value.missing{color:var(--faint);font-style:italic;font-weight:400}
+.abnormal-tag{font-size:8px;color:var(--red);font-weight:700;margin-left:4px}
+
+/* Footer */
+.doc-footer{border-top:1px solid var(--border-light);background:#F9FEFC;padding:10px 14px;display:flex;gap:8px;flex-wrap:wrap}
+.doc-action{display:flex;align-items:center;gap:5px;background:white;border:1px solid var(--border);border-radius:8px;padding:7px 12px;font-size:11px;font-weight:700;color:var(--text2);cursor:pointer;font-family:inherit}
+.doc-action.primary{background:var(--em-dark);border-color:transparent;color:white}
+.doc-action.done{background:var(--em-light);border-color:var(--em-border);color:var(--em-deep)}
+
+/* Missing banner */
+.missing-banner{display:flex;gap:8px;align-items:flex-start;background:var(--warn-bg);border:1px solid #FDE68A;border-radius:11px;padding:10px 12px;margin-top:6px}
+.missing-text{font-size:11px;color:#92400E;line-height:1.5}
+.missing-text b{color:#B45309}
+
+/* Feedback */
+.feedback-row{display:flex;align-items:center;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border-light)}
+.feedback-label{flex:1;font-size:11px;color:var(--muted)}
+.fb-btn{width:38px;height:38px;border-radius:9px;background:white;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px;transition:all 0.15s}
+.fb-btn:hover{background:var(--em-light);border-color:var(--em-border)}
+
+/* Chips */
+.chips{display:flex;gap:8px;flex-wrap:nowrap;overflow-x:auto;padding:4px 0 8px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{background:white;border:1.5px solid var(--em-border);border-radius:99px;padding:8px 14px;font-size:12px;font-weight:600;color:var(--em-deep);cursor:pointer;white-space:nowrap;font-family:inherit;transition:all 0.15s;flex-shrink:0}
+.chip:hover{background:var(--em-light)}
+
+/* Update confirm */
+.update-confirm{background:var(--em-light);border:1px solid var(--em-border);border-radius:12px;padding:12px 14px;display:flex;gap:10px;align-items:flex-start}
+.update-text{font-size:12.5px;color:var(--em-deep);line-height:1.5;font-weight:600}
+
+/* Input bar */
+.input-bar{background:white;border-top:1px solid var(--border-light);padding:10px 14px 20px;display:flex;gap:10px;align-items:flex-end;flex-shrink:0;box-shadow:0 -2px 10px rgba(13,43,26,0.05)}
+.mic-btn{width:46px;height:46px;border-radius:14px;background:var(--em-dark);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 3px 10px rgba(13,107,58,0.3)}
+.text-input{flex:1;background:white;border:1.5px solid var(--border);border-radius:14px;padding:12px 14px;font-size:13px;color:var(--text);font-family:inherit;outline:none;resize:none;line-height:1.4}
+.text-input:focus{border-color:var(--em);box-shadow:0 0 0 3px rgba(29,184,112,0.1)}
+.send-btn{width:46px;height:46px;border-radius:14px;background:var(--em-light);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px;color:var(--em-dark)}
+</style>
+</head>
+<body>
+
+<div class="phone">
+  <div class="screen">
+
+    <!-- Header — emerald green -->
+    <div class="header">
+      <div class="hback"><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M12 3L6 9L12 15" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="hinfo">
+        <div class="htitle">Case #47</div>
+        <div class="hsub">Abdulahad · 52M · P1 · Chest pain</div>
+      </div>
+      <button class="hedit">Edit fields</button>
+    </div>
+
+    <!-- Chat -->
+    <div class="chat" id="chat">
+
+      <!-- Doctor dictation bubble -->
+      <div class="doc-bub-wrap">
+        <div class="doc-bub">🎙 Voice dictation · 48 seconds · Malayalam + Hindi</div>
+      </div>
+
+      <div class="sys-label">ErMate processed your dictation</div>
+
+      <!-- Case note -->
+      <div class="er-msg">
+        <div class="er-header">
+          <div class="er-avatar">⚡</div>
+          <div>
+            <div class="er-label">ErMate</div>
+            <div class="er-sublabel">Case note — live from all tabs</div>
+          </div>
+        </div>
+
+        <div class="doc-card">
+          <div class="doc-card-header">
+            <span class="doc-card-icon">📋</span>
+            <span class="doc-card-title">Emergency Case Note</span>
+            <span class="doc-badge">CASE NOTE</span>
+          </div>
+          <div class="doc-body">
+            <div class="doc-patient-name">Abdulahad, 52M</div>
+            <div class="doc-meta">
+              <span class="p-badge p1">P1 — Immediate</span>
+              <span class="doc-meta-text">02 Jul 2026 · 14:32</span>
+              <span class="doc-meta-text">City Emergency · Dr. Neeraj</span>
+            </div>
+
+            <div class="doc-section">
+              <div class="doc-section-title">Vitals</div>
+              <div class="doc-field"><span class="doc-label">HR</span><span class="doc-value abnormal">108 bpm ⚠</span></div>
+              <div class="doc-field"><span class="doc-label">BP</span><span class="doc-value abnormal">94/60 mmHg ⚠</span></div>
+              <div class="doc-field"><span class="doc-label">SpO₂</span><span class="doc-value">96%</span></div>
+              <div class="doc-field"><span class="doc-label">RR</span><span class="doc-value abnormal">22/min ⚠</span></div>
+              <div class="doc-field"><span class="doc-label">Temp</span><span class="doc-value">36.8°C</span></div>
+              <div class="doc-field"><span class="doc-label">GCS</span><span class="doc-value">15/15</span></div>
+              <div class="doc-field"><span class="doc-label">GRBS</span><span class="doc-value">186 mg/dL</span></div>
+            </div>
+
+            <div class="doc-section">
+              <div class="doc-section-title">History (SAMPLE)</div>
+              <div class="doc-field"><span class="doc-label">Symptoms</span><span class="doc-value">Crushing chest pain, radiation to jaw, 2 hours onset</span></div>
+              <div class="doc-field"><span class="doc-label">Allergies</span><span class="doc-value">NKDA</span></div>
+              <div class="doc-field"><span class="doc-label">Medications</span><span class="doc-value">Metformin 500mg BD, Amlodipine 5mg OD</span></div>
+              <div class="doc-field"><span class="doc-label">Past Hx</span><span class="doc-value">T2DM × 6y, Hypertension</span></div>
+              <div class="doc-field"><span class="doc-label">Last meal</span><span class="doc-value">4 hours ago</span></div>
+            </div>
+
+            <div class="doc-section">
+              <div class="doc-section-title">Primary Survey (ABCDE)</div>
+              <div class="doc-field"><span class="doc-label">Airway</span><span class="doc-value">Patent, self-maintained</span></div>
+              <div class="doc-field"><span class="doc-label">Breathing</span><span class="doc-value">SpO₂ 96%, equal air entry bilateral</span></div>
+              <div class="doc-field"><span class="doc-label">Circulation</span><span class="doc-value abnormal">HR 108, BP 94/60, cool peripheries ⚠</span></div>
+              <div class="doc-field"><span class="doc-label">Disability</span><span class="doc-value">GCS 15/15, pupils equal reacting</span></div>
+              <div class="doc-field"><span class="doc-label">Exposure</span><span class="doc-value">No rash, no oedema</span></div>
+            </div>
+
+            <div class="doc-section">
+              <div class="doc-section-title">Treatment Given</div>
+              <div class="doc-field"><span class="doc-label">Medications</span><span class="doc-value">Aspirin 325mg oral · Morphine 5mg IV stat · Heparin 5000 IU IV</span></div>
+              <div class="doc-field"><span class="doc-label">IV Access</span><span class="doc-value">18G right antecubital</span></div>
+              <div class="doc-field"><span class="doc-label">Oxygen</span><span class="doc-value">4L/min nasal prongs</span></div>
+            </div>
+
+            <div class="doc-section">
+              <div class="doc-section-title">Impression</div>
+              <div class="doc-field"><span class="doc-label">Diagnosis</span><span class="doc-value">Probable STEMI — anterior. ST elevation V1–V4. Haemodynamically compromised.</span></div>
+            </div>
+          </div>
+
+          <div class="doc-footer">
+            <button class="doc-action primary">📋 Copy all</button>
+            <button class="doc-action">✏ Edit</button>
+            <button class="doc-action">⬇ Export PDF</button>
+            <button class="doc-action">💾 Save</button>
+          </div>
+        </div>
+
+        <!-- Missing fields -->
+        <div class="missing-banner">
+          <span>⚠</span>
+          <span class="missing-text">Not captured: <b>Name · ECG findings · Consults</b></span>
+        </div>
+
+        <!-- Feedback -->
+        <div class="feedback-row">
+          <span class="feedback-label">Was this accurate?</span>
+          <button class="fb-btn">👍</button>
+          <button class="fb-btn">👎</button>
+        </div>
+      </div>
+
+      <!-- Suggestion chips -->
+      <div class="chips">
+        <button class="chip">Prepare discharge summary</button>
+        <button class="chip">Add to treatment</button>
+        <button class="chip">Referral letter</button>
+        <button class="chip">Show differentials</button>
+      </div>
+
+      <!-- Doctor types command -->
+      <div class="doc-bub-wrap">
+        <div class="doc-bub">Prepare discharge summary</div>
+      </div>
+
+      <!-- Discharge summary -->
+      <div class="er-msg">
+        <div class="er-header">
+          <div class="er-avatar">⚡</div>
+          <div>
+            <div class="er-label">ErMate</div>
+            <div class="er-sublabel">Discharge summary generated from your case data</div>
+          </div>
+        </div>
+
+        <div class="doc-card">
+          <div class="doc-card-header">
+            <span class="doc-card-icon">📄</span>
+            <span class="doc-card-title">Discharge Summary</span>
+            <span class="doc-badge">DISCHARGE</span>
+          </div>
+          <div class="doc-body">
+            <div class="doc-patient-name">Abdulahad, 52M</div>
+            <div class="doc-meta">
+              <span class="doc-meta-text">Presented: 02 Jul 2026 · 14:32</span>
+              <span class="doc-meta-text">City Emergency · Dr. Neeraj</span>
+            </div>
+            <div class="doc-section">
+              <div class="doc-section-title">Presenting Complaint</div>
+              <div style="font-size:12px;color:var(--text);line-height:1.7">Crushing central chest pain radiating to jaw, 2 hours duration. Background T2DM and hypertension.</div>
+            </div>
+            <div class="doc-section">
+              <div class="doc-section-title">Diagnosis</div>
+              <div style="font-size:13px;font-weight:700;color:var(--text)">Anterior STEMI — ST elevation V1–V4</div>
+            </div>
+            <div class="doc-section">
+              <div class="doc-section-title">Treatment Given</div>
+              <div class="doc-field"><span class="doc-label">Aspirin</span><span class="doc-value">325mg oral</span></div>
+              <div class="doc-field"><span class="doc-label">Morphine</span><span class="doc-value">5mg IV stat</span></div>
+              <div class="doc-field"><span class="doc-label">Heparin</span><span class="doc-value">5000 IU IV</span></div>
+            </div>
+            <div class="doc-section">
+              <div class="doc-section-title">Disposition</div>
+              <div class="doc-field"><span class="doc-label">Decision</span><span class="doc-value">Admitted — CCU</span></div>
+              <div class="doc-field"><span class="doc-label">Referred to</span><span class="doc-value">Cardiology — cath lab activated</span></div>
+            </div>
+          </div>
+          <div class="doc-footer">
+            <button class="doc-action primary">📋 Copy all</button>
+            <button class="doc-action">⬇ Export PDF</button>
+          </div>
+        </div>
+        <div class="feedback-row">
+          <span class="feedback-label">Was this accurate?</span>
+          <button class="fb-btn">👍</button>
+          <button class="fb-btn">👎</button>
+        </div>
+      </div>
+
+      <!-- Update confirm -->
+      <div class="doc-bub-wrap"><div class="doc-bub">Add allergy — penicillin</div></div>
+      <div class="er-msg">
+        <div class="er-header">
+          <div class="er-avatar">⚡</div>
+          <div><div class="er-label">ErMate</div></div>
+        </div>
+        <div class="update-confirm">
+          <span style="font-size:16px">✅</span>
+          <span class="update-text">Allergy added: Penicillin. Case note and discharge summary updated automatically.</span>
+        </div>
+      </div>
+
+      <div class="chips">
+        <button class="chip">Referral letter to cardiology</button>
+        <button class="chip">Export all PDF</button>
+        <button class="chip">Edit diagnosis</button>
+      </div>
+
+    </div>
+
+    <!-- Input bar — light, clean -->
+    <div class="input-bar">
+      <button class="mic-btn">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <rect x="7" y="1" width="6" height="11" rx="3" fill="white"/>
+          <path d="M3 10c0 3.9 3.1 7 7 7s7-3.1 7-7" stroke="white" stroke-width="1.6" stroke-linecap="round"/>
+          <path d="M10 17v2" stroke="white" stroke-width="1.6" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <input class="text-input" placeholder="Try: discharge summary, add allergy, referral letter..." style="height:46px"/>
+      <button class="send-btn">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+          <path d="M9 15V3M3 9l6-6 6 6" stroke="#15924F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

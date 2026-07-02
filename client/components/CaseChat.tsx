@@ -184,26 +184,29 @@ export function generateReferralLetter(c: CaseData): string {
   return L.join('\n');
 }
 
-// ── Design tokens ────────────────────────────────────────────────────────────
+// ── Design tokens — Emerald Light Theme ──────────────────────────────────────
 const C = {
   green:      '#1DB870',
   greenDark:  '#15924F',
-  greenLight: 'rgba(29,184,112,0.10)',
-  greenBd:    'rgba(29,184,112,0.22)',
-  chat:       '#0F1419',
-  bubble:     '#1A2332',
-  ink:        '#0B0F14',
-  muted:      '#6B7280',
-  faint:      '#9CA3AF',
-  border:     '#E8EAED',
-  surface:    '#F7F8FA',
+  greenDeep:  '#0D6B3A',
+  greenLight: '#E8F8EE',
+  greenBd:    '#B8E8CB',
+  chat:       '#F4FAF7',
+  bubble:     '#E8F5EE',
+  ink:        '#0D2B1A',
+  muted:      '#6B9E80',
+  faint:      '#9EC4AF',
+  border:     '#D4E8DC',
+  borderLight:'#E8F5EE',
+  surface:    '#F9FEFC',
   white:      '#FFFFFF',
   orange:     '#F59E0B',
   red:        '#EF4444',
   docBg:      '#FFFFFF',
-  docBorder:  '#E0E4EA',
+  docBorder:  '#D4E8DC',
+  docHeader:  '#0D2B1A',
   headerMsg:  'rgba(255,255,255,0.50)',
-  headerSub:  'rgba(255,255,255,0.30)',
+  headerSub:  'rgba(255,255,255,0.65)',
 };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -300,7 +303,7 @@ function DoctorBubble({ text, icon }: { text: string; icon?: string }) {
       <View style={s.doctorBubble}>
         {icon ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Feather name={icon as any} size={13} color="rgba(255,255,255,0.5)" />
+            <Feather name={icon as any} size={13} color={C.muted} />
             <Text style={s.doctorBubbleText}>{text}</Text>
           </View>
         ) : (
@@ -340,10 +343,10 @@ function ErMateResponse({ children, subtitle }: { children: React.ReactNode; sub
 function UpdateConfirmation({ text }: { text: string }) {
   return (
     <View style={[s.confirmBox, { backgroundColor: C.greenLight, borderColor: C.greenBd }]}>
-      <View style={[s.confirmCheck, { backgroundColor: C.greenLight }]}>
-        <Feather name="check" size={12} color={C.green} />
+      <View style={[s.confirmCheck, { backgroundColor: C.greenBd }]}>
+        <Feather name="check" size={12} color={C.greenDark} />
       </View>
-      <Text style={[s.confirmText, { color: 'rgba(255,255,255,0.85)' }]}>{text}</Text>
+      <Text style={[s.confirmText, { color: C.ink }]}>{text}</Text>
     </View>
   );
 }
@@ -402,7 +405,7 @@ function FeedbackPrompt({
           value={correctionText || ''}
           onChangeText={onTextChange}
           placeholder="Describe the correction…"
-          placeholderTextColor="rgba(255,255,255,0.25)"
+          placeholderTextColor={C.faint}
           multiline
           maxLength={400}
         />
@@ -433,7 +436,7 @@ function FeedbackPrompt({
 function AddendumBody({ content }: { content: string }) {
   return (
     <View style={{ padding: 2 }}>
-      <Text style={{ fontSize: 12, color: '#1A2332', lineHeight: 20 }}>{content}</Text>
+      <Text style={{ fontSize: 12, color: C.ink, lineHeight: 20 }}>{content}</Text>
     </View>
   );
 }
@@ -466,8 +469,8 @@ function DocAction({
         done
           ? { backgroundColor: C.greenLight, borderColor: C.greenBd }
           : primary
-          ? { backgroundColor: C.ink, borderColor: 'transparent' }
-          : { backgroundColor: '#fff', borderColor: C.border },
+          ? { backgroundColor: C.greenDark, borderColor: 'transparent' }
+          : { backgroundColor: C.white, borderColor: C.border },
       ]}
     >
       <Feather
@@ -752,8 +755,7 @@ function DocCard({
   onSave?: () => void;
 }) {
   const [copied, setCopied] = useState(false);
-  const headerColors: [string, string] =
-    type === 'discharge' ? ['#1E2530', '#252E3D'] : ['#0B0F14', '#1A2332'];
+  const headerColors: [string, string] = [C.docHeader, C.docHeader];
 
   const handleCopy = () => {
     onCopy?.();
@@ -1344,9 +1346,9 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
           if (msg.type === 'error') {
             return (
               <ErMateResponse key={msg.id}>
-                <View style={[s.confirmBox, { backgroundColor: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.2)' }]}>
+                <View style={[s.confirmBox, { backgroundColor: 'rgba(239,68,68,0.07)', borderColor: 'rgba(239,68,68,0.18)' }]}>
                   <Feather name="alert-circle" size={13} color={C.red} />
-                  <Text style={[s.confirmText, { color: 'rgba(255,255,255,0.7)' }]}>{msg.content}</Text>
+                  <Text style={[s.confirmText, { color: '#7A1E1E' }]}>{msg.content}</Text>
                 </View>
               </ErMateResponse>
             );
@@ -1394,7 +1396,7 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
             placeholder={hasCaseNote
               ? 'Try: discharge summary, add allergy…'
               : 'Or type your case note…'}
-            placeholderTextColor="rgba(255,255,255,0.22)"
+            placeholderTextColor={C.faint}
             multiline
             maxLength={1500}
             editable={!disabled && !busy}
@@ -1408,10 +1410,10 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
           style={[
             s.micBtn,
             isRecording
-              ? { backgroundColor: 'rgba(239,68,68,0.15)', borderColor: 'rgba(239,68,68,0.3)' }
+              ? { backgroundColor: 'rgba(239,68,68,0.10)', borderColor: 'rgba(239,68,68,0.25)', borderWidth: 1 }
               : !hasCaseNote
-              ? { backgroundColor: C.green }
-              : { backgroundColor: 'rgba(29,184,112,0.12)', borderColor: C.greenBd },
+              ? { backgroundColor: C.greenDark }
+              : { backgroundColor: C.greenLight, borderColor: C.greenBd, borderWidth: 1 },
           ]}
         >
           <Feather
@@ -1426,9 +1428,9 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
           <Pressable
             onPress={handleSend}
             disabled={busy}
-            style={[s.sendBtn, { backgroundColor: inputText.trim() ? C.green : 'rgba(255,255,255,0.06)' }]}
+            style={[s.sendBtn, { backgroundColor: inputText.trim() ? C.greenDark : C.greenLight }]}
           >
-            <Text style={{ color: inputText.trim() ? '#fff' : 'rgba(255,255,255,0.25)', fontSize: 18, lineHeight: 20 }}>↑</Text>
+            <Text style={{ color: inputText.trim() ? '#fff' : C.greenDark, fontSize: 18, lineHeight: 20 }}>↑</Text>
           </Pressable>
         ) : null}
       </View>
@@ -1463,7 +1465,7 @@ function buildCopyText(ex: SmartDictationExtracted, ctx?: CaseChatProps['patient
   return lines.join('\n');
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
+// ── Styles — Emerald Light Theme ──────────────────────────────────────────────
 const s = StyleSheet.create({
   container: {
     backgroundColor: C.chat,
@@ -1478,13 +1480,13 @@ const s = StyleSheet.create({
   // Empty
   emptyState: { alignItems: 'center', justifyContent: 'center', gap: 14, paddingVertical: 30 },
   emptyIcon: { width: 56, height: 56, borderRadius: 16, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  emptyTitle: { fontSize: 16, fontWeight: '700', color: C.white, textAlign: 'center' },
-  emptySub: { fontSize: 12.5, color: 'rgba(255,255,255,0.35)', lineHeight: 20, textAlign: 'center', maxWidth: 240 },
+  emptyTitle: { fontSize: 16, fontWeight: '700', color: C.ink, textAlign: 'center' },
+  emptySub: { fontSize: 12.5, color: C.muted, lineHeight: 20, textAlign: 'center', maxWidth: 240 },
 
   // Recording full state
   recordingFullState: { alignItems: 'center', justifyContent: 'center', gap: 20, paddingVertical: 40, flex: 1 },
-  recordingListening: { fontSize: 13, color: 'rgba(255,255,255,0.4)', fontWeight: '600' },
-  recordingHint: { fontSize: 12, color: 'rgba(255,255,255,0.25)', textAlign: 'center', fontStyle: 'italic', maxWidth: 240 },
+  recordingListening: { fontSize: 13, color: C.muted, fontWeight: '600' },
+  recordingHint: { fontSize: 12, color: C.faint, textAlign: 'center', fontStyle: 'italic', maxWidth: 240 },
 
   // Wave
   wave: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -1497,25 +1499,25 @@ const s = StyleSheet.create({
   doctorBubble: {
     backgroundColor: C.bubble,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: C.greenBd,
     borderRadius: 16,
     borderBottomRightRadius: 4,
     paddingHorizontal: 14,
     paddingVertical: 10,
     maxWidth: '75%',
   },
-  doctorBubbleText: { fontSize: 13, color: 'rgba(255,255,255,0.85)', lineHeight: 20 },
+  doctorBubbleText: { fontSize: 13, color: C.ink, lineHeight: 20 },
 
   // System label
   sysLabelRow: { alignItems: 'center', marginVertical: 8 },
-  sysLabelText: { fontSize: 10, color: 'rgba(255,255,255,0.25)', fontWeight: '600', letterSpacing: 0.5 },
+  sysLabelText: { fontSize: 10, color: C.faint, fontWeight: '600', letterSpacing: 0.5 },
 
   // ErMate response
   erRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 4 },
   erAvatar: { width: 22, height: 22, borderRadius: 6, alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 },
-  erName: { fontSize: 11, fontWeight: '700', color: C.green, marginBottom: 2 },
-  erSubtitle: { fontSize: 11.5, color: 'rgba(255,255,255,0.45)', marginBottom: 8, lineHeight: 16 },
-  erTextMsg: { fontSize: 12.5, color: 'rgba(255,255,255,0.75)', lineHeight: 19 },
+  erName: { fontSize: 11, fontWeight: '700', color: C.greenDark, marginBottom: 2 },
+  erSubtitle: { fontSize: 11.5, color: C.muted, marginBottom: 8, lineHeight: 16 },
+  erTextMsg: { fontSize: 12.5, color: C.ink, lineHeight: 19 },
 
   // Update confirmation
   confirmBox: { borderRadius: 12, padding: 10, flexDirection: 'row', alignItems: 'flex-start', gap: 9, borderWidth: 1 },
@@ -1530,20 +1532,21 @@ const s = StyleSheet.create({
     borderColor: C.docBorder,
     overflow: 'hidden',
     marginBottom: 4,
-    shadowColor: '#000',
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
+    shadowColor: C.docHeader,
+    shadowOpacity: 0.10,
+    shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
+    elevation: 4,
   },
   docCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 11, paddingHorizontal: 14 },
-  docCardTitle: { fontSize: 12, fontWeight: '800', color: 'rgba(255,255,255,0.9)', letterSpacing: 0.3, flex: 1 },
+  docCardTitle: { fontSize: 12, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.3, flex: 1 },
   docCardTag: { borderRadius: 4, paddingHorizontal: 7, paddingVertical: 2, borderWidth: 1 },
   docCardTagText: { fontSize: 9, fontWeight: '700', letterSpacing: 0.5 },
   docCardBody: { padding: 14 },
   docCardActions: {
     flexDirection: 'row', gap: 6, padding: 9, paddingHorizontal: 14,
     borderTopWidth: 1, flexWrap: 'wrap',
+    borderTopColor: C.borderLight, backgroundColor: C.surface,
   },
 
   // DocCard action button
@@ -1552,8 +1555,8 @@ const s = StyleSheet.create({
 
   // DocField
   docFieldRow: { flexDirection: 'row', gap: 10, marginBottom: 5 },
-  docFieldLabel: { fontSize: 11, color: C.faint, width: 88, flexShrink: 0, lineHeight: 18 },
-  docFieldValue: { fontSize: 11.5, color: C.ink, flex: 1, lineHeight: 18 },
+  docFieldLabel: { fontSize: 11, color: C.muted, width: 88, flexShrink: 0, lineHeight: 18 },
+  docFieldValue: { fontSize: 11.5, color: C.ink, flex: 1, lineHeight: 18, fontWeight: '500' },
 
   // DocSection
   docSection: { marginBottom: 12 },
@@ -1561,7 +1564,7 @@ const s = StyleSheet.create({
   docSectionTitle: { fontSize: 9.5, fontWeight: '800', letterSpacing: 1.2, textTransform: 'uppercase', color: C.faint, marginBottom: 7 },
 
   // Patient header in doccard
-  docPatientHeader: { marginBottom: 12, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: C.border },
+  docPatientHeader: { marginBottom: 12, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: C.borderLight },
   docPatientName: { fontSize: 15, fontWeight: '700', color: C.ink, marginBottom: 4 },
 
   // Free text (discharge summary)
@@ -1580,20 +1583,20 @@ const s = StyleSheet.create({
     padding: 10,
     paddingHorizontal: 14,
     paddingBottom: 14,
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    backgroundColor: C.white,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.07)',
+    borderTopColor: C.borderLight,
   },
   input: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: C.white,
+    borderWidth: 1.5,
+    borderColor: C.border,
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 11,
     fontSize: 13,
-    color: 'rgba(255,255,255,0.85)',
+    color: C.ink,
     maxHeight: 80,
     minHeight: 42,
   },
@@ -1605,7 +1608,7 @@ const s = StyleSheet.create({
   micBtn: {
     width: 42, height: 42, borderRadius: 12,
     alignItems: 'center', justifyContent: 'center',
-    flexShrink: 0, borderWidth: 1, borderColor: 'transparent',
+    flexShrink: 0,
   },
   sendBtn: {
     width: 42, height: 42, borderRadius: 12,
@@ -1619,7 +1622,7 @@ const s = StyleSheet.create({
     position: 'absolute', top: 12, alignSelf: 'center',
     backgroundColor: C.greenDark, flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingHorizontal: 16, paddingVertical: 8, borderRadius: 99,
-    shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
+    shadowColor: C.greenDeep, shadowOpacity: 0.3, shadowRadius: 10, shadowOffset: { width: 0, height: 3 },
   },
   toastText: { fontSize: 12, fontWeight: '700', color: '#fff' },
 });
@@ -1634,44 +1637,44 @@ const fb = StyleSheet.create({
   feedbackRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     marginTop: 10, paddingTop: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.1)',
+    borderTopWidth: 1,
+    borderTopColor: C.borderLight,
   },
-  feedbackLabel: { fontSize: 11.5, color: 'rgba(255,255,255,0.4)', flex: 1 },
+  feedbackLabel: { fontSize: 11.5, color: C.muted, flex: 1 },
   thumbBtn: {
     paddingHorizontal: 12, paddingVertical: 6,
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: C.white,
     borderRadius: 8, borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: C.border,
   },
   thumbText: { fontSize: 15 },
   feedbackDone: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     marginTop: 8, paddingTop: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.08)',
+    borderTopWidth: 1,
+    borderTopColor: C.borderLight,
   },
   feedbackDoneText: { fontSize: 11.5, fontWeight: '600' },
   correctionBox: {
     marginTop: 10, paddingTop: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.1)',
+    borderTopWidth: 1,
+    borderTopColor: C.borderLight,
     gap: 8,
   },
-  correctionLabel: { fontSize: 12, color: 'rgba(255,255,255,0.6)', fontWeight: '600' },
+  correctionLabel: { fontSize: 12, color: C.ink, fontWeight: '600' },
   correctionInput: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: C.white,
+    borderWidth: 1.5,
+    borderColor: C.greenBd,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 12.5,
-    color: 'rgba(255,255,255,0.85)',
+    color: C.ink,
     minHeight: 60,
   },
   correctionSubmit: {
-    backgroundColor: C.green,
+    backgroundColor: C.greenDark,
     borderRadius: 8,
     paddingVertical: 8,
     paddingHorizontal: 16,
@@ -1683,12 +1686,12 @@ const fb = StyleSheet.create({
 // Chip styles in separate object (name clash with `s`)
 const s2 = StyleSheet.create({
   chip: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: C.white,
+    borderWidth: 1.5,
+    borderColor: C.greenBd,
     borderRadius: 99,
     paddingHorizontal: 14,
     paddingVertical: 7,
   },
-  chipText: { fontSize: 12, fontWeight: '500', color: 'rgba(255,255,255,0.7)' },
+  chipText: { fontSize: 12, fontWeight: '600', color: C.greenDark },
 });
