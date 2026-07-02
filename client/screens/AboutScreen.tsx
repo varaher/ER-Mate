@@ -24,8 +24,8 @@ const TECH_STACK = [
   { label: "Frontend", value: "React Native + Expo SDK 54" },
   { label: "Backend", value: "Express.js + TypeScript" },
   { label: "Database", value: "PostgreSQL" },
-  { label: "AI Engine", value: "OpenAI GPT-4o" },
-  { label: "Voice", value: "Sarvam AI + Whisper" },
+  { label: "AI Engine", value: "Clinical AI" },
+  { label: "Voice", value: "AI Speech Recognition" },
 ];
 
 const OPEN_SOURCE_LIBS = [

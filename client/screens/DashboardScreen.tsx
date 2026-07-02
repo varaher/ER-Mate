@@ -675,7 +675,7 @@ export default function DashboardScreen() {
           <View style={styles.newPatientText}>
             <Text style={[styles.newPatientTitle, { color: "#FFFFFF" }]}>New Patient</Text>
             <Text style={[styles.newPatientSubtitle, { color: "rgba(255,255,255,0.75)" }]}>
-              Speak your case — AI fills everything
+              Speak your case — ErMate fills the case sheet
             </Text>
           </View>
           <Feather name="chevron-right" size={24} color="rgba(255,255,255,0.8)" />

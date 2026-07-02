@@ -415,7 +415,7 @@ export default function VoiceCaseSheetScreen() {
               ? "Speak in any language — Hindi, Tamil, English, or mixed"
               : phase === "recording"
               ? "Speak naturally — age, vitals, complaints, medications"
-              : "This may take 20–30 seconds"}
+              : "ErMate is filling your case sheet…"}
           </Text>
         </View>
 

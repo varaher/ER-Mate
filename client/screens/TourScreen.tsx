@@ -73,7 +73,7 @@ const FEATURES: Feature[] = [
     title: "Smart Dictation",
     subtitle: "Talk naturally — ErMate fills the sheet",
     description:
-      "Dictate the full case in natural speech. Sarvam AI transcribes it, then GPT-4o extracts structured data and maps it to every relevant field across all 7 tabs automatically.",
+      "Dictate the full case in natural speech. ErMate transcribes it and extracts structured data, mapping it to every relevant field across all 7 tabs automatically.",
     how: "Open any case sheet → Patient tab → tap Speak This Case → dictate → Apply",
   },
   {
@@ -96,7 +96,7 @@ const FEATURES: Feature[] = [
     title: "Document Scanning",
     subtitle: "Scan referral letters, ECGs, reports",
     description:
-      "Photograph a paper referral or printed report. Sarvam Vision OCR reads the text, and GPT-4o structures the clinical data and populates the relevant fields.",
+      "Photograph a paper referral or printed report. ErMate reads the text and structures the clinical data, populating the relevant fields automatically.",
     how: "Case sheet → tap the scan icon (top bar) → take photo or pick from gallery",
   },
   {
@@ -258,7 +258,7 @@ const FEATURES: Feature[] = [
     title: "EM Reference Library",
     subtitle: "AI-powered guideline chat",
     description:
-      "Ask any emergency medicine clinical question. Responses are grounded in EM guidelines and literature, powered by GPT-4o with PubMed integration.",
+      "Ask any emergency medicine clinical question. Responses are grounded in EM guidelines and literature, with PubMed integration for evidence-based answers.",
     how: "Learn tab → EM Reference Library → type your question",
   },
   {
