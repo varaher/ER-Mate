@@ -39,7 +39,6 @@ import type { TriviaCategory, TriviaDifficulty } from "@/data/triviaQuestions";
 import QuickCaseSheetScreen from "@/screens/QuickCaseSheetScreen";
 import StatsScreen from "@/screens/StatsScreen";
 import MySubscriptionsScreen from "@/screens/MySubscriptionsScreen";
-import VoiceCaseSheetScreen from "@/screens/VoiceCaseSheetScreen";
 import RoundsScreen from "@/screens/RoundsScreen";
 import HandoverScreen from "@/screens/HandoverScreen";
 import SetupDepartmentScreen from "@/screens/department/SetupDepartmentScreen";
@@ -56,7 +55,6 @@ export type RootStackParamList = {
   Main: undefined;
   Triage: undefined;
   QuickCaseSheet: { type: "adult" | "pediatric" };
-  VoiceCaseSheet: undefined;
   CaseSheet: { caseId: string; patientType?: string; caseData?: CaseData; triageData?: any };
   PediatricCaseSheet: { caseId: string; patientType?: string; caseData?: CaseData; triageData?: any };
   PhysicalExam: { caseId: string };
@@ -108,7 +106,7 @@ export type RootStackParamList = {
   AdminDashboard: undefined;
   HandoverDetail: undefined;
   Escalation: { caseId?: string } | undefined;
-  CaseChat: { caseId: string; patientName?: string };
+  CaseChat: { caseId?: string; patientName?: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -162,14 +160,6 @@ export default function RootStackNavigator() {
             options={{
               presentation: "modal",
               headerTitle: "Quick Case Sheet",
-            }}
-          />
-          <Stack.Screen
-            name="VoiceCaseSheet"
-            component={VoiceCaseSheetScreen}
-            options={{
-              presentation: "modal",
-              headerShown: false,
             }}
           />
           <Stack.Screen

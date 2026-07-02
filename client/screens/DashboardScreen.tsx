@@ -667,7 +667,7 @@ export default function DashboardScreen() {
             styles.newPatientBtn,
             { backgroundColor: theme.primary, borderColor: theme.primary, opacity: pressed ? 0.88 : 1 },
           ]}
-          onPress={() => navigation.navigate("VoiceCaseSheet")}
+          onPress={() => navigation.navigate("CaseChat")}
         >
           <View style={[styles.newPatientIcon, { backgroundColor: "rgba(255,255,255,0.18)" }]}>
             <Feather name="mic" size={24} color="#FFFFFF" />
