@@ -145,10 +145,22 @@ export default function CaseChatScreen({ route, navigation }: Props) {
     const otherHist    = hist.other_history || hist.social_history || '';
     const pastSurgical = hist.past_surgical_history || '';
 
-    const airwayStatus     = pa.airway_status || caseData.airway?.status || '';
-    const breathingNotes   = pa.breathing_effort ? `WOB: ${pa.breathing_effort}` : caseData.breathing?.notes || '';
-    const circulationNotes = pa.circulation_cap_refill ? `CRT: ${pa.circulation_cap_refill}` : caseData.circulation?.notes || '';
-    const disabilityNote   = [gcsTotal > 0 ? `GCS ${gcsTotal}` : '', pa.disability_avpu || ''].filter(Boolean).join(' · ');
+    const airwayStatus = pa.airway_status || caseData.airway?.status || '';
+    const breathingNotes = [
+      spo2 ? `SpO₂: ${spo2}%` : '',
+      rr   ? `RR: ${rr}/min` : '',
+      pa.breathing_effort       ? `WOB: ${pa.breathing_effort}` : '',
+      pa.breathing_auscultation ? pa.breathing_auscultation : '',
+      pa.breathing_oxygen_device && pa.breathing_oxygen_device !== 'Room air'
+        ? `O₂: ${pa.breathing_oxygen_device}` : '',
+    ].filter(Boolean).join(' · ') || caseData.breathing?.notes || '';
+    const circulationNotes = [
+      hr            ? `HR: ${hr} bpm` : '',
+      bpS && bpD    ? `BP: ${bpS}/${bpD} mmHg` : bpS ? `BP: ${bpS} mmHg` : '',
+      pa.circulation_cap_refill ? `CRT: ${pa.circulation_cap_refill}` : '',
+      pa.circulation_iv_access  ? `IV: ${pa.circulation_iv_access}` : '',
+    ].filter(Boolean).join(' · ') || caseData.circulation?.notes || '';
+    const disabilityNote = [gcsTotal > 0 ? `GCS ${gcsTotal}` : '', pa.disability_avpu || ''].filter(Boolean).join(' · ');
     const exposureNote     = temp ? `Temp ${temp}°C` : '';
 
     const examGeneral     = exam.general?.notes || '';

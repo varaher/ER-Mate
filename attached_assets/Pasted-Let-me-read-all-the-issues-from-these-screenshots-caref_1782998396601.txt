@@ -1,0 +1,502 @@
+Let me read all the issues from these screenshots carefully before writing any code.
+
+---
+
+## What I Can See — Four Issues
+
+**Image 3 — Critical bug: Audio looping**
+```
+"Thank you, doctors. Please do the
+background work for us. Thank you. Bye."
+
+Repeated 50+ times in the dictation bubble.
+
+This is a Sarvam STT bug — background 
+noise caused the audio to loop during
+transcription. The same phrase repeated
+infinitely in the transcript.
+
+ErMate should detect this and stop.
+```
+
+**Image 1 & 2 — Case note missing sections**
+```
+PRESENT in case note:
+  ✓ GCS 15
+  ✓ GRBS 100 mg/dL
+  ✓ Allergies: NKDA
+  ✓ Past Hx: Cardiovascular disease
+  ✓ Airway: Patent
+  ✓ Disability: GCS 15 · Alert
+  ✓ Exposure: Temp 36.8°C
+  ✓ General: Conscious, alert, well-oriented
+  ✓ CVS: S1S2 heard, no murmurs
+
+MISSING from case note:
+  ✗ Name (shows "New Patient U")
+  ✗ HR (in "Not captured" banner)
+  ✗ BP (in "Not captured" banner)
+  ✗ SpO₂ (in "Not captured" banner)
+  ✗ Breathing (B in ABCDE — blank)
+  ✗ Circulation (C in ABCDE — blank)
+  ✗ Symptoms / Chief complaint
+  ✗ Impression / Diagnosis
+  ✗ Treatment given
+```
+
+**Image 4 — Discharge summary wrong**
+```
+PRESENT:
+  ✓ Background: Cardiovascular disease
+  ✓ Allergies: NKDA
+  ✓ Vitals: HR 80 · BP 120/80 · SpO₂ 98
+
+WRONG:
+  ✗ "Presenting complaint: Not documented"
+     ← vitals ARE in the case data
+     ← symptoms should come from History tab
+  
+  ✗ "Differentials" section is empty
+  
+  ✗ Name: "New Patient Unknown"
+     ← name not captured
+```
+
+---
+
+## Root Causes
+
+```
+ISSUE 1 — Audio loop:
+  Sarvam STT receiving background noise
+  No deduplication of repeated phrases
+  No max-length check on transcript
+
+ISSUE 2 — Missing vitals in case note:
+  HR, BP, SpO₂ not captured from dictation
+  Even though they're in the case data
+  (discharge summary shows them correctly)
+  Means: data exists but rendering is wrong
+  OR the ABCDE B and C fields not mapped
+
+ISSUE 3 — Discharge summary "Not documented":
+  Presenting complaint comes from
+  history.symptoms field
+  That field is empty in this case
+  Because doctor spoke about past history,
+  not current symptoms clearly
+  GPT-4o didn't extract chief complaint
+
+ISSUE 4 — Impression blank:
+  No diagnosis extracted from dictation
+  GPT-4o needs to infer from available data
+```
+
+---
+
+## Now Let Me Write The Fixes
+
+I need to see the actual server prompt file. Let me check the transcript for the current prompt.
+
+I can't see the server code from the transcript. Here are the exact fixes your developer needs to make — complete and self-contained.
+
+---
+
+## Fix 1 — Audio Loop Detection
+
+Tell your developer to add this to the transcription handler:
+
+```typescript
+// server/services/sarvam.ts or 
+// wherever transcript is processed
+// after getting the raw transcript back:
+
+function cleanTranscript(raw: string): string {
+  // Split into sentences
+  const sentences = raw.split(/[.!?]+/).map(s => s.trim()).filter(Boolean);
+  
+  // Detect repeated phrases (loop bug)
+  const seen = new Map<string, number>();
+  const cleaned: string[] = [];
+  
+  for (const sentence of sentences) {
+    const normalized = sentence.toLowerCase().trim();
+    const count = seen.get(normalized) || 0;
+    
+    if (count < 2) { // allow max 2 occurrences
+      cleaned.push(sentence);
+      seen.set(normalized, count + 1);
+    }
+    // else: skip — it's a loop repetition
+  }
+  
+  // If more than 60% of sentences are duplicates
+  // the whole recording is noise — reject it
+  const uniqueRatio = cleaned.length / sentences.length;
+  if (uniqueRatio < 0.4 && sentences.length > 10) {
+    throw new Error('TRANSCRIPT_LOOP_DETECTED');
+  }
+  
+  return cleaned.join('. ');
+}
+
+// In the route, catch this error:
+try {
+  const cleanedTranscript = cleanTranscript(rawTranscript);
+  // proceed with GPT-4o extraction
+} catch (err) {
+  if (err.message === 'TRANSCRIPT_LOOP_DETECTED') {
+    return res.status(400).json({
+      error: 'Background noise detected. Please record again in a quieter environment.',
+      code: 'NOISE_DETECTED'
+    });
+  }
+}
+```
+
+---
+
+## Fix 2 — Complete GPT-4o Extraction Prompt
+
+This is the most important fix. Replace the current system prompt with this:
+
+```typescript
+// server/routes.ts or server/services/voiceChat.ts
+// Find: const systemPrompt = `...`
+// Replace entirely with:
+
+const systemPrompt = `
+You are ErMate, a clinical AI for Indian emergency departments.
+
+The doctor will dictate in Hindi, Malayalam, Tamil, English or any mix.
+Extract ALL clinical information and return a JSON object.
+
+EXTRACTION RULES:
+1. Extract every clinical fact mentioned — never skip anything
+2. For vitals: HR, BP, SpO2, RR, Temp, GCS, GRBS — extract all
+3. Chief complaint = the main reason patient came to ER
+4. If doctor says "haemodynamically stable" → 
+   BP: "Stable", HR: "Stable", Circulation: "Haemodynamically stable"
+5. If doctor says a patient's age and sex → extract immediately
+6. Drug names: extract Indian brand names too 
+   (Zidot = Azithromycin, Ompras = Omeprazole, OHG = Oral hypoglycaemic)
+7. Always generate an impression from available information
+8. For ABCDE: if not mentioned individually but patient is "stable" →
+   A: "Patent", B: "Normal air entry", C: "Haemodynamically stable",
+   D: "GCS 15, Alert", E: "No obvious abnormality"
+
+Return ONLY this JSON, no other text:
+{
+  "patientName": "string or null",
+  "age": "string or null",
+  "gender": "Male/Female/Other or null", 
+  "priority": "P1/P2/P3/P4/P5",
+  "chiefComplaint": "string — NEVER null, infer from symptoms",
+  "vitals": {
+    "hr": "string or null",
+    "bp": "string or null", 
+    "spo2": "string or null",
+    "rr": "string or null",
+    "temp": "string or null",
+    "gcs": "string or null",
+    "grbs": "string or null"
+  },
+  "history": {
+    "symptoms": "string — full symptom description, NEVER null",
+    "allergies": "string or NKDA if not mentioned",
+    "medications": "string or None if not mentioned",
+    "pastHistory": "string or Nil significant if not mentioned",
+    "lastMeal": "string or Not mentioned",
+    "events": "string or Not mentioned",
+    "familyHistory": "string or Not mentioned",
+    "socialHistory": "string or Not mentioned"
+  },
+  "primary": {
+    "airway": "Patent if not mentioned otherwise",
+    "breathing": "string — air entry, SpO2, RR",
+    "circulation": "string — HR, BP, perfusion",
+    "disability": "string — GCS, pupils",
+    "exposure": "string — temp, skin, other"
+  },
+  "examination": {
+    "general": "string or Not examined",
+    "cvs": "string or Not examined",
+    "respiratory": "string or Not examined",
+    "abdomen": "string or Not examined",
+    "neuro": "string or Not examined",
+    "other": "string or Not examined"
+  },
+  "treatment": {
+    "medications": "array of {drug, dose, route, frequency}",
+    "procedures": "string or None",
+    "ivAccess": "string or Not mentioned",
+    "fluids": "string or None",
+    "oxygen": "string or Not required"
+  },
+  "disposition": {
+    "diagnosis": "string — NEVER null, infer from all available data",
+    "differentials": "array of strings",
+    "plan": "string or Not specified",
+    "decision": "admit/discharge/transfer/observation/pending",
+    "referralSpecialty": "string or null",
+    "followUp": "string or As needed",
+    "instructions": "string or Standard advice"
+  },
+  "missingCritical": ["list of critical fields not mentioned"]
+}
+
+PRIORITY RULES:
+P1 = Immediate threat to life (STEMI, severe hypotension, airway compromise)
+P2 = Urgent (chest pain, moderate distress, altered consciousness)
+P3 = Less urgent (stable vitals, moderate symptoms)
+P4 = Non-urgent (mild symptoms, fully stable)
+P5 = Observation only
+
+INDIAN DRUG NAME MAPPING:
+OHG / oral hypoglycaemic → Metformin/Glibenclamide (specify if known)
+Zidot → Azithromycin 100mg
+Ompras → Omeprazole 40mg
+Pan → Pantoprazole
+Aug → Amoxicillin-Clavulanate
+Calpol → Paracetamol
+Combiflam → Ibuprofen + Paracetamol
+`;
+```
+
+---
+
+## Fix 3 — Case Note Renderer
+
+Tell your developer to update the case note rendering to show ALL sections always:
+
+```typescript
+// In CaseChat.tsx or CaseNote component
+// Find the renderCaseNote function
+// Replace with complete version:
+
+function renderCaseNote(data: CaseData) {
+  const v = data.vitals || {};
+  const h = data.history || {};
+  const p = data.primary || {};
+  const e = data.examination || {};
+  const t = data.treatment || {};
+  const d = data.disposition || {};
+
+  // Helper — show value or fallback
+  const val = (v: any, fallback = 'Not mentioned') => 
+    v && v !== '' ? v : fallback;
+  
+  // Helper — highlight abnormal vitals
+  const vitalVal = (v: any, field: string) => {
+    if (!v || v === '') return '—';
+    const abnormal = isAbnormal(v, field);
+    return { value: v, abnormal };
+  };
+
+  return `
+PATIENT
+  Name        ${val(data.patientName, 'Not recorded')}
+  Age/Sex     ${val(data.age, '—')}${data.gender ? ' · ' + data.gender : ''}
+  Priority    ${data.priority || 'P4'}
+  Complaint   ${val(h.symptoms || data.chiefComplaint)}
+
+VITALS
+  HR          ${vitalVal(v.hr, 'hr')}
+  BP          ${vitalVal(v.bp, 'bp')}
+  SpO₂        ${vitalVal(v.spo2, 'spo2')}
+  RR          ${vitalVal(v.rr, 'rr')}
+  Temp        ${vitalVal(v.temp, 'temp')}
+  GCS         ${vitalVal(v.gcs, 'gcs')}
+  GRBS        ${vitalVal(v.grbs, 'grbs')}
+
+HISTORY (SAMPLE)
+  Symptoms    ${val(h.symptoms)}
+  Allergies   ${val(h.allergies, 'NKDA')}
+  Medications ${val(h.medications, 'None')}
+  Past Hx     ${val(h.pastHistory, 'Nil significant')}
+  Last Meal   ${val(h.lastMeal)}
+  Events      ${val(h.events)}
+
+PRIMARY SURVEY (ABCDE)
+  Airway      ${val(p.airway, 'Patent')}
+  Breathing   ${val(p.breathing)}
+  Circulation ${val(p.circulation)}
+  Disability  ${val(p.disability)}
+  Exposure    ${val(p.exposure)}
+
+EXAMINATION
+  General     ${val(e.general)}
+  CVS         ${val(e.cvs)}
+  Respiratory ${val(e.respiratory)}
+  Abdomen     ${val(e.abdomen)}
+  Neuro       ${val(e.neuro)}
+
+TREATMENT GIVEN
+  Medications ${formatMeds(t.medications)}
+  Procedures  ${val(t.procedures, 'None')}
+  IV Access   ${val(t.ivAccess)}
+  Fluids      ${val(t.fluids, 'None')}
+  Oxygen      ${val(t.oxygen, 'Not required')}
+
+IMPRESSION
+  Diagnosis   ${val(d.diagnosis)}
+  
+PLAN
+  ${val(d.plan)}
+  Decision    ${val(d.decision, 'Pending')}
+  `;
+}
+
+function isAbnormal(value: string, field: string): boolean {
+  const num = parseFloat(value);
+  if (isNaN(num)) return false;
+  
+  const ranges: Record<string, [number, number]> = {
+    hr:   [60, 100],
+    spo2: [95, 100],
+    rr:   [12, 20],
+    temp: [36.1, 37.8],
+    gcs:  [15, 15],
+    grbs: [70, 140],
+  };
+  
+  const range = ranges[field];
+  if (!range) return false;
+  return num < range[0] || num > range[1];
+}
+
+function formatMeds(meds: any): string {
+  if (!meds) return 'None given';
+  if (typeof meds === 'string') return meds;
+  if (Array.isArray(meds)) {
+    return meds.map(m => 
+      `${m.drug} ${m.dose} ${m.route}${m.frequency ? ' ' + m.frequency : ''}`
+    ).join('\n              ');
+  }
+  return String(meds);
+}
+```
+
+---
+
+## Fix 4 — Discharge Summary Prompt
+
+```typescript
+// In server/routes.ts
+// POST /api/voice/chat — when type === 'discharge'
+// Replace the discharge summary prompt:
+
+const dischargeSummaryPrompt = `
+Generate a complete discharge summary from this case data.
+Use EVERY piece of information available.
+
+CASE DATA:
+${JSON.stringify(caseData, null, 2)}
+
+CRITICAL RULES:
+1. Presenting complaint MUST come from 
+   caseData.history.symptoms OR caseData.chiefComplaint
+   NEVER write "Not documented" if symptoms exist
+   
+2. Background MUST include:
+   - caseData.history.pastHistory
+   - caseData.history.medications  
+   - caseData.history.allergies
+   
+3. Treatment section MUST list every item from:
+   - caseData.treatment.medications
+   - caseData.treatment.procedures
+   - caseData.treatment.fluids
+   - caseData.treatment.oxygen
+
+4. If ANY field is truly empty → write "Not recorded"
+   NEVER write "Not documented" or "Nil"
+
+5. Generate differentials if caseData.disposition.differentials
+   is empty — based on symptoms and examination
+
+Return this exact format:
+
+DISCHARGE SUMMARY
+Patient: [name] · [age][gender]  
+Date: [date]
+Doctor: [doctorName]
+Department: [department]
+
+PRESENTING COMPLAINT
+[from history.symptoms — never blank]
+
+HISTORY OF PRESENTING ILLNESS  
+[narrative from dictation]
+
+BACKGROUND
+Past History: [pastHistory]
+Home Medications: [medications]
+Allergies: [allergies]
+
+VITALS ON ARRIVAL
+HR [hr] · BP [bp] · SpO₂ [spo2] · RR [rr] · Temp [temp] · GCS [gcs]
+
+EXAMINATION FINDINGS
+General: [general]
+CVS: [cvs]
+Respiratory: [respiratory]
+Abdomen: [abdomen]
+
+INVESTIGATIONS
+[any tests from case]
+
+TREATMENT GIVEN
+[every medication with dose and route]
+[procedures]
+
+DIAGNOSIS
+[diagnosis — generate from symptoms if empty]
+
+DIFFERENTIALS
+[differentials or generate from presentation]
+
+DISPOSITION
+Decision: [decision]
+[plan]
+
+FOLLOW-UP
+[followUp]
+
+INSTRUCTIONS TO PATIENT
+[instructions]
+`;
+```
+
+---
+
+## Summary — Four Files to Change
+
+```
+FILE 1: server/services/sarvam.ts
+  Add cleanTranscript() function
+  Detect audio loops
+  Return error to client with message
+
+FILE 2: server/routes.ts (voice/chat route)
+  Replace systemPrompt with full version above
+  Add Indian drug name mapping
+  Add ABCDE defaults for "stable" patients
+  Replace discharge summary prompt
+
+FILE 3: client/screens/CaseChatScreen.tsx
+  or client/components/CaseNote.tsx
+  Replace renderCaseNote() with full version
+  Show ALL sections always
+  Show "Not mentioned" / "Patent" defaults
+  Highlight abnormal vitals in orange/red
+
+FILE 4: client/screens/CaseChatScreen.tsx
+  Add client-side noise detection:
+  If transcript contains same phrase 5+ times
+  Show: "Background noise detected.
+         Please try again in a quiet area."
+  Don't send to GPT-4o
+```
+
+Send these four fixes to your developer. The most impactful is Fix 2 — the GPT-4o prompt. That single change will fix the missing chief complaint, missing impression, and discharge summary gaps all at once.

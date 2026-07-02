@@ -3441,6 +3441,29 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       const { isSarvamAvailable, sarvamSpeechToTextTranslate } = await import("./services/sarvamAI");
       const { extractSmartDictation } = await import("./services/aiDiagnosis");
 
+      // Deduplicate looping transcripts (Sarvam/Whisper hallucination where a
+      // sentence repeats many times). Keeps each unique sentence only once.
+      function cleanTranscript(text: string): string {
+        if (!text || text.length < 80) return text;
+        const sentences = text.split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(Boolean);
+        if (sentences.length < 5) return text;
+        const counts: Record<string, number> = {};
+        for (const s of sentences) {
+          const key = s.toLowerCase().replace(/\s+/g, ' ').slice(0, 50);
+          counts[key] = (counts[key] || 0) + 1;
+        }
+        const maxRepeat = Math.max(...Object.values(counts));
+        if (maxRepeat <= 2) return text;
+        const seen = new Set<string>();
+        const unique: string[] = [];
+        for (const s of sentences) {
+          const key = s.toLowerCase().replace(/\s+/g, ' ').slice(0, 50);
+          if (!seen.has(key)) { seen.add(key); unique.push(s); }
+        }
+        console.warn(`[SmartDictation] Audio loop detected — deduped ${sentences.length} → ${unique.length} sentences`);
+        return unique.join(' ');
+      }
+
       let transcript = '';
 
       // Skip Sarvam for large files (>900KB ≈ >25 seconds) — Sarvam has a 30s hard limit
@@ -3471,6 +3494,9 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       if (!transcript || transcript.trim().length === 0) {
         return res.json({ transcript: '', extracted: null, error: 'No speech detected' });
       }
+
+      // Clean looping / hallucinated repeats before extraction
+      transcript = cleanTranscript(transcript);
 
       console.log("[SmartDictation] Extracting clinical data from transcript...");
       const extracted = await extractSmartDictation(transcript, patientContext);
@@ -3995,7 +4021,7 @@ Always use the conversation history for context. Keep replies SHORT (1-2 sentenc
         model: "gpt-4o",
         messages: chatMessages,
         response_format: { type: "json_object" },
-        max_tokens: 1500,
+        max_tokens: 2500,
         temperature: 0.3,
       });
 

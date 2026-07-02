@@ -124,9 +124,13 @@ export function generateDischargeSummary(c: CaseData): string {
   if (c.doctorName) L.push(`Doctor: ${c.doctorName}`);
   L.push('');
   L.push('PRESENTING COMPLAINT');
-  // symptoms = chief complaint; events = HPI narrative
-  const complaint = [c.history.symptoms, c.history.events].filter(Boolean).join('\n');
-  L.push(complaint || 'Not documented');
+  // symptoms = chief complaint / signs; events = HPI narrative
+  // Fall back through every available source so this section is never blank
+  const complaint = [c.history.symptoms, c.history.events].filter(Boolean).join('\n')
+    || c.notes?.split('\n')[0]
+    || (c.disposition.diagnosis ? `Working diagnosis: ${c.disposition.diagnosis}` : '')
+    || 'Not documented';
+  L.push(complaint);
   L.push('');
   L.push('BACKGROUND');
   const bg = [
