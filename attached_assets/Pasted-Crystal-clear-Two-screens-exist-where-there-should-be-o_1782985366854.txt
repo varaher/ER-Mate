@@ -1,0 +1,142 @@
+Crystal clear. Two screens exist where there should be one.
+
+**Image 1** — "New Patient" (white, light mode, purple mic) — DELETE THIS
+**Image 2** — "ErMate / Unknown" (dark, chat style, green mic) — KEEP THIS
+
+---
+
+## Tell Your Developer — Exact Instructions
+
+```
+DELETE VoiceCaseSheetScreen completely.
+
+The "New Patient" white screen 
+(Image 1) must never appear.
+
+When doctor taps [New Patient] 
+on dashboard:
+  → Go DIRECTLY to CaseChatScreen (Image 2)
+  → Skip all intermediate screens
+  → No white screen, no modal, nothing
+
+CaseChatScreen is the ONLY screen
+for new patient entry.
+```
+
+---
+
+## The Three Places to Fix
+
+**Fix 1 — Dashboard button**
+```typescript
+// Find in DashboardScreen.tsx
+// The "New Patient" button onPress:
+
+// CURRENT (wrong):
+onPress={() => navigation.navigate('VoiceCaseSheetScreen')}
+// OR
+onPress={() => setShowNewPatientModal(true)}
+
+// CHANGE TO:
+onPress={() => navigation.navigate('CaseChatScreen')}
+// No params needed — CaseChatScreen
+// handles new case creation itself
+```
+
+**Fix 2 — Remove VoiceCaseSheetScreen from navigator**
+```typescript
+// Find AppNavigator.tsx or 
+// wherever the Stack.Navigator is
+
+// REMOVE this line entirely:
+<Stack.Screen 
+  name="VoiceCaseSheetScreen" 
+  component={VoiceCaseSheetScreen}
+/>
+
+// Also remove the import at the top:
+import VoiceCaseSheetScreen from 
+  '../screens/VoiceCaseSheetScreen';
+```
+
+**Fix 3 — Remove the file**
+```
+DELETE the file:
+client/screens/VoiceCaseSheetScreen.tsx
+
+If deletion causes import errors,
+just leave the file but remove it 
+from the navigator — it will never
+be reachable.
+```
+
+**Fix 4 — Fix "Unknown" in header**
+```typescript
+// In CaseChatScreen.tsx
+// The header shows "Unknown"
+// because patientName is not set yet
+// for new cases
+
+// Change the header title to:
+title: patientName || 'New Patient'
+
+// After GPT-4o extracts the name
+// from dictation, update the header:
+setPatientName(extractedData.patientName 
+  || 'New Patient');
+```
+
+---
+
+## Also Fix ffmpeg While At It
+
+```
+The logs showed:
+[AudioConvert] ffmpeg conversion failed
+
+This is why case notes aren't 
+appearing after dictation.
+
+Quick fix — in Replit shell:
+  cat replit.nix
+
+If pkgs.ffmpeg is not in the deps list:
+  Add it:
+  pkgs.ffmpeg
+
+Then restart the server.
+
+OR bypass ffmpeg entirely:
+  Find audioConvert.ts or similar
+  Check if audio is already .m4a
+  If yes, skip conversion,
+  send directly to Sarvam
+```
+
+---
+
+## After These Fixes
+
+```
+Doctor flow becomes:
+
+Tap [New Patient] on dashboard
+         ↓
+CaseChatScreen opens (dark, Image 2)
+         ↓
+Tap green mic
+         ↓
+Speak the case
+         ↓
+Case note appears in chat
+         ↓
+Doctor types commands
+         ↓
+Done
+
+Zero extra screens.
+Zero navigation steps.
+One screen, start to finish.
+```
+
+Send this to your developer. The changes are small — 3 lines in the navigator, 1 line in the dashboard button, delete one file. Should be done in 30 minutes.
