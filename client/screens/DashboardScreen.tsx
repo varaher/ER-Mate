@@ -87,7 +87,6 @@ export default function DashboardScreen() {
   const [localPlan, setLocalPlan] = useState<string | null>(null);
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialChecked, setTutorialChecked] = useState(false);
-  const [showNewPatientModal, setShowNewPatientModal] = useState(false);
 
   useEffect(() => {
     const checkTutorial = async () => {
@@ -666,46 +665,21 @@ export default function DashboardScreen() {
         <Pressable
           style={({ pressed }) => [
             styles.newPatientBtn,
-            { backgroundColor: theme.card, borderColor: theme.primary, opacity: pressed ? 0.9 : 1 },
+            { backgroundColor: theme.primary, borderColor: theme.primary, opacity: pressed ? 0.88 : 1 },
           ]}
-          onPress={() => setShowNewPatientModal(true)}
+          onPress={() => navigation.navigate("VoiceCaseSheet")}
         >
-          <View style={[styles.newPatientIcon, { backgroundColor: theme.primary }]}>
-            <Feather name="plus" size={24} color="#FFFFFF" />
+          <View style={[styles.newPatientIcon, { backgroundColor: "rgba(255,255,255,0.18)" }]}>
+            <Feather name="mic" size={24} color="#FFFFFF" />
           </View>
           <View style={styles.newPatientText}>
-            <Text style={[styles.newPatientTitle, { color: theme.text }]}>New Patient</Text>
-            <Text style={[styles.newPatientSubtitle, { color: theme.textSecondary }]}>
-              Voice dictation or manual entry
+            <Text style={[styles.newPatientTitle, { color: "#FFFFFF" }]}>New Patient</Text>
+            <Text style={[styles.newPatientSubtitle, { color: "rgba(255,255,255,0.75)" }]}>
+              Speak your case — AI fills everything
             </Text>
           </View>
-          <Feather name="chevron-right" size={24} color={theme.primary} />
+          <Feather name="chevron-right" size={24} color="rgba(255,255,255,0.8)" />
         </Pressable>
-
-        <View style={styles.quickSheetRow}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.quickSheetBtn,
-              { backgroundColor: theme.card, borderColor: "#10b981", opacity: pressed ? 0.9 : 1 },
-            ]}
-            onPress={() => navigation.navigate("QuickCaseSheet" as any, { type: "adult" })}
-          >
-            <Feather name="user" size={20} color="#10b981" />
-            <Text style={[styles.quickSheetBtnTitle, { color: theme.text }]}>Start Adult</Text>
-            <Text style={[styles.quickSheetBtnSub, { color: theme.textSecondary }]}>Case Sheet</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
-              styles.quickSheetBtn,
-              { backgroundColor: theme.card, borderColor: "#06b6d4", opacity: pressed ? 0.9 : 1 },
-            ]}
-            onPress={() => navigation.navigate("QuickCaseSheet" as any, { type: "pediatric" })}
-          >
-            <Feather name="heart" size={20} color="#06b6d4" />
-            <Text style={[styles.quickSheetBtnTitle, { color: theme.text }]}>Start Pediatric</Text>
-            <Text style={[styles.quickSheetBtnSub, { color: theme.textSecondary }]}>Case Sheet</Text>
-          </Pressable>
-        </View>
 
         <Pressable
           style={({ pressed }) => [
@@ -1014,60 +988,6 @@ export default function DashboardScreen() {
         </Pressable>
       </Modal>
 
-      <Modal
-        visible={showNewPatientModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowNewPatientModal(false)}
-      >
-        <Pressable style={styles.newPatientModalOverlay} onPress={() => setShowNewPatientModal(false)}>
-          <Pressable style={[styles.newPatientModalSheet, { backgroundColor: theme.card }]} onPress={() => {}}>
-            <View style={[styles.newPatientModalHandle, { backgroundColor: theme.border }]} />
-            <Text style={[styles.newPatientModalTitle, { color: theme.text }]}>Start New Case</Text>
-            <Text style={[styles.newPatientModalSub, { color: theme.textSecondary }]}>How do you want to document this patient?</Text>
-
-            <Pressable
-              style={({ pressed }) => [
-                styles.newPatientOption,
-                { backgroundColor: theme.primary, opacity: pressed ? 0.9 : 1, marginBottom: Spacing.md },
-              ]}
-              onPress={() => {
-                setShowNewPatientModal(false);
-                navigation.navigate("VoiceCaseSheet");
-              }}
-            >
-              <View style={styles.newPatientOptionIcon}>
-                <Feather name="mic" size={28} color="#FFFFFF" />
-              </View>
-              <View style={styles.newPatientOptionText}>
-                <Text style={styles.newPatientOptionTitle}>Speak This Case</Text>
-                <Text style={styles.newPatientOptionSub}>Talk naturally — ErMate fills everything including triage</Text>
-              </View>
-              <Feather name="chevron-right" size={20} color="#FFFFFF" />
-            </Pressable>
-
-            <Pressable
-              style={({ pressed }) => [
-                styles.newPatientOption,
-                { backgroundColor: theme.card, borderWidth: 1.5, borderColor: theme.border, opacity: pressed ? 0.8 : 1 },
-              ]}
-              onPress={() => {
-                setShowNewPatientModal(false);
-                navigation.navigate("QuickCaseSheet" as any, { type: "adult" });
-              }}
-            >
-              <View style={[styles.newPatientOptionIcon, { backgroundColor: theme.backgroundSecondary }]}>
-                <Feather name="edit-3" size={24} color={theme.textSecondary} />
-              </View>
-              <View style={styles.newPatientOptionText}>
-                <Text style={[styles.newPatientOptionTitle, { color: theme.text }]}>Fill Manually</Text>
-                <Text style={[styles.newPatientOptionSub, { color: theme.textSecondary }]}>Triage form then case sheet, step by step</Text>
-              </View>
-              <Feather name="chevron-right" size={20} color={theme.textMuted} />
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
     </View>
   );
 }

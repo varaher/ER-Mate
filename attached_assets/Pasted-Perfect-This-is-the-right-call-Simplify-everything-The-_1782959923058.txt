@@ -1,0 +1,221 @@
+Perfect. This is the right call. Simplify everything.
+
+---
+
+## The New Vision — One Entry Point
+
+```
+REMOVE:
+  Standard Entry
+  Start with Triage  
+  Adult Case Sheet
+  Pediatric Case Sheet
+  Voice Case Entry (old)
+
+KEEP ONE:
+  New Patient → Tap mic → Speak → Done
+```
+
+---
+
+## The Flow
+
+```
+Dashboard → [New Patient]
+         ↓
+Single screen opens:
+  Patient name (one field)
+  Tap mic
+  Speak everything
+         ↓
+ErMate processes:
+  Sarvam AI → transcribes
+  GPT-4o → extracts all fields
+  Age detected → auto Adult or Paediatric
+         ↓
+Chat screen appears with:
+  📋 Case Note (ready to copy)
+         ↓
+Doctor types or taps:
+  "Discharge summary" → appears
+  "Referral letter"   → appears
+  "Export PDF"        → downloads
+  "Save"              → saved to dashboard
+```
+
+---
+
+## Tell Your Developer — Exact Spec
+
+```
+REMOVE from New Patient bottom sheet:
+  Standard Entry
+  Start with Triage
+  Adult Case Sheet
+  Pediatric Case Sheet
+
+KEEP:
+  Voice Case Entry → rename to 
+  just "New Patient" or remove 
+  the bottom sheet entirely
+
+NEW FLOW:
+  Tap [New Patient] on dashboard
+         ↓
+  Screen opens with:
+    - One text field: Patient name
+      (optional — can be added later)
+    - Big mic button in center
+    - "Tap to speak your case"
+         ↓
+  Doctor speaks everything:
+    "52 year old male, chest pain 
+     2 hours, BP 94/60, diabetic,
+     gave aspirin and morphine..."
+         ↓
+  Processing:
+    Sarvam AI transcribes
+    GPT-4o extracts:
+      - Detects age → Adult/Paediatric
+        framework selected automatically
+      - Fills all fields in background
+         ↓
+  CaseChatScreen opens:
+    Shows formatted case note
+    Doctor can type commands
+    Everything from one place
+```
+
+---
+
+## The Three Backend Things That Already Exist
+
+```
+✓ Sarvam AI STT — already wired
+✓ GPT-4o extraction — already working
+✓ CaseChatScreen — already built
+
+Nothing new to build on backend.
+Just simplify the frontend entry.
+```
+
+---
+
+## What Doctor Sees — Full Simplified Flow
+
+```
+SCREEN 1 — Dashboard
+┌─────────────────────┐
+│  ErMate             │
+│  Welcome, Dr. Neeraj│
+│                     │
+│  [New Patient]  ←   │
+│                     │
+│  Today's Cases (3)  │
+└─────────────────────┘
+
+         ↓ tap New Patient
+
+SCREEN 2 — Dictate
+┌─────────────────────┐
+│  ← New Patient      │
+│                     │
+│  Name: ________     │
+│  (optional)         │
+│                     │
+│       🎙️            │
+│  Tap to speak       │
+│  your case          │
+│                     │
+│  Speak in any       │
+│  Indian language    │
+└─────────────────────┘
+
+         ↓ doctor speaks and taps stop
+
+SCREEN 3 — CaseChatScreen
+┌─────────────────────┐
+│  ← Case #47         │
+│  Abdulahad·52M·P1   │
+├─────────────────────┤
+│  📋 CASE NOTE       │
+│  ─────────────────  │
+│  Patient: 52M       │
+│  CC: Chest pain     │
+│  BP: 94/60 ⚠       │
+│  HR: 108 ⚠         │
+│  ...                │
+│                     │
+│  [Copy] [Save]      │
+├─────────────────────┤
+│  💬 discharge summary│
+│  💬 referral letter  │
+│  💬 export pdf       │
+├─────────────────────┤
+│  🎙️  Type command.. │
+└─────────────────────┘
+```
+
+---
+
+## Exact Message for Your Developer
+
+```
+Simplify the New Patient flow completely.
+
+REMOVE these options from the 
+New Patient bottom sheet:
+  - Standard Entry
+  - Start with Triage
+  - Adult Case Sheet
+  - Pediatric Case Sheet
+
+KEEP only Voice Case Entry but 
+simplify it to:
+
+1. Patient name field (optional)
+2. Big mic button
+3. "Speak your case in any 
+    Indian language"
+4. Tap Stop when done
+
+AFTER processing:
+  Navigate directly to CaseChatScreen
+  (already built)
+
+IN CaseChatScreen:
+  Show formatted case note immediately
+  Adult vs Paediatric decided by GPT-4o
+  based on age extracted from dictation
+  
+  Suggestion chips at bottom:
+    "Discharge summary"
+    "Referral letter to [specialty]"
+    "Export PDF"
+    "Save to dashboard"
+
+The 7-tab form stays in the database
+as the data layer — never shown to 
+doctor unless they tap "Edit fields"
+
+That's it. One flow. One screen.
+```
+
+---
+
+## What This Removes vs What It Was
+
+```
+BEFORE:                    AFTER:
+5 options to choose from   1 tap — speak
+4-step wizard              2 steps — speak + read
+Tabs to navigate           Scroll one screen
+Multiple export steps      Tap Copy
+Confusion about which      Auto-detected from
+  Adult/Paediatric           age in dictation
+
+Steps reduced: 10+ → 3
+Decisions required: 5 → 0
+```
+
+This is the right product direction. One entry point, one output, copy and done.

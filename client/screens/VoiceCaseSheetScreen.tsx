@@ -1,130 +1,84 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  ScrollView,
-  TextInput,
-  Alert,
-  ActivityIndicator,
-  Platform,
-  Animated,
+  View, Text, StyleSheet, Pressable,
+  TextInput, Alert, Animated, Platform,
 } from "react-native";
 import { Audio } from "expo-av";
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
-import * as FileSystem from "expo-file-system";
 import { Feather } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useHeaderHeight } from "@react-navigation/elements";
-import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { getApiUrl } from "@/lib/query-client";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { apiPost, invalidateCases } from "@/lib/api";
-import { Spacing, BorderRadius, Typography } from "@/constants/theme";
+import { invalidateCases } from "@/lib/api";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
-type Step = "patient" | "record" | "transcript" | "review";
 
-const ACCENT = "#7c3aed";
-const STEPS: Step[] = ["patient", "record", "transcript", "review"];
-const STEP_LABELS = ["Patient", "Record", "Transcript", "Review"];
+const DARK_BG   = "#0F1419";
+const ACCENT    = "#7c3aed";
+const MIC_SIZE  = 88;
 
-interface ExtractedField {
-  key: string;
-  label: string;
-  value: string;
-  icon: string;
-  source: 'voice' | 'prefill' | 'missing';
-  confidence: 'high' | 'medium' | 'low';
-}
-
-interface WebRecState {
-  mediaRecorder: MediaRecorder | null;
-  audioChunks: Blob[];
-  stream: MediaStream | null;
-}
-
-// Converts any age string to decimal years — handles "8m", "8 months", "4", "4y", "1.5"
 const parseAgeToYears = (ageStr: string | number): number => {
   if (!ageStr) return 0;
   const str = String(ageStr).toLowerCase().trim();
-  // Months: "8m", "8mo", "8 months", "8 month" — but NOT "18yr" or "18 years"
-  if ((str.endsWith('m') || str.includes('mo') || str.includes('month')) &&
-      !str.includes('yr') && !str.includes('year')) {
-    const months = parseFloat(str) || 0;
-    return months / 12;
+  if ((str.endsWith("m") || str.includes("mo") || str.includes("month")) &&
+      !str.includes("yr") && !str.includes("year")) {
+    return (parseFloat(str) || 0) / 12;
   }
   return parseFloat(str) || 0;
 };
 
+type Phase = "idle" | "recording" | "processing";
+
+const PHASE_LABELS: Record<Phase, string> = {
+  idle:       "Tap to speak your case",
+  recording:  "Listening…  tap to stop",
+  processing: "Processing…",
+};
+
+const PHASE_HINTS: Record<Phase, string> = {
+  idle:       "Speak in any language — Hindi, Tamil, English, or mixed",
+  recording:  "Speak naturally — age, vitals, complaints, medications",
+  processing: "Sarvam AI + GPT-4o extracting clinical data",
+};
+
+interface WebRec {
+  mr: MediaRecorder | null;
+  chunks: Blob[];
+  stream: MediaStream | null;
+}
+
 export default function VoiceCaseSheetScreen() {
-  const { theme } = useTheme();
-  const { user } = useAuth();
   const navigation = useNavigation<NavigationProp>();
-  const insets = useSafeAreaInsets();
-  const headerHeight = useHeaderHeight();
+  const { user }   = useAuth();
+  const insets     = useSafeAreaInsets();
 
-  const [step, setStep] = useState<Step>("patient");
-
-  // Patient
   const [patientName, setPatientName] = useState("");
-  const [patientAge, setPatientAge] = useState("");
-  const [patientSex, setPatientSex] = useState("Male");
-  const [caseType, setCaseType] = useState<"adult" | "pediatric">("adult");
+  const [phase, setPhase]             = useState<Phase>("idle");
+  const [recSecs, setRecSecs]         = useState(0);
 
-  // Recording
-  const [isRecording, setIsRecording] = useState(false);
-  const [isTranscribing, setIsTranscribing] = useState(false);
-  const [recDuration, setRecDuration] = useState(0);
-
-  // Transcript
-  const [editedTranscript, setEditedTranscript] = useState("");
-  const [isExtracting, setIsExtracting] = useState(false);
-
-  // Transcript + language
-  const [detectedLanguage, setDetectedLanguage] = useState("");
-  const [englishTranscript, setEnglishTranscript] = useState("");
-
-  // Review
-  const [extractedFields, setExtractedFields] = useState<ExtractedField[]>([]);
-  const [rawExtracted, setRawExtracted] = useState<any>(null);
-  const [savedCaseId, setSavedCaseId] = useState<string | null>(null);
-
-  // Editable review fields
-  const [editedHPI, setEditedHPI] = useState("");
-  const [editedDiagnosis, setEditedDiagnosis] = useState("");
-  const [editedPMH, setEditedPMH] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
+  const nativeRec   = useRef<Audio.Recording | null>(null);
+  const webRec      = useRef<WebRec>({ mr: null, chunks: [], stream: null });
+  const timerRef    = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recStart    = useRef(0);
 
   // Animations
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-  const ring1 = useRef(new Animated.Value(0)).current;
-  const ring2 = useRef(new Animated.Value(0)).current;
-  const ring1Loop = useRef<Animated.CompositeAnimation | null>(null);
-  const ring2Loop = useRef<Animated.CompositeAnimation | null>(null);
-  const pulseLoop = useRef<Animated.CompositeAnimation | null>(null);
-  const durationInterval = useRef<ReturnType<typeof setInterval> | null>(null);
-  const nativeRec = useRef<Audio.Recording | null>(null);
-  const webRec = useRef<WebRecState>({ mediaRecorder: null, audioChunks: [], stream: null });
+  const pulseAnim   = useRef(new Animated.Value(1)).current;
+  const ring1       = useRef(new Animated.Value(0)).current;
+  const ring2       = useRef(new Animated.Value(0)).current;
+  const ring1Loop   = useRef<Animated.CompositeAnimation | null>(null);
+  const ring2Loop   = useRef<Animated.CompositeAnimation | null>(null);
+  const pulseLoop   = useRef<Animated.CompositeAnimation | null>(null);
 
-  // Auto-detect pediatric from age — handles "8m", "4y", "4", etc.
   useEffect(() => {
-    const age = parseAgeToYears(patientAge);
-    if (age > 0) setCaseType(age <= 16 ? "pediatric" : "adult");
-  }, [patientAge]);
-
-  // Recording animations
-  useEffect(() => {
-    if (isRecording) {
+    if (phase === "recording") {
       pulseLoop.current = Animated.loop(Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1.1, duration: 700, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 1, duration: 700, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1.12, duration: 650, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1,    duration: 650, useNativeDriver: true }),
       ]));
       pulseLoop.current.start();
 
@@ -144,119 +98,90 @@ export default function VoiceCaseSheetScreen() {
         ring2Loop.current.start();
       }, 500);
 
-      durationInterval.current = setInterval(() => setRecDuration(d => d + 1), 1000);
+      timerRef.current = setInterval(() => setRecSecs(s => s + 1), 1000);
     } else {
-      ring1Loop.current?.stop();
-      ring2Loop.current?.stop();
-      pulseLoop.current?.stop();
-      ring1.setValue(0);
-      ring2.setValue(0);
-      pulseAnim.setValue(1);
-      if (durationInterval.current) { clearInterval(durationInterval.current); durationInterval.current = null; }
+      ring1Loop.current?.stop(); ring2Loop.current?.stop(); pulseLoop.current?.stop();
+      ring1.setValue(0); ring2.setValue(0); pulseAnim.setValue(1);
+      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     }
-    return () => { if (durationInterval.current) clearInterval(durationInterval.current); };
-  }, [isRecording]);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [phase]);
 
   const fmtTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 
   const startRecording = async () => {
+    setRecSecs(0);
+    recStart.current = Date.now();
     try {
-      setRecDuration(0);
       if (Platform.OS === "web") {
         if (!navigator.mediaDevices?.getUserMedia) {
-          Alert.alert("Not Supported", "Voice recording is not available in this browser.");
+          Alert.alert("Not supported", "Voice recording is not available in this browser.");
           return;
         }
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        webRec.current.stream = stream;
-        webRec.current.audioChunks = [];
-        const mr = new MediaRecorder(stream, {
-          mimeType: MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4",
-        });
-        mr.ondataavailable = (e) => { if (e.data.size > 0) webRec.current.audioChunks.push(e.data); };
+        webRec.current = { mr: null, chunks: [], stream };
+        const mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4";
+        const mr = new MediaRecorder(stream, { mimeType });
+        mr.ondataavailable = e => { if (e.data.size > 0) webRec.current.chunks.push(e.data); };
         mr.onstop = () => {
-          const blob = new Blob(webRec.current.audioChunks, { type: mr.mimeType });
-          webRec.current.stream?.getTracks().forEach(t => t.stop());
-          handleTranscribe(blob, null);
+          const blob = new Blob(webRec.current.chunks, { type: mimeType });
+          stream.getTracks().forEach(t => t.stop());
+          processAudio(blob, null);
         };
-        webRec.current.mediaRecorder = mr;
+        webRec.current.mr = mr;
         mr.start(100);
-        setIsRecording(true);
       } else {
-        const perm = await Audio.requestPermissionsAsync();
-        if (!perm.granted) {
-          Alert.alert("Permission Required", "Microphone access is needed for voice recording.");
+        const { granted } = await Audio.requestPermissionsAsync();
+        if (!granted) {
+          Alert.alert("Permission required", "Microphone access is needed for voice recording.");
           return;
         }
         if (nativeRec.current) {
           try { await nativeRec.current.stopAndUnloadAsync(); } catch {}
           nativeRec.current = null;
         }
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: true,
-          playsInSilentModeIOS: true,
-          staysActiveInBackground: true,
-          shouldDuckAndroid: true,
-        });
-        await activateKeepAwakeAsync("voice-recording");
+        await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true, staysActiveInBackground: true });
+        await activateKeepAwakeAsync("voice-case");
         const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
         nativeRec.current = recording;
-        setIsRecording(true);
       }
-    } catch (err) {
+      setPhase("recording");
+    } catch {
       Alert.alert("Error", "Could not start recording. Please try again.");
     }
   };
 
   const stopRecording = async () => {
-    if (!isRecording) return;
-    setIsRecording(false);
-
-    // Guard: reject recordings under 2 seconds
-    if (recDuration < 2) {
-      Alert.alert("Too short", "Please hold the button and speak for at least 2 seconds.");
-      if (Platform.OS !== "web" && nativeRec.current) {
-        try { await nativeRec.current.stopAndUnloadAsync(); } catch {}
-        nativeRec.current = null;
-      }
+    const elapsed = Math.floor((Date.now() - recStart.current) / 1000);
+    if (elapsed < 2) {
+      Alert.alert("Too short", "Please hold and speak for at least 2 seconds.");
       return;
     }
-
+    setPhase("processing");
     try {
       if (Platform.OS === "web") {
-        const mr = webRec.current.mediaRecorder;
+        const mr = webRec.current.mr;
         if (mr && mr.state !== "inactive") mr.stop();
       } else {
         const rec = nativeRec.current;
-        if (!rec) return;
+        if (!rec) { setPhase("idle"); return; }
         await rec.stopAndUnloadAsync();
         await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
-        deactivateKeepAwake("voice-recording");
+        deactivateKeepAwake("voice-case");
         const uri = rec.getURI();
         nativeRec.current = null;
-        if (uri) {
-          // Log file size for debugging audio capture issues
-          try {
-            const { getInfoAsync } = await import("expo-file-system");
-            const info = await getInfoAsync(uri);
-            const size = (info as any).size ?? 0;
-            console.log(`[VoiceRec] Audio file: ${uri.split("/").pop()} — ${size} bytes, ${recDuration}s`);
-            if (size < 5000) {
-              Alert.alert("Recording issue", "The audio file is too small. Please try recording again in a quieter spot.");
-              return;
-            }
-          } catch { /* file-system check failed — proceed anyway */ }
-          handleTranscribe(null, uri);
-        }
+        if (uri) processAudio(null, uri);
+        else setPhase("idle");
       }
-    } catch (err) {
+    } catch {
       nativeRec.current = null;
+      setPhase("idle");
     }
   };
 
-  const handleTranscribe = async (blob: Blob | null, uri: string | null) => {
-    setIsTranscribing(true);
+  const processAudio = async (blob: Blob | null, uri: string | null) => {
     try {
+      // 1. Transcribe
       const formData = new FormData();
       if (Platform.OS === "web" && blob) {
         const ext = blob.type.includes("webm") ? "webm" : "m4a";
@@ -264,1544 +189,329 @@ export default function VoiceCaseSheetScreen() {
       } else if (uri) {
         const ext = uri.split(".").pop() || "m4a";
         formData.append("audio", {
-          uri,
-          name: `voice.${ext}`,
+          uri, name: `voice.${ext}`,
           type: `audio/${ext === "caf" ? "x-caf" : ext === "m4a" ? "mp4" : ext}`,
         } as any);
       }
       formData.append("mode", "field");
 
-      const resp = await fetch(new URL("/api/voice/transcribe", getApiUrl()).toString(), {
-        method: "POST",
-        body: formData,
+      const txResp = await fetch(new URL("/api/voice/transcribe", getApiUrl()).toString(), {
+        method: "POST", body: formData,
       });
-      if (!resp.ok) throw new Error("Transcription failed");
-      const data = await resp.json();
-      const text = (data.transcript || "").trim();
-      const engText = (data.englishTranscript || data.transcript || "").trim();
-      const lang = data.detectedLanguage || "en-IN";
-      setEditedTranscript(text);
-      setEnglishTranscript(engText);
-      setDetectedLanguage(lang);
-      setStep("transcript");
-    } catch (err) {
-      Alert.alert("Transcription Failed", "Could not process the recording. Please try again.");
-    } finally {
-      setIsTranscribing(false);
-    }
-  };
+      if (!txResp.ok) throw new Error("Transcription failed");
+      const txData = await txResp.json();
+      const transcript: string = (txData.transcript || "").trim();
+      const engTranscript: string = (txData.englishTranscript || txData.transcript || "").trim();
+      const lang: string = txData.detectedLanguage || "en-IN";
 
-  // Pre-fill editable review fields when review step loads
-  useEffect(() => {
-    if (step === "review" && rawExtracted) {
-      setEditedHPI(rawExtracted.historyOfPresentIllness || "");
-      setEditedDiagnosis(rawExtracted.diagnosis?.[0] || "");
-      const pmh = rawExtracted.pastMedicalHistory;
-      setEditedPMH(Array.isArray(pmh) ? pmh.join(", ") : (typeof pmh === "string" ? pmh : ""));
-    }
-  }, [step]);
+      if (!transcript) throw new Error("No speech detected. Please try again.");
 
-  const handleExtract = async () => {
-    const text = editedTranscript.trim();
+      // 2. Extract clinical data
+      const token = await AsyncStorage.getItem("token");
+      if (!token) { Alert.alert("Session expired", "Please log in again."); setPhase("idle"); return; }
 
-    if (text.length < 10) {
-      Alert.alert("Nothing to extract", "Transcript is too short. Please re-record and speak for at least 5 seconds.");
-      return;
-    }
-    if (!patientName.trim()) {
-      Alert.alert("Required", "Please enter a patient name before saving.");
-      setStep("patient");
-      return;
-    }
-
-    const token = await AsyncStorage.getItem("token");
-    if (!token) { Alert.alert("Session expired", "Please log in again."); return; }
-
-    setIsExtracting(true);
-
-    // Translate non-English transcript first
-    let extractText = text;
-    try {
-      if (detectedLanguage && !detectedLanguage.startsWith("en")) {
-        const tResp = await fetch(new URL("/api/voice/translate", getApiUrl()).toString(), {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text, sourceLanguage: detectedLanguage }),
-        });
-        if (tResp.ok) {
-          const tData = await tResp.json();
-          const translated = (tData.englishText || "").trim();
-          if (translated) { extractText = translated; setEnglishTranscript(translated); }
-        }
-      } else if (englishTranscript && englishTranscript !== text) {
-        extractText = englishTranscript;
+      let extractText = engTranscript || transcript;
+      if (lang && !lang.startsWith("en") && engTranscript !== transcript) {
+        try {
+          const tResp = await fetch(new URL("/api/voice/translate", getApiUrl()).toString(), {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: transcript, sourceLanguage: lang }),
+          });
+          if (tResp.ok) {
+            const tData = await tResp.json();
+            if (tData.englishText?.trim()) extractText = tData.englishText.trim();
+          }
+        } catch {}
       }
-    } catch (_) {}
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 75000);
-    try {
-      console.log("[Extract] Calling extract-clinical, length:", extractText.length);
-
-      const resp = await fetch(new URL("/api/voice/extract-clinical", getApiUrl()).toString(), {
+      const exResp = await fetch(new URL("/api/voice/extract-clinical", getApiUrl()).toString(), {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-        signal: controller.signal,
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           transcript: extractText,
-          patientContext: { age: parseFloat(patientAge) || 0, sex: patientSex, caseType },
+          patientContext: { age: 0, sex: "Unknown", caseType: "adult" },
         }),
       });
-      clearTimeout(timeoutId);
+      if (!exResp.ok) throw new Error(`Extraction failed (${exResp.status})`);
+      const exData = await exResp.json();
+      const extracted = exData.extracted;
+      if (!extracted || typeof extracted !== "object") throw new Error("Could not extract clinical data. Please try again.");
 
-      if (!resp.ok) {
-        const errBody = await resp.text();
-        throw new Error(`Server returned ${resp.status}: ${errBody}`);
-      }
+      // 3. Detect adult vs pediatric from extracted age
+      const rawAge = extracted.patientAge ?? extracted.age ?? "";
+      const ageYears = parseAgeToYears(rawAge);
+      const caseType: "adult" | "pediatric" = ageYears > 0 && ageYears <= 16 ? "pediatric" : "adult";
 
-      const data = await resp.json();
-      console.log("[Extract] Response keys:", Object.keys(data || {}));
+      // Use name from field if doctor didn't type one
+      const finalName = patientName.trim() || extracted.patientName || "Unknown";
+      const finalAge  = rawAge ? String(rawAge) : "";
+      const finalSex  = extracted.patientSex || extracted.sex || "Unknown";
 
-      const extracted = data.extracted;
-      if (!extracted || typeof extracted !== "object") {
-        throw new Error("No extracted data returned from server. Please try again.");
-      }
-      console.log("[Extract] Done. Chief complaint:", extracted.chiefComplaint, "| PMH type:", Array.isArray(extracted.pastMedicalHistory) ? "array" : typeof extracted.pastMedicalHistory);
-
-      setRawExtracted(extracted);
-      try {
-        setExtractedFields(buildFieldList(extracted, text));
-      } catch (bfErr: any) {
-        console.error("[Extract] buildFieldList error:", bfErr?.message);
-        setExtractedFields([]);
-      }
-      console.log("[Extract] Moving to review step");
-      setStep("review");
-    } catch (err: any) {
-      clearTimeout(timeoutId);
-      const isTimeout = err?.name === "AbortError";
-      Alert.alert(
-        isTimeout ? "Taking too long" : "Extraction failed",
-        isTimeout
-          ? "The AI is taking longer than expected. Please check your connection and try again."
-          : err.message || "Could not extract clinical data. Please try again.",
-        [{ text: "OK" }]
-      );
-    } finally {
-      setIsExtracting(false);
-    }
-  };
-
-  const handleSave = async () => {
-    if (!rawExtracted) { Alert.alert("Nothing to save", "Please extract clinical data first."); return; }
-    setIsSaving(true);
-    try {
-      const token = await AsyncStorage.getItem("token");
-      if (!token) { Alert.alert("Session expired", "Please log in again."); return; }
-
-      // Merge doctor's edits back into extracted data
-      const finalExtracted = {
-        ...rawExtracted,
-        historyOfPresentIllness: editedHPI.trim() || rawExtracted.historyOfPresentIllness,
-        diagnosis: editedDiagnosis.trim()
-          ? [editedDiagnosis.trim(), ...(rawExtracted.diagnosis || []).slice(1)]
-          : rawExtracted.diagnosis,
-        pastMedicalHistory: editedPMH.trim()
-          ? editedPMH.split(/[,;]+/).map((s: string) => s.trim()).filter((s: string) => s)
-          : rawExtracted.pastMedicalHistory,
-      };
-
-      const resp = await fetch(new URL("/api/voice/save-case", getApiUrl()).toString(), {
+      // 4. Save case
+      const svResp = await fetch(new URL("/api/voice/save-case", getApiUrl()).toString(), {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           patient: {
-            name: patientName.trim(),
-            age: patientAge.trim(),
-            sex: patientSex,
+            name: finalName,
+            age: finalAge,
+            sex: finalSex,
             phone: "",
-            weight: finalExtracted.patientWeight || finalExtracted.weight || "",
+            weight: extracted.patientWeight || extracted.weight || "",
             mode_of_arrival: "Walk-in",
             address: "Not provided",
             brought_by: "Self",
-            informant_name: patientName.trim(),
+            informant_name: finalName,
             informant_reliability: "Reliable",
             identification_mark: "None noted",
             arrival_datetime: new Date().toISOString(),
           },
-          extracted: finalExtracted,
-          transcript: editedTranscript,
+          extracted,
+          transcript,
           case_type: caseType,
           userId: user?.id,
           userEmail: user?.email || "",
         }),
       });
 
-      if (resp.status === 401) {
+      if (svResp.status === 401) {
         await AsyncStorage.multiRemove(["token", "user"]);
-        Alert.alert("Session Expired", "Your session has expired. Please log in again.", [
+        Alert.alert("Session expired", "Please log in again.", [
           { text: "Log In", onPress: () => navigation.navigate("Login") },
         ]);
+        setPhase("idle");
         return;
       }
 
-      let result: any;
-      try {
-        result = await resp.json();
-      } catch {
-        throw new Error("Unexpected response from server. Please try again.");
-      }
+      const svData = await svResp.json();
+      if (!svData.success) throw new Error(svData.error || svData.detail || "Save failed");
 
-      if (!result.success) {
-        const rawErr: string = result.error || result.detail || "Save failed";
-        const lower = rawErr.toLowerCase();
-        if (lower.includes("token expired") || lower.includes("not authenticated") || lower.includes("jwt expired")) {
-          await AsyncStorage.multiRemove(["token", "user"]);
-          Alert.alert("Session Expired", "Your session has expired. Please log in again.", [
-            { text: "Log In", onPress: () => navigation.navigate("Login") },
-          ]);
-          return;
-        }
-        throw new Error(rawErr);
-      }
-
-      setSavedCaseId(String(result.caseId));
       await invalidateCases();
-      navigation.replace("ViewCase", { caseId: String(result.caseId) });
+      const caseId = String(svData.caseId);
+      // Navigate to CaseChatScreen — case note appears immediately
+      navigation.replace("CaseChat", { caseId, patientName: finalName });
     } catch (err: any) {
       Alert.alert(
-        "Save Failed",
-        err.message || "Could not save case. Please try again.",
+        "Something went wrong",
+        err.message || "Please try again.",
         [
-          { text: "Try Again", onPress: handleSave },
-          { text: "Cancel", style: "cancel" },
+          { text: "Retry", onPress: () => setPhase("idle") },
+          { text: "Cancel", style: "cancel", onPress: () => { setPhase("idle"); navigation.goBack(); } },
         ]
       );
-    } finally {
-      setIsSaving(false);
+      setPhase("idle");
     }
   };
 
-  const computeCompleteness = (ex: any) => {
-    const ps = ex?.primarySurvey || {};
-    const vs = ex?.vitalsSuggested || {};
-    const hasVBGMentioned = !!(ex?.vbgResults?.ph || ex?.vbgResults?.pco2 || ex?.vbgResults?.hco3);
-    const hasConsultMentioned = !!(ex?.consultations?.length > 0 || ex?.consultationGiven);
-
-    const checks = [
-      // Patient
-      { label: "Patient Name", filled: !!(ex?.patientName || patientName) },
-      { label: "Patient Age", filled: !!patientAge },
-      // Complaint
-      { label: "Chief Complaint", filled: !!(ex?.chiefComplaint) },
-      { label: "Duration / Onset", filled: !!(ex?.duration || ex?.onset) },
-      // History
-      { label: "HPI Narrative", filled: !!(ex?.historyOfPresentIllness) },
-      { label: "Past Medical History", filled: !!(ex?.pastMedicalHistory) },
-      // Primary survey vitals
-      { label: "BP", filled: !!(vs.bp || (ps.circulation?.bpSystolic && ps.circulation?.bpDiastolic)) },
-      { label: "HR / Pulse", filled: !!(vs.hr || ps.circulation?.hr) },
-      { label: "SpO2", filled: !!(vs.spo2 || ps.breathing?.spo2) },
-      { label: "GCS", filled: !!(vs.gcs || ps.disability?.gcsTotal) },
-      // Primary survey clinical
-      { label: "Airway Assessment", filled: !!(ps.airway?.status || ps.airway?.findings) },
-      { label: "Auscultation", filled: !!(ps.breathing?.auscultation) },
-      // Labs always required
-      { label: "Labs / Investigations", filled: !!(ex?.investigationsOrdered || ex?.imagingOrdered || hasVBGMentioned) },
-      // Team
-      { label: "EM Resident", filled: !!(ex?.emResident) },
-      // Diagnosis + Disposition
-      { label: "Working Diagnosis", filled: !!(ex?.diagnosis?.length > 0) },
-      { label: "Disposition Plan", filled: !!(ex?.disposition?.plan) },
-      // Pediatric-specific completeness checks
-      ...(caseType === 'pediatric' ? [
-        { label: "Weight", filled: !!(ex?.patientWeight || ex?.weight) },
-        { label: "Immunization History", filled: !!(ex?.immunizationHistory) },
-        { label: "PAT Assessment", filled: !!(ex?.patAssessment?.appearance) },
-      ] : []),
-      // Conditional: VBG completeness only if VBG was mentioned
-      ...(hasVBGMentioned ? [
-        { label: "VBG — pH", filled: !!(ex?.vbgResults?.ph) },
-        { label: "VBG — HCO3", filled: !!(ex?.vbgResults?.hco3) },
-        { label: "VBG — Lactate", filled: !!(ex?.vbgResults?.lactate) },
-      ] : []),
-      // Conditional: consultation advice only if consultation mentioned
-      ...(hasConsultMentioned ? [
-        { label: "Consultation Advice", filled: !!(ex?.consultations?.[0]?.adviceGiven || ex?.consultationGiven) },
-      ] : []),
-    ];
-    const filled = checks.filter(c => c.filled).length;
-    return { filled, total: checks.length, percent: Math.round((filled / checks.length) * 100), checks };
+  const handleMicPress = () => {
+    if (phase === "processing") return;
+    if (phase === "recording") stopRecording();
+    else startRecording();
   };
 
-  const buildFieldList = (ex: any, transcript: string): ExtractedField[] => {
-    // Safely convert any field to a string — AI may return arrays or strings
-    const toStr = (val: any): string => {
-      if (!val) return "";
-      if (Array.isArray(val)) return val.filter(Boolean).join(", ");
-      return String(val);
-    };
+  const ring1Scale = ring1.interpolate({ inputRange: [0, 1], outputRange: [1, 2.0] });
+  const ring1Opacity = ring1.interpolate({ inputRange: [0, 0.3, 1], outputRange: [0, 0.35, 0] });
+  const ring2Scale = ring2.interpolate({ inputRange: [0, 1], outputRange: [1, 2.4] });
+  const ring2Opacity = ring2.interpolate({ inputRange: [0, 0.3, 1], outputRange: [0, 0.25, 0] });
 
-    const conf = ex?.sectionConfidence || {};
-    const getConf = (section: string): 'high' | 'medium' | 'low' => {
-      const c = conf[section] || '';
-      if (c === 'high') return 'high';
-      if (c === 'medium') return 'medium';
-      return 'low';
-    };
-
-    if (!ex) return [{ key: "raw", label: "Full Transcript", value: transcript, icon: "file-text", source: 'voice', confidence: 'low' }];
-    const fields: ExtractedField[] = [];
-
-    const addVoice = (key: string, label: string, icon: string, val: string, section: string) => {
-      if (val && val.trim()) {
-        fields.push({ key, label, value: val, icon, source: 'voice', confidence: getConf(section) });
-      }
-    };
-    const addMissing = (key: string, label: string, icon: string) => {
-      fields.push({ key, label, value: "Not mentioned — tap to add", icon, source: 'missing', confidence: 'low' });
-    };
-    const addPrefill = (key: string, label: string, icon: string, val: string) => {
-      fields.push({ key, label, value: val, icon, source: 'prefill', confidence: 'medium' });
-    };
-
-    // Patient
-    if (ex.patientName) addVoice("patientName", "Patient Name", "user", ex.patientName, "patient");
-    if (ex.emResident) addVoice("emResident", "EM Resident", "user", ex.emResident, "doctors");
-    if (ex.emConsultant) addVoice("emConsultant", "EM Consultant", "user", ex.emConsultant, "doctors");
-
-    // Consultations
-    const consultList = (ex.consultations || []).filter((c: any) => c.specialty || c.doctorName);
-    if (consultList.length > 0) {
-      addVoice("consultations", "Specialist Consultations", "phone",
-        consultList.map((c: any) => `${c.specialty}${c.doctorName ? ' (Dr. '+c.doctorName+')' : ''}${c.adviceGiven ? ': '+c.adviceGiven : ''}`).join('; '), "doctors");
-    } else if (ex.consultationGiven) {
-      addVoice("consultationGiven", "Specialist Consultation", "phone", ex.consultationGiven, "doctors");
-    }
-
-    // Chief Complaint
-    const ccStr = toStr(ex.chiefComplaint);
-    if (ccStr) addVoice("chiefComplaint", "Chief Complaint", "alert-circle", ccStr, "chiefComplaint");
-    else addMissing("chiefComplaint", "Chief Complaint", "alert-circle");
-
-    // HPI
-    const hpiStr = toStr(ex.historyOfPresentIllness);
-    if (hpiStr) addVoice("hpi", "History of Present Illness", "file-text", hpiStr, "hpi");
-    else addMissing("hpi", "History of Present Illness", "file-text");
-
-    const negStr = toStr(ex.negativeSymptoms);
-    if (negStr) addVoice("negativeSymptoms", "Pertinent Negatives", "minus-circle", negStr, "hpi");
-
-    // Past History
-    const pmhStr = toStr(ex.pastMedicalHistory);
-    if (pmhStr) addVoice("pastMedical", "Past Medical History", "archive", pmhStr, "pastHistory");
-    else addPrefill("pastMedical", "Past Medical History", "archive", "None significant (pre-filled normal)");
-    const pshStr = toStr(ex.pastSurgicalHistory);
-    if (pshStr) addVoice("pastSurgical", "Past Surgical History", "scissors", pshStr, "pastHistory");
-    const allergStr = toStr(ex.allergies);
-    if (allergStr) addVoice("allergies", "Allergies", "alert-triangle", allergStr, "pastHistory");
-    else addPrefill("allergies", "Allergies", "alert-triangle", "NKDA (pre-filled normal)");
-    const medsStr = toStr(ex.currentMedications);
-    if (medsStr) addVoice("currentMeds", "Current Medications", "package", medsStr, "pastHistory");
-
-    // Last Meal (SAMPLE — L) — critical for sedation/anaesthesia
-    const lastMealStr = toStr(ex.lastMeal);
-    if (lastMealStr) addVoice("lastMeal", "Last Meal", "coffee", lastMealStr, "pastHistory");
-
-    // Pediatric-specific history fields
-    if (caseType === "pediatric") {
-      const immStr = toStr(ex.immunizationHistory);
-      if (immStr) addVoice("immunization", "Immunization History", "shield", immStr, "pastHistory");
-      else addPrefill("immunization", "Immunization History", "shield", "Not mentioned");
-      const birthStr = toStr(ex.birthHistory);
-      if (birthStr) addVoice("birthHistory", "Birth History", "star", birthStr, "pastHistory");
-      const feedStr = toStr(ex.feedingHistory);
-      if (feedStr) addVoice("feedingHistory", "Feeding History", "droplet", feedStr, "pastHistory");
-      const devStr = toStr(ex.developmentalHistory);
-      if (devStr) addVoice("developmental", "Developmental History", "trending-up", devStr, "pastHistory");
-      const wtStr = toStr(ex.patientWeight || ex.weight);
-      if (wtStr) addVoice("pedWeight", "Weight (kg)", "activity", wtStr, "primarySurvey");
-      // PAT — Pediatric Assessment Triangle
-      const patAppStr = toStr(ex.patAssessment?.appearance);
-      if (patAppStr) addVoice("patAppearance", "PAT — Appearance", "eye", patAppStr, "primarySurvey");
-      const patWobStr = toStr(ex.patAssessment?.workOfBreathing);
-      if (patWobStr) addVoice("patWOB", "PAT — Work of Breathing", "wind", patWobStr, "primarySurvey");
-      const patCircStr = toStr(ex.patAssessment?.circulationToSkin);
-      if (patCircStr) addVoice("patCirculation", "PAT — Circulation to Skin", "heart", patCircStr, "primarySurvey");
-    }
-
-    // Primary Survey / Vitals
-    const vs = ex.vitalsSuggested || {};
-    const ps = ex.primarySurvey || {};
-    const vitalParts: string[] = [];
-    const bp = vs.bp || (ps.circulation?.bpSystolic && ps.circulation?.bpDiastolic ? `${ps.circulation.bpSystolic}/${ps.circulation.bpDiastolic}` : "");
-    const hr = vs.hr || ps.circulation?.hr || "";
-    const rr = vs.rr || ps.breathing?.rr || "";
-    const spo2 = vs.spo2 || ps.breathing?.spo2 || "";
-    const temp = vs.temperature || ps.exposure?.temperature || "";
-    const grbs = vs.grbs || ps.disability?.grbs || "";
-    const gcs = vs.gcs || ps.disability?.gcsTotal || "";
-    if (bp) vitalParts.push(`BP: ${bp}`);
-    if (hr) vitalParts.push(`HR: ${hr}`);
-    if (rr) vitalParts.push(`RR: ${rr}`);
-    if (spo2) vitalParts.push(`SpO2: ${spo2}`);
-    if (temp) vitalParts.push(`Temp: ${temp}`);
-    if (grbs) vitalParts.push(`GRBS: ${grbs}`);
-    if (gcs) vitalParts.push(`GCS: ${gcs}`);
-    if (vitalParts.length > 0) addVoice("vitals", "Primary Survey / Vitals", "activity", vitalParts.join("  |  "), "primarySurvey");
-    else addMissing("vitals", "Primary Survey / Vitals", "activity");
-
-    // Airway
-    if (ps.airway?.status || ps.airway?.findings) {
-      addVoice("airway", "Airway", "wind", `${ps.airway.status || ""}${ps.airway.findings ? ' — '+ps.airway.findings : ''}`.trim(), "primarySurvey");
-    } else {
-      addPrefill("airway", "Airway", "wind", "Patent, self-maintained");
-    }
-
-    // Breathing
-    if (ps.breathing?.auscultation) {
-      addVoice("auscultation", "Auscultation", "headphones", ps.breathing.auscultation, "primarySurvey");
-    } else {
-      addPrefill("auscultation", "Auscultation", "headphones", "Air entry bilaterally equal and clear, no wheeze or crepts");
-    }
-    if (ps.breathing?.workOfBreathing) addVoice("wob", "Work of Breathing", "activity", ps.breathing.workOfBreathing, "primarySurvey");
-    else addPrefill("wob", "Work of Breathing", "activity", "No accessory muscle use");
-    if (ps.breathing?.oxygenDevice) addVoice("o2device", "Oxygen Device", "wind", ps.breathing.oxygenDevice, "primarySurvey");
-    else addPrefill("o2device", "Oxygen Device", "wind", "Room air");
-
-    // Circulation
-    const crt = ps.circulation?.crt;
-    const cvs = ex?.examFindings?.cvs;
-    if (crt) addVoice("crt", "Capillary Refill", "clock", crt, "primarySurvey");
-    else addPrefill("crt", "Capillary Refill", "clock", "< 2 seconds");
-    if (cvs) addVoice("cvs", "CVS Auscultation", "heart", cvs, "examination");
-    else addPrefill("cvs", "CVS Auscultation", "heart", "S1 S2 heard, no murmurs");
-
-    // Disability
-    if (ps.disability?.pupils) addVoice("pupils", "Pupils", "eye", ps.disability.pupils, "primarySurvey");
-    else addPrefill("pupils", "Pupils", "eye", "Bilaterally equal and reactive to light");
-    if (ps.disability?.power) addVoice("power", "Motor Power", "zap", ps.disability.power, "primarySurvey");
-    else addPrefill("power", "Motor Power", "zap", "5/5 all four limbs, no focal deficit");
-
-    // Exposure
-    const exposure = ps.exposure?.findings || ex?.examFindings?.musculoskeletal;
-    if (exposure) addVoice("exposure", "Exposure / Skin", "search", exposure, "primarySurvey");
-    else addPrefill("exposure", "Exposure / Skin", "search", "No external injuries, no rash, no pedal oedema");
-
-    // VBG
-    if (ex.vbgResults) {
-      const vbg = ex.vbgResults;
-      const parts: string[] = [];
-      if (vbg.ph) parts.push(`pH ${vbg.ph}`);
-      if (vbg.pco2) parts.push(`PCO2 ${vbg.pco2}`);
-      if (vbg.po2) parts.push(`PO2 ${vbg.po2}`);
-      if (vbg.hco3) parts.push(`HCO3 ${vbg.hco3}`);
-      if (vbg.lactate) parts.push(`Lac ${vbg.lactate}`);
-      if (vbg.hemoglobin) parts.push(`Hb ${vbg.hemoglobin}`);
-      if (vbg.sodium) parts.push(`Na ${vbg.sodium}`);
-      if (vbg.potassium) parts.push(`K ${vbg.potassium}`);
-      if (vbg.creatinine) parts.push(`Cr ${vbg.creatinine}`);
-      if (parts.length > 0) addVoice("vbg", "VBG / ABG", "droplet", parts.join("  |  "), "investigations");
-    }
-
-    // EFAST
-    const adj = ex.adjuncts || {};
-    if (adj.efastDone || adj.efastFindings) {
-      addVoice("efast", "EFAST", "search", adj.efastFindings || "Done", "investigations");
-    }
-
-    // Exam
-    const ef = ex.examFindings || {};
-    const examParts: string[] = [];
-    if (ef.general) examParts.push(`General: ${ef.general}`);
-    if (ef.cvs) examParts.push(`CVS: ${ef.cvs}`);
-    if (ef.respiratory) examParts.push(`Resp: ${ef.respiratory}`);
-    if (ef.abdomen) examParts.push(`Abd: ${ef.abdomen}`);
-    if (ef.cns) examParts.push(`CNS: ${ef.cns}`);
-    if (ef.heent) examParts.push(`HEENT: ${ef.heent}`);
-    if (ef.musculoskeletal) examParts.push(`MSK: ${ef.musculoskeletal}`);
-    if (examParts.length > 0) addVoice("exam", "Examination Findings", "search", examParts.join("  |  "), "examination");
-    else addPrefill("exam", "Examination Findings", "search", "Within normal limits (pre-filled)");
-
-    // Investigations
-    const labsStr = toStr(ex.investigationsOrdered);
-    if (labsStr) addVoice("labs", "Labs Ordered", "clipboard", labsStr, "investigations");
-    const imagingStr = toStr(ex.imagingOrdered);
-    if (imagingStr) addVoice("imaging", "Imaging Ordered", "camera", imagingStr, "investigations");
-    const resultsStr = toStr(ex.resultsSummary);
-    if (resultsStr) addVoice("resultsSummary", "Results Summary", "bar-chart-2", resultsStr, "investigations");
-
-    // Treatment
-    if (ex.prescribedMedications?.length > 0) {
-      const meds = ex.prescribedMedications.filter((m: any) => m.name);
-      if (meds.length > 0) addVoice("medications", `Medications (${meds.length})`, "thermometer",
-        meds.map((m: any) => `${m.name} ${m.dose || ''} ${m.route || ''} ${m.frequency || ''}`.trim()).join('\n'), "treatment");
-    }
-    if (ex.prescribedInfusions?.length > 0) {
-      const inf = ex.prescribedInfusions.filter((i: any) => i.name);
-      if (inf.length > 0) addVoice("infusions", `IV Fluids (${inf.length})`, "droplet",
-        inf.map((i: any) => `${i.name} ${i.dose || ''} ${i.rate ? '@ '+i.rate : ''}`.trim()).join('\n'), "treatment");
-    }
-    if (ex.treatmentNotes) addVoice("treatmentNotes", "Treatment Notes", "edit-3", ex.treatmentNotes, "treatment");
-
-    // Diagnosis
-    if (ex.diagnosis?.length > 0) addVoice("diagnosis", "Working Diagnosis", "clipboard", ex.diagnosis.join(', '), "diagnosis");
-    else addMissing("diagnosis", "Working Diagnosis", "clipboard");
-    if (ex.differentialDiagnosis?.length > 0) addVoice("differentials", "Differentials", "git-branch", ex.differentialDiagnosis.join(', '), "diagnosis");
-
-    // Disposition
-    if (ex.disposition?.plan) addVoice("disposition", "Disposition Plan", "log-out", ex.disposition.plan, "disposition");
-
-    // Psychological screen
-    const psych = ex.psychologicalAssessment;
-    if (psych) {
-      const flags = [
-        psych.suicidalIdeation ? 'Suicidal ideation' : null,
-        psych.selfHarm ? 'Self-harm history' : null,
-        psych.substanceAbuse ? 'Substance abuse' : null,
-        psych.psychiatricHistory ? 'Psychiatric history' : null,
-      ].filter(Boolean);
-      if (flags.length > 0) addVoice("psychological", "Psychological Flags", "alert-triangle", flags.join(', '), "psychological");
-      else addPrefill("psychological", "Psychological Screen", "check-circle", "Screened — no flags identified");
-    }
-
-    return fields;
-  };
-
-  const computeTriageFromVitals = (vs: any) => {
-    if (!vs) return { triage_color: "green", triage_priority: 4 };
-    const [sys] = (vs.bp || "120/80").split("/");
-    const bpSys = parseInt(sys) || 120;
-    const hr = parseInt(vs.hr) || 80;
-    const spo2 = parseInt(vs.spo2) || 98;
-    const gcs = parseInt(vs.gcs) || 15;
-    const rr = parseInt(vs.rr) || 16;
-    const age = parseAgeToYears(patientAge) || 99;
-
-    // Age-adjusted normal upper limits for HR and RR, and lower BP thresholds
-    let hrHigh: number, rrHigh: number, bpCrit: number, bpWarn: number;
-    if (age < 1)       { hrHigh = 160; rrHigh = 60; bpCrit = 60; bpWarn = 70; }
-    else if (age < 5)  { hrHigh = 140; rrHigh = 40; bpCrit = 60; bpWarn = 70; }
-    else if (age < 12) { hrHigh = 120; rrHigh = 30; bpCrit = 70; bpWarn = 80; }
-    else if (age < 16) { hrHigh = 100; rrHigh = 24; bpCrit = 75; bpWarn = 90; }
-    else               { hrHigh = 100; rrHigh = 20; bpCrit = 80; bpWarn = 100; }
-
-    if (spo2 < 90 || gcs < 9 || bpSys < bpCrit)
-      return { triage_color: "red", triage_priority: 1 };
-    if (spo2 < 94 || gcs < 13 || bpSys < bpWarn || hr > hrHigh || rr > rrHigh)
-      return { triage_color: "orange", triage_priority: 2 };
-    if (spo2 < 96 || hr > Math.round(hrHigh * 0.85) || rr > Math.round(rrHigh * 1.2) || bpSys > 180)
-      return { triage_color: "yellow", triage_priority: 3 };
-    if (hr > Math.round(hrHigh * 0.75) || rr > rrHigh)
-      return { triage_color: "green", triage_priority: 4 };
-    return { triage_color: "blue", triage_priority: 5 };
-  };
-
-  const buildVitals = (vs: any) => {
-    if (!vs) return { hr: 80, bp_systolic: 120, bp_diastolic: 80, rr: 16, spo2: 98, temperature: 36.8, gcs_e: 4, gcs_v: 5, gcs_m: 6, grbs: 100, pain_score: 0 };
-    const [sys, dia] = (vs.bp || "120/80").split("/");
-    return {
-      hr: parseInt(vs.hr) || 80,
-      bp_systolic: parseInt(sys) || 120,
-      bp_diastolic: parseInt(dia) || 80,
-      rr: parseInt(vs.rr) || 16,
-      spo2: parseInt(vs.spo2) || 98,
-      temperature: parseFloat(vs.temperature) || 36.8,
-      gcs_e: 4, gcs_v: 5, gcs_m: 6,
-      grbs: parseInt(vs.grbs) || 100,
-      pain_score: 0,
-    };
-  };
-
-  const buildClinical = (ex: any, transcript: string) => {
-    const pastMedRaw = ex?.pastMedicalHistory || "";
-    const pastMedArr: string[] = pastMedRaw
-      ? pastMedRaw.split(/[,;\/\n]+/).map((s: string) => s.trim()).filter((s: string) => s.length > 0)
-      : [];
-
-    const symptomsArr: string[] = [];
-    if (ex?.symptoms?.length > 0) symptomsArr.push(...ex.symptoms);
-    if (ex?.associatedSymptoms) symptomsArr.push(ex.associatedSymptoms);
-    if (ex?.negativeSymptoms) symptomsArr.push(`Negative: ${ex.negativeSymptoms}`);
-
-    const vbg = ex?.vbgResults;
-    const vbgText = vbg ? [
-      vbg.ph ? `pH ${vbg.ph}` : "",
-      vbg.pco2 ? `PCO2 ${vbg.pco2}` : "",
-      vbg.po2 ? `PO2 ${vbg.po2}` : "",
-      vbg.hco3 ? `HCO3 ${vbg.hco3}` : "",
-      vbg.be ? `BE ${vbg.be}` : "",
-      vbg.lactate ? `Lactate ${vbg.lactate}` : "",
-      vbg.sao2 ? `SaO2 ${vbg.sao2}%` : "",
-      vbg.fio2 ? `FiO2 ${vbg.fio2}` : "",
-      vbg.hemoglobin ? `Hb ${vbg.hemoglobin}` : "",
-      vbg.sodium ? `Na ${vbg.sodium}` : "",
-      vbg.potassium ? `K ${vbg.potassium}` : "",
-      vbg.chloride ? `Cl ${vbg.chloride}` : "",
-      vbg.creatinine ? `Cr ${vbg.creatinine}` : "",
-      vbg.glucose ? `Glucose ${vbg.glucose}` : "",
-    ].filter(Boolean).join(", ") : "";
-
-    // Build consultation note from master schema consultations array, fallback to legacy field
-    const consultationsArr: string[] = (ex?.consultations || [])
-      .filter((c: any) => c.specialty || c.doctorName)
-      .map((c: any) => [
-        c.specialty,
-        c.doctorName ? `Dr. ${c.doctorName}` : "",
-        c.adviceGiven ? `— ${c.adviceGiven}` : "",
-      ].filter(Boolean).join(" "));
-    const consultationNote = consultationsArr.length > 0
-      ? `Consultations: ${consultationsArr.join("; ")}. `
-      : ex?.consultationGiven ? `Consultation: ${ex.consultationGiven}. ` : "";
-    const treatmentNotes = consultationNote + (ex?.treatmentNotes || "");
-
-    return {
-      history: {
-        hpi: ex?.historyOfPresentIllness || transcript,
-        events_hopi: ex?.historyOfPresentIllness || transcript,
-        signs_and_symptoms: symptomsArr.join(", "),
-        past_medical: pastMedArr,
-        past_surgical: ex?.pastSurgicalHistory || "",
-        allergies: ex?.allergies ? ex.allergies.split(/[,;]+/).map((s: string) => s.trim()).filter((s: string) => s) : [],
-        medications: ex?.currentMedications || "",
-        drug_history: ex?.currentMedications || "",
-        family_history: ex?.familyHistory || "",
-        social_history: ex?.socialHistory || "",
-      },
-      primary_survey: {
-        airway: ex?.primarySurvey?.airway?.status || ex?.primarySurvey?.airway?.findings || "Patent, self-maintained",
-        airway_intervention: ex?.primarySurvey?.airway?.intervention || "",
-        breathing_rate: ex?.primarySurvey?.breathing?.rr || ex?.vitalsSuggested?.rr || "",
-        spo2: ex?.primarySurvey?.breathing?.spo2 || ex?.vitalsSuggested?.spo2 || "",
-        auscultation: ex?.primarySurvey?.breathing?.auscultation || "Air entry bilaterally equal and clear",
-        work_of_breathing: ex?.primarySurvey?.breathing?.workOfBreathing || "No accessory muscle use",
-        oxygen_device: ex?.primarySurvey?.breathing?.oxygenDevice || "Room air",
-        bp_systolic: ex?.primarySurvey?.circulation?.bpSystolic || "",
-        bp_diastolic: ex?.primarySurvey?.circulation?.bpDiastolic || "",
-        heart_rate: ex?.primarySurvey?.circulation?.hr || ex?.vitalsSuggested?.hr || "",
-        crt: ex?.primarySurvey?.circulation?.crt || "< 2 seconds",
-        gcs_total: ex?.primarySurvey?.disability?.gcsTotal || ex?.vitalsSuggested?.gcs || "",
-        gcs_e: ex?.primarySurvey?.disability?.gcsE || "",
-        gcs_v: ex?.primarySurvey?.disability?.gcsV || "",
-        gcs_m: ex?.primarySurvey?.disability?.gcsM || "",
-        pupils: ex?.primarySurvey?.disability?.pupils || "Bilaterally equal and reactive to light",
-        power: ex?.primarySurvey?.disability?.power || "5/5 all four limbs",
-        grbs: ex?.primarySurvey?.disability?.grbs || ex?.vitalsSuggested?.grbs || "",
-        temperature: ex?.primarySurvey?.exposure?.temperature || ex?.vitalsSuggested?.temperature || "",
-        exposure_findings: ex?.primarySurvey?.exposure?.findings || "No external injuries, no rash, no pedal oedema",
-      },
-      examination: {
-        general_appearance: ex?.examFindings?.general || "Conscious, oriented, comfortable at rest",
-        cvs_additional_notes: ex?.examFindings?.cvs || "S1 S2 heard, no murmurs",
-        respiratory_additional_notes: ex?.examFindings?.respiratory || "Normal vesicular breath sounds bilaterally",
-        abdomen_additional_notes: ex?.examFindings?.abdomen || "Soft, non-tender, no organomegaly",
-        cns_additional_notes: ex?.examFindings?.cns || "No focal neurological deficit",
-        heent: ex?.examFindings?.heent || "",
-        musculoskeletal: ex?.examFindings?.musculoskeletal || "",
-      },
-      treatment: {
-        primary_diagnosis: ex?.diagnosis?.[0] || "",
-        provisional_diagnoses: ex?.diagnosis || [],
-        differential_diagnoses: ex?.differentialDiagnosis || [],
-        medications: ex?.prescribedMedications || [],
-        infusions: ex?.prescribedInfusions || [],
-        intervention_notes: treatmentNotes.trim(),
-        course_in_hospital: treatmentNotes.trim(),
-        consultations: (ex?.consultations || []).filter((c: any) => c.specialty || c.doctorName),
-      },
-      investigations: {
-        individual_tests: ex?.investigationsOrdered
-          ? ex.investigationsOrdered.split(/[,;]+/).map((s: string) => s.trim()).filter((s: string) => s)
-          : [],
-        imaging: ex?.imagingOrdered
-          ? ex.imagingOrdered.split(/[,;]+/).map((s: string) => s.trim()).filter((s: string) => s)
-          : [],
-        vbg: vbg ? {
-          ph: vbg?.ph || "",
-          pco2: vbg?.pco2 || "",
-          po2: vbg?.po2 || "",
-          hco3: vbg?.hco3 || "",
-          be: vbg?.be || "",
-          lactate: vbg?.lactate || "",
-          sao2: vbg?.sao2 || "",
-          fio2: vbg?.fio2 || "",
-          hemoglobin: vbg?.hemoglobin || "",
-          sodium: vbg?.sodium || "",
-          potassium: vbg?.potassium || "",
-          chloride: vbg?.chloride || "",
-          creatinine: vbg?.creatinine || "",
-          glucose: vbg?.glucose || "",
-          raw: vbgText,
-        } : undefined,
-        vbg_raw: vbgText || undefined,
-      },
-      disposition: {
-        plan: ex?.disposition?.plan || "",
-        follow_up: ex?.disposition?.followUp || "",
-        discharge_instructions: ex?.disposition?.dischargeInstructions || "",
-      },
-      psychological_assessment: ex?.psychologicalAssessment ? {
-        suicidal_ideation: ex.psychologicalAssessment.suicidalIdeation || false,
-        self_harm: ex.psychologicalAssessment.selfHarm || false,
-        intent_to_harm_others: ex.psychologicalAssessment.intentToHarmOthers || false,
-        substance_abuse: ex.psychologicalAssessment.substanceAbuse || false,
-        psychiatric_history: ex.psychologicalAssessment.psychiatricHistory || false,
-        currently_on_psychiatric_treatment: ex.psychologicalAssessment.currentlyOnPsychiatricTreatment || false,
-        has_support_system: ex.psychologicalAssessment.hasSupportSystem || false,
-        notes: ex.psychologicalAssessment.notes || "",
-      } : undefined,
-      voice_transcript: transcript,
-      detected_language: detectedLanguage || "en-IN",
-      english_transcript: englishTranscript || transcript,
-    };
-  };
-
-
-  const stepIdx = STEPS.indexOf(step);
-  const topPad = headerHeight + Spacing.md;
-  const botPad = insets.bottom + 100;
+  const micBg = phase === "recording" ? "#ef4444" : phase === "processing" ? "#374151" : ACCENT;
 
   return (
-    <View style={[s.root, { backgroundColor: theme.backgroundDefault }]}>
-      {/* ── PROGRESS BAR ──────────────────────────────────────────────────────── */}
-      <View style={[s.progressBar, { paddingTop: topPad, backgroundColor: theme.backgroundDefault, borderBottomColor: theme.border }]}>
-        {STEPS.map((st, i) => {
-          const done = i < stepIdx;
-          const active = i === stepIdx;
-          return (
-            <React.Fragment key={st}>
-              <View style={s.progressStep}>
-                <View style={[s.dot, {
-                  backgroundColor: done || active ? ACCENT : theme.backgroundSecondary,
-                  width: active ? 28 : 22,
-                  height: active ? 28 : 22,
-                  borderRadius: 14,
-                }]}>
-                  {done
-                    ? <Feather name="check" size={11} color="#fff" />
-                    : <Text style={[s.dotNum, { color: active ? "#fff" : theme.textMuted, fontSize: active ? 12 : 10 }]}>{i + 1}</Text>
-                  }
-                </View>
-                <Text style={[s.dotLabel, { color: active ? ACCENT : done ? theme.textSecondary : theme.textMuted, fontWeight: active ? "700" : "400" }]}>
-                  {STEP_LABELS[i]}
-                </Text>
-              </View>
-              {i < 3 && <View style={[s.progressLine, { backgroundColor: done ? ACCENT : theme.border }]} />}
-            </React.Fragment>
-          );
-        })}
-      </View>
-
-      {/* ── STEP 1: PATIENT ────────────────────────────────────────────────────── */}
-      {step === "patient" && (
-        <ScrollView
-          contentContainerStyle={[s.scrollContent, { paddingBottom: botPad }]}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={[s.heroBanner, { backgroundColor: `${ACCENT}12` }]}>
-            <View style={[s.heroIcon, { backgroundColor: ACCENT }]}>
-              <Feather name="mic" size={22} color="#fff" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[s.heroTitle, { color: theme.text }]}>Voice Case Entry</Text>
-              <Text style={[s.heroSubtitle, { color: theme.textSecondary }]}>
-                Record the full patient story — AI extracts the clinical data for you
-              </Text>
-            </View>
-          </View>
-
-          <Text style={[s.sectionLabel, { color: theme.textSecondary }]}>Patient Details</Text>
-
-          <View style={[s.card, { backgroundColor: theme.card }]}>
-            <Text style={[s.inputLabel, { color: theme.textSecondary }]}>Full Name *</Text>
-            <TextInput
-              style={[s.input, { backgroundColor: theme.backgroundSecondary, color: theme.text }]}
-              placeholder="Enter patient name"
-              placeholderTextColor={theme.textMuted}
-              value={patientName}
-              onChangeText={setPatientName}
-              autoCapitalize="words"
-            />
-          </View>
-
-          <View style={[s.card, { backgroundColor: theme.card }]}>
-            <Text style={[s.inputLabel, { color: theme.textSecondary }]}>Age (years) *</Text>
-            <TextInput
-              style={[s.input, { backgroundColor: theme.backgroundSecondary, color: theme.text }]}
-              placeholder="Age in years"
-              placeholderTextColor={theme.textMuted}
-              value={patientAge}
-              onChangeText={setPatientAge}
-              keyboardType="numeric"
-            />
-            {caseType === "pediatric" && (
-              <Text style={[s.pedNote, { color: "#06b6d4" }]}>
-                Pediatric protocol will apply (age 16)
-              </Text>
-            )}
-          </View>
-
-          <View style={[s.card, { backgroundColor: theme.card }]}>
-            <Text style={[s.inputLabel, { color: theme.textSecondary }]}>Sex</Text>
-            <View style={s.toggleRow}>
-              {["Male", "Female", "Other"].map(v => (
-                <Pressable
-                  key={v}
-                  style={[s.toggleBtn, {
-                    backgroundColor: patientSex === v ? ACCENT : theme.backgroundSecondary,
-                    borderColor: patientSex === v ? ACCENT : theme.border,
-                  }]}
-                  onPress={() => setPatientSex(v)}
-                >
-                  <Text style={[s.toggleBtnText, { color: patientSex === v ? "#fff" : theme.text }]}>{v}</Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-
-          <View style={[s.card, { backgroundColor: theme.card }]}>
-            <Text style={[s.inputLabel, { color: theme.textSecondary }]}>Case Type</Text>
-            <View style={s.toggleRow}>
-              {(["adult", "pediatric"] as const).map(v => (
-                <Pressable
-                  key={v}
-                  style={[s.toggleBtn, {
-                    flex: 1,
-                    backgroundColor: caseType === v ? ACCENT : theme.backgroundSecondary,
-                    borderColor: caseType === v ? ACCENT : theme.border,
-                  }]}
-                  onPress={() => setCaseType(v)}
-                >
-                  <Text style={[s.toggleBtnText, { color: caseType === v ? "#fff" : theme.text }]}>
-                    {v === "adult" ? "Adult" : "Pediatric"}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-
-          <Pressable
-            style={[s.primaryBtn, { backgroundColor: ACCENT }]}
-            onPress={() => {
-              if (!patientName.trim()) { Alert.alert("Required", "Please enter patient name"); return; }
-              if (!patientAge.trim()) { Alert.alert("Required", "Please enter patient age"); return; }
-              setStep("record");
-            }}
-          >
-            <Feather name="mic" size={18} color="#fff" />
-            <Text style={s.primaryBtnText}>Proceed to Recording</Text>
+    <View style={[styles.root, { backgroundColor: DARK_BG }]}>
+      <KeyboardAwareScrollViewCompat
+        contentContainerStyle={[
+          styles.scroll,
+          { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 32 },
+        ]}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* Header */}
+        <View style={styles.headerRow}>
+          <Pressable onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={12}>
+            <Feather name="x" size={20} color="rgba(255,255,255,0.6)" />
           </Pressable>
-
-          <View style={[s.infoBox, { backgroundColor: `${ACCENT}08`, borderColor: `${ACCENT}25` }]}>
-            <Feather name="info" size={14} color={ACCENT} />
-            <Text style={[s.infoText, { color: theme.textSecondary }]}>
-              No AI diagnosis or ABG analysis in this mode. Transcript is saved directly to the case sheet.
-            </Text>
-          </View>
-        </ScrollView>
-      )}
-
-      {/* ── STEP 2: RECORD ─────────────────────────────────────────────────────── */}
-      {step === "record" && (
-        <View style={[s.recordRoot, { paddingBottom: botPad }]}>
-          <Text style={[s.recordTitle, { color: theme.text }]}>
-            {isTranscribing ? "Processing audio..." : isRecording ? "Recording" : "Ready to Record"}
-          </Text>
-          <Text style={[s.recordHint, { color: theme.textSecondary }]}>
-            {isRecording
-              ? "Speak naturally — history, vitals, exam findings, treatment"
-              : isTranscribing
-              ? "Transcribing your recording, please wait..."
-              : "Tap the mic and dictate the full patient story"}
-          </Text>
-
-          <View style={s.micArea}>
-            {isRecording && (
-              <>
-                <Animated.View style={[s.ring, {
-                  borderColor: ACCENT,
-                  opacity: ring1.interpolate({ inputRange: [0, 1], outputRange: [0.55, 0] }),
-                  transform: [{ scale: ring1.interpolate({ inputRange: [0, 1], outputRange: [1, 2.4] }) }],
-                }]} />
-                <Animated.View style={[s.ring, {
-                  borderColor: ACCENT,
-                  opacity: ring2.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0] }),
-                  transform: [{ scale: ring2.interpolate({ inputRange: [0, 1], outputRange: [1, 1.75] }) }],
-                }]} />
-              </>
-            )}
-
-            <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-              <Pressable
-                style={[s.micBtn, {
-                  backgroundColor: isRecording ? "#ef4444" : isTranscribing ? theme.backgroundSecondary : ACCENT,
-                }]}
-                onPress={isRecording ? stopRecording : isTranscribing ? undefined : startRecording}
-                disabled={isTranscribing}
-              >
-                {isTranscribing
-                  ? <ActivityIndicator size="large" color={ACCENT} />
-                  : <Feather name={isRecording ? "square" : "mic"} size={52} color="#fff" />
-                }
-              </Pressable>
-            </Animated.View>
-          </View>
-
-          {isRecording && (
-            <View style={s.timerRow}>
-              <View style={[s.recDot, { backgroundColor: "#ef4444" }]} />
-              <Text style={[s.timerText, { color: "#ef4444" }]}>{fmtTime(recDuration)}</Text>
-            </View>
-          )}
-
-          {!isRecording && !isTranscribing && (
-            <View style={s.recordFooter}>
-              <Text style={[s.langNote, { color: theme.textMuted }]}>
-                Supports English, Hindi, Tamil, Telugu, Kannada, Bengali, Marathi and more
-              </Text>
-              <Pressable style={s.backLink} onPress={() => setStep("patient")}>
-                <Feather name="arrow-left" size={15} color={theme.textSecondary} />
-                <Text style={[s.backLinkText, { color: theme.textSecondary }]}>Back to patient details</Text>
-              </Pressable>
-            </View>
-          )}
-
-          <Text style={[s.recordAction, { color: theme.textMuted }]}>
-            {isRecording ? "Tap the red button when done" : ""}
-          </Text>
+          <Text style={styles.headerTitle}>New Patient</Text>
+          <View style={{ width: 40 }} />
         </View>
-      )}
 
-      {/* ── STEP 3: TRANSCRIPT ─────────────────────────────────────────────────── */}
-      {step === "transcript" && (
-        <View style={[s.transcriptRoot, { paddingBottom: botPad }]}>
-          <View style={s.transcriptHeader}>
-            <View style={s.transcriptBadgeRow}>
-              <View style={[s.badge, { backgroundColor: `${ACCENT}15` }]}>
-                <Feather name="file-text" size={13} color={ACCENT} />
-                <Text style={[s.badgeText, { color: ACCENT }]}>Transcript Ready</Text>
-              </View>
-              {detectedLanguage && !detectedLanguage.startsWith('en') && (
-                <View style={[s.badge, { backgroundColor: "#06b6d415" }]}>
-                  <Feather name="globe" size={13} color="#06b6d4" />
-                  <Text style={[s.badgeText, { color: "#06b6d4" }]}>{detectedLanguage.toUpperCase()}</Text>
-                </View>
-              )}
-            </View>
-            <Text style={[s.transcriptHint, { color: theme.textSecondary }]}>
-              {detectedLanguage && !detectedLanguage.startsWith('en')
-                ? "Original language shown — AI will extract using English translation"
-                : "Review and edit if needed, then extract clinical fields"}
-            </Text>
-          </View>
-
+        {/* Name field */}
+        <View style={styles.nameSection}>
+          <Text style={styles.nameLabel}>Patient name</Text>
           <TextInput
-            style={[s.transcriptInput, { backgroundColor: theme.card, borderColor: theme.border, color: theme.text }]}
-            multiline
-            value={editedTranscript}
-            onChangeText={setEditedTranscript}
-            placeholder="Transcript will appear here..."
-            placeholderTextColor={theme.textMuted}
-            textAlignVertical="top"
+            style={styles.nameInput}
+            value={patientName}
+            onChangeText={setPatientName}
+            placeholder="Optional — extracted from speech"
+            placeholderTextColor="rgba(255,255,255,0.25)"
+            autoCapitalize="words"
+            returnKeyType="done"
+            editable={phase === "idle"}
+          />
+        </View>
+
+        {/* Mic area */}
+        <View style={styles.micArea}>
+          {/* Ring animations */}
+          <Animated.View
+            style={[styles.micRing, {
+              width: MIC_SIZE + 20, height: MIC_SIZE + 20,
+              borderRadius: (MIC_SIZE + 20) / 2,
+              transform: [{ scale: ring1Scale }],
+              opacity: ring1Opacity,
+            }]}
+          />
+          <Animated.View
+            style={[styles.micRing, {
+              width: MIC_SIZE + 20, height: MIC_SIZE + 20,
+              borderRadius: (MIC_SIZE + 20) / 2,
+              transform: [{ scale: ring2Scale }],
+              opacity: ring2Opacity,
+            }]}
           />
 
-          <View style={s.rowBtns}>
+          <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
             <Pressable
-              style={[s.outlineBtn, { borderColor: theme.border, backgroundColor: theme.card }]}
-              onPress={() => { setStep("record"); setRecDuration(0); setEditedTranscript(""); setEnglishTranscript(""); setDetectedLanguage(""); }}
+              onPress={handleMicPress}
+              disabled={phase === "processing"}
+              style={[styles.micBtn, { width: MIC_SIZE, height: MIC_SIZE, borderRadius: MIC_SIZE / 2, backgroundColor: micBg }]}
             >
-              <Feather name="mic" size={15} color={theme.text} />
-              <Text style={[s.outlineBtnText, { color: theme.text }]}>Re-record</Text>
+              {phase === "processing" ? (
+                <Feather name="loader" size={32} color="#FFFFFF" />
+              ) : phase === "recording" ? (
+                <Feather name="square" size={32} color="#FFFFFF" />
+              ) : (
+                <Feather name="mic" size={36} color="#FFFFFF" />
+              )}
             </Pressable>
-            <Pressable
-              style={[s.primaryBtn, { flex: 1, backgroundColor: ACCENT }]}
-              onPress={handleExtract}
-              disabled={isExtracting}
-            >
-              {isExtracting
-                ? <>
-                    <ActivityIndicator size="small" color="#fff" />
-                    <Text style={s.primaryBtnText}>Extracting... (up to 60s)</Text>
-                  </>
-                : <>
-                    <Feather name="cpu" size={15} color="#fff" />
-                    <Text style={s.primaryBtnText}>Extract Clinical Data</Text>
-                  </>
-              }
-            </Pressable>
-          </View>
+          </Animated.View>
+
+          <Text style={styles.phaseLabel}>{PHASE_LABELS[phase]}</Text>
+          {phase === "recording" && (
+            <Text style={styles.recTimer}>{fmtTime(recSecs)}</Text>
+          )}
+          <Text style={styles.phaseHint}>{PHASE_HINTS[phase]}</Text>
         </View>
-      )}
 
-      {/* ── STEP 4: REVIEW ─────────────────────────────────────────────────────── */}
-      {step === "review" && (() => {
-        const completeness = computeCompleteness(rawExtracted);
-        const ex = rawExtracted || {};
-        const vs = ex.vitalsSuggested || {};
-        const ps = ex.primarySurvey || {};
-
-        const vitalsLine = [
-          vs.bp && `BP ${vs.bp}`,
-          vs.hr && `HR ${vs.hr}`,
-          vs.rr && `RR ${vs.rr}`,
-          vs.spo2 && `SpO2 ${vs.spo2}%`,
-          vs.temperature && `Temp ${vs.temperature}`,
-        ].filter(Boolean).join("  ·  ");
-
-        const medsLine = [
-          ...(ex.prescribedMedications || []).map((m: any) => `${m.name || ""}${m.dose ? ` ${m.dose}` : ""}${m.route ? ` ${m.route}` : ""}`),
-          ...(ex.prescribedInfusions || []).map((i: any) => `${i.name || ""}${i.rate ? ` @ ${i.rate}` : ""}`),
-        ].filter(Boolean).join(", ");
-
-        return (
-          <KeyboardAwareScrollViewCompat style={{ flex: 1 }}>
-            <View style={[s.reviewRoot, { paddingBottom: botPad }]}>
-
-              {/* Header banner */}
-              <View style={[s.savedBanner, { backgroundColor: "#7c3aed15", borderColor: ACCENT }]}>
-                <Feather name="edit-3" size={18} color={ACCENT} />
-                <View style={{ flex: 1 }}>
-                  <Text style={[s.savedBannerTitle, { color: ACCENT }]}>Review Extracted Data</Text>
-                  <Text style={[s.savedBannerSub, { color: theme.textSecondary }]}>
-                    Edit any field below, then tap Save to Case Sheet
-                  </Text>
-                </View>
-              </View>
-
-              {/* Completeness bar */}
-              <View style={[s.completenessCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                <View style={s.completenessRow}>
-                  <Text style={[s.completenessTitle, { color: theme.text }]}>Case Completeness</Text>
-                  <Text style={[s.completenessScore, { color: completeness.percent >= 70 ? "#16a34a" : completeness.percent >= 40 ? "#d97706" : "#dc2626" }]}>
-                    {completeness.filled}/{completeness.total}
-                  </Text>
-                </View>
-                <View style={[s.progressTrack, { backgroundColor: theme.backgroundSecondary }]}>
-                  <View style={[s.progressFill, { width: `${completeness.percent}%` as any, backgroundColor: completeness.percent >= 70 ? "#16a34a" : completeness.percent >= 40 ? "#d97706" : "#dc2626" }]} />
-                </View>
-              </View>
-
-              {/* Patient chip */}
-              <View style={[s.patientChip, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                <Feather name="user" size={14} color={theme.textSecondary} />
-                <Text style={[s.patientChipText, { color: theme.text }]}>
-                  {patientName}  ·  {patientAge} yrs  ·  {patientSex}  ·  {caseType === "pediatric" ? "Pediatric" : "Adult"}
-                </Text>
-              </View>
-
-              {/* ── EDITABLE FIELDS ─────────────────────────────────────────── */}
-              <Text style={[s.sectionLabel, { color: theme.textSecondary, marginTop: Spacing.md, marginBottom: 4 }]}>
-                Edit before saving
-              </Text>
-
-              {/* Chief Complaint — read only */}
-              <View style={[s.reviewField, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                <Text style={[s.reviewFieldLabel, { color: theme.textSecondary }]}>Chief Complaint</Text>
-                <Text style={[s.reviewFieldValue, { color: theme.text }]}>
-                  {ex.chiefComplaint || "Not extracted"}
-                </Text>
-              </View>
-
-              {/* HPI — editable */}
-              <View style={[s.reviewField, { backgroundColor: theme.card, borderColor: ACCENT + "40", borderLeftColor: ACCENT, borderLeftWidth: 3 }]}>
-                <View style={s.reviewFieldHeaderRow}>
-                  <Text style={[s.reviewFieldLabel, { color: theme.textSecondary }]}>History of Present Illness</Text>
-                  <View style={[s.editBadge, { backgroundColor: ACCENT + "18" }]}>
-                    <Feather name="edit-2" size={10} color={ACCENT} />
-                    <Text style={[s.editBadgeText, { color: ACCENT }]}>editable</Text>
-                  </View>
-                </View>
-                <TextInput
-                  style={[s.reviewEditInput, { color: theme.text, backgroundColor: theme.backgroundSecondary }]}
-                  value={editedHPI}
-                  onChangeText={setEditedHPI}
-                  multiline
-                  placeholder="HPI not extracted — type here"
-                  placeholderTextColor={theme.textMuted}
-                />
-              </View>
-
-              {/* Past Medical History — editable */}
-              <View style={[s.reviewField, { backgroundColor: theme.card, borderColor: ACCENT + "40", borderLeftColor: ACCENT, borderLeftWidth: 3 }]}>
-                <View style={s.reviewFieldHeaderRow}>
-                  <Text style={[s.reviewFieldLabel, { color: theme.textSecondary }]}>Past Medical History</Text>
-                  <View style={[s.editBadge, { backgroundColor: ACCENT + "18" }]}>
-                    <Feather name="edit-2" size={10} color={ACCENT} />
-                    <Text style={[s.editBadgeText, { color: ACCENT }]}>editable</Text>
-                  </View>
-                </View>
-                <TextInput
-                  style={[s.reviewEditInput, { color: theme.text, backgroundColor: theme.backgroundSecondary, minHeight: 70 }]}
-                  value={editedPMH}
-                  onChangeText={setEditedPMH}
-                  multiline
-                  numberOfLines={3}
-                  placeholder="Nil significant"
-                  placeholderTextColor={theme.textMuted}
-                />
-              </View>
-
-              {/* Working Diagnosis — editable */}
-              <View style={[s.reviewField, { backgroundColor: theme.card, borderColor: ACCENT + "40", borderLeftColor: ACCENT, borderLeftWidth: 3 }]}>
-                <View style={s.reviewFieldHeaderRow}>
-                  <Text style={[s.reviewFieldLabel, { color: theme.textSecondary }]}>Working Diagnosis</Text>
-                  <View style={[s.editBadge, { backgroundColor: ACCENT + "18" }]}>
-                    <Feather name="edit-2" size={10} color={ACCENT} />
-                    <Text style={[s.editBadgeText, { color: ACCENT }]}>editable</Text>
-                  </View>
-                </View>
-                <TextInput
-                  style={[s.reviewEditInput, { color: theme.text, backgroundColor: theme.backgroundSecondary }]}
-                  value={editedDiagnosis}
-                  onChangeText={setEditedDiagnosis}
-                  placeholder="Primary diagnosis"
-                  placeholderTextColor={theme.textMuted}
-                />
-              </View>
-
-              {/* ── ALL CAPTURED DATA (READ-ONLY) ────────────────────────────── */}
-              <Text style={[s.sectionLabel, { color: theme.textSecondary, marginTop: Spacing.md, marginBottom: 4 }]}>
-                All captured data
-              </Text>
-
-              {/* VITALS */}
-              {vitalsLine ? (
-                <View style={[s.reviewSection, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                  <View style={s.reviewSectionHeader}>
-                    <Feather name="activity" size={12} color={ACCENT} />
-                    <Text style={[s.reviewSectionTitle, { color: ACCENT }]}>Vitals</Text>
-                  </View>
-                  <Text style={[s.reviewSectionRow, { color: theme.text, borderTopColor: theme.border }]}>{vitalsLine}</Text>
-                  {(vs.grbs || ps.disability?.grbs) ? (
-                    <Text style={[s.reviewSectionRow, { color: theme.text, borderTopColor: theme.border }]}>
-                      GRBS: {vs.grbs || ps.disability?.grbs} mg/dL
-                    </Text>
-                  ) : null}
-                </View>
-              ) : null}
-
-              {/* PRIMARY SURVEY */}
-              {(() => {
-                const rows = [
-                  (ps.airway?.status || ps.airway?.findings)
-                    ? `Airway: ${[ps.airway?.status, ps.airway?.findings].filter(Boolean).join(' — ')}` : null,
-                  ps.breathing?.auscultation ? `Auscultation: ${ps.breathing.auscultation}` : null,
-                  ps.breathing?.workOfBreathing ? `Work of breathing: ${ps.breathing.workOfBreathing}` : null,
-                  ps.breathing?.oxygenDevice ? `O2 device: ${ps.breathing.oxygenDevice}` : null,
-                  ps.circulation?.crt ? `CRT: ${ps.circulation.crt}` : null,
-                  ps.disability?.pupils ? `Pupils: ${ps.disability.pupils}` : null,
-                  ps.disability?.power ? `Power: ${ps.disability.power}` : null,
-                  (ps.exposure?.findings || ex.examFindings?.musculoskeletal)
-                    ? `Exposure: ${ps.exposure?.findings || ex.examFindings?.musculoskeletal}` : null,
-                ].filter(Boolean) as string[];
-                if (rows.length === 0) return null;
-                return (
-                  <View style={[s.reviewSection, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                    <View style={s.reviewSectionHeader}>
-                      <Feather name="shield" size={12} color={ACCENT} />
-                      <Text style={[s.reviewSectionTitle, { color: ACCENT }]}>Primary Survey (ABCDE)</Text>
-                    </View>
-                    {rows.map((r, i) => (
-                      <Text key={i} style={[s.reviewSectionRow, { color: theme.text, borderTopColor: theme.border }]}>{r}</Text>
-                    ))}
-                  </View>
-                );
-              })()}
-
-              {/* EXAMINATION FINDINGS */}
-              {(() => {
-                const ef = ex.examFindings || {};
-                const rows = [
-                  ef.general ? `General: ${ef.general}` : null,
-                  ef.cvs ? `CVS: ${ef.cvs}` : null,
-                  ef.respiratory ? `Respiratory: ${ef.respiratory}` : null,
-                  ef.abdomen ? `Abdomen: ${ef.abdomen}` : null,
-                  ef.cns ? `CNS: ${ef.cns}` : null,
-                  ef.heent ? `HEENT: ${ef.heent}` : null,
-                  ef.musculoskeletal ? `MSK: ${ef.musculoskeletal}` : null,
-                ].filter(Boolean) as string[];
-                if (rows.length === 0) return null;
-                return (
-                  <View style={[s.reviewSection, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                    <View style={s.reviewSectionHeader}>
-                      <Feather name="search" size={12} color={ACCENT} />
-                      <Text style={[s.reviewSectionTitle, { color: ACCENT }]}>Examination Findings</Text>
-                    </View>
-                    {rows.map((r, i) => (
-                      <Text key={i} style={[s.reviewSectionRow, { color: theme.text, borderTopColor: theme.border }]}>{r}</Text>
-                    ))}
-                  </View>
-                );
-              })()}
-
-              {/* ADDITIONAL HISTORY */}
-              {(() => {
-                const toS = (v: any) => Array.isArray(v) ? v.join(', ') : (v ? String(v) : '');
-                const rows = [
-                  ex.allergies ? `Allergies: ${toS(ex.allergies)}` : null,
-                  ex.currentMedications ? `Current meds: ${toS(ex.currentMedications)}` : null,
-                  ex.pastSurgicalHistory ? `Surgical history: ${toS(ex.pastSurgicalHistory)}` : null,
-                  ex.lastMeal ? `Last meal: ${toS(ex.lastMeal)}` : null,
-                  ex.negativeSymptoms ? `Pertinent negatives: ${toS(ex.negativeSymptoms)}` : null,
-                  ex.socialHistory ? `Social history: ${toS(ex.socialHistory)}` : null,
-                  ex.familyHistory ? `Family history: ${toS(ex.familyHistory)}` : null,
-                ].filter(Boolean) as string[];
-                if (rows.length === 0) return null;
-                return (
-                  <View style={[s.reviewSection, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                    <View style={s.reviewSectionHeader}>
-                      <Feather name="archive" size={12} color={ACCENT} />
-                      <Text style={[s.reviewSectionTitle, { color: ACCENT }]}>Additional History</Text>
-                    </View>
-                    {rows.map((r, i) => (
-                      <Text key={i} style={[s.reviewSectionRow, { color: theme.text, borderTopColor: theme.border }]}>{r}</Text>
-                    ))}
-                  </View>
-                );
-              })()}
-
-              {/* INVESTIGATIONS & RESULTS */}
-              {(() => {
-                const toS = (v: any) => Array.isArray(v) ? v.join(', ') : (v ? String(v) : '');
-                const rows: string[] = [];
-                if (ex.investigationsOrdered) rows.push(`Labs: ${toS(ex.investigationsOrdered)}`);
-                if (ex.imagingOrdered) rows.push(`Imaging: ${toS(ex.imagingOrdered)}`);
-                if (ex.adjuncts?.efastDone || ex.adjuncts?.efastFindings)
-                  rows.push(`EFAST: ${ex.adjuncts?.efastFindings || 'Done'}`);
-                if (ex.adjuncts?.ecgDone)
-                  rows.push(`ECG: ${ex.adjuncts?.ecgFindings || 'Done'}`);
-                if (ex.resultsSummary) rows.push(`Results: ${toS(ex.resultsSummary)}`);
-                if (ex.vbgResults) {
-                  const vbg = ex.vbgResults;
-                  const parts = [
-                    vbg.ph ? `pH ${vbg.ph}` : null,
-                    vbg.pco2 ? `PCO2 ${vbg.pco2}` : null,
-                    vbg.po2 ? `PO2 ${vbg.po2}` : null,
-                    vbg.hco3 ? `HCO3 ${vbg.hco3}` : null,
-                    vbg.lactate ? `Lac ${vbg.lactate}` : null,
-                    vbg.hemoglobin ? `Hb ${vbg.hemoglobin}` : null,
-                    vbg.sao2 ? `SaO2 ${vbg.sao2}%` : null,
-                    vbg.fio2 ? `FiO2 ${vbg.fio2}%` : null,
-                    vbg.sodium ? `Na ${vbg.sodium}` : null,
-                    vbg.potassium ? `K ${vbg.potassium}` : null,
-                    vbg.creatinine ? `Cr ${vbg.creatinine}` : null,
-                  ].filter(Boolean);
-                  if (parts.length > 0) rows.push(`VBG/ABG: ${parts.join('  |  ')}`);
-                }
-                if (rows.length === 0) return null;
-                return (
-                  <View style={[s.reviewSection, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                    <View style={s.reviewSectionHeader}>
-                      <Feather name="clipboard" size={12} color={ACCENT} />
-                      <Text style={[s.reviewSectionTitle, { color: ACCENT }]}>Investigations & Results</Text>
-                    </View>
-                    {rows.map((r, i) => (
-                      <Text key={i} style={[s.reviewSectionRow, { color: theme.text, borderTopColor: theme.border }]}>{r}</Text>
-                    ))}
-                  </View>
-                );
-              })()}
-
-              {/* MEDICATIONS & TREATMENT */}
-              {(() => {
-                const meds = (ex.prescribedMedications || []).filter((m: any) => m.name);
-                const infs = (ex.prescribedInfusions || []).filter((i: any) => i.name);
-                if (meds.length === 0 && infs.length === 0 && !ex.treatmentNotes) return null;
-                return (
-                  <View style={[s.reviewSection, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                    <View style={s.reviewSectionHeader}>
-                      <Feather name="thermometer" size={12} color={ACCENT} />
-                      <Text style={[s.reviewSectionTitle, { color: ACCENT }]}>Medications & Treatment</Text>
-                    </View>
-                    {meds.map((m: any, i: number) => (
-                      <Text key={`med-${i}`} style={[s.reviewSectionRow, { color: theme.text, borderTopColor: theme.border }]}>
-                        {`${m.name}${m.dose ? ' ' + m.dose : ''}${m.route ? ' ' + m.route : ''}${m.frequency ? ' ' + m.frequency : ''}`.trim()}
-                      </Text>
-                    ))}
-                    {infs.map((f: any, i: number) => (
-                      <Text key={`inf-${i}`} style={[s.reviewSectionRow, { color: theme.text, borderTopColor: theme.border }]}>
-                        {`${f.name}${f.dose ? ' ' + f.dose : ''}${f.rate ? ' @ ' + f.rate : ''}`.trim()}
-                      </Text>
-                    ))}
-                    {ex.treatmentNotes ? (
-                      <Text style={[s.reviewSectionRow, { color: theme.text, borderTopColor: theme.border }]}>
-                        Notes: {ex.treatmentNotes}
-                      </Text>
-                    ) : null}
-                  </View>
-                );
-              })()}
-
-              {/* ASSESSMENT & PLAN */}
-              {(() => {
-                const rows: string[] = [];
-                if (ex.differentialDiagnosis?.length > 0)
-                  rows.push(`Differentials: ${ex.differentialDiagnosis.join(' / ')}`);
-                if (ex.disposition?.plan) rows.push(`Disposition: ${ex.disposition.plan}`);
-                const consults = (ex.consultations || []).filter((c: any) => c.specialty || c.doctorName);
-                if (consults.length > 0)
-                  rows.push(`Consultations: ${consults.map((c: any) => `${c.specialty || ''}${c.doctorName ? ' (Dr. ' + c.doctorName + ')' : ''}${c.adviceGiven ? ': ' + c.adviceGiven : ''}`).join('; ')}`);
-                else if (ex.consultationGiven) rows.push(`Consultation: ${ex.consultationGiven}`);
-                const psych = ex.psychologicalAssessment;
-                if (psych) {
-                  const flags = [
-                    psych.suicidalIdeation ? 'Suicidal ideation' : null,
-                    psych.selfHarm ? 'Self-harm history' : null,
-                    psych.substanceAbuse ? 'Substance abuse' : null,
-                    psych.psychiatricHistory ? 'Psychiatric history' : null,
-                  ].filter(Boolean);
-                  if (flags.length > 0) rows.push(`Psych flags: ${flags.join(', ')}`);
-                }
-                if (rows.length === 0) return null;
-                return (
-                  <View style={[s.reviewSection, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                    <View style={s.reviewSectionHeader}>
-                      <Feather name="git-branch" size={12} color={ACCENT} />
-                      <Text style={[s.reviewSectionTitle, { color: ACCENT }]}>Assessment & Plan</Text>
-                    </View>
-                    {rows.map((r, i) => (
-                      <Text key={i} style={[s.reviewSectionRow, { color: theme.text, borderTopColor: theme.border }]}>{r}</Text>
-                    ))}
-                  </View>
-                );
-              })()}
-
-              {/* PEDIATRIC SPECIFIC */}
-              {caseType === "pediatric" && (() => {
-                const rows = [
-                  (ex.patientWeight || ex.weight) ? `Weight: ${ex.patientWeight || ex.weight} kg` : null,
-                  ex.immunizationHistory ? `Immunization: ${ex.immunizationHistory}` : null,
-                  ex.birthHistory ? `Birth history: ${ex.birthHistory}` : null,
-                  ex.feedingHistory ? `Feeding: ${ex.feedingHistory}` : null,
-                  ex.developmentalHistory ? `Development: ${ex.developmentalHistory}` : null,
-                  ex.patAssessment?.appearance ? `PAT Appearance: ${ex.patAssessment.appearance}` : null,
-                  ex.patAssessment?.workOfBreathing ? `PAT WOB: ${ex.patAssessment.workOfBreathing}` : null,
-                  ex.patAssessment?.circulationToSkin ? `PAT Circulation: ${ex.patAssessment.circulationToSkin}` : null,
-                ].filter(Boolean) as string[];
-                if (rows.length === 0) return null;
-                return (
-                  <View style={[s.reviewSection, { backgroundColor: theme.card, borderColor: "#0ea5e930" }]}>
-                    <View style={s.reviewSectionHeader}>
-                      <Feather name="users" size={12} color="#0ea5e9" />
-                      <Text style={[s.reviewSectionTitle, { color: "#0ea5e9" }]}>Pediatric Details</Text>
-                    </View>
-                    {rows.map((r, i) => (
-                      <Text key={i} style={[s.reviewSectionRow, { color: theme.text, borderTopColor: theme.border }]}>{r}</Text>
-                    ))}
-                  </View>
-                );
-              })()}
-
-              {detectedLanguage && !detectedLanguage.startsWith("en") ? (
-                <View style={[s.langBadge, { backgroundColor: "#06b6d415", borderColor: "#06b6d430" }]}>
-                  <Feather name="globe" size={13} color="#06b6d4" />
-                  <Text style={[s.langBadgeText, { color: "#06b6d4" }]}>
-                    Dictated in {detectedLanguage} — translated to English for extraction
-                  </Text>
-                </View>
-              ) : null}
-
-              <View style={[s.noAiBanner, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                <Feather name="shield" size={14} color={theme.textSecondary} />
-                <Text style={[s.noAiText, { color: theme.textSecondary }]}>
-                  Clinical decision support can be added from the case sheet after saving.
-                </Text>
-              </View>
-
-              {/* ── BOTTOM ACTIONS ───────────────────────────────────────────── */}
-              <View style={[s.reviewActions, { marginTop: Spacing.lg }]}>
-                <Pressable
-                  style={[s.outlineBtn, { borderColor: theme.border, backgroundColor: theme.card }]}
-                  onPress={() => setStep("transcript")}
-                >
-                  <Feather name="chevron-left" size={15} color={theme.text} />
-                  <Text style={[s.outlineBtnText, { color: theme.text }]}>Back</Text>
-                </Pressable>
-                <Pressable
-                  style={[s.primaryBtn, { flex: 1, backgroundColor: isSaving ? "#6b7280" : ACCENT }]}
-                  onPress={handleSave}
-                  disabled={isSaving}
-                >
-                  {isSaving ? (
-                    <>
-                      <ActivityIndicator size="small" color="#fff" />
-                      <Text style={s.primaryBtnText}>Saving...</Text>
-                    </>
-                  ) : (
-                    <>
-                      <Feather name="save" size={15} color="#fff" />
-                      <Text style={s.primaryBtnText}>Save to Case Sheet</Text>
-                    </>
-                  )}
-                </Pressable>
-              </View>
-            </View>
-          </KeyboardAwareScrollViewCompat>
-        );
-      })()}
+        {/* Example prompt */}
+        {phase === "idle" && (
+          <View style={styles.exampleBox}>
+            <Text style={styles.exampleTitle}>Example</Text>
+            <Text style={styles.exampleText}>
+              "52 year old male with chest pain for 2 hours, BP 94 by 60, diabetic, gave aspirin and morphine, ECG shows ST elevation in V1 to V4"
+            </Text>
+          </View>
+        )}
+      </KeyboardAwareScrollViewCompat>
     </View>
   );
 }
 
-const s = StyleSheet.create({
-  root: { flex: 1 },
-
-  // Progress
-  progressBar: {
+const styles = StyleSheet.create({
+  root:        { flex: 1 },
+  scroll: {
+    flexGrow: 1,
+    paddingHorizontal: 24,
+    alignItems: "stretch",
+  },
+  headerRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: Spacing.xl,
-    paddingBottom: Spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    justifyContent: "space-between",
+    marginBottom: 32,
   },
-  progressStep: { alignItems: "center", gap: 4 },
-  progressLine: { flex: 1, height: 2, marginBottom: 16 },
-  dot: { alignItems: "center", justifyContent: "center" },
-  dotNum: { fontWeight: "700" },
-  dotLabel: { fontSize: 10 },
-
-  // Shared
-  scrollContent: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.md },
-  card: { padding: Spacing.md, borderRadius: BorderRadius.md, marginBottom: Spacing.sm },
-  sectionLabel: { fontSize: 12, fontWeight: "600", textTransform: "uppercase", letterSpacing: 1, marginBottom: Spacing.sm, marginLeft: Spacing.xs },
-  inputLabel: { fontSize: 14, fontWeight: "500", marginBottom: Spacing.xs },
-  input: { height: 44, borderRadius: BorderRadius.sm, paddingHorizontal: Spacing.md, fontSize: 16 },
-  toggleRow: { flexDirection: "row", gap: Spacing.sm },
-  toggleBtn: { flex: 1, height: 40, borderRadius: BorderRadius.sm, alignItems: "center", justifyContent: "center", borderWidth: 1 },
-  toggleBtnText: { fontSize: 14, fontWeight: "600" },
-  primaryBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", height: 52, borderRadius: BorderRadius.md, gap: Spacing.sm },
-  primaryBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
-  outlineBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", height: 52, borderRadius: BorderRadius.md, borderWidth: 1, paddingHorizontal: Spacing.lg, gap: Spacing.xs },
-  outlineBtnText: { fontSize: 14, fontWeight: "600" },
-  rowBtns: { flexDirection: "row", gap: Spacing.sm, marginTop: Spacing.sm },
-  pedNote: { fontSize: 12, marginTop: Spacing.xs, fontWeight: "500" },
-
-  // Hero / info
-  heroBanner: {
-    flexDirection: "row",
+  backBtn: {
+    width: 40, height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.07)",
+    justifyContent: "center",
     alignItems: "center",
-    padding: Spacing.lg,
-    borderRadius: BorderRadius.lg,
-    marginBottom: Spacing.xl,
-    gap: Spacing.md,
   },
-  heroIcon: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
-  heroTitle: { fontSize: 18, fontWeight: "700" },
-  heroSubtitle: { fontSize: 14, marginTop: 2, lineHeight: 18 },
-  infoBox: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: Spacing.sm,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
+  headerTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    letterSpacing: 0.2,
+  },
+  nameSection:   { marginBottom: 48 },
+  nameLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "rgba(255,255,255,0.5)",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginBottom: 10,
+  },
+  nameInput: {
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderRadius: 14,
     borderWidth: 1,
-    marginTop: Spacing.lg,
+    borderColor: "rgba(255,255,255,0.10)",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 17,
+    color: "#FFFFFF",
   },
-  infoText: { flex: 1, fontSize: 14, lineHeight: 18 },
-
-  // Record screen
-  recordRoot: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: Spacing.xl },
-  recordTitle: { fontSize: 20, fontWeight: "700", textAlign: "center", marginBottom: Spacing.sm },
-  recordHint: { fontSize: 16, textAlign: "center", lineHeight: 22, marginBottom: Spacing.xl * 2 },
-  micArea: { width: 160, height: 160, alignItems: "center", justifyContent: "center", marginBottom: Spacing.xl },
-  ring: { position: "absolute", width: 160, height: 160, borderRadius: 80, borderWidth: 2 },
-  micBtn: { width: 120, height: 120, borderRadius: 60, alignItems: "center", justifyContent: "center", shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 16, elevation: 12 },
-  timerRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: Spacing.xl },
-  recDot: { width: 8, height: 8, borderRadius: 4 },
-  timerText: { fontSize: 28, fontWeight: "700", fontVariant: ["tabular-nums"] },
-  recordFooter: { alignItems: "center", gap: Spacing.md, marginTop: Spacing.xl },
-  langNote: { fontSize: 14, textAlign: "center", lineHeight: 18 },
-  backLink: { flexDirection: "row", alignItems: "center", gap: Spacing.xs, padding: Spacing.sm },
-  backLinkText: { fontSize: 14 },
-  recordAction: { fontSize: 14, marginTop: Spacing.md },
-
-  // Transcript
-  transcriptRoot: { flex: 1, paddingHorizontal: Spacing.lg, paddingTop: Spacing.md },
-  transcriptHeader: { marginBottom: Spacing.md },
-  badge: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", paddingHorizontal: Spacing.sm, paddingVertical: 4, borderRadius: BorderRadius.full, marginBottom: Spacing.xs },
-  badgeText: { fontSize: 12, fontWeight: "600" },
-  transcriptBadgeRow: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, flexWrap: "wrap" },
-  transcriptHint: { fontSize: 14, lineHeight: 18 },
-  transcriptInput: { flex: 1, borderRadius: BorderRadius.md, borderWidth: 1, padding: Spacing.md, fontSize: 16, lineHeight: 22, marginBottom: Spacing.md },
-
-  // Review
-  savedBanner: {
-    flexDirection: "row", alignItems: "center", gap: Spacing.sm,
-    padding: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1, marginBottom: Spacing.sm,
+  micArea: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 32,
+    gap: 18,
+    minHeight: 280,
   },
-  savedBannerTitle: { fontSize: 14, fontWeight: "700" },
-  savedBannerSub: { fontSize: 12, marginTop: 2 },
-  reviewRoot: { flex: 1 },
-  reviewScroll: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, paddingBottom: Spacing.xl },
-  // Completeness
-  completenessCard: { padding: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1, marginBottom: Spacing.sm },
-  completenessRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: Spacing.sm },
-  completenessTitle: { fontSize: 14, fontWeight: "700" },
-  completenessScore: { fontSize: 16, fontWeight: "800" },
-  progressTrack: { height: 8, borderRadius: 4, overflow: "hidden", marginBottom: Spacing.xs },
-  progressFill: { height: 8, borderRadius: 4 },
-  completenessHint: { fontSize: 12 },
-  // Legend
-  legendRow: { flexDirection: "row", gap: Spacing.md, marginBottom: Spacing.sm },
-  legendItem: { flexDirection: "row", alignItems: "center", gap: 5 },
-  legendDot: { width: 10, height: 10, borderRadius: 5 },
-  legendText: { fontSize: 12 },
-  // Language badge
-  langBadge: { flexDirection: "row", alignItems: "center", gap: Spacing.xs, padding: Spacing.sm, borderRadius: BorderRadius.md, borderWidth: 1, marginBottom: Spacing.sm },
-  langBadgeText: { flex: 1, fontSize: 12, fontWeight: "500" },
-  // Patient + fields
-  patientChip: {
-    flexDirection: "row", alignItems: "center", gap: Spacing.sm,
-    padding: Spacing.sm + 2, borderRadius: BorderRadius.md, borderWidth: 1, marginBottom: Spacing.xs,
+  micBtn: {
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#7c3aed",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 12,
   },
-  patientChipText: { fontSize: 14, fontWeight: "500" },
-  fieldCard: {
-    flexDirection: "row", alignItems: "flex-start", gap: Spacing.sm,
-    padding: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1, marginBottom: Spacing.xs,
-    overflow: "hidden",
+  micRing: {
+    position: "absolute",
+    backgroundColor: ACCENT,
   },
-  fieldIcon: { width: 28, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center", marginTop: 2 },
-  fieldLabelRow: { flexDirection: "row", alignItems: "center", gap: Spacing.xs, marginBottom: 3 },
-  fieldLabel: { fontSize: 12, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5 },
-  fieldBadge: { paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 },
-  fieldBadgeText: { fontSize: 9, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 },
-  fieldValue: { fontSize: 14, lineHeight: 19 },
-  noAiBanner: {
-    flexDirection: "row", alignItems: "flex-start", gap: Spacing.sm,
-    padding: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1, marginTop: Spacing.md,
+  phaseLabel: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    textAlign: "center",
+    marginTop: 8,
   },
-  noAiText: { flex: 1, fontSize: 12, lineHeight: 17 },
-  reviewActions: {
-    flexDirection: "row", gap: Spacing.sm,
-    paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md,
+  recTimer: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: "#ef4444",
+    letterSpacing: 2,
+    fontVariant: ["tabular-nums"],
   },
-  // Editable review fields
-  reviewField: {
-    padding: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1,
-    marginBottom: Spacing.sm, overflow: "hidden",
+  phaseHint: {
+    fontSize: 14,
+    color: "rgba(255,255,255,0.40)",
+    textAlign: "center",
+    paddingHorizontal: 32,
+    lineHeight: 20,
   },
-  reviewFieldHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: Spacing.xs },
-  reviewFieldLabel: { fontSize: 12, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5 },
-  reviewFieldValue: { fontSize: 14, lineHeight: 20 },
-  editBadge: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  editBadgeText: { fontSize: 9, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4 },
-  reviewEditInput: {
-    fontSize: 14, lineHeight: 20, borderRadius: BorderRadius.sm,
-    paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs, minHeight: 40,
+  exampleBox: {
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    padding: 18,
+    marginTop: 8,
   },
-  reviewSection: {
-    borderRadius: BorderRadius.md, borderWidth: 1,
-    marginBottom: Spacing.sm, overflow: "hidden",
+  exampleTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: ACCENT,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginBottom: 8,
   },
-  reviewSectionHeader: {
-    flexDirection: "row", alignItems: "center", gap: 6,
-    paddingHorizontal: Spacing.md, paddingTop: Spacing.sm, paddingBottom: 6,
-  },
-  reviewSectionTitle: {
-    fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.6,
-  },
-  reviewSectionRow: {
-    fontSize: 14, lineHeight: 20, paddingHorizontal: Spacing.md,
-    paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth,
+  exampleText: {
+    fontSize: 14,
+    color: "rgba(255,255,255,0.55)",
+    lineHeight: 22,
+    fontStyle: "italic",
   },
 });
