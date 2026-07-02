@@ -24,8 +24,8 @@ const TECH_STACK = [
   { label: "Frontend", value: "React Native + Expo SDK 54" },
   { label: "Backend", value: "Express.js + TypeScript" },
   { label: "Database", value: "PostgreSQL" },
-  { label: "AI Engine", value: "Clinical AI" },
-  { label: "Voice", value: "AI Speech Recognition" },
+  { label: "Clinical Engine", value: "ErMate" },
+  { label: "Voice", value: "ErMate Speech" },
 ];
 
 const OPEN_SOURCE_LIBS = [
@@ -90,7 +90,7 @@ export default function AboutScreen() {
         <View style={[styles.section, { backgroundColor: theme.card }]}>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>About</Text>
           <Text style={[styles.aboutText, { color: theme.textSecondary }]}>
-            ErMate is a mobile-first Emergency Room Electronic Medical Records application designed for emergency medicine physicians and residents. It streamlines the complete patient workflow from triage through discharge with AI-powered features, voice dictation, and evidence-based clinical decision support.
+            ErMate is a mobile-first Emergency Room Electronic Medical Records application designed for emergency medicine physicians and residents. It streamlines the complete patient workflow from triage through discharge with ErMate-powered features, voice dictation, and evidence-based clinical decision support.
           </Text>
         </View>
 
@@ -98,8 +98,8 @@ export default function AboutScreen() {
           <Text style={[styles.sectionTitle, { color: theme.text }]}>Key Features</Text>
           {[
             { icon: "clipboard", text: "Complete ER workflow: Triage, Case Sheet, Disposition, Discharge" },
-            { icon: "mic", text: "Voice dictation with AI clinical data extraction" },
-            { icon: "cpu", text: "AI-powered differential diagnosis with literature references" },
+            { icon: "mic", text: "Voice dictation with ErMate clinical data extraction" },
+            { icon: "cpu", text: "ErMate differential diagnosis with literature references" },
             { icon: "alert-triangle", text: "Red flag detection with severity-based alerts" },
             { icon: "users", text: "Age-based protocols: ATLS (adults) and PALS (pediatrics)" },
             { icon: "file-text", text: "PDF and Word export for case sheets and discharge summaries" },

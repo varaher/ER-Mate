@@ -105,8 +105,8 @@ export default function NotificationsScreen() {
         {
           key: "aiInsights" as const,
           icon: "cpu",
-          label: "AI Insights",
-          description: "AI-powered suggestions and diagnostic alerts",
+          label: "ErMate Insights",
+          description: "ErMate suggestions and diagnostic alerts",
           color: "#8B5CF6",
         },
         {

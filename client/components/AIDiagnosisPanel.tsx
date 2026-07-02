@@ -176,7 +176,7 @@ export function AIDiagnosisPanel({
 
     const apiUrl = getAIApiUrl();
     if (!apiUrl) {
-      setError("AI service is not available. Please try again later.");
+      setError("ErMate service is not available. Please try again later.");
       return;
     }
 
@@ -203,11 +203,11 @@ export function AIDiagnosisPanel({
 
       if (response.status === 402) {
         const errData = await response.json().catch(() => ({}));
-        setError(errData.error || "No AI credits remaining. Upgrade to Pro for unlimited access.");
+        setError(errData.error || "No ErMate credits remaining. Upgrade to Pro for unlimited access.");
       } else if (response.ok) {
         const data = await response.json();
         if (data.suggestions?.length === 0 && data.redFlags?.length === 0) {
-          setError("AI could not generate suggestions. This may be due to service configuration. Please try again later.");
+          setError("ErMate could not generate suggestions. Please try again later.");
         }
         setSuggestions(data.suggestions || []);
         setRedFlags(data.redFlags || []);
@@ -216,11 +216,11 @@ export function AIDiagnosisPanel({
           setExpandedDiagnosis(data.suggestions[0].id);
         }
       } else {
-        setError("Failed to get AI suggestions. Please try again.");
+        setError("Failed to get suggestions. Please try again.");
       }
     } catch (err) {
       console.error("Failed to fetch AI diagnosis:", err);
-      setError("Unable to connect to AI service. Please check your connection.");
+      setError("Unable to connect. Please check your connection.");
     } finally {
       setIsLoading(false);
       setSearchStatus("");
@@ -581,7 +581,7 @@ export function AIDiagnosisPanel({
       <View style={styles.header}>
         <View style={styles.titleRow}>
           <Feather name="cpu" size={20} color="#8B5CF6" />
-          <Text style={[styles.title, { color: theme.text }]}>Clinical Decision Support</Text>
+          <Text style={[styles.title, { color: theme.text }]}>ErMate Decision Support</Text>
         </View>
         <Pressable
           style={[styles.analyzeButton, isLoading && styles.buttonDisabled]}

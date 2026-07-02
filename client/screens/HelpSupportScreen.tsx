@@ -38,7 +38,7 @@ const FAQ_ITEMS = [
   },
   {
     question: "How does voice dictation work?",
-    answer: "Look for the microphone icon on supported fields. Tap to start recording your clinical notes. The AI will transcribe your speech and automatically extract relevant clinical data like chief complaints, vitals, and history.",
+    answer: "Look for the microphone icon on supported fields. Tap to start recording your clinical notes. ErMate will transcribe your speech and automatically extract relevant clinical data like chief complaints, vitals, and history.",
   },
   {
     question: "How do I export a case sheet or discharge summary?",

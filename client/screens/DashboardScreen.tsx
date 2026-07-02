@@ -772,7 +772,7 @@ export default function DashboardScreen() {
             <View style={styles.creditsWidgetLeft}>
               <Feather name="cpu" size={20} color={theme.primary} />
               <View>
-                <Text style={[styles.creditsWidgetTitle, { color: theme.text }]}>AI Credits</Text>
+                <Text style={[styles.creditsWidgetTitle, { color: theme.text }]}>ErMate Credits</Text>
                 {aiCredits === 0 ? (
                   <Text style={[styles.creditsWidgetStatus, { color: TriageColors.red }]}>Exhausted</Text>
                 ) : aiCredits <= 2 ? (

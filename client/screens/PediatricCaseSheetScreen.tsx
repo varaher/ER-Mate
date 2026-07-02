@@ -955,7 +955,7 @@ export default function PediatricCaseSheetScreen() {
       setAbgInterpretation(data.interpretation || "Unable to interpret ABG values");
     } catch (error) {
       console.error("ABG interpretation error:", error);
-      Alert.alert("Error", "Failed to get AI interpretation. Please try again.");
+      Alert.alert("Error", "Failed to get interpretation. Please try again.");
     } finally {
       setAbgInterpreting(false);
     }
@@ -1793,7 +1793,7 @@ export default function PediatricCaseSheetScreen() {
                 ) : (
                   <Feather name="cpu" size={16} color="#FFFFFF" />
                 )}
-                <Text style={styles.aiInterpretBtnText}>{abgInterpreting ? "Interpreting..." : "AI Interpret ABG"}</Text>
+                <Text style={styles.aiInterpretBtnText}>{abgInterpreting ? "Interpreting..." : "Interpret ABG"}</Text>
               </Pressable>
               {abgInterpretation && (
                 <View style={[styles.abgInterpretationCard, { backgroundColor: `${theme.primary}10`, borderColor: theme.primary }]}>
@@ -1822,7 +1822,7 @@ export default function PediatricCaseSheetScreen() {
                     style={[styles.abgCopyDxBtn, { borderColor: theme.primary }]}
                     onPress={() => {
                       setAbgData((p) => ({ ...p, finalDiagnosis: abgInterpretation.replace(/\*\*/g, '') }));
-                      Alert.alert("Copied", "AI interpretation copied to Final ABG Diagnosis.");
+                      Alert.alert("Copied", "Interpretation copied to Final ABG Diagnosis.");
                     }}
                   >
                     <Feather name="copy" size={14} color={theme.primary} />

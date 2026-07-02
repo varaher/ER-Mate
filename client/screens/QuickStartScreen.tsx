@@ -31,7 +31,7 @@ const STEPS: TutorialStep[] = [
     iconColor: "#3B82F6",
     iconBg: "#DBEAFE",
     title: "Welcome to ErMate",
-    description: "Your AI-powered Emergency Room EMR companion. Let's walk you through the key features.",
+    description: "Your ErMate Emergency Room EMR companion. Let's walk you through the key features.",
     tips: [
       "Designed for EM physicians and residents",
       "Works on your phone, tablet, or desktop",
@@ -80,11 +80,11 @@ const STEPS: TutorialStep[] = [
     iconColor: "#EF4444",
     iconBg: "#FEE2E2",
     title: "Smart Dictation",
-    description: "Tap the mic icon and speak naturally. AI transcribes your words and auto-fills 20+ case sheet fields instantly.",
+    description: "Tap the mic icon and speak naturally. ErMate transcribes your words and auto-fills 20+ case sheet fields instantly.",
     tips: [
       "Supports full history capture in one go",
       "Tap any field's mic icon to dictate just that field",
-      "Review the transcript before applying — uses 1 AI credit",
+      "Review the transcript before applying — uses 1 ErMate credit",
     ],
   },
   {
@@ -92,11 +92,11 @@ const STEPS: TutorialStep[] = [
     iconColor: "#0EA5E9",
     iconBg: "#E0F2FE",
     title: "Scan Documents",
-    description: "Photograph referral letters, lab reports, or prescriptions. AI reads them and populates your case sheet automatically.",
+    description: "Photograph referral letters, lab reports, or prescriptions. ErMate reads them and populates your case sheet automatically.",
     tips: [
       "Tap the camera icon inside the case sheet",
       "Works with printed text, handwriting, and forms",
-      "Uses 1 AI credit per scan",
+      "Uses 1 ErMate credit per scan",
     ],
   },
   {
@@ -104,11 +104,11 @@ const STEPS: TutorialStep[] = [
     iconColor: "#F59E0B",
     iconBg: "#FEF3C7",
     title: "Clinical Decision Support",
-    description: "Prompt your clinical reasoning with AI-ranked conditions to rule out, backed by PubMed citations and EM guidelines.",
+    description: "Prompt your clinical reasoning with ErMate-ranked conditions to rule out, backed by PubMed citations and EM guidelines.",
     tips: [
       "Found in the Treatment tab",
       "Labels: CONSISTENT / POSSIBLE / LESS LIKELY",
-      "Accept or exclude suggestions to help the AI learn — uses 1 credit",
+      "Accept or exclude suggestions — uses 1 ErMate credit",
     ],
   },
   {
@@ -118,7 +118,7 @@ const STEPS: TutorialStep[] = [
     title: "Export & Discharge",
     description: "Generate discharge summaries and export as PDF or DOCX — shareable instantly via WhatsApp or email.",
     tips: [
-      "AI-generated discharge summaries use 1 credit",
+      "ErMate discharge summaries use 1 credit",
       "PDF and DOCX export is always free",
       "Tap the share icon on any case from the Dashboard",
     ],
@@ -155,7 +155,7 @@ const STEPS: TutorialStep[] = [
     description: "Use the Learn tab for clinical simulations, EM reference chat, and trivia quizzes to stay sharp.",
     tips: [
       "Simulations present real ER scenarios — free to use",
-      "EM Reference answers guideline questions with citations — uses 1 credit",
+      "EM Reference answers guideline questions with citations — uses 1 ErMate credit",
       "Build your weekly trivia streak for consistent practice",
     ],
   },
@@ -163,10 +163,10 @@ const STEPS: TutorialStep[] = [
     icon: "credit-card",
     iconColor: "#3B82F6",
     iconBg: "#DBEAFE",
-    title: "AI Credits",
-    description: "Your Base Plan includes 20 AI credits per month for Smart Dictation, CDS, document scanning, and more.",
+    title: "ErMate Credits",
+    description: "Your Base Plan includes 20 ErMate credits per month for Smart Dictation, CDS, document scanning, and more.",
     tips: [
-      "Free plan: 10 cases total, no AI credits",
+      "Free plan: 10 cases total, no ErMate credits",
       "Base Plan: Unlimited EMR + 20 credits/month",
       "Credits roll over forever — they never expire",
     ],

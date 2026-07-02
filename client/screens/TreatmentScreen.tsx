@@ -112,11 +112,11 @@ export default function TreatmentScreen() {
         setAiSuggestion(res.data.diagnosis);
         setRedFlags(res.data.red_flags || []);
       } else {
-        const errMsg = typeof res.error === 'string' ? res.error : JSON.stringify(res.error || "Failed to get AI diagnosis");
+        const errMsg = typeof res.error === 'string' ? res.error : JSON.stringify(res.error || "Failed to get diagnosis");
         Alert.alert("Error", errMsg);
       }
     } catch (err) {
-      const errMsg = err instanceof Error ? err.message : String(err || "Failed to get AI diagnosis");
+      const errMsg = err instanceof Error ? err.message : String(err || "Failed to get diagnosis");
       Alert.alert("Error", errMsg);
     } finally {
       setAiLoading(false);

@@ -128,7 +128,7 @@ export function DocumentScanner({ onDataExtracted, context, userId }: DocumentSc
       }
 
       if (response.status === 402) {
-        Alert.alert("No AI Credits", data?.error || "No AI credits remaining. Upgrade to Pro for unlimited access.");
+        Alert.alert("No ErMate Credits", data?.error || "No ErMate credits remaining. Upgrade to Pro for unlimited access.");
         return;
       }
       if (!response.ok) {

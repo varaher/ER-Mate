@@ -105,10 +105,10 @@ const FEATURES: Feature[] = [
     icon: "cpu",
     iconColor: "#8b5cf6",
     title: "Clinical Decision Support",
-    subtitle: "AI differential with evidence citations",
+    subtitle: "ErMate differential with evidence citations",
     description:
       "Generates a ranked differential diagnosis labelled CONSISTENT / POSSIBLE / LESS LIKELY, with PubMed and WikEM citations. Tap Add to Case to include in documentation or Exclude to dismiss.",
-    how: "Disposition tab of any case sheet → AI Clinical Decision Support section",
+    how: "Disposition tab of any case sheet → ErMate Decision Support section",
   },
   {
     id: "discharge",
@@ -116,7 +116,7 @@ const FEATURES: Feature[] = [
     icon: "file-text",
     iconColor: "#0ea5e9",
     title: "Discharge Summary",
-    subtitle: "AI-generated, exportable as PDF/DOCX",
+    subtitle: "ErMate-generated, exportable as PDF/DOCX",
     description:
       "Auto-generates a structured discharge summary from all documented data. Export as PDF or DOCX for patient hand-off.",
     how: "Disposition tab → Generate Discharge Summary → Export",
@@ -256,7 +256,7 @@ const FEATURES: Feature[] = [
     icon: "book-open",
     iconColor: "#0ea5e9",
     title: "EM Reference Library",
-    subtitle: "AI-powered guideline chat",
+    subtitle: "ErMate guideline chat",
     description:
       "Ask any emergency medicine clinical question. Responses are grounded in EM guidelines and literature, with PubMed integration for evidence-based answers.",
     how: "Learn tab → EM Reference Library → type your question",

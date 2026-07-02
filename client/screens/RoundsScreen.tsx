@@ -425,9 +425,9 @@ export default function RoundsScreen() {
         });
         if (res.status === 402) {
           const err = await res.json().catch(() => ({}));
-          throw new Error(err.error || "No AI credits remaining. Upgrade to Pro for unlimited access.");
+          throw new Error(err.error || "No ErMate credits remaining. Upgrade to Pro for unlimited access.");
         }
-        if (!res.ok) throw new Error("AI service unavailable");
+        if (!res.ok) throw new Error("ErMate service unavailable");
         const data = await res.json();
         const text: string = data.text ?? "No response generated.";
         setFullText(text);

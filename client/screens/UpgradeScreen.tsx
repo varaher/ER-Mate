@@ -284,10 +284,10 @@ export default function UpgradeScreen() {
                 </View>
               </View>
               <Text style={[s.planDesc, { color: C.faint }]}>
-                10 cases to try ErMate. Includes 5 AI credits to experience Decision Support and Rounds before upgrading.
+                10 cases to try ErMate. Includes 5 ErMate credits to experience Decision Support and Rounds before upgrading.
               </Text>
               <View style={[s.creditPreview, { backgroundColor: "#F0FDF6", borderColor: C.greenBorder }]}>
-                <Text style={[s.creditPreviewTitle, { color: C.greenDark }]}>5 free AI credits included</Text>
+                <Text style={[s.creditPreviewTitle, { color: C.greenDark }]}>5 free ErMate credits included</Text>
                 <View style={s.creditTrack}>
                   <View style={[s.creditFill, { width: 0, backgroundColor: C.green }]} />
                 </View>
@@ -296,12 +296,12 @@ export default function UpgradeScreen() {
               {[
                 { text: "10 cases (lifetime)", ok: true },
                 { text: "Smart Dictation — always free", ok: true },
-                { text: "AI Discharge Summary — always free", ok: true },
+                { text: "ErMate Discharge Summary — always free", ok: true },
                 { text: "ATLS adult + PALS paediatric", ok: true },
                 { text: "PDF / WhatsApp export", ok: true },
-                { text: "5 AI credits (one-time)", ok: true },
+                { text: "5 ErMate credits (one-time)", ok: true },
                 { text: "Unlimited cases", ok: false },
-                { text: "Unlimited AI features", ok: false },
+                { text: "Unlimited ErMate features", ok: false },
                 { text: "Rounds & Clinical Memory", ok: false },
               ].map((f, i) => <FRow key={i} {...f} color={C.muted} />)}
             </View>
@@ -354,13 +354,13 @@ export default function UpgradeScreen() {
                 {[
                   { text: "Unlimited cases", bold: true },
                   { text: "Smart Dictation — always free, always unlimited", bold: true },
-                  { text: "AI Discharge Summary — always free, always unlimited", bold: true },
+                  { text: "ErMate Discharge Summary — always free, always unlimited", bold: true },
                   { text: "ATLS adult + PALS paediatric frameworks" },
                   { text: "Paediatric drug calculator" },
                   { text: "Document OCR scanning" },
-                  { text: "ABG / VBG AI interpretation" },
-                  { text: "Clinical Decision Support — unlimited" },
-                  { text: "EM Reference Library — AI chat, unlimited" },
+                  { text: "ABG / VBG interpretation" },
+                  { text: "ErMate Decision Support — unlimited" },
+                  { text: "EM Reference Library — unlimited" },
                   { text: "PDF export + WhatsApp share" },
                 ].map((f, i) => <FRow key={i} ok bold={!!f.bold} text={f.text} color={C.green} />)}
 
@@ -425,9 +425,9 @@ export default function UpgradeScreen() {
 
             {/* No credits note */}
             <View style={[s.card, { backgroundColor: C.white, borderColor: C.border }]}>
-              <Text style={[s.noCreditsCardTitle, { color: C.ink }]}>No AI credits on Pro?</Text>
+              <Text style={[s.noCreditsCardTitle, { color: C.ink }]}>No ErMate credits on Pro?</Text>
               <Text style={[s.noCreditsCardBody, { color: C.muted }]}>
-                Correct. On Pro, every AI feature just works — no counting, no topping up, no mid-shift surprises.
+                Correct. On Pro, every ErMate feature just works — no counting, no topping up, no mid-shift surprises.
                 Credits only exist on the Free plan as a one-time taste before you decide to upgrade.
               </Text>
             </View>
@@ -565,7 +565,7 @@ export default function UpgradeScreen() {
                     {[
                       { text: "Everything in Individual Pro — for every doctor", bold: true },
                       { text: "Unlimited cases, Dictation, Discharge Summary" },
-                      { text: "All AI — Decision Support, OCR, ABG, EM Reference" },
+                      { text: "Decision Support, OCR, ABG, EM Reference" },
                       { text: "Rounds with all 7 lenses, unlimited", bold: true },
                       { text: "No credits. No limits. Ever.", bold: true },
                     ].map((f, i) => (

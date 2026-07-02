@@ -733,7 +733,7 @@ export default function DischargeSummaryScreen() {
         }
         console.log("[AI] Calling forceUpdate...");
         forceUpdate();
-        Alert.alert("Generated", "AI has generated the Course in Hospital section. Please review and edit as needed.");
+        Alert.alert("Generated", "ErMate has generated the Course in Hospital section. Please review and edit as needed.");
       } else {
         const errMsg = typeof res.error === 'string' ? res.error : JSON.stringify(res.error || "Failed to generate summary");
         console.log("[AI] Error response:", errMsg);
@@ -1182,7 +1182,7 @@ export default function DischargeSummaryScreen() {
                 style={[styles.textAreaLarge, { backgroundColor: theme.backgroundSecondary, color: theme.text }]}
                 defaultValue={summaryRef.current.course_in_hospital}
                 onChangeText={(v) => updateField("course_in_hospital", v)}
-                placeholder="Detailed course in hospital (AI will generate this)..."
+                placeholder="Detailed course in hospital (ErMate will generate this)..."
                 placeholderTextColor={theme.textMuted}
                 multiline
               />

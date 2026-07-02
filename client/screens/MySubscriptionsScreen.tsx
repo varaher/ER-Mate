@@ -86,7 +86,7 @@ function CreditBar({ credits, maxCredits = 5, onUpgrade }: { credits: number; ma
     <View style={[styles.creditBar, { backgroundColor: bgColor, borderColor }]}>
       <View style={styles.creditBarTop}>
         <Text style={[styles.creditBarTitle, { color: titleColor }]}>
-          {gone ? "AI credits used up" : `${credits} AI credit${credits === 1 ? "" : "s"} remaining`}
+          {gone ? "ErMate credits used up" : `${credits} ErMate credit${credits === 1 ? "" : "s"} remaining`}
         </Text>
         <Text style={[styles.creditBarUsed, { color: C.faint }]}>{used}/{maxCredits} used</Text>
       </View>
@@ -95,10 +95,10 @@ function CreditBar({ credits, maxCredits = 5, onUpgrade }: { credits: number; ma
       </View>
       <Text style={[styles.creditBarDesc, { color: C.muted }]}>
         {gone
-          ? "Upgrade to Pro for unlimited AI — Decision Support, Rounds, OCR, and more."
+          ? "Upgrade to Pro for unlimited access — Decision Support, Rounds, OCR, and more."
           : low
-          ? `${credits} credit${credits === 1 ? "" : "s"} left. Each AI action uses 1 credit.`
-          : "Each AI action (Decision Support, Rounds, OCR) uses 1 credit."}
+          ? `${credits} credit${credits === 1 ? "" : "s"} left. Each ErMate action uses 1 credit.`
+          : "Each ErMate action (Decision Support, Rounds, OCR) uses 1 credit."}
       </Text>
       {(gone || low) && (
         <Pressable style={[styles.creditUpgradeBtn, { backgroundColor: C.green }]} onPress={onUpgrade}>
@@ -287,7 +287,7 @@ export default function MySubscriptionsScreen() {
             All features unlocked — 30 days free
           </Text>
           <Text style={{ color: C.muted, fontSize: 13, lineHeight: 18, marginBottom: 12 }}>
-            Full access to Smart Dictation, AI Decision Support, document scanning, unlimited cases, discharge summaries, and every learning tool — at no cost.
+            Full access to Smart Dictation, ErMate Decision Support, document scanning, unlimited cases, discharge summaries, and every learning tool — at no cost.
           </Text>
           {subStatus?.trialEnd ? (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 12 }}>
@@ -554,7 +554,7 @@ export default function MySubscriptionsScreen() {
           {[
             { label: "Case documentation", val: access.cases === "unlimited" ? "Unlimited" : access.cases },
             { label: "Smart Dictation", val: "Always free" },
-            { label: "AI Discharge Summary", val: "Always free" },
+            { label: "ErMate Discharge Summary", val: "Always free" },
             { label: "Decision Support", val: access.unlimited ? "Unlimited" : access.aiCredits > 0 ? `${access.aiCredits} credits left` : "Upgrade to unlock" },
             { label: "Rounds debriefs", val: access.unlimited ? "Unlimited" : access.aiCredits > 0 ? `${access.aiCredits} credits left` : "Upgrade to unlock" },
             { label: "Clinical Memory", val: access.clinicalMemory ? "Private ✓" : "Add Pro" },

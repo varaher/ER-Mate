@@ -1841,7 +1841,7 @@ export default function CaseSheetScreen() {
       
       if (response.status === 402) {
         const errData = await response.json().catch(() => ({}));
-        Alert.alert("No AI Credits", errData.error || "No AI credits remaining. Upgrade to Pro for unlimited access.");
+        Alert.alert("No ErMate Credits", errData.error || "No ErMate credits remaining. Upgrade to Pro for unlimited access.");
         return;
       }
       if (!response.ok) {
@@ -1852,7 +1852,7 @@ export default function CaseSheetScreen() {
       setAbgInterpretation(data.interpretation || "Unable to interpret ABG values");
     } catch (error) {
       console.error("ABG interpretation error:", error);
-      Alert.alert("Error", "Failed to get AI interpretation. Please try again.");
+      Alert.alert("Error", "Failed to get interpretation. Please try again.");
     } finally {
       setAbgInterpreting(false);
     }
@@ -1870,7 +1870,7 @@ export default function CaseSheetScreen() {
 
       if (response.status === 402) {
         const errData = await response.json().catch(() => ({}));
-        Alert.alert("No AI Credits", errData.error || "No AI credits remaining. Upgrade to Pro for unlimited access.");
+        Alert.alert("No ErMate Credits", errData.error || "No ErMate credits remaining. Upgrade to Pro for unlimited access.");
         return;
       }
       if (!response.ok) {
@@ -3187,7 +3187,7 @@ export default function CaseSheetScreen() {
                 ) : (
                   <Feather name="cpu" size={16} color="#FFFFFF" />
                 )}
-                <Text style={styles.aiInterpretBtnText}>{abgInterpreting ? "Interpreting..." : "AI Interpret ABG"}</Text>
+                <Text style={styles.aiInterpretBtnText}>{abgInterpreting ? "Interpreting..." : "Interpret ABG"}</Text>
               </Pressable>
               {abgInterpretation && (
                 <View style={[styles.abgInterpretationCard, { backgroundColor: `${theme.primary}10`, borderColor: theme.primary }]}>
@@ -3261,7 +3261,7 @@ export default function CaseSheetScreen() {
                 style={[styles.aiScribeToolBtn, { backgroundColor: '#7c3aed15', borderColor: '#7c3aed40' }]}
               >
                 <Feather name="message-circle" size={16} color="#7c3aed" />
-                <Text style={[styles.aiScribeToolBtnText, { color: '#7c3aed' }]}>AI Scribe</Text>
+                <Text style={[styles.aiScribeToolBtnText, { color: '#7c3aed' }]}>ErMate</Text>
               </Pressable>
               <DocumentScanner
                 onDataExtracted={handleDocumentScanExtraction}
@@ -3686,7 +3686,7 @@ export default function CaseSheetScreen() {
                 style={[styles.aiScribeToolBtn, { backgroundColor: '#7c3aed15', borderColor: '#7c3aed40' }]}
               >
                 <Feather name="message-circle" size={16} color="#7c3aed" />
-                <Text style={[styles.aiScribeToolBtnText, { color: '#7c3aed' }]}>AI Scribe</Text>
+                <Text style={[styles.aiScribeToolBtnText, { color: '#7c3aed' }]}>ErMate</Text>
               </Pressable>
               <DocumentScanner
                 onDataExtracted={handleDocumentScanExtraction}
@@ -3852,7 +3852,7 @@ export default function CaseSheetScreen() {
         <View style={{ flex: 1, backgroundColor: '#0F1419' }}>
           <View style={[styles.chatModalHeader, { backgroundColor: '#0F1419', borderBottomColor: 'rgba(255,255,255,0.08)' }]}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.chatModalTitle, { color: '#FFFFFF' }]}>AI Scribe</Text>
+              <Text style={[styles.chatModalTitle, { color: '#FFFFFF' }]}>ErMate</Text>
               <Text style={[styles.chatModalSub, { color: 'rgba(255,255,255,0.45)' }]}>
                 {caseData?.patient?.name ? `${caseData.patient.name} · ` : ''}Tap to dictate or type a command
               </Text>

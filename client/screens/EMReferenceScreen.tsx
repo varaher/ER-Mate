@@ -143,7 +143,7 @@ export default function EMReferenceScreen() {
 
         if (res.status === 402) {
           const err = await res.json().catch(() => ({}));
-          const errorMsg: Message = { id: Date.now().toString(), role: "assistant", content: err.error || "No AI credits remaining. Upgrade to Pro for unlimited access." };
+          const errorMsg: Message = { id: Date.now().toString(), role: "assistant", content: err.error || "No ErMate credits remaining. Upgrade to Pro for unlimited access." };
           setMessages((prev) => [...prev, errorMsg]);
           setLoading(false);
           return;

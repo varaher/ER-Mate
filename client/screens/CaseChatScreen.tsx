@@ -199,7 +199,7 @@ export default function CaseChatScreen({ route, navigation }: Props) {
       {/* Header */}
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.headerTitle}>AI Scribe</Text>
+          <Text style={styles.headerTitle}>ErMate</Text>
           <Text style={styles.headerSub} numberOfLines={1}>
             {patientLabel}
           </Text>

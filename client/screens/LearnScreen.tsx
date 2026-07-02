@@ -20,7 +20,7 @@ const learnSections = [
   {
     id: "rounds",
     title: "Rounds",
-    subtitle: "Debrief your real cases with AI across 6 clinical thinking lenses",
+    subtitle: "Debrief your real cases with ErMate across 6 clinical thinking lenses",
     icon: "rotate-cw" as const,
     color: "#1DB870",
     route: "Rounds" as const,
@@ -44,7 +44,7 @@ const learnSections = [
   {
     id: "em-reference",
     title: "EM Reference Library",
-    subtitle: "AI-powered clinical knowledge with textbook and guideline references",
+    subtitle: "ErMate clinical knowledge with textbook and guideline references",
     icon: "book-open" as const,
     color: TriageColors.blue,
     route: "EMReference" as const,
