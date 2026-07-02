@@ -2206,8 +2206,8 @@ export default function CaseSheetScreen() {
     const completion = calculateDictationCompletion(data);
     setDictationCompletion(completion);
     setPendingExtracted(data);
-    setShowChatModal(true);
     handleSave(true);
+    navigation.navigate('CaseChat', { caseId, patientName: caseData?.patient?.name });
   };
 
   const handleDocumentScanExtraction = (data: {
@@ -2427,7 +2427,7 @@ export default function CaseSheetScreen() {
           </View>
           <View style={styles.headerRight}>
             <Pressable style={styles.headerIcon}><Feather name="settings" size={20} color={theme.textSecondary} /></Pressable>
-            <Pressable style={styles.headerIcon} onPress={() => setShowChatModal(true)}>
+            <Pressable style={styles.headerIcon} onPress={() => navigation.navigate('CaseChat', { caseId, patientName: caseData?.patient?.name })}>
               <Feather name="message-circle" size={20} color="#7c3aed" />
             </Pressable>
           </View>
@@ -3257,7 +3257,7 @@ export default function CaseSheetScreen() {
           <>
             <View style={styles.inputToolsRow}>
               <Pressable
-                onPress={() => setShowChatModal(true)}
+                onPress={() => navigation.navigate('CaseChat', { caseId, patientName: caseData?.patient?.name })}
                 style={[styles.aiScribeToolBtn, { backgroundColor: '#7c3aed15', borderColor: '#7c3aed40' }]}
               >
                 <Feather name="message-circle" size={16} color="#7c3aed" />
@@ -3682,7 +3682,7 @@ export default function CaseSheetScreen() {
           <>
             <View style={styles.inputToolsRow}>
               <Pressable
-                onPress={() => setShowChatModal(true)}
+                onPress={() => navigation.navigate('CaseChat', { caseId, patientName: caseData?.patient?.name })}
                 style={[styles.aiScribeToolBtn, { backgroundColor: '#7c3aed15', borderColor: '#7c3aed40' }]}
               >
                 <Feather name="message-circle" size={16} color="#7c3aed" />

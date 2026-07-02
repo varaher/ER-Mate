@@ -1,11 +1,11 @@
 {
-  "id": "2728b1fa-8141-4fea-85aa-6251098b9d1f",
-  "createdAt": "2026-07-01T14:20:34.115Z",
+  "id": "955a35b6-702e-46c9-9f7a-14e0d290e407",
+  "createdAt": "2026-07-01T23:58:54.703Z",
   "runtimeVersion": "1.0.0",
   "launchAsset": {
-    "key": "bundle-1782915634115-1156",
+    "key": "bundle-1782950334703-1619",
     "contentType": "application/javascript",
-    "url": "https://er-mate.replit.app/1782915634115-1156/_expo/static/js/ios/bundle.js"
+    "url": "https://er-mate.replit.app/1782950334703-1619/_expo/static/js/ios/bundle.js"
   },
   "assets": [],
   "metadata": {},
@@ -139,6 +139,6 @@
       },
       "mainModuleName": "client/index"
     },
-    "scopeKey": "@anonymous/ermate-f55999d4-ec55-49b6-a34a-d7ea0df911b5"
+    "scopeKey": "@anonymous/ermate-0e12051a-f079-43e8-a581-558d61600063"
   }
 }

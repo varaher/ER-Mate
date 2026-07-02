@@ -48,6 +48,7 @@ import AdminDashboardScreen from "@/screens/department/AdminDashboardScreen";
 import HandoverDetailScreen from "@/screens/HandoverDetailScreen";
 import EscalationScreen from "@/screens/EscalationScreen";
 import TourScreen from "@/screens/TourScreen";
+import CaseChatScreen from "@/screens/CaseChatScreen";
 
 export type RootStackParamList = {
   Login: undefined;
@@ -107,6 +108,7 @@ export type RootStackParamList = {
   AdminDashboard: undefined;
   HandoverDetail: undefined;
   Escalation: { caseId?: string } | undefined;
+  CaseChat: { caseId: string; patientName?: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -436,6 +438,13 @@ export default function RootStackNavigator() {
             options={{
               presentation: "modal",
               headerTitle: "Escalations",
+            }}
+          />
+          <Stack.Screen
+            name="CaseChat"
+            component={CaseChatScreen}
+            options={{
+              headerShown: false,
             }}
           />
         </>
