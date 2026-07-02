@@ -35,20 +35,21 @@ const SHIFT_ROW_COLORS = ["#F59E0B", "#7C6AF6", "#374151", "#3b82f6", "#10b981"]
 const MEMBER_ROLE_COLORS: Record<string, string> = { hod: "#7C6AF6", consultant: "#7C6AF6", resident: "#10b981" };
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const MONTH_LABELS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const MONTH_FULL = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const SCREEN_W = Dimensions.get("window").width;
 const H_PAD = Spacing.lg;
 const LEFT_COL = 44;
 const DAY_COL = Math.max(38, Math.floor((SCREEN_W - H_PAD * 2 - LEFT_COL) / 7));
 const CELL_H = 62;
 
-// Navigation limits
-const WEEKS_BACK = 8;
-const WEEKS_FORWARD = 4;
+// Navigation limits (months)
+const MONTHS_BACK = 2;
+const MONTHS_FORWARD = 3;
 
 // ── Date helpers ─────────────────────────────────────────────────────────────
 function getMonday(d: Date): Date {
   const date = new Date(d);
-  const day = date.getDay(); // 0=Sun, 1=Mon..6=Sat
+  const day = date.getDay();
   const diff = day === 0 ? -6 : 1 - day;
   date.setDate(date.getDate() + diff);
   date.setHours(0, 0, 0, 0);
@@ -62,21 +63,58 @@ function formatDate(d: Date): string {
   return `${y}-${m}-${dd}`;
 }
 
-function getWeekDates(monday: Date) {
+function getMonthFirstDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+
+type DayInfo = {
+  label: string;
+  dateNum: number;
+  month: string;
+  dateStr: string;
+  isToday: boolean;
+  isPast: boolean;
+  inMonth: boolean;
+};
+
+type WeekData = {
+  weekLabel: string;
+  days: DayInfo[];
+};
+
+function getWeeksOfMonth(monthDate: Date): WeekData[] {
+  const year = monthDate.getFullYear();
+  const month = monthDate.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const lastDayOfMonth = new Date(year, month + 1, 0);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(monday);
-    d.setDate(monday.getDate() + i);
-    return {
-      label: DAY_LABELS[i],
-      dateNum: d.getDate(),
-      month: MONTH_LABELS[d.getMonth()],
-      dateStr: formatDate(d),
-      isToday: d.toDateString() === today.toDateString(),
-      isPast: d < today,
-    };
-  });
+
+  const start = getMonday(firstDay);
+  const weeks: WeekData[] = [];
+
+  let current = new Date(start);
+  while (current <= lastDayOfMonth) {
+    const days: DayInfo[] = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(current);
+      d.setDate(current.getDate() + i);
+      return {
+        label: DAY_LABELS[i],
+        dateNum: d.getDate(),
+        month: MONTH_LABELS[d.getMonth()],
+        dateStr: formatDate(d),
+        isToday: d.toDateString() === today.toDateString(),
+        isPast: d < today,
+        inMonth: d.getMonth() === month,
+      };
+    });
+    weeks.push({
+      weekLabel: `${days[0].dateNum} ${days[0].month} – ${days[6].dateNum} ${days[6].month}`,
+      days,
+    });
+    current.setDate(current.getDate() + 7);
+  }
+  return weeks;
 }
 
 // ── Time picker modal ────────────────────────────────────────────────────────
@@ -155,10 +193,10 @@ const tStyles = StyleSheet.create({
 
 // ── Grid cell ─────────────────────────────────────────────────────────────────
 function RotaGridCell({
-  assignments, rotaMembers, isToday, isPast, onTap, theme,
+  assignments, rotaMembers, isToday, isPast, dimmed, onTap, theme,
 }: {
   assignments: any[]; rotaMembers: any[]; isToday: boolean;
-  isPast: boolean; onTap: () => void; theme: any;
+  isPast: boolean; dimmed?: boolean; onTap: () => void; theme: any;
 }) {
   const assigned = assignments
     .map((a) => rotaMembers.find((m) => m.userId === a.memberUserId))
@@ -177,7 +215,7 @@ function RotaGridCell({
         margin: 2,
         alignItems: "center",
         justifyContent: "center",
-        opacity: pressed ? 0.65 : isPast ? 0.45 : 1,
+        opacity: pressed ? 0.65 : (isPast || dimmed) ? 0.4 : 1,
       })}
     >
       {assigned.length === 0 ? (
@@ -402,17 +440,19 @@ export default function ManageRosterScreen() {
   const [rotaMembers, setRotaMembers] = useState<any[]>([]);
   const [rotaLoading, setRotaLoading] = useState(false);
 
-  // ── Week navigation (date-based) ──
-  const [weekStart, setWeekStart] = useState<Date>(() => getMonday(new Date()));
-  const todayMonday = getMonday(new Date());
-  const minWeek = new Date(todayMonday); minWeek.setDate(minWeek.getDate() - WEEKS_BACK * 7);
-  const maxWeek = new Date(todayMonday); maxWeek.setDate(maxWeek.getDate() + WEEKS_FORWARD * 7);
-  const canGoBack = weekStart > minWeek;
-  const canGoForward = weekStart < maxWeek;
-  const isCurrentWeek = weekStart.toDateString() === todayMonday.toDateString();
+  // ── Month navigation ──
+  const [monthStart, setMonthStart] = useState<Date>(() => getMonthFirstDay(new Date()));
+  const todayMonthFirst = getMonthFirstDay(new Date());
+  const minMonth = new Date(todayMonthFirst.getFullYear(), todayMonthFirst.getMonth() - MONTHS_BACK, 1);
+  const maxMonth = new Date(todayMonthFirst.getFullYear(), todayMonthFirst.getMonth() + MONTHS_FORWARD, 1);
+  const canGoPrevMonth = monthStart > minMonth;
+  const canGoNextMonth = monthStart < maxMonth;
+  const isCurrentMonth =
+    monthStart.getFullYear() === todayMonthFirst.getFullYear() &&
+    monthStart.getMonth() === todayMonthFirst.getMonth();
 
   // ── Grid UI ──
-  const [viewMode, setViewMode] = useState<"hod" | "my">("hod");
+  const [viewMode, setViewMode] = useState<"grid" | "my">("grid");
   const [gridSheet, setGridSheet] = useState<GridSheet>(null);
   const [assigningId, setAssigningId] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<number | null>(null);
@@ -437,51 +477,55 @@ export default function ManageRosterScreen() {
 
   const myId = (user as any)?.id;
 
-  // ── Computed week data ──
-  const weekDays = getWeekDates(weekStart);
-  const [firstDay, lastDay] = [weekDays[0], weekDays[6]];
-  const weekLabel = (() => {
-    const diffMs = weekStart.getTime() - todayMonday.getTime();
-    const diffWeeks = Math.round(diffMs / (7 * 24 * 60 * 60 * 1000));
-    if (diffWeeks === 0) return "This Week";
-    if (diffWeeks === 1) return "Next Week";
-    if (diffWeeks === -1) return "Last Week";
-    if (diffWeeks > 0) return `+${diffWeeks} weeks`;
-    return `${diffWeeks} weeks`;
-  })();
-  const weekRange = `${firstDay.dateNum} ${firstDay.month} – ${lastDay.dateNum} ${lastDay.month}`;
+  // ── Computed month data ──
+  const monthWeeks = getWeeksOfMonth(monthStart);
+  const monthLabel = `${MONTH_FULL[monthStart.getMonth()]} ${monthStart.getFullYear()}`;
+  const allMonthDays = monthWeeks.flatMap((w) => w.days.filter((d) => d.inMonth));
 
   const getCellAssignments = (shiftId: number, dateStr: string) =>
     rotaAssignments.filter((a) => a.shiftId === shiftId && a.date === dateStr);
 
+  // ── Monthly stats ──
+  const totalSlots = rotaShifts.length * allMonthDays.length;
+  const filledSlots = rotaShifts.reduce(
+    (acc, s) => acc + allMonthDays.filter((d) => getCellAssignments(s.id, d.dateStr).length > 0).length,
+    0,
+  );
+  const openSlots = totalSlots - filledSlots;
+
   // ── My schedule helpers ──
-  const myWeekAssignments = weekDays.flatMap((day) =>
-    rotaAssignments
-      .filter((a) => a.memberUserId === myId && a.date === day.dateStr)
-      .map((a) => ({ ...a, shift: rotaShifts.find((s) => s.id === a.shiftId), day }))
-      .filter((x) => x.shift),
+  const myMonthAssignments = monthWeeks.flatMap((week) =>
+    week.days.flatMap((day) =>
+      rotaAssignments
+        .filter((a) => a.memberUserId === myId && a.date === day.dateStr)
+        .map((a) => ({ ...a, shift: rotaShifts.find((s) => s.id === a.shiftId), day }))
+        .filter((x) => x.shift),
+    ),
   );
 
-  // Open slots: only future/today days, no one assigned
-  const openSlotsForClaiming = weekDays
-    .filter((day) => !day.isPast)
-    .flatMap((day) =>
-      rotaShifts
-        .filter((shift) => {
-          const cell = getCellAssignments(shift.id, day.dateStr);
-          return cell.length === 0 && !cell.some((a: any) => a.memberUserId === myId);
-        })
-        .map((shift) => ({ shift, day })),
-    );
+  const openSlotsForClaiming = monthWeeks.flatMap((week) =>
+    week.days
+      .filter((day) => !day.isPast && day.inMonth)
+      .flatMap((day) =>
+        rotaShifts
+          .filter((shift) => {
+            const cell = getCellAssignments(shift.id, day.dateStr);
+            return cell.length === 0 && !cell.some((a: any) => a.memberUserId === myId);
+          })
+          .map((shift) => ({ shift, day })),
+      ),
+  );
 
   // ── Load functions ──
-  const loadRota = useCallback(async (ws?: Date) => {
+  const loadRota = useCallback(async (ms?: Date) => {
     if (!department || !token) return;
-    const start = ws ?? weekStart;
-    const endDay = new Date(start);
-    endDay.setDate(start.getDate() + 6);
-    const startDate = formatDate(start);
-    const endDate = formatDate(endDay);
+    const m = ms ?? monthStart;
+    const firstDay = getMonthFirstDay(m);
+    const lastDay = new Date(firstDay.getFullYear(), firstDay.getMonth() + 1, 0);
+    // Include days from previous week that appear in the first-week row
+    const startMonday = getMonday(firstDay);
+    const startDate = formatDate(startMonday);
+    const endDate = formatDate(lastDay);
     setRotaLoading(true);
     try {
       const res = await fetch(
@@ -496,7 +540,7 @@ export default function ManageRosterScreen() {
       }
     } catch {}
     setRotaLoading(false);
-  }, [department?.id, token, weekStart]);
+  }, [department?.id, token, monthStart]);
 
   const loadRoster = async (silent = false) => {
     if (!department || !token) { setLoading(false); return; }
@@ -517,31 +561,27 @@ export default function ManageRosterScreen() {
 
   useFocusEffect(useCallback(() => {
     loadRoster();
-    loadRota(weekStart);
+    loadRota(monthStart);
   }, [department?.id]));
 
-  // Re-fetch rota when weekStart changes
+  // Re-fetch rota when monthStart changes
   useEffect(() => {
-    if (department && token) loadRota(weekStart);
-  }, [weekStart, department?.id]);
+    if (department && token) loadRota(monthStart);
+  }, [monthStart, department?.id]);
 
   // ── Navigation ──
-  const goToPrevWeek = () => {
-    if (!canGoBack) return;
-    const prev = new Date(weekStart);
-    prev.setDate(prev.getDate() - 7);
-    setWeekStart(prev);
+  const goToPrevMonth = () => {
+    if (!canGoPrevMonth) return;
+    setMonthStart(new Date(monthStart.getFullYear(), monthStart.getMonth() - 1, 1));
   };
 
-  const goToNextWeek = () => {
-    if (!canGoForward) return;
-    const next = new Date(weekStart);
-    next.setDate(next.getDate() + 7);
-    setWeekStart(next);
+  const goToNextMonth = () => {
+    if (!canGoNextMonth) return;
+    setMonthStart(new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1));
   };
 
-  const goToCurrentWeek = () => {
-    setWeekStart(getMonday(new Date()));
+  const goToCurrentMonth = () => {
+    setMonthStart(getMonthFirstDay(new Date()));
   };
 
   // ── Invite link handlers ──
@@ -742,7 +782,7 @@ export default function ManageRosterScreen() {
         }),
       });
       const data = await res.json();
-      if (res.ok) { setEditShiftModal(false); loadRota(weekStart); refreshDept(); }
+      if (res.ok) { setEditShiftModal(false); loadRota(monthStart); refreshDept(); }
       else Alert.alert("Error", data.error || "Failed to save shift");
     } catch { Alert.alert("Error", "Network error"); }
     setSavingShift(false);
@@ -773,12 +813,6 @@ export default function ManageRosterScreen() {
   const hodMember = members.find((m) => m.role === "hod");
   const pendingMembers = members.filter((m) => m.status === "pending");
 
-  // Stats for subtitle
-  const totalSlots = rotaShifts.length * 7;
-  const filledSlots = rotaShifts.reduce((acc, s) =>
-    acc + weekDays.filter((d) => getCellAssignments(s.id, d.dateStr).length > 0).length, 0);
-  const openSlots = totalSlots - filledSlots;
-
   if (!department) {
     return (
       <View style={[styles.center, { backgroundColor: theme.backgroundDefault }]}>
@@ -795,7 +829,7 @@ export default function ManageRosterScreen() {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => { setRefreshing(true); loadRoster(); loadRota(weekStart); }}
+            onRefresh={() => { setRefreshing(true); loadRoster(); loadRota(monthStart); }}
           />
         }
       >
@@ -803,9 +837,9 @@ export default function ManageRosterScreen() {
         {/* ── Invite Link ── */}
         {inviteLink ? (
           <>
-            <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>TEAM INVITE LINK</Text>
+            <Text style={[styles.sectionHeading, { color: theme.text }]}>Team Invite</Text>
             <View style={[styles.linkCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-              <Text style={[styles.linkText, { color: theme.text }]} numberOfLines={2} selectable>{inviteLink}</Text>
+              <Text style={[styles.linkText, { color: theme.textMuted }]} numberOfLines={2} selectable>{inviteLink}</Text>
               <View style={styles.linkActions}>
                 <Pressable
                   style={({ pressed }) => [styles.linkBtn, { backgroundColor: copied ? theme.primary : theme.backgroundSecondary, opacity: pressed ? 0.8 : 1 }]}
@@ -835,177 +869,196 @@ export default function ManageRosterScreen() {
           </>
         ) : null}
 
-        {/* ── Rota header ── */}
-        <View style={[styles.rotaHeader, { marginTop: inviteLink ? Spacing.xl : 0 }]}>
-          <View>
-            <Text style={[styles.sectionTitle, { color: theme.textSecondary, marginBottom: 2 }]}>WEEKLY ROTA</Text>
-            {rotaShifts.length > 0 && (
-              <Text style={[styles.rotaSubtitle, { color: theme.textMuted }]}>
-                {openSlots > 0 ? `${openSlots} of ${totalSlots} slots open` : "All slots filled"}
-              </Text>
-            )}
-          </View>
-          <View style={[styles.toggleRow, { backgroundColor: theme.backgroundSecondary }]}>
-            <Pressable
-              style={[styles.toggleBtn, viewMode === "hod" && { backgroundColor: theme.card }]}
-              onPress={() => setViewMode("hod")}
-            >
-              <Text style={[styles.toggleBtnText, { color: viewMode === "hod" ? theme.primary : theme.textMuted }]}>
-                {isHOD ? "Grid" : "Schedule"}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[styles.toggleBtn, viewMode === "my" && { backgroundColor: theme.card }]}
-              onPress={() => setViewMode("my")}
-            >
-              <Text style={[styles.toggleBtnText, { color: viewMode === "my" ? theme.primary : theme.textMuted }]}>
-                My Shifts
-              </Text>
-            </Pressable>
-          </View>
-        </View>
+        {/* ══════════════════ MONTHLY ROTA ══════════════════ */}
+        <View style={{ marginTop: inviteLink ? Spacing.xl : 0 }}>
 
-        {/* ── Week navigation ── */}
-        <View style={[styles.weekNav, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <Pressable
-            onPress={goToPrevWeek}
-            disabled={!canGoBack}
-            style={({ pressed }) => [styles.weekNavBtn, { backgroundColor: theme.backgroundSecondary, opacity: !canGoBack ? 0.3 : pressed ? 0.7 : 1 }]}
-          >
-            <Feather name="chevron-left" size={18} color={theme.text} />
-          </Pressable>
-
-          <Pressable onPress={goToCurrentWeek} style={{ alignItems: "center" }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <Text style={[styles.weekLabel, { color: theme.text }]}>{weekLabel}</Text>
-              {!isCurrentWeek && (
-                <View style={[styles.todayChip, { backgroundColor: theme.primaryLight }]}>
-                  <Text style={[styles.todayChipText, { color: theme.primary }]}>Today</Text>
-                </View>
+          {/* Section heading + view toggle */}
+          <View style={[styles.rotaHeader, { marginBottom: Spacing.sm }]}>
+            <View>
+              <Text style={[styles.sectionHeading, { color: theme.text }]}>Monthly Rota</Text>
+              {rotaShifts.length > 0 && (
+                <Text style={[styles.rotaSubtitle, { color: theme.textMuted }]}>
+                  {openSlots > 0 ? `${openSlots} open slots this month` : "All slots filled"}
+                </Text>
               )}
             </View>
-            <Text style={[styles.weekRange, { color: theme.textMuted }]}>{weekRange}</Text>
-          </Pressable>
+            <View style={[styles.toggleRow, { backgroundColor: theme.backgroundSecondary }]}>
+              <Pressable
+                style={[styles.toggleBtn, viewMode === "grid" && { backgroundColor: theme.card }]}
+                onPress={() => setViewMode("grid")}
+              >
+                <Text style={[styles.toggleBtnText, { color: viewMode === "grid" ? theme.primary : theme.textMuted }]}>
+                  Grid
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[styles.toggleBtn, viewMode === "my" && { backgroundColor: theme.card }]}
+                onPress={() => setViewMode("my")}
+              >
+                <Text style={[styles.toggleBtnText, { color: viewMode === "my" ? theme.primary : theme.textMuted }]}>
+                  My Shifts
+                </Text>
+              </Pressable>
+            </View>
+          </View>
 
-          <Pressable
-            onPress={goToNextWeek}
-            disabled={!canGoForward}
-            style={({ pressed }) => [styles.weekNavBtn, { backgroundColor: theme.backgroundSecondary, opacity: !canGoForward ? 0.3 : pressed ? 0.7 : 1 }]}
-          >
-            <Feather name="chevron-right" size={18} color={theme.text} />
-          </Pressable>
-        </View>
+          {/* Month navigation */}
+          <View style={[styles.monthNav, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <Pressable
+              onPress={goToPrevMonth}
+              disabled={!canGoPrevMonth}
+              style={({ pressed }) => [styles.monthNavBtn, { backgroundColor: theme.backgroundSecondary, opacity: !canGoPrevMonth ? 0.3 : pressed ? 0.7 : 1 }]}
+            >
+              <Feather name="chevron-left" size={18} color={theme.text} />
+            </Pressable>
 
-        {/* ═════════════ HOD GRID VIEW ═════════════ */}
-        {viewMode === "hod" && (
-          <View style={[styles.gridCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            {rotaLoading ? (
-              <View style={styles.gridEmpty}>
-                <ActivityIndicator color={theme.primary} />
-              </View>
-            ) : rotaShifts.length === 0 ? (
-              <View style={styles.gridEmpty}>
-                <Feather name="calendar" size={30} color={theme.textMuted} />
-                <Text style={[styles.gridEmptyTitle, { color: theme.textSecondary }]}>No shifts configured</Text>
-                {isHOD && (
-                  <Text style={[styles.gridEmptySub, { color: theme.textMuted }]}>
-                    Use Shift Configuration below to add shifts
-                  </Text>
-                )}
-              </View>
-            ) : (
-              <>
-                {/* Day header row */}
-                <View style={styles.gridRow}>
-                  <View style={{ width: LEFT_COL }} />
-                  {weekDays.map((day) => (
-                    <View key={day.dateStr} style={{ width: DAY_COL, alignItems: "center" }}>
-                      <Text style={[styles.dayLabel, { color: day.isToday ? "#1DB870" : day.isPast ? theme.textMuted + "99" : theme.textMuted }]}>
-                        {day.label}
-                      </Text>
-                      <Text style={[styles.dayDate, { color: day.isToday ? "#1DB870" : day.isPast ? theme.text + "66" : theme.text }]}>
-                        {day.dateNum}
-                      </Text>
-                    </View>
-                  ))}
+            <Pressable onPress={goToCurrentMonth} style={{ alignItems: "center", flex: 1 }}>
+              <Text style={[styles.monthLabel, { color: theme.text }]}>{monthLabel}</Text>
+              {!isCurrentMonth && (
+                <View style={[styles.todayChip, { backgroundColor: theme.primaryLight }]}>
+                  <Text style={[styles.todayChipText, { color: theme.primary }]}>Back to today</Text>
                 </View>
+              )}
+            </Pressable>
 
-                {/* Shift rows */}
-                {rotaShifts.map((shift, sIdx) => {
-                  const shiftColor = SHIFT_ROW_COLORS[sIdx % SHIFT_ROW_COLORS.length];
-                  return (
-                    <View
-                      key={shift.id}
-                      style={[styles.gridRow, sIdx < rotaShifts.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.border + "55" }]}
-                    >
-                      <View style={[styles.shiftLabelCol, { width: LEFT_COL }]}>
-                        <View style={[styles.shiftDot, { backgroundColor: shiftColor }]} />
-                        <Text style={[styles.shiftLabelText, { color: theme.textMuted }]} numberOfLines={2}>
-                          {shift.name.length > 5 ? shift.name.slice(0, 3) : shift.name}
+            <Pressable
+              onPress={goToNextMonth}
+              disabled={!canGoNextMonth}
+              style={({ pressed }) => [styles.monthNavBtn, { backgroundColor: theme.backgroundSecondary, opacity: !canGoNextMonth ? 0.3 : pressed ? 0.7 : 1 }]}
+            >
+              <Feather name="chevron-right" size={18} color={theme.text} />
+            </Pressable>
+          </View>
+
+          {/* ═════════════ GRID VIEW ═════════════ */}
+          {viewMode === "grid" && (
+            <>
+              {rotaLoading ? (
+                <View style={[styles.gridEmpty, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                  <ActivityIndicator color={theme.primary} />
+                </View>
+              ) : rotaShifts.length === 0 ? (
+                <View style={[styles.gridEmpty, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                  <Feather name="calendar" size={30} color={theme.textMuted} />
+                  <Text style={[styles.gridEmptyTitle, { color: theme.textSecondary }]}>No shifts configured</Text>
+                  {isHOD && (
+                    <Text style={[styles.gridEmptySub, { color: theme.textMuted }]}>
+                      Use Shift Configuration below to add shifts
+                    </Text>
+                  )}
+                </View>
+              ) : (
+                <>
+                  {/* Shift colour legend */}
+                  <View style={[styles.legend, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                    {rotaShifts.map((shift, sIdx) => (
+                      <View key={shift.id} style={styles.legendItem}>
+                        <View style={[styles.legendDot, { backgroundColor: SHIFT_ROW_COLORS[sIdx % SHIFT_ROW_COLORS.length] }]} />
+                        <Text style={[styles.legendText, { color: theme.textMuted }]}>
+                          {shift.name} {shift.startTime}–{shift.endTime}
                         </Text>
                       </View>
-                      {weekDays.map((day) => (
-                        <RotaGridCell
-                          key={day.dateStr}
-                          assignments={getCellAssignments(shift.id, day.dateStr)}
-                          rotaMembers={rotaMembers}
-                          isToday={day.isToday}
-                          isPast={day.isPast}
-                          onTap={() => setGridSheet({
-                            shiftId: shift.id,
-                            dateStr: day.dateStr,
-                            dayLabel: day.label,
-                            dateLabel: `${day.dateNum} ${day.month}`,
-                          })}
-                          theme={theme}
-                        />
-                      ))}
-                    </View>
-                  );
-                })}
+                    ))}
+                  </View>
 
-                {/* Legend */}
-                <View style={[styles.legend, { borderTopColor: theme.border }]}>
-                  {rotaShifts.map((shift, sIdx) => (
-                    <View key={shift.id} style={styles.legendItem}>
-                      <View style={[styles.legendDot, { backgroundColor: SHIFT_ROW_COLORS[sIdx % SHIFT_ROW_COLORS.length] }]} />
-                      <Text style={[styles.legendText, { color: theme.textMuted }]}>
-                        {shift.name} {shift.startTime}–{shift.endTime}
-                      </Text>
+                  {/* Week blocks */}
+                  {monthWeeks.map((week, wIdx) => (
+                    <View key={wIdx} style={[styles.weekBlock, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                      {/* Week label */}
+                      <View style={[styles.weekLabelRow, { borderBottomColor: theme.border }]}>
+                        <Text style={[styles.weekNum, { color: theme.primary }]}>W{wIdx + 1}</Text>
+                        <Text style={[styles.weekRange, { color: theme.textMuted }]}>{week.weekLabel}</Text>
+                      </View>
+
+                      {/* Day header */}
+                      <View style={styles.gridRow}>
+                        <View style={{ width: LEFT_COL }} />
+                        {week.days.map((day) => (
+                          <View key={day.dateStr} style={{ width: DAY_COL, alignItems: "center" }}>
+                            <Text style={[
+                              styles.dayLabel,
+                              { color: day.isToday ? "#1DB870" : day.isPast ? theme.textMuted + "77" : !day.inMonth ? theme.textMuted + "44" : theme.textMuted },
+                            ]}>
+                              {day.label}
+                            </Text>
+                            <Text style={[
+                              styles.dayDate,
+                              {
+                                color: day.isToday ? "#1DB870" : day.isPast ? theme.text + "55" : !day.inMonth ? theme.text + "33" : theme.text,
+                                fontWeight: day.isToday ? "900" : "800",
+                              },
+                            ]}>
+                              {day.dateNum}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+
+                      {/* Shift rows */}
+                      {rotaShifts.map((shift, sIdx) => {
+                        const shiftColor = SHIFT_ROW_COLORS[sIdx % SHIFT_ROW_COLORS.length];
+                        return (
+                          <View
+                            key={shift.id}
+                            style={[styles.gridRow, sIdx < rotaShifts.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.border + "55" }]}
+                          >
+                            <View style={[styles.shiftLabelCol, { width: LEFT_COL }]}>
+                              <View style={[styles.shiftDot, { backgroundColor: shiftColor }]} />
+                              <Text style={[styles.shiftLabelText, { color: theme.textMuted }]} numberOfLines={2}>
+                                {shift.name.length > 5 ? shift.name.slice(0, 3) : shift.name}
+                              </Text>
+                            </View>
+                            {week.days.map((day) => (
+                              <RotaGridCell
+                                key={day.dateStr}
+                                assignments={getCellAssignments(shift.id, day.dateStr)}
+                                rotaMembers={rotaMembers}
+                                isToday={day.isToday}
+                                isPast={day.isPast}
+                                dimmed={!day.inMonth}
+                                onTap={() => setGridSheet({
+                                  shiftId: shift.id,
+                                  dateStr: day.dateStr,
+                                  dayLabel: `${day.label} ${day.dateNum} ${day.month}`,
+                                  dateLabel: `${day.dateNum} ${day.month}`,
+                                })}
+                                theme={theme}
+                              />
+                            ))}
+                          </View>
+                        );
+                      })}
                     </View>
                   ))}
-                </View>
-              </>
-            )}
-          </View>
-        )}
+                </>
+              )}
+            </>
+          )}
 
-        {/* ═════════════ MY SHIFTS VIEW ═════════════ */}
-        {viewMode === "my" && (
-          <View>
-            <Text style={[styles.myViewLabel, { color: theme.textMuted }]}>
-              MY SHIFTS THIS WEEK ({myWeekAssignments.length})
-            </Text>
-            {myWeekAssignments.length === 0 ? (
-              <View style={[styles.myEmptyCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                <Text style={[styles.myEmptyText, { color: theme.textMuted }]}>No shifts assigned this week</Text>
-                {openSlotsForClaiming.length > 0 && (
-                  <Text style={[styles.myEmptySub, { color: theme.textMuted }]}>Claim an open slot below</Text>
-                )}
-              </View>
-            ) : myWeekAssignments.map((item) => {
-              const sIdx = rotaShifts.findIndex((s) => s.id === item.shiftId);
-              return (
+          {/* ═════════════ MY SHIFTS VIEW ═════════════ */}
+          {viewMode === "my" && (
+            <View style={{ marginTop: Spacing.sm }}>
+              <Text style={[styles.myViewLabel, { color: theme.textMuted }]}>
+                MY SHIFTS — {monthLabel.toUpperCase()} ({myMonthAssignments.length})
+              </Text>
+              {myMonthAssignments.length === 0 ? (
+                <View style={[styles.myEmptyCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                  <Text style={[styles.myEmptyText, { color: theme.textMuted }]}>No shifts assigned this month</Text>
+                  {openSlotsForClaiming.length > 0 && (
+                    <Text style={[styles.myEmptySub, { color: theme.textMuted }]}>Claim an open slot below</Text>
+                  )}
+                </View>
+              ) : myMonthAssignments.map((item) => (
                 <View key={item.id} style={[styles.myShiftCard, { backgroundColor: theme.card, borderColor: "rgba(29,184,112,0.3)" }]}>
                   <View style={[styles.myShiftIcon, { backgroundColor: "rgba(29,184,112,0.1)" }]}>
                     <Feather name="check-circle" size={18} color="#1DB870" />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.myShiftName, { color: theme.text }]}>
-                      {item.shift.name} · {item.day.label}
+                      {item.shift.name} · {item.day.label} {item.day.dateNum} {item.day.month}
                     </Text>
                     <Text style={[styles.myShiftTime, { color: theme.textMuted }]}>
-                      {item.shift.startTime}–{item.shift.endTime} · {item.day.dateNum} {item.day.month}
+                      {item.shift.startTime}–{item.shift.endTime}
                     </Text>
                   </View>
                   <Pressable
@@ -1015,51 +1068,54 @@ export default function ManageRosterScreen() {
                     <Text style={[styles.releaseBtnText, { color: theme.textMuted }]}>Release</Text>
                   </Pressable>
                 </View>
-              );
-            })}
+              ))}
 
-            {openSlotsForClaiming.length > 0 && (
-              <>
-                <Text style={[styles.myViewLabel, { color: theme.textMuted, marginTop: Spacing.lg }]}>
-                  OPEN SLOTS — CLAIM ONE ({openSlotsForClaiming.length})
-                </Text>
-                {openSlotsForClaiming.slice(0, 10).map(({ shift, day }) => {
-                  const sIdx = rotaShifts.findIndex((s) => s.id === shift.id);
-                  const shiftColor = SHIFT_ROW_COLORS[sIdx % SHIFT_ROW_COLORS.length];
-                  return (
-                    <View key={`${day.dateStr}-${shift.id}`} style={[styles.openSlotCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                      <View style={[styles.shiftDot, { backgroundColor: shiftColor, margin: 0, marginRight: 4 }]} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.myShiftName, { color: theme.text }]}>
-                          {shift.name} · {day.label}
-                        </Text>
-                        <Text style={[styles.myShiftTime, { color: theme.textMuted }]}>
-                          {shift.startTime}–{shift.endTime} · {day.dateNum} {day.month}
-                        </Text>
+              {openSlotsForClaiming.length > 0 && (
+                <>
+                  <Text style={[styles.myViewLabel, { color: theme.textMuted, marginTop: Spacing.lg }]}>
+                    OPEN SLOTS — CLAIM ONE ({openSlotsForClaiming.length})
+                  </Text>
+                  {openSlotsForClaiming.slice(0, 12).map(({ shift, day }) => {
+                    const sIdx = rotaShifts.findIndex((s) => s.id === shift.id);
+                    const shiftColor = SHIFT_ROW_COLORS[sIdx % SHIFT_ROW_COLORS.length];
+                    return (
+                      <View key={`${day.dateStr}-${shift.id}`} style={[styles.openSlotCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                        <View style={[styles.shiftDot, { backgroundColor: shiftColor, margin: 0, marginRight: 4 }]} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.myShiftName, { color: theme.text }]}>
+                            {shift.name} · {day.label} {day.dateNum} {day.month}
+                          </Text>
+                          <Text style={[styles.myShiftTime, { color: theme.textMuted }]}>
+                            {shift.startTime}–{shift.endTime}
+                          </Text>
+                        </View>
+                        <Pressable
+                          style={({ pressed }) => [styles.claimBtn, { opacity: pressed ? 0.8 : 1 }]}
+                          onPress={() => handleClaim(shift.id, day.dateStr)}
+                        >
+                          <Text style={styles.claimBtnText}>Claim</Text>
+                        </Pressable>
                       </View>
-                      <Pressable
-                        style={({ pressed }) => [styles.claimBtn, { opacity: pressed ? 0.8 : 1 }]}
-                        onPress={() => handleClaim(shift.id, day.dateStr)}
-                      >
-                        <Text style={styles.claimBtnText}>Claim</Text>
-                      </Pressable>
-                    </View>
-                  );
-                })}
-              </>
-            )}
-          </View>
-        )}
+                    );
+                  })}
+                </>
+              )}
+            </View>
+          )}
+        </View>
 
         {/* ── Shift Configuration (HOD only, collapsible) ── */}
         {isHOD && (
-          <View style={{ marginTop: Spacing.lg }}>
+          <View style={{ marginTop: Spacing.xl }}>
+            <Text style={[styles.sectionHeading, { color: theme.text }]}>Shift Configuration</Text>
             <Pressable
               style={[styles.shiftMgmtHeader, { backgroundColor: theme.card, borderColor: theme.border }]}
               onPress={() => setShowShiftMgmt((v) => !v)}
             >
               <Feather name="sliders" size={15} color={theme.primary} />
-              <Text style={[styles.shiftMgmtTitle, { color: theme.text }]}>Shift Configuration</Text>
+              <Text style={[styles.shiftMgmtTitle, { color: theme.text }]}>
+                {rotaShifts.length > 0 ? `${rotaShifts.length} shift${rotaShifts.length > 1 ? "s" : ""} defined` : "No shifts yet"}
+              </Text>
               <Feather name={showShiftMgmt ? "chevron-up" : "chevron-down"} size={16} color={theme.textMuted} />
             </Pressable>
             {showShiftMgmt && (
@@ -1094,12 +1150,11 @@ export default function ManageRosterScreen() {
 
         {/* ── Pending Requests ── */}
         {!loading && pendingMembers.length > 0 && (
-          <>
-            <View style={[styles.sectionRow, { marginTop: Spacing.xl }]}>
-              <Text style={[styles.sectionTitle, { color: theme.textSecondary, marginBottom: 0 }]}>
-                PENDING REQUESTS ({pendingMembers.length})
-              </Text>
-            </View>
+          <View style={{ marginTop: Spacing.xl }}>
+            <Text style={[styles.sectionHeading, { color: theme.text }]}>
+              Pending Requests
+              <Text style={[styles.sectionCount, { color: theme.textMuted }]}> ({pendingMembers.length})</Text>
+            </Text>
             <View style={[styles.card, { backgroundColor: theme.card, marginBottom: Spacing.lg }]}>
               {pendingMembers.map((m) => (
                 <View key={m.id} style={[styles.memberRow, { borderBottomColor: theme.border }]}>
@@ -1135,16 +1190,17 @@ export default function ManageRosterScreen() {
                 </View>
               ))}
             </View>
-          </>
+          </View>
         )}
 
         {/* ── Active Members ── */}
         {loading ? (
           <ActivityIndicator style={{ marginTop: 20 }} color={theme.primary} />
         ) : (hodMember || activeMembers.length > 0) ? (
-          <>
-            <Text style={[styles.sectionTitle, { color: theme.textSecondary, marginTop: pendingMembers.length > 0 ? 0 : Spacing.xl }]}>
-              ACTIVE MEMBERS ({activeMembers.length + (hodMember ? 1 : 0)})
+          <View style={{ marginTop: pendingMembers.length > 0 ? 0 : Spacing.xl }}>
+            <Text style={[styles.sectionHeading, { color: theme.text }]}>
+              Active Members
+              <Text style={[styles.sectionCount, { color: theme.textMuted }]}> ({activeMembers.length + (hodMember ? 1 : 0)})</Text>
             </Text>
             <View style={[styles.card, { backgroundColor: theme.card }]}>
               {hodMember && (
@@ -1187,9 +1243,9 @@ export default function ManageRosterScreen() {
                 </View>
               ))}
             </View>
-          </>
+          </View>
         ) : pendingMembers.length === 0 ? (
-          <View style={[styles.emptyBox, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <View style={[styles.emptyBox, { backgroundColor: theme.card, borderColor: theme.border, marginTop: Spacing.xl }]}>
             <Feather name="users" size={32} color={theme.textMuted} />
             <Text style={[styles.emptyTitle, { color: theme.text }]}>No team members yet</Text>
             <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
@@ -1316,8 +1372,10 @@ export default function ManageRosterScreen() {
 // ── StyleSheet ────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  sectionTitle: { fontSize: 11, fontWeight: "700", letterSpacing: 0.8, marginBottom: Spacing.sm },
-  sectionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: Spacing.sm },
+
+  // Section headings — bold, blog-style
+  sectionHeading: { fontSize: 20, fontWeight: "800", marginBottom: Spacing.sm, letterSpacing: -0.3 },
+  sectionCount: { fontSize: 16, fontWeight: "500" },
 
   linkCard: { borderRadius: BorderRadius.lg, borderWidth: 1, padding: Spacing.md, marginBottom: 0 },
   linkText: { fontSize: 12, marginBottom: Spacing.sm },
@@ -1327,35 +1385,41 @@ const styles = StyleSheet.create({
   regenRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   regenText: { fontSize: 11 },
 
-  rotaHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: Spacing.sm },
-  rotaSubtitle: { fontSize: 11 },
+  rotaHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
+  rotaSubtitle: { fontSize: 13, fontWeight: "500", marginTop: 2 },
   toggleRow: { flexDirection: "row", borderRadius: 10, padding: 3, gap: 2 },
-  toggleBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  toggleBtn: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8 },
   toggleBtnText: { fontSize: 12, fontWeight: "700" },
 
-  weekNav: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderRadius: 12, borderWidth: 1, paddingHorizontal: Spacing.sm, paddingVertical: Spacing.sm, marginBottom: Spacing.sm },
-  weekNavBtn: { width: 34, height: 34, borderRadius: 9, alignItems: "center", justifyContent: "center" },
-  weekLabel: { fontSize: 13, fontWeight: "700" },
-  weekRange: { fontSize: 11, marginTop: 1 },
-  todayChip: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
+  // Month navigation
+  monthNav: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderRadius: 14, borderWidth: 1, paddingHorizontal: Spacing.sm, paddingVertical: Spacing.sm, marginBottom: Spacing.md },
+  monthNavBtn: { width: 38, height: 38, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  monthLabel: { fontSize: 17, fontWeight: "800", letterSpacing: -0.2 },
+  todayChip: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, marginTop: 3 },
   todayChipText: { fontSize: 10, fontWeight: "700" },
 
-  gridCard: { borderRadius: 14, borderWidth: 1, overflow: "hidden", marginBottom: Spacing.md },
-  gridEmpty: { padding: 32, alignItems: "center", gap: 8 },
-  gridEmptyTitle: { fontSize: 14, fontWeight: "600" },
+  // Week blocks within monthly grid
+  weekBlock: { borderRadius: 14, borderWidth: 1, overflow: "hidden", marginBottom: Spacing.md },
+  weekLabelRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1 },
+  weekNum: { fontSize: 11, fontWeight: "900", letterSpacing: 0.5 },
+  weekRange: { fontSize: 11, fontWeight: "500" },
+
+  gridEmpty: { borderRadius: 14, borderWidth: 1, padding: 32, alignItems: "center", gap: 8, marginBottom: Spacing.md },
+  gridEmptyTitle: { fontSize: 15, fontWeight: "700" },
   gridEmptySub: { fontSize: 12, textAlign: "center" },
   gridRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 4, paddingVertical: 4 },
   dayLabel: { fontSize: 9, fontWeight: "700", letterSpacing: 0.5 },
-  dayDate: { fontSize: 14, fontWeight: "800", marginTop: 1 },
+  dayDate: { fontSize: 14, marginTop: 1 },
   shiftLabelCol: { alignItems: "center", justifyContent: "center", gap: 3, paddingVertical: 8 },
   shiftDot: { width: 7, height: 7, borderRadius: 3.5, margin: 2 },
   shiftLabelText: { fontSize: 8, fontWeight: "700", textAlign: "center" },
-  legend: { flexDirection: "row", flexWrap: "wrap", gap: 10, padding: Spacing.md, borderTopWidth: 1 },
-  legendItem: { flexDirection: "row", alignItems: "center", gap: 5 },
-  legendDot: { width: 6, height: 6, borderRadius: 3 },
-  legendText: { fontSize: 9 },
 
-  myViewLabel: { fontSize: 10, fontWeight: "700", letterSpacing: 0.8, marginBottom: Spacing.sm },
+  legend: { flexDirection: "row", flexWrap: "wrap", gap: 10, padding: Spacing.md, borderRadius: 12, borderWidth: 1, marginBottom: Spacing.sm },
+  legendItem: { flexDirection: "row", alignItems: "center", gap: 5 },
+  legendDot: { width: 7, height: 7, borderRadius: 3.5 },
+  legendText: { fontSize: 10, fontWeight: "500" },
+
+  myViewLabel: { fontSize: 11, fontWeight: "800", letterSpacing: 0.8, marginBottom: Spacing.sm },
   myEmptyCard: { borderRadius: 12, borderWidth: 1.5, borderStyle: "dashed", padding: 20, alignItems: "center", marginBottom: Spacing.sm },
   myEmptyText: { fontSize: 13 },
   myEmptySub: { fontSize: 11, marginTop: 4 },
@@ -1373,7 +1437,7 @@ const styles = StyleSheet.create({
   shiftMgmtTitle: { flex: 1, fontSize: 14, fontWeight: "600" },
   shiftMgmtBody: { borderRadius: 12, borderWidth: 1, borderTopWidth: 0, borderTopLeftRadius: 0, borderTopRightRadius: 0, paddingVertical: Spacing.sm },
   shiftMgmtRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderBottomWidth: 1 },
-  shiftMgmtName: { fontSize: 13, fontWeight: "600" },
+  shiftMgmtName: { fontSize: 13, fontWeight: "700" },
   shiftMgmtTime: { fontSize: 11, marginTop: 1 },
   iconBtnSm: { width: 30, height: 30, borderRadius: 8, alignItems: "center", justifyContent: "center" },
   addShiftBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, margin: Spacing.md, borderRadius: 10, borderWidth: 1.5, borderStyle: "dashed", padding: Spacing.sm },
@@ -1381,9 +1445,9 @@ const styles = StyleSheet.create({
 
   card: { borderRadius: BorderRadius.lg, overflow: "hidden", marginBottom: Spacing.sm },
   memberRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, borderBottomWidth: 1 },
-  avatar: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
-  avatarText: { fontSize: 14, fontWeight: "700", color: "#fff" },
-  memberName: { fontSize: 14, fontWeight: "600" },
+  avatar: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
+  avatarText: { fontSize: 15, fontWeight: "800", color: "#fff" },
+  memberName: { fontSize: 15, fontWeight: "700" },
   memberRoleTxt: { fontSize: 12, marginTop: 1 },
   removeMemberBtn: { padding: 8 },
   approvalBtns: { flexDirection: "row", gap: 8 },
@@ -1392,14 +1456,14 @@ const styles = StyleSheet.create({
   approveBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
 
   emptyBox: { borderRadius: BorderRadius.lg, borderWidth: 1, padding: 32, alignItems: "center", gap: 8 },
-  emptyTitle: { fontSize: 15, fontWeight: "600" },
+  emptyTitle: { fontSize: 16, fontWeight: "700" },
   emptyText: { fontSize: 13, textAlign: "center" },
 
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
   modalSheet: { borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 24, paddingBottom: 36 },
   modalHandle: { width: 38, height: 4, borderRadius: 99, alignSelf: "center", marginBottom: 18 },
-  modalTitle: { fontSize: 18, fontWeight: "800", marginBottom: Spacing.lg },
-  fieldLabel: { fontSize: 13, fontWeight: "600", marginBottom: 6 },
+  modalTitle: { fontSize: 20, fontWeight: "800", marginBottom: Spacing.lg, letterSpacing: -0.3 },
+  fieldLabel: { fontSize: 13, fontWeight: "700", marginBottom: 6 },
   textInput: { borderRadius: 12, borderWidth: 1, padding: Spacing.md, fontSize: 15, marginBottom: Spacing.md },
   timeRow: { flexDirection: "row", gap: 12, marginBottom: Spacing.md },
   timePill: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 12, borderWidth: 1, padding: Spacing.sm, paddingHorizontal: Spacing.md },
