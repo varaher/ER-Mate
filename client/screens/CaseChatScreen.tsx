@@ -6,6 +6,7 @@ import {
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RootStackParamList } from '@/navigation/RootStackNavigator';
 import { useAuth } from '@/context/AuthContext';
 import { getApiUrl } from '@/lib/query-client';
@@ -30,7 +31,7 @@ export default function CaseChatScreen({ route, navigation }: Props) {
     setLoading(true);
     setError(null);
     try {
-      const token = user?.token;
+      const token = await AsyncStorage.getItem('token');
       const res = await fetch(`${getApiUrl()}/api/proxy/cases/${caseId}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
