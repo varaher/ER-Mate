@@ -31,7 +31,7 @@ export default function CaseChatScreen({ route, navigation }: Props) {
     setError(null);
     try {
       const token = user?.token;
-      const res = await fetch(`${getApiUrl()}/api/cases/${caseId}`, {
+      const res = await fetch(`${getApiUrl()}/api/proxy/cases/${caseId}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
