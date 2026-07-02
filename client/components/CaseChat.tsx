@@ -896,7 +896,8 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
       const data = await res.json();
       const { reply, type, extracted, specialContent } = data;
       const fc = extracted ? countFields(extracted) : 0;
-      const missing = (type === 'case_update' || type === 'addendum') && extracted
+      // Only show missing fields on the first case note — addendum has sparse extracted data by design
+      const missing = type === 'case_update' && extracted
         ? computeMissingFields(extracted) : [];
       const needsFeedback = ['case_update', 'addendum', 'discharge_summary', 'referral'].includes(type || '');
 

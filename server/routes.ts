@@ -2943,13 +2943,12 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         return res.status(400).json({ error: "Missing required fields (suggestionId, feedbackType)" });
       }
 
-      if (!caseId || caseId.trim() === "") {
-        return res.status(400).json({ error: "Valid caseId is required for feedback tracking" });
-      }
+      // caseId is optional for chat feedback (case may not yet be committed)
+      const resolvedCaseId = caseId?.trim() || "chat_session";
 
       const feedback: AIFeedback = {
         suggestionId,
-        caseId,
+        caseId: resolvedCaseId,
         feedbackType,
         userCorrection,
         suggestionText,

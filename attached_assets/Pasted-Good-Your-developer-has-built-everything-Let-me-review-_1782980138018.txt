@@ -1,0 +1,231 @@
+Good. Your developer has built everything. Let me review what was done and what to test.
+
+---
+
+## What Was Built
+
+```
+✓ 👍 👎 feedback after every document
+✓ Addendum flow — 2nd dictation adds 
+  to same case, not new case note
+✓ Missing fields banner after case note
+✓ 401 token fix — now uses AsyncStorage
+✓ Correction flow — 👎 → text box → 
+  AI corrects + stores learning
+✓ user_feedback stored in database
+```
+
+---
+
+## Test This Right Now — Step by Step
+
+**Test 1 — Basic chat flow**
+```
+Dashboard → New Patient
+Tap mic → speak a case in Hindi 
+or Malayalam
+Stop recording
+
+Expected:
+  Case note appears as formatted document
+  Headings and subheadings visible
+  Abnormal vitals marked ⚠
+  Missing fields listed at bottom
+  👍 👎 appears below document
+```
+
+**Test 2 — Addendum flow**
+```
+After case note appears,
+tap mic again and speak:
+"Patient admitted to CCU.
+ Cardiology reviewed.
+ Started on heparin infusion."
+
+Expected:
+  NEW addendum card appears below
+  NOT a second case note
+  Shows timestamp
+  Shows only the new information
+  👍 👎 appears below addendum
+```
+
+**Test 3 — Discharge summary**
+```
+Type or tap:
+"Discharge summary"
+
+Expected:
+  Discharge summary card appears
+  Pulls from ALL previous messages
+  (case note + addendum combined)
+  Patient name, diagnosis, treatment,
+  disposition all populated
+  Missing fields filled from addendum
+  👍 👎 at bottom
+```
+
+**Test 4 — Feedback correction**
+```
+Tap 👎 on any document
+
+Expected:
+  Text box appears inline
+  Type: "Diagnosis should be NSTEMI 
+         not STEMI"
+  Tap send
+
+Expected response:
+  "Corrected. Updated to NSTEMI.
+   I'll remember this."
+  Updated document appears
+  Correction stored in database
+```
+
+**Test 5 — Copy button**
+```
+Tap [Copy Case Note] on any document
+
+Expected:
+  "Copied ✓" feedback
+  Open Notes app
+  Paste — full formatted text appears
+  Ready to paste into hospital EMR
+```
+
+---
+
+## What To Watch For — Known Risk Areas
+
+**Risk 1 — Token still failing**
+```
+If you still see 401 after the fix,
+tell developer:
+
+Add this log at the top of 
+the sendToAI function:
+
+const token = await AsyncStorage
+  .getItem('token');
+console.log('[Chat] token:', 
+  token ? token.slice(0,10)+'...' 
+        : 'NULL');
+
+Share the log output.
+```
+
+**Risk 2 — Addendum vs new case note**
+```
+The hasCaseNote: true flag tells 
+GPT-4o to create an addendum.
+
+Test: does the second dictation 
+create an ADDENDUM card or a 
+second CASE NOTE card?
+
+If it creates a second case note,
+the flag isn't being passed correctly.
+```
+
+**Risk 3 — Missing fields accuracy**
+```
+The missing fields banner should show
+only genuinely empty fields.
+
+If it shows fields that WERE captured
+as missing — the computeMissingFields()
+function needs adjusting.
+
+Note which fields it incorrectly 
+flags as missing.
+```
+
+**Risk 4 — Web bundle vs mobile**
+```
+Developer noted web bundle was 
+hanging during build but resolved.
+
+Test on your phone first — not 
+the web browser.
+Close Expo Go completely,
+reopen, navigate to the case chat.
+```
+
+---
+
+## The Learning System — Confirm It's Working
+
+```
+After tapping 👎 and submitting 
+a correction:
+
+Ask developer to check the database:
+
+SELECT * FROM user_feedback 
+ORDER BY created_at DESC 
+LIMIT 5;
+
+Should show your correction 
+stored with:
+  doctorId
+  caseId  
+  rating: 'negative'
+  correctionText: what you typed
+  timestamp: just now
+```
+
+---
+
+## What's Still Missing After This Build
+
+```
+Not built yet — next sprint:
+
+1. Referral letter command
+   "Referral letter to cardiology"
+   → generates formatted letter
+
+2. Export PDF from chat
+   [Export PDF] button on each card
+   → downloads PDF
+
+3. WhatsApp share
+   [WhatsApp] button
+   → shares formatted text
+
+4. Suggestion chips
+   After each response show:
+   "What next?" with quick tap options
+
+5. Individual procedure notes
+   "Add procedure note — lumbar puncture"
+   → timestamped procedure note card
+```
+
+---
+
+## Send This to Your Developer
+
+```
+Three things to confirm working:
+
+1. Hard close Expo Go, reopen,
+   test the full chat flow on phone.
+   Share screenshots of what 
+   CaseChatScreen looks like now.
+
+2. Check database after 👎 feedback:
+   SELECT * FROM user_feedback 
+   ORDER BY created_at DESC LIMIT 5;
+   Confirm correction is stored.
+
+3. Test addendum:
+   After case note appears,
+   dictate again.
+   Confirm addendum card appears,
+   NOT a second case note.
+
+Report back with screenshots.
+```
+
+Go test it now and send screenshots of what the chat screen looks like. That'll tell us exactly where we are.
