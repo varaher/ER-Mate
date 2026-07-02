@@ -168,12 +168,15 @@ interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  type: 'text' | 'case_update' | 'discharge_summary' | 'referral' | 'note' | 'error';
+  type: 'text' | 'case_update' | 'addendum' | 'discharge_summary' | 'referral' | 'note' | 'error';
   extracted?: SmartDictationExtracted;
   specialContent?: string;
   fieldCount?: number;
   isLoading?: boolean;
   durationSecs?: number;
+  missingFields?: string[];
+  feedbackState?: 'prompted' | 'positive' | 'correcting' | 'corrected';
+  correctionText?: string;
 }
 
 export interface CaseChatProps {
@@ -189,6 +192,8 @@ export interface CaseChatProps {
   /** If set on mount, automatically renders a case note DocCard in the chat */
   initialExtracted?: SmartDictationExtracted | null;
   disabled?: boolean;
+  caseId?: string;
+  userId?: string;
 }
 
 // ── Wave bar (recording animation) ───────────────────────────────────────────
@@ -298,6 +303,110 @@ function UpdateConfirmation({ text }: { text: string }) {
       <Text style={[s.confirmText, { color: 'rgba(255,255,255,0.85)' }]}>{text}</Text>
     </View>
   );
+}
+
+// ── Missing fields banner ─────────────────────────────────────────────────────
+function MissingFieldsBanner({ fields }: { fields: string[] }) {
+  if (!fields.length) return null;
+  return (
+    <View style={fb.missingRow}>
+      <Feather name="alert-triangle" size={11} color={C.orange} />
+      <Text style={fb.missingText}>
+        Not captured: <Text style={{ fontWeight: '700' }}>{fields.join(' · ')}</Text>
+      </Text>
+    </View>
+  );
+}
+
+// ── Feedback prompt ───────────────────────────────────────────────────────────
+function FeedbackPrompt({
+  state,
+  correctionText,
+  onPositive,
+  onNegative,
+  onTextChange,
+  onSubmit,
+}: {
+  state: ChatMessage['feedbackState'];
+  correctionText?: string;
+  onPositive: () => void;
+  onNegative: () => void;
+  onTextChange: (t: string) => void;
+  onSubmit: () => void;
+}) {
+  if (state === 'positive') {
+    return (
+      <View style={fb.feedbackDone}>
+        <Feather name="check-circle" size={12} color={C.green} />
+        <Text style={[fb.feedbackDoneText, { color: C.green }]}>Noted — thank you</Text>
+      </View>
+    );
+  }
+  if (state === 'corrected') {
+    return (
+      <View style={fb.feedbackDone}>
+        <Feather name="check-circle" size={12} color={C.green} />
+        <Text style={[fb.feedbackDoneText, { color: C.green }]}>Correction applied</Text>
+      </View>
+    );
+  }
+  if (state === 'correcting') {
+    return (
+      <View style={fb.correctionBox}>
+        <Text style={fb.correctionLabel}>What was wrong?</Text>
+        <TextInput
+          style={fb.correctionInput}
+          value={correctionText || ''}
+          onChangeText={onTextChange}
+          placeholder="Describe the correction…"
+          placeholderTextColor="rgba(255,255,255,0.25)"
+          multiline
+          maxLength={400}
+        />
+        <Pressable
+          style={[fb.correctionSubmit, { opacity: (correctionText || '').trim() ? 1 : 0.4 }]}
+          onPress={onSubmit}
+          disabled={!(correctionText || '').trim()}
+        >
+          <Text style={fb.correctionSubmitText}>Submit correction</Text>
+        </Pressable>
+      </View>
+    );
+  }
+  return (
+    <View style={fb.feedbackRow}>
+      <Text style={fb.feedbackLabel}>Was this accurate?</Text>
+      <Pressable style={fb.thumbBtn} onPress={onPositive}>
+        <Text style={fb.thumbText}>👍</Text>
+      </Pressable>
+      <Pressable style={fb.thumbBtn} onPress={onNegative}>
+        <Text style={fb.thumbText}>👎</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+// ── Addendum body ─────────────────────────────────────────────────────────────
+function AddendumBody({ content }: { content: string }) {
+  return (
+    <View style={{ padding: 2 }}>
+      <Text style={{ fontSize: 12, color: '#1A2332', lineHeight: 20 }}>{content}</Text>
+    </View>
+  );
+}
+
+// ── computeMissingFields ──────────────────────────────────────────────────────
+function computeMissingFields(ex: SmartDictationExtracted): string[] {
+  const missing: string[] = [];
+  if (!ex.patientName) missing.push('Name');
+  const vs = ex.vitalsSuggested || {};
+  if (!vs.hr) missing.push('HR');
+  if (!vs.bp) missing.push('BP');
+  if (!vs.spo2) missing.push('SpO₂');
+  if (!ex.allergies) missing.push('Allergies');
+  const pa = (ex as any).primarySurvey || {};
+  if (!pa.airway && !ex.examFindings?.general) missing.push('Airway');
+  return missing.slice(0, 6);
 }
 
 // ── DocCard action button ─────────────────────────────────────────────────────
@@ -700,7 +809,7 @@ function countFields(extracted: SmartDictationExtracted): number {
 const AFTER_CASE_CHIPS = ['Prepare discharge summary', 'Add to treatment', 'Change priority', 'Referral letter'];
 const AFTER_DS_CHIPS   = ['Add allergy', 'Export PDF', 'Show differentials', 'Edit diagnosis'];
 
-export default function CaseChat({ onDataExtracted, patientContext, liveCase, initialExtracted, disabled = false }: CaseChatProps) {
+export default function CaseChat({ onDataExtracted, patientContext, liveCase, initialExtracted, disabled = false, caseId, userId }: CaseChatProps) {
   const [messages, setMessages]         = useState<ChatMessage[]>([]);
   const [inputText, setInputText]       = useState('');
   const [isRecording, setIsRecording]   = useState(false);
@@ -758,10 +867,12 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
     setMessages(p => p.map(m => m.id === id ? { ...m, ...update } : m));
   };
 
-  const sendToAI = async (text: string, durSecs?: number) => {
+  const sendToAI = async (text: string, durSecs?: number, isCorrection = false) => {
     if (!text.trim() || isThinking) return;
 
-    push({ role: 'user', content: text, type: 'text', durationSecs: durSecs });
+    if (!isCorrection) {
+      push({ role: 'user', content: text, type: 'text', durationSecs: durSecs });
+    }
     const prev = [...historyRef.current];
     historyRef.current.push({ role: 'user', content: text });
 
@@ -777,6 +888,7 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
           messages: prev,
           currentMessage: text,
           patientContext,
+          hasCaseNote,
         }),
       });
 
@@ -784,21 +896,26 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
       const data = await res.json();
       const { reply, type, extracted, specialContent } = data;
       const fc = extracted ? countFields(extracted) : 0;
+      const missing = (type === 'case_update' || type === 'addendum') && extracted
+        ? computeMissingFields(extracted) : [];
+      const needsFeedback = ['case_update', 'addendum', 'discharge_summary', 'referral'].includes(type || '');
 
       replace(lid, {
         content: reply || '',
-        type: type || 'general',
+        type: type || 'text',
         extracted: extracted || undefined,
         specialContent: specialContent || undefined,
         fieldCount: fc,
         isLoading: false,
+        missingFields: missing,
+        feedbackState: needsFeedback ? 'prompted' : undefined,
       });
 
       historyRef.current.push({ role: 'assistant', content: reply || '' });
 
-      if (type === 'case_update' && extracted && fc > 0) {
+      if ((type === 'case_update' || type === 'addendum') && extracted && fc > 0) {
         onDataExtracted(extracted);
-        setHasCaseNote(true);
+        if (type === 'case_update') setHasCaseNote(true);
       }
       if (type === 'discharge_summary') setHasDs(true);
     } catch (err) {
@@ -806,6 +923,36 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
     } finally {
       setIsThinking(false);
     }
+  };
+
+  const handleFeedback = async (msgId: string, rating: 'positive' | 'negative') => {
+    replace(msgId, { feedbackState: rating === 'positive' ? 'positive' : 'correcting' });
+    if (rating === 'positive') {
+      try {
+        await fetch(new URL('/api/ai/feedback', getApiUrl()).toString(), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ suggestionId: msgId, caseId: caseId || '', feedbackType: 'positive', userId: userId || '' }),
+        });
+      } catch { /* silent */ }
+    }
+  };
+
+  const handleCorrectionChange = (msgId: string, text: string) => {
+    replace(msgId, { correctionText: text });
+  };
+
+  const handleCorrectionSubmit = async (msgId: string, correctionText: string) => {
+    if (!correctionText.trim()) return;
+    replace(msgId, { feedbackState: 'corrected' });
+    try {
+      await fetch(new URL('/api/ai/feedback', getApiUrl()).toString(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ suggestionId: msgId, caseId: caseId || '', feedbackType: 'negative', userCorrection: correctionText, userId: userId || '' }),
+      });
+    } catch { /* silent */ }
+    sendToAI(`Correction: ${correctionText}`, undefined, true);
   };
 
   const handleChip = (chip: string) => {
@@ -1025,6 +1172,50 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
                         ? <CaseNoteBody extracted={msg.extracted} patientContext={patientContext} />
                         : null}
                   </DocCard>
+                  {msg.missingFields && msg.missingFields.length > 0
+                    ? <MissingFieldsBanner fields={msg.missingFields} /> : null}
+                  {msg.feedbackState ? (
+                    <FeedbackPrompt
+                      state={msg.feedbackState}
+                      correctionText={msg.correctionText}
+                      onPositive={() => handleFeedback(msg.id, 'positive')}
+                      onNegative={() => handleFeedback(msg.id, 'negative')}
+                      onTextChange={t => handleCorrectionChange(msg.id, t)}
+                      onSubmit={() => handleCorrectionSubmit(msg.id, msg.correctionText || '')}
+                    />
+                  ) : null}
+                </ErMateResponse>
+              </React.Fragment>
+            );
+          }
+
+          if (msg.type === 'addendum') {
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            return (
+              <React.Fragment key={msg.id}>
+                <SystemLabel text={`Addendum · ${time}`} />
+                <ErMateResponse subtitle={msg.content}>
+                  <DocCard
+                    type="case"
+                    title={`Addendum · ${time}`}
+                    tag="ADDENDUM"
+                    onCopy={() => {
+                      Clipboard.setStringAsync(msg.specialContent || msg.content);
+                      showToast('Addendum copied');
+                    }}
+                  >
+                    <AddendumBody content={msg.specialContent || msg.content} />
+                  </DocCard>
+                  {msg.feedbackState ? (
+                    <FeedbackPrompt
+                      state={msg.feedbackState}
+                      correctionText={msg.correctionText}
+                      onPositive={() => handleFeedback(msg.id, 'positive')}
+                      onNegative={() => handleFeedback(msg.id, 'negative')}
+                      onTextChange={t => handleCorrectionChange(msg.id, t)}
+                      onSubmit={() => handleCorrectionSubmit(msg.id, msg.correctionText || '')}
+                    />
+                  ) : null}
                 </ErMateResponse>
               </React.Fragment>
             );
@@ -1049,6 +1240,16 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
                       <Text style={s.docFreeTextContent}>{dsText}</Text>
                     </View>
                   </DocCard>
+                  {msg.feedbackState ? (
+                    <FeedbackPrompt
+                      state={msg.feedbackState}
+                      correctionText={msg.correctionText}
+                      onPositive={() => handleFeedback(msg.id, 'positive')}
+                      onNegative={() => handleFeedback(msg.id, 'negative')}
+                      onTextChange={t => handleCorrectionChange(msg.id, t)}
+                      onSubmit={() => handleCorrectionSubmit(msg.id, msg.correctionText || '')}
+                    />
+                  ) : null}
                 </ErMateResponse>
               </React.Fragment>
             );
@@ -1073,6 +1274,16 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
                       <Text style={s.docFreeTextContent}>{refText}</Text>
                     </View>
                   </DocCard>
+                  {msg.feedbackState ? (
+                    <FeedbackPrompt
+                      state={msg.feedbackState}
+                      correctionText={msg.correctionText}
+                      onPositive={() => handleFeedback(msg.id, 'positive')}
+                      onNegative={() => handleFeedback(msg.id, 'negative')}
+                      onTextChange={t => handleCorrectionChange(msg.id, t)}
+                      onSubmit={() => handleCorrectionSubmit(msg.id, msg.correctionText || '')}
+                    />
+                  ) : null}
                 </ErMateResponse>
               </React.Fragment>
             );
@@ -1367,6 +1578,62 @@ const s = StyleSheet.create({
     shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
   },
   toastText: { fontSize: 12, fontWeight: '700', color: '#fff' },
+});
+
+// Feedback + missing fields styles
+const fb = StyleSheet.create({
+  missingRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    marginTop: 6, paddingHorizontal: 4,
+  },
+  missingText: { fontSize: 11, color: C.orange, flex: 1, lineHeight: 16 },
+  feedbackRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    marginTop: 10, paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+  },
+  feedbackLabel: { fontSize: 11.5, color: 'rgba(255,255,255,0.4)', flex: 1 },
+  thumbBtn: {
+    paddingHorizontal: 12, paddingVertical: 6,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderRadius: 8, borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  thumbText: { fontSize: 15 },
+  feedbackDone: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    marginTop: 8, paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+  },
+  feedbackDoneText: { fontSize: 11.5, fontWeight: '600' },
+  correctionBox: {
+    marginTop: 10, paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+    gap: 8,
+  },
+  correctionLabel: { fontSize: 12, color: 'rgba(255,255,255,0.6)', fontWeight: '600' },
+  correctionInput: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 12.5,
+    color: 'rgba(255,255,255,0.85)',
+    minHeight: 60,
+  },
+  correctionSubmit: {
+    backgroundColor: C.green,
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    alignSelf: 'flex-start',
+  },
+  correctionSubmitText: { fontSize: 12, fontWeight: '700', color: '#fff' },
 });
 
 // Chip styles in separate object (name clash with `s`)

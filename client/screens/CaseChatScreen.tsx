@@ -175,9 +175,8 @@ export default function CaseChatScreen({ route, navigation }: Props) {
   // When user dictates inside the chat, save extracted data back to the case
   const handleDataExtracted = useCallback(async (data: SmartDictationExtracted) => {
     try {
-      const token = user?.token;
-      // Trigger a case save with extracted overlay data — backend will merge
-      await fetch(`${getApiUrl()}/api/cases/${caseId}`, {
+      const token = await AsyncStorage.getItem('token');
+      await fetch(`${getApiUrl()}/api/proxy/cases/${caseId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -185,12 +184,11 @@ export default function CaseChatScreen({ route, navigation }: Props) {
         },
         body: JSON.stringify({ smartDictationData: data }),
       });
-      // Refresh case data to reflect changes
       fetchCase();
     } catch {
       // silent — chat still works even if save fails
     }
-  }, [caseId, user?.token, fetchCase]);
+  }, [caseId, fetchCase]);
 
   const patientLabel = caseData?.patient?.name || patientName || 'Case';
 
@@ -231,6 +229,8 @@ export default function CaseChatScreen({ route, navigation }: Props) {
               caseType: 'adult',
             }}
             liveCase={liveCase}
+            caseId={caseId}
+            userId={user?.id}
           />
         </View>
       )}

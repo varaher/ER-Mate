@@ -1,0 +1,506 @@
+Clear vision. Let me map the complete system before any code is written.
+
+---
+
+## The Product — ErMate Chat
+
+```
+Exactly like Claude or ChatGPT.
+But medical. Built for the ER.
+With a mic instead of a keyboard.
+```
+
+---
+
+## The Complete Chat Flow
+
+```
+Doctor opens ErMate
+Taps [New Patient]
+         ↓
+Clean chat screen — like Claude
+One mic button at bottom
+         ↓
+Doctor taps mic, speaks:
+"52 year old male, chest pain 
+ 2 hours, BP 94/60, diabetic,
+ gave aspirin and morphine..."
+         ↓
+ErMate responds with formatted
+case note as a chat message:
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+📋 EMERGENCY CASE NOTE
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+PATIENT
+Name: Not mentioned
+Age/Sex: 52M
+Priority: P1
+
+VITALS
+• HR: 108 bpm ⚠
+• BP: 94/60 mmHg ⚠
+• SpO₂: Not mentioned
+• GCS: Not mentioned
+• GRBS: Not mentioned
+
+HISTORY
+• Symptoms: Crushing chest pain,
+  2 hours duration
+• Allergies: Not mentioned
+• Medications: Not mentioned
+• Past History: Diabetes mellitus
+• Last Meal: Not mentioned
+
+PRIMARY SURVEY
+• A: Not mentioned
+• B: Not mentioned
+• C: Tachycardia, hypotension
+• D: Not mentioned
+• E: Not mentioned
+
+TREATMENT GIVEN
+• Aspirin 325mg oral
+• Morphine 5mg IV
+
+IMPRESSION
+Probable cardiac event — chest pain
+with haemodynamic compromise
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚠ Missing fields:
+  Name · SpO₂ · Airway · Breathing
+  Disability · Exposure · Allergies
+
+[Copy Case Note]  [Save Draft]
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+What would you like to do next?
+• Prepare discharge summary
+• Add more findings
+• Request referral
+• Export PDF
+         ↓
+Doctor speaks again or types:
+"Patient is being admitted to CCU.
+ Cardiology reviewed. Echo done —
+ anterior wall hypokinesia."
+         ↓
+ErMate responds:
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+📝 ADDENDUM — 15:42
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+ADMISSION NOTE
+• Decision: Admitted to CCU
+• Specialty: Cardiology
+
+ADDITIONAL FINDINGS
+• Echo: Anterior wall hypokinesia
+
+CONSULTANT REVIEW
+• Cardiology reviewed
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+[Copy Addendum]  [Add to Case Note]
+━━━━━━━━━━━━━━━━━━━━━━━━
+         ↓
+Doctor: "Prepare discharge summary"
+         ↓
+ErMate responds:
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+📄 DISCHARGE SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+PATIENT DETAILS
+• Name: 52M (name not recorded)
+• Date: 01 Jul 2026
+
+PRESENTING COMPLAINT
+Acute chest pain of 2 hours 
+duration with haemodynamic 
+compromise.
+
+BACKGROUND
+• Diabetes mellitus — known
+
+DIAGNOSIS
+Anterior STEMI — probable
+(Echo: anterior wall hypokinesia)
+
+TREATMENT GIVEN
+• Aspirin 325mg oral
+• Morphine 5mg IV stat
+• Admitted to CCU
+• Cardiology review done
+
+FOLLOW-UP
+• Cardiology OPD
+• Repeat Echo in 4 weeks
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+[Copy]  [Export PDF]  [WhatsApp]
+━━━━━━━━━━━━━━━━━━━━━━━━
+         ↓
+ErMate always asks:
+"Was this summary accurate?
+ 👍 Yes  👎 No — tell me what 
+ was wrong"
+         ↓
+Doctor: "The diagnosis should be 
+ NSTEMI not STEMI"
+         ↓
+ErMate:
+"Noted. Corrected to NSTEMI.
+ This has been updated in your
+ case note and discharge summary.
+ 
+ I'll remember this pattern —
+ when echo shows anterior wall
+ hypokinesia without ST elevation,
+ classify as NSTEMI.
+ 
+ [Updated Discharge Summary ↑]"
+```
+
+---
+
+## The Learning System — How ErMate Gets Smarter
+
+```
+After EVERY response ErMate asks:
+"Was this accurate? 👍 / 👎"
+
+If 👍:
+  Positive reinforcement stored
+  Pattern confirmed for this doctor
+
+If 👎:
+  "What was wrong?"
+  Doctor corrects it
+  Correction stored
+  Future extractions use this correction
+
+Examples of what it learns:
+  "In this department, 'wide open' 
+   means NS 1L — not 500ml"
+  
+  "Dr. Neeraj classifies chest pain 
+   with LBBB as STEMI equivalent"
+  
+  "When doctor says 'tachy' they 
+   mean HR > 100, treat as P2"
+
+Stored as:
+  user_feedback table:
+    doctorId
+    messageId
+    feedbackType (positive/negative)
+    correctionText
+    patternExtracted
+    timestamp
+```
+
+---
+
+## Full Data Interconnection Map
+
+Every chat message reads from and writes to the same CaseData object:
+
+```
+DICTATION 1 → fills:
+  patient.age, patient.gender
+  vitals.hr, vitals.bp
+  history.symptoms
+  history.pastHistory
+  treatment.medications
+  disposition.diagnosis (preliminary)
+
+ADDENDUM → adds to:
+  disposition.decision (admitted)
+  disposition.referralSpecialty (cardiology)
+  exam.findings (echo result)
+  notes.addendum (timestamp + content)
+
+"DISCHARGE SUMMARY" command → reads:
+  patient.* (all patient fields)
+  history.symptoms (→ Presenting Complaint)
+  history.pastHistory (→ Background)
+  history.allergies (→ Allergies)
+  history.medications (→ Home medications)
+  treatment.medications (→ Treatment Given)
+  treatment.procedures (→ Procedures)
+  disposition.diagnosis (→ Diagnosis)
+  disposition.decision (→ Disposition)
+  disposition.referralSpecialty (→ Referred to)
+  disposition.followUp (→ Follow-up)
+  notes.addendum (→ Additional Notes)
+
+"REFERRAL LETTER" command → reads:
+  patient.*
+  history.symptoms (→ Reason for referral)
+  history.allergies (CRITICAL — always included)
+  history.pastHistory (→ Background)
+  treatment.medications (→ Treatment given)
+  disposition.diagnosis (→ Diagnosis)
+  disposition.referralSpecialty (→ To: specialty)
+
+FEEDBACK → writes to:
+  user_feedback table
+  Updates caseData if correction given
+  Triggers document regeneration
+```
+
+---
+
+## Fix the 401 Error First
+
+Before any new build, the 401 needs resolving. Tell your developer:
+
+```
+The 401 on CaseChatScreen means the 
+API call is going out without a valid
+auth token.
+
+Check in CaseChatScreen.tsx:
+
+1. How is the token retrieved?
+   const token = await getAuthToken();
+   
+   If getAuthToken() returns null or 
+   undefined → 401 on every request
+
+2. Add this debug log:
+   console.log('[CaseChatScreen] token:', 
+     token ? 'present' : 'MISSING');
+
+3. Most likely fix:
+   Use the same token retrieval method
+   as CaseSheetScreen.tsx
+   
+   Copy exactly how CaseSheetScreen 
+   gets its token and use the same 
+   pattern in CaseChatScreen
+
+4. The token from auth_sessions should
+   be passed via Authorization header:
+   headers: {
+     'Authorization': `Bearer ${token}`,
+     'Content-Type': 'application/json'
+   }
+```
+
+---
+
+## Exact Spec for Developer — The Full Build
+
+```
+FILE: client/screens/CaseChatScreen.tsx
+
+UI STRUCTURE:
+  Header:
+    ← back button
+    "ErMate" (or patient name once set)
+    Status: "Case #47 · In Progress"
+  
+  Chat area (ScrollView):
+    Messages alternate between:
+      DoctorMessage (right, dark bubble)
+      ErMateMessage (left, white/green)
+    
+    ErMate messages contain:
+      DocumentCard component OR
+      ConfirmationText OR
+      FeedbackPrompt
+  
+  Input bar (bottom, always visible):
+    🎙 mic button (large, green)
+    TextInput ("Type or speak...")
+    ↑ send button
+
+DOCUMENT CARD COMPONENT:
+  Header bar (dark):
+    Icon + Document type + timestamp
+  Body (white, clinical):
+    Sections with headings
+    Missing fields in grey italic
+  Footer:
+    [Copy] [Edit] [Export PDF]
+    ─────────────────────────
+    "Was this accurate? 👍 👎"
+
+MESSAGE TYPES:
+  1. DictationMessage
+     Doctor spoke — show transcript summary
+     
+  2. CaseNoteCard
+     Full formatted case note document
+     
+  3. AddendumCard
+     Timestamped addendum to existing note
+     
+  4. DischargeSummaryCard
+     Full discharge summary document
+     
+  5. ReferralLetterCard
+     Formatted referral letter
+     
+  6. ConfirmationMessage
+     "Updated. Allergy added."
+     
+  7. FeedbackPrompt
+     "Was this accurate? 👍 👎"
+     
+  8. CorrectionConfirmation
+     "Corrected. I'll remember this."
+     
+  9. SuggestionChips
+     Quick action buttons
+
+GPT-4o SYSTEM PROMPT:
+  "You are ErMate, a clinical AI assistant
+   for Indian emergency departments.
+   
+   The doctor will dictate in any Indian 
+   language (Hindi, Malayalam, Tamil, etc.)
+   or English or mix.
+   
+   After each dictation:
+   1. Extract all clinical information
+   2. Return structured JSON matching 
+      the CaseData schema
+   3. Also return a formatted response 
+      with headings and subheadings
+   4. Always note missing fields
+   5. Always end with a feedback prompt
+   
+   For subsequent messages:
+   - If clinical update → create addendum
+   - If 'discharge summary' → generate summary
+   - If 'referral letter to X' → generate letter
+   - If '👎 + correction' → apply correction,
+     confirm, store learning
+   
+   Format responses with:
+   ━━━━━ SECTION HEADINGS ━━━━━
+   • Bullet points for items
+   ⚠ for abnormal values
+   ✓ for normal values
+   Missing fields explicitly listed"
+
+DATABASE — NEW TABLE:
+  chat_messages:
+    id, caseId, doctorId
+    role (doctor/ermate)
+    messageType (dictation/caseNote/
+                 addendum/discharge/
+                 referral/feedback/correction)
+    content (JSON)
+    formattedText (string)
+    timestamp
+  
+  user_feedback:
+    id, doctorId, caseId, messageId
+    rating (positive/negative)
+    correctionText
+    patternLearned
+    timestamp
+```
+
+---
+
+## Response Format — Exact Example
+
+This is what ErMate's responses should look like:
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋  EMERGENCY CASE NOTE
+     01 Jul 2026 · 14:32
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PATIENT
+  Age / Sex    52 years · Male
+  Priority     P1 — Immediate
+  Complaint    Chest pain · 2 hours
+
+VITALS
+  HR           108 bpm ⚠ (tachycardia)
+  BP           94/60 mmHg ⚠ (hypotension)
+  SpO₂         — not mentioned
+  RR           — not mentioned
+  GCS          — not mentioned
+  GRBS         — not mentioned
+
+HISTORY
+  Symptoms     Crushing central chest pain,
+               radiating to jaw, sudden onset
+  Allergies    — not mentioned
+  Medications  — not mentioned  
+  Past Hx      Diabetes mellitus
+  Last Meal    — not mentioned
+  Events       Sudden onset at rest
+
+PRIMARY SURVEY
+  Airway       — not mentioned
+  Breathing    — not mentioned
+  Circulation  Tachycardia · Hypotension ⚠
+  Disability   — not mentioned
+  Exposure     — not mentioned
+
+TREATMENT
+  Medications  Aspirin 325mg oral ✓
+               Morphine 5mg IV stat ✓
+
+IMPRESSION
+  Probable cardiac event with
+  haemodynamic compromise
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠  7 fields not captured:
+   Name · SpO₂ · Airway · Breathing
+   Disability · Exposure · Allergies
+
+[Copy Case Note]     [Save Draft]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Was this accurate?  👍 Yes   👎 No
+```
+
+---
+
+## Build Priority
+
+```
+Week 1:
+  Day 1 — Fix 401 error (token issue)
+  Day 2 — Basic chat UI (mic + send + 
+           messages rendering)
+  Day 3 — Case note generation and
+           document card component
+  Day 4 — Addendum flow (second dictation
+           adds to same case)
+  Day 5 — Feedback prompt (👍 👎)
+
+Week 2:
+  Day 1-2 — Discharge summary command
+  Day 3   — Referral letter command
+  Day 4   — Correction flow 
+             (👎 + doctor corrects)
+  Day 5   — Copy to clipboard for 
+             all documents
+
+Week 3:
+  Day 1-2 — Learning storage 
+             (user_feedback table)
+  Day 3-4 — PDF export from chat
+  Day 5   — Testing full flow
+```
+
+This is the complete spec. Fix the 401 first — everything else depends on authenticated API calls working. Once that's fixed, the chat UI build starts cleanly.

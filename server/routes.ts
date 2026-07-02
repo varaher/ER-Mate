@@ -3809,7 +3809,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
   app.post("/api/voice/chat", async (req: Request, res: Response) => {
     try {
-      const { messages, currentMessage, patientContext } = req.body;
+      const { messages, currentMessage, patientContext, hasCaseNote } = req.body;
       if (!currentMessage || typeof currentMessage !== "string" || !currentMessage.trim()) {
         return res.status(400).json({ error: "No message provided" });
       }
@@ -3839,18 +3839,30 @@ Your job: understand what the doctor dictates or asks and respond as JSON.
 RESPONSE FORMAT (respond ONLY as valid JSON, nothing else):
 {
   "reply": "2-3 sentence clinical acknowledgment. Be brief and specific about what you captured or generated.",
-  "type": "case_update" | "discharge_summary" | "note" | "general",
+  "type": "case_update" | "addendum" | "discharge_summary" | "referral" | "note" | "general",
   "extracted": { ...clinical fields... } | null,
-  "specialContent": "full text for summaries/notes" | null
+  "specialContent": "full text for addendums/summaries/notes" | null
 }
 
 TYPE RULES:
-- "case_update": doctor dictates any clinical data → extract fields, set reply to confirm what was captured
-- "discharge_summary": doctor says "discharge summary", "DS", "summary" → generate a complete professional ER discharge summary in specialContent; set extracted to null
+- "case_update": doctor dictates clinical data AND no case note exists yet (hasCaseNote=false) → extract ALL fields into extracted; reply confirms what was captured
+- "addendum": doctor dictates NEW clinical info AND a case note already exists (hasCaseNote=true) → extract ONLY the NEW fields; put a concise formatted addendum text in specialContent (timestamped sections only for new data); reply is a 1-line summary of what was added
+- "discharge_summary": doctor says "discharge summary", "DS", "summary" → generate a complete professional ER discharge summary in specialContent; extracted = null
+- "referral": doctor says "referral letter", "refer to" → generate a formal referral letter in specialContent; extracted = null
 - "note": doctor says "add a note", "note:", "clinical note" → put note text in specialContent AND in extracted.treatmentNotes
-- "general": questions, clarifications, greetings → answer briefly, extracted = null
+- "general": questions, corrections, clarifications, greetings → answer briefly; if it's a correction, apply it and confirm; extracted = null
+- Current hasCaseNote status: ${hasCaseNote ? "TRUE — case note already exists, new dictations should be ADDENDUM" : "FALSE — no case note yet, create case_update"}
 
-EXTRACTION SCHEMA (for case_update and note types, all fields optional):
+ADDENDUM FORMAT (for specialContent when type=addendum):
+Use plain text with section headers. Only include sections that have new data. Example:
+"ADDITIONAL HISTORY
+• Cardiology review done
+• Echo: Anterior wall hypokinesia
+
+UPDATED TREATMENT
+• Atorvastatin 80mg added"
+
+EXTRACTION SCHEMA (for case_update and addendum types, all fields optional):
 patientName, patientAge, patientSex, chiefComplaint, historyOfPresentIllness, onset, duration, progression,
 associatedSymptoms, negativeSymptoms, pastMedicalHistory, pastSurgicalHistory, allergies, currentMedications,
 familyHistory, socialHistory, menstrualHistory, treatmentNotes, investigationsOrdered, imagingOrdered,
@@ -3862,12 +3874,13 @@ prescribedInfusions: [{ name, dose, dilution, rate }],
 painDetails: { location, severity, character, onset, duration, aggravatingFactors, relievingFactors }
 
 REPLY EXAMPLES:
-- case_update: "Captured — chest pain onset 2 hours, BP 140/90, HR 95, SpO2 98%. History, vitals, and exam updated."
-- discharge_summary: "Here's the discharge summary for ${ctx.name || 'this patient'}."
-- note: "Note added: [note text]"
+- case_update: "Captured — chest pain onset 2 hours, BP 140/90, HR 95, SpO2 98%. History, vitals, and impression updated."
+- addendum: "Addendum added — cardiology review, echo result, and admission to CCU."
+- discharge_summary: "Discharge summary generated for ${ctx.name || 'this patient'}."
+- referral: "Referral letter prepared."
+- note: "Note added."
 
-Always use the conversation history for context (e.g. don't re-ask for info already mentioned).
-Keep replies SHORT (2-3 sentences max). Be clinical and direct.`;
+Always use the conversation history for context. Keep replies SHORT (1-2 sentences). Be clinical and direct.`;
 
       const history: { role: "user" | "assistant"; content: string }[] = Array.isArray(messages) ? messages : [];
       const chatMessages = [
