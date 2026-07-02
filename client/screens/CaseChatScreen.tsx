@@ -174,21 +174,22 @@ export default function CaseChatScreen({ route, navigation }: Props) {
 
   // When user dictates inside the chat, save extracted data back to the case
   const handleDataExtracted = useCallback(async (data: SmartDictationExtracted) => {
+    // Fire-and-forget — do NOT call fetchCase() here; it sets loading=true
+    // which unmounts CaseChat and destroys all chat messages.
     try {
       const token = await AsyncStorage.getItem('token');
-      await fetch(`${getApiUrl()}/api/proxy/cases/${caseId}`, {
-        method: 'PUT',
+      await fetch(`${getApiUrl()}/api/proxy/cases/${caseId}/chat-update`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ smartDictationData: data }),
+        body: JSON.stringify({ extracted: data }),
       });
-      fetchCase();
     } catch {
       // silent — chat still works even if save fails
     }
-  }, [caseId, fetchCase]);
+  }, [caseId]);
 
   const patientLabel = caseData?.patient?.name || patientName || 'Case';
 

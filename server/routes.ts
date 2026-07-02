@@ -359,6 +359,79 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  // Chat-update: save extracted clinical data from ErMate chat back to the case
+  app.post("/api/proxy/cases/:id/chat-update", async (req: Request, res: Response) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader) return res.status(401).json({ error: "No auth token" });
+      const { id } = req.params;
+      const { extracted: ex = {} } = req.body || {};
+
+      // Map SmartDictationExtracted → external backend case format
+      const updateBody: Record<string, any> = {};
+
+      if (ex.chiefComplaint) {
+        updateBody.presenting_complaint = { text: ex.chiefComplaint };
+      }
+
+      const histFields: Record<string, any> = {};
+      if (ex.historyOfPresentIllness) histFields.hpi = ex.historyOfPresentIllness;
+      if (ex.chiefComplaint) histFields.signs_and_symptoms = ex.chiefComplaint;
+      if (ex.allergies) histFields.allergies = ex.allergies.split(/[,;]+/).map((s: string) => s.trim()).filter(Boolean);
+      if (ex.currentMedications) histFields.medications = ex.currentMedications;
+      if (ex.pastMedicalHistory) histFields.past_medical = ex.pastMedicalHistory;
+      if (ex.familyHistory) histFields.family_history = ex.familyHistory;
+      if (ex.socialHistory) histFields.social_history = ex.socialHistory;
+      if (Object.keys(histFields).length > 0) updateBody.history = histFields;
+
+      const primaryFields: Record<string, any> = {};
+      if (ex.heartRate) primaryFields.circulation_hr = ex.heartRate;
+      if (ex.bloodPressure) {
+        const bp = String(ex.bloodPressure).split(/[/\\-]/);
+        if (bp[0]) primaryFields.circulation_bp_systolic = bp[0].trim();
+        if (bp[1]) primaryFields.circulation_bp_diastolic = bp[1].trim();
+      }
+      if (ex.spo2) primaryFields.breathing_spo2 = ex.spo2;
+      if (ex.respiratoryRate) primaryFields.breathing_rr = ex.respiratoryRate;
+      if (ex.temperature) primaryFields.exposure_temperature = ex.temperature;
+      if (ex.gcs) primaryFields.disability_gcs_total = ex.gcs;
+      if (Object.keys(primaryFields).length > 0) updateBody.primary_assessment = primaryFields;
+
+      const examFields: Record<string, any> = {};
+      if (ex.generalExamination) examFields.general = ex.generalExamination;
+      if (ex.cardiovascularExam) examFields.cardiovascular = ex.cardiovascularExam;
+      if (ex.respiratoryExam) examFields.respiratory = ex.respiratoryExam;
+      if (ex.abdomenExam) examFields.abdomen = ex.abdomenExam;
+      if (ex.cnsExam) examFields.cns = ex.cnsExam;
+      if (Object.keys(examFields).length > 0) updateBody.examination = examFields;
+
+      const treatFields: Record<string, any> = {};
+      if (ex.medications?.length) treatFields.medications = ex.medications;
+      if (ex.procedures?.length) treatFields.procedures_performed = ex.procedures;
+      if (ex.investigations) treatFields.investigations_ordered = ex.investigations;
+      if (Object.keys(treatFields).length > 0) updateBody.treatment = treatFields;
+
+      if (ex.provisionalDiagnosis) updateBody.disposition = { provisional_diagnosis: ex.provisionalDiagnosis };
+
+      if (Object.keys(updateBody).length === 0) {
+        return res.json({ success: true, updated: false });
+      }
+
+      const externalRes = await fetch(`${EXTERNAL_API}/cases/${id}`, {
+        method: "PUT",
+        headers: { Authorization: authHeader, "Content-Type": "application/json" },
+        body: JSON.stringify(updateBody),
+      });
+
+      const responseText = await externalRes.text();
+      try { return res.status(externalRes.status).json(JSON.parse(responseText)); }
+      catch { return res.status(externalRes.status).send(responseText); }
+    } catch (err: any) {
+      console.error("[PROXY] POST /cases/:id/chat-update error:", err);
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post("/api/proxy/clinical-data/:caseId", async (req: Request, res: Response) => {
     try {
       const authHeader = req.headers.authorization;
