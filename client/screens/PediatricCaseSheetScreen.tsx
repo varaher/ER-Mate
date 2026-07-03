@@ -1189,6 +1189,151 @@ export default function PediatricCaseSheetScreen() {
         ...(ds.erObservationNotes ? { erObservationNotes: prev.erObservationNotes ? prev.erObservationNotes + "\n" + ds.erObservationNotes : ds.erObservationNotes } : {}),
       }));
     }
+    const raw = data as any;
+    if (raw.emResident || raw.emConsultant) {
+      setDispositionData((prev: any) => ({
+        ...prev,
+        ...(raw.emResident && !prev.emResident ? { emResident: raw.emResident } : {}),
+        ...(raw.emConsultant && !prev.emConsultant ? { emConsultant: raw.emConsultant } : {}),
+      }));
+    }
+    if (data.pediatricPrimary) {
+      const pp = data.pediatricPrimary;
+      if (pp.pat) {
+        const pat = pp.pat;
+        setPatData((prev) => ({
+          ...prev,
+          ...(pat.workOfBreathing ? { workOfBreathing: pat.workOfBreathing } : {}),
+          ...(pat.circulationToSkin ? { circulationToSkin: pat.circulationToSkin } : {}),
+          appearance: {
+            ...prev.appearance,
+            ...(pat.appearance?.tone ? { tone: pat.appearance.tone } : {}),
+            ...(pat.appearance?.interactivity ? { interactivity: pat.appearance.interactivity } : {}),
+            ...(pat.appearance?.consolability ? { consolability: pat.appearance.consolability } : {}),
+            ...(pat.appearance?.lookGaze ? { lookGaze: pat.appearance.lookGaze } : {}),
+            ...(pat.appearance?.speechCry ? { speechCry: pat.appearance.speechCry } : {}),
+          },
+        }));
+      }
+      if (pp.airway) {
+        const aw = pp.airway;
+        setAirwayData((prev) => ({
+          ...prev,
+          ...(aw.cry ? { cry: aw.cry } : {}),
+          ...(aw.status ? { status: aw.status } : {}),
+          ...(aw.intervention ? { intervention: aw.intervention } : {}),
+        }));
+      }
+      if (pp.breathing) {
+        const br = pp.breathing;
+        setBreathingData((prev) => ({
+          ...prev,
+          ...(br.wob && br.wob.length > 0 ? { workOfBreathing: br.wob } : {}),
+          ...(br.positioning && br.positioning !== "None" ? { abnormalPositioning: br.positioning } : {}),
+          ...(br.airEntry ? { airEntry: br.airEntry } : {}),
+          ...(br.subcutaneousEmphysema ? { subcutaneousEmphysema: br.subcutaneousEmphysema } : {}),
+          ...(br.intervention ? { intervention: br.intervention } : {}),
+        }));
+      }
+      if (pp.circulation) {
+        const ci = pp.circulation;
+        setCirculationData((prev) => ({
+          ...prev,
+          ...(ci.crt ? { crt: ci.crt } : {}),
+          ...(ci.skinColorTemp ? { skinColorTemp: ci.skinColorTemp } : {}),
+          ...(ci.distendedNeckVeins ? { distendedNeckVeins: ci.distendedNeckVeins } : {}),
+          ...(ci.intervention ? { intervention: ci.intervention } : {}),
+        }));
+      }
+      if (pp.disability) {
+        const di = pp.disability;
+        setDisabilityData((prev) => ({
+          ...prev,
+          ...(di.avpuGcs ? { avpuGcs: di.avpuGcs } : {}),
+          ...(di.pupils ? { pupils: di.pupils } : {}),
+          ...(di.abnormalResponses ? { abnormalResponses: di.abnormalResponses } : {}),
+        }));
+      }
+      if (pp.exposure) {
+        const ex = pp.exposure;
+        setExposureData((prev) => ({
+          ...prev,
+          ...(ex.signsOfTraumaIllness && ex.signsOfTraumaIllness.length > 0 ? { signsOfTraumaIllness: ex.signsOfTraumaIllness } : {}),
+          ...(ex.painScore ? { painScore: ex.painScore } : {}),
+          ...(ex.trauma ? { trauma: ex.trauma } : {}),
+          ...(ex.evidenceOfInfection ? { evidenceOfInfection: ex.evidenceOfInfection } : {}),
+        }));
+      }
+    }
+    if (data.vitalsSuggested) {
+      const vs = data.vitalsSuggested;
+      setPatient((prev: any) => prev ? { ...prev, vitals: { ...prev.vitals, ...(vs.hr ? { hr: vs.hr } : {}), ...(vs.bp ? { bp: vs.bp } : {}), ...(vs.rr ? { rr: vs.rr } : {}), ...(vs.spo2 ? { spo2: vs.spo2 } : {}), ...(vs.temperature ? { temperature: vs.temperature } : {}), ...(vs.grbs ? { grbs: vs.grbs } : {}) } } : prev);
+      if (vs.rr) setBreathingData((prev) => ({ ...prev, respiratoryRate: vs.rr! }));
+      if (vs.spo2) setBreathingData((prev) => ({ ...prev, spo2: vs.spo2! }));
+      if (vs.hr) setCirculationData((prev) => ({ ...prev, heartRate: vs.hr! }));
+      if (vs.bp) setCirculationData((prev) => ({ ...prev, bloodPressure: vs.bp! }));
+      if (vs.grbs) setDisabilityData((prev) => ({ ...prev, glucose: vs.grbs! }));
+    }
+    if (data.vbgResults && data.vbgResults.done) {
+      const vbg = data.vbgResults;
+      setAbgData((prev: any) => ({
+        ...prev,
+        ...(vbg.ph ? { ph: vbg.ph } : {}),
+        ...(vbg.pco2 ? { pco2: vbg.pco2 } : {}),
+        ...(vbg.po2 ? { po2: vbg.po2 } : {}),
+        ...(vbg.hco3 ? { hco3: vbg.hco3 } : {}),
+        ...(vbg.be ? { be: vbg.be } : {}),
+        ...(vbg.lactate ? { lactate: vbg.lactate } : {}),
+        ...(vbg.sao2 ? { sao2: vbg.sao2 } : {}),
+        ...(vbg.fio2 ? { fio2: vbg.fio2 } : {}),
+        ...(vbg.hemoglobin ? { hb: vbg.hemoglobin } : {}),
+        ...(vbg.sodium ? { na: vbg.sodium } : {}),
+        ...(vbg.potassium ? { k: vbg.potassium } : {}),
+        ...(vbg.chloride ? { cl: vbg.chloride } : {}),
+        ...(vbg.glucose ? { glucose: vbg.glucose } : {}),
+      }));
+    }
+    if (raw.adjuncts) {
+      if (raw.adjuncts.efastDone && raw.adjuncts.efastFindings) {
+        const ef: string = raw.adjuncts.efastFindings.toLowerCase();
+        setEfastData({
+          heart: ef.includes("pericardial") || ef.includes("heart") ? raw.adjuncts.efastFindings : ef.includes("no") ? "No pericardial effusion" : "",
+          abdomen: ef.includes("free fluid") || ef.includes("hemoperitoneum") || ef.includes("abdomen") ? raw.adjuncts.efastFindings : ef.includes("no") ? "No free fluid" : "",
+          lungs: ef.includes("pneumothorax") || ef.includes("pleural") || ef.includes("lung") ? raw.adjuncts.efastFindings : ef.includes("no") ? "No pneumothorax" : "",
+          pelvis: ef.includes("pelvis") ? raw.adjuncts.efastFindings : "",
+        });
+      }
+    }
+    if (raw.primarySurvey) {
+      const ps = raw.primarySurvey;
+      if (ps.breathing?.rr && !data.vitalsSuggested?.rr) setBreathingData((prev) => ({ ...prev, respiratoryRate: String(ps.breathing.rr) }));
+      if (ps.breathing?.spo2 && !data.vitalsSuggested?.spo2) setBreathingData((prev) => ({ ...prev, spo2: String(ps.breathing.spo2) }));
+      if (ps.circulation?.hr && !data.vitalsSuggested?.hr) setCirculationData((prev) => ({ ...prev, heartRate: String(ps.circulation.hr) }));
+      if (ps.circulation?.bpSystolic && ps.circulation?.bpDiastolic && !data.vitalsSuggested?.bp) {
+        setCirculationData((prev) => ({ ...prev, bloodPressure: `${ps.circulation.bpSystolic}/${ps.circulation.bpDiastolic}` }));
+      }
+      if (ps.disability?.grbs && !data.vitalsSuggested?.grbs) setDisabilityData((prev) => ({ ...prev, glucose: String(ps.disability.grbs) }));
+      if (ps.disability?.gcsTotal || ps.disability?.focalDeficit) {
+        const avpu = (() => {
+          const gcs = parseInt(ps.disability?.gcsTotal || "0");
+          if (gcs >= 15) return "Alert";
+          if (gcs >= 10) return "Verbal";
+          if (gcs >= 6) return "Pain";
+          if (gcs > 0) return "Unresponsive";
+          return "";
+        })();
+        if (avpu) setDisabilityData((prev) => ({ ...prev, avpuGcs: prev.avpuGcs || avpu }));
+      }
+      if (ps.disability?.pupils) {
+        const pupilText: string = ps.disability.pupils.toLowerCase();
+        let pupilChip = "";
+        if (pupilText.includes("equal") || pupilText.includes("reactive") || pupilText.includes("perrl") || pupilText.includes("e/e")) pupilChip = "Equal, round, reactive";
+        else if (pupilText.includes("pinpoint") || pupilText.includes("miosis")) pupilChip = "Pinpoint";
+        else if (pupilText.includes("anisocor") || pupilText.includes("unilateral")) pupilChip = "Unilaterally dilated";
+        else if (pupilText.includes("dilat") || pupilText.includes("mydriasis")) pupilChip = "Dilated";
+        if (pupilChip) setDisabilityData((prev) => ({ ...prev, pupils: prev.pupils || pupilChip }));
+      }
+    }
     const completion = calculateDictationCompletion(data);
     setDictationCompletion(completion);
     setShowDictationResult(true);

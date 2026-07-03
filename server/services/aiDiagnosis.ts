@@ -1526,10 +1526,47 @@ export async function extractSmartDictation(
     "birthHistory": "Birth history structured as: term/preterm (gestational age if stated), birth weight in kg/grams, delivery type (normal/LSCS/forceps/vacuum), NICU admission (yes/no + duration), any birth complications — exactly as stated",
     "feedingHistory": "Breastfeeding/formula/mixed/weaning — as stated",
     "developmentalHistory": "Developmental milestones — gross motor, fine motor, speech, social — whether normal or delayed as stated",
-    "patAssessment": {
-      "appearance": "PAT Appearance (TICLS): tone (normal/decreased/limp), interactivity (interactive/lethargic/unresponsive), consolability (consolable/inconsolable), look/gaze (normal/glassy/vacant), speech/cry (strong cry/weak cry/no cry/irritable/normal speech). Map natural speech: 'crying' → strong cry + interactive; 'consolable' → consolable; 'lethargic' → decreased interactivity. Capture exactly as dictated.",
-      "workOfBreathing": "PAT Work of Breathing: retractions (subcostal/intercostal/suprasternal), grunting, nasal flaring, head bobbing, stridor, wheezing — as stated. Map 'no retractions, no grunting' → 'No retractions, no grunting, no nasal flaring'.",
-      "circulationToSkin": "PAT Circulation to Skin: skin colour (normal/pale/mottled/cyanotic/ashen/flushed), CRT normal or prolonged — as stated"
+    "pediatricPrimary": {
+      "pat": {
+        "appearance": {
+          "tone": "MUST be one of: Moves spontaneously | Resists examination | Sits or stands | Floppy. Map: 'active/moving/playing' → 'Moves spontaneously'; 'resists/cries when touched' → 'Resists examination'; 'sitting/standing' → 'Sits or stands'; 'floppy/limp/hypotonic' → 'Floppy'. Leave empty if not mentioned.",
+          "interactivity": "MUST be one of: Alert | Engaged | Interacts well | Reaches for objects | Unresponsive. Map: 'alert/responsive' → 'Alert'; 'engaged/attentive' → 'Engaged'; 'interacting/playing' → 'Interacts well'; 'reaching/grabbing' → 'Reaches for objects'; 'unresponsive/unconscious' → 'Unresponsive'. Leave empty if not mentioned.",
+          "consolability": "MUST be one of: Stops crying with caregiver | Inconsolable. Map: 'consolable/settles with parent/calms down' → 'Stops crying with caregiver'; 'inconsolable/not settling' → 'Inconsolable'. Leave empty if not mentioned.",
+          "lookGaze": "MUST be one of: Makes eye contact | Tracks visually | Normal behavior | Abnormal behavior. Map: 'makes eye contact/looking at me' → 'Makes eye contact'; 'tracks/follows' → 'Tracks visually'; 'normal gaze/behavior' → 'Normal behavior'; 'glazed/vacant/staring' → 'Abnormal behavior'. Leave empty if not mentioned.",
+          "speechCry": "MUST be one of: Age appropriate speech | Strong cry | Weak cry | No cry. Map: 'speaking normally/age appropriate' → 'Age appropriate speech'; 'crying loudly/strong cry' → 'Strong cry'; 'weak cry/whimpering' → 'Weak cry'; 'not crying/silent/no cry' → 'No cry'. Leave empty if not mentioned."
+        },
+        "workOfBreathing": "MUST be one of: Normal | Increased | Decreased/Absent. Map: 'no respiratory distress/breathing normally' → 'Normal'; 'retractions/grunting/stridor/tachypnea/labored' → 'Increased'; 'apnea/minimal effort/gasping' → 'Decreased/Absent'. Leave empty if not mentioned.",
+        "circulationToSkin": "MUST be one of: Pink | Pale | Mottled | Cyanotic. Map: 'pink/well perfused' → 'Pink'; 'pale/pallor' → 'Pale'; 'mottled' → 'Mottled'; 'cyanotic/blue/dusky' → 'Cyanotic'. Leave empty if not mentioned."
+      },
+      "airway": {
+        "cry": "MUST be one of: Good | Weak | No Cry. Map: 'crying loudly/good cry' → 'Good'; 'weak cry/whimpering' → 'Weak'; 'not crying/silent' → 'No Cry'. Leave empty if not mentioned.",
+        "status": "MUST be one of: Patent | Threatened | Compromised. Map: 'airway clear/patent/maintaining' → 'Patent'; 'stridor/noisy/partial obstruction/threatened' → 'Threatened'; 'obstruction/secretions blocking/intubated' → 'Compromised'. Leave empty if not mentioned.",
+        "intervention": "Text describing airway intervention if any (e.g. 'Repositioning done', 'Suction given', 'OPA inserted', 'Intubated'). Leave empty if none."
+      },
+      "breathing": {
+        "wob": ["Array of WOB signs from: Nasal Flaring | Retractions | Grunting | Wheezing | Stridor | Snoring | Gurgling. Include only if explicitly mentioned."],
+        "positioning": "MUST be one of: None | Tripod | Sniffing | Prefers seated. Map: 'tripod position' → 'Tripod'; 'sniffing position/neck extended' → 'Sniffing'; 'prefers to sit/refuses to lie' → 'Prefers seated'. Leave empty or 'None' if not mentioned.",
+        "airEntry": "MUST be one of: Normal | Abnormal. Map: 'equal air entry/good air entry' → 'Normal'; 'reduced/absent/unequal air entry' → 'Abnormal'. Leave empty if not mentioned.",
+        "subcutaneousEmphysema": "MUST be one of: No | Yes. Leave empty if not mentioned.",
+        "intervention": "Text: O2 device or breathing intervention (e.g. 'O2 via NRM at 15 L/min', 'CPAP started', 'Intubated'). Leave empty if none."
+      },
+      "circulation": {
+        "crt": "MUST be one of: Normal (<2s) | Delayed (≥2s). Map: 'CRT normal/less than 2/brisk' → 'Normal (<2s)'; 'CRT delayed/more than 2/sluggish/3 seconds' → 'Delayed (≥2s)'. Leave empty if not mentioned.",
+        "skinColorTemp": "MUST be one of: Pink | Pale | Cyanosed | Mottled. Leave empty if not mentioned.",
+        "distendedNeckVeins": "MUST be one of: No | Yes. Leave empty if not mentioned.",
+        "intervention": "Text: Fluid or circulatory intervention (e.g. '20 ml/kg NS bolus given', 'Adrenaline IV given'). Leave empty if none."
+      },
+      "disability": {
+        "avpuGcs": "MUST be one of: Alert | Verbal | Pain | Unresponsive. Map: 'alert/awake/oriented' → 'Alert'; 'responds to voice/verbal stimuli' → 'Verbal'; 'responds to pain only' → 'Pain'; 'unresponsive/GCS 3' → 'Unresponsive'. If GCS is mentioned instead (e.g. GCS 15), map to appropriate AVPU. Leave empty if not mentioned.",
+        "pupils": "MUST be one of: Equal, round, reactive | Pinpoint | Dilated | Unilaterally dilated. Map: 'pupils equal and reactive/PERRL/e/e' → 'Equal, round, reactive'; 'pinpoint/miosis' → 'Pinpoint'; 'dilated/mydriasis/both dilated' → 'Dilated'; 'anisocoria/one dilated' → 'Unilaterally dilated'. Leave empty if not mentioned.",
+        "abnormalResponses": "Any abnormal neurological response noted (e.g. 'Decorticate posturing', 'Seizure activity'). Leave empty if none."
+      },
+      "exposure": {
+        "signsOfTraumaIllness": ["Array from: Rashes | Petechiae | Ecchymosis | Bruises | Burns | Purpura. Include only if explicitly mentioned."],
+        "painScore": "Numeric pain score 0-10 if mentioned (as string). Leave empty if not mentioned.",
+        "trauma": "Trauma findings if mentioned (e.g. 'Laceration on forehead 3cm', 'Swelling right arm'). Leave empty if none.",
+        "evidenceOfInfection": "Signs of infection/bleeding on exposure exam (e.g. 'Petechiae noted on trunk', 'Purpuric rash'). Leave empty if none."
+      }
     }` : "";
 
   const prompt = `You are a clinical documentation AI for an Indian emergency department.

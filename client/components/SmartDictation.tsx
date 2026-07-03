@@ -193,6 +193,48 @@ export interface SmartDictationExtracted {
   };
   addendumNotes?: string;
   resultsSummary?: string;
+  pediatricPrimary?: {
+    pat?: {
+      appearance?: {
+        tone?: string;
+        interactivity?: string;
+        consolability?: string;
+        lookGaze?: string;
+        speechCry?: string;
+      };
+      workOfBreathing?: string;
+      circulationToSkin?: string;
+    };
+    airway?: {
+      cry?: string;
+      status?: string;
+      intervention?: string;
+    };
+    breathing?: {
+      wob?: string[];
+      positioning?: string;
+      airEntry?: string;
+      subcutaneousEmphysema?: string;
+      intervention?: string;
+    };
+    circulation?: {
+      crt?: string;
+      skinColorTemp?: string;
+      distendedNeckVeins?: string;
+      intervention?: string;
+    };
+    disability?: {
+      avpuGcs?: string;
+      pupils?: string;
+      abnormalResponses?: string;
+    };
+    exposure?: {
+      signsOfTraumaIllness?: string[];
+      painScore?: string;
+      trauma?: string;
+      evidenceOfInfection?: string;
+    };
+  };
 }
 
 interface SmartDictationProps {
