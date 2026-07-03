@@ -214,7 +214,7 @@ interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  type: 'text' | 'case_update' | 'addendum' | 'discharge_summary' | 'referral' | 'note' | 'error';
+  type: 'text' | 'case_update' | 'addendum' | 'discharge_summary' | 'referral' | 'procedure_note' | 'note' | 'error';
   extracted?: SmartDictationExtracted;
   specialContent?: string;
   fieldCount?: number;
@@ -873,7 +873,7 @@ function countFields(extracted: SmartDictationExtracted): number {
 }
 
 // ── Main CaseChat ─────────────────────────────────────────────────────────────
-const AFTER_CASE_CHIPS = ['Prepare discharge summary', 'Add to treatment', 'Change priority', 'Referral letter'];
+const AFTER_CASE_CHIPS = ['Prepare discharge summary', 'RSI note', 'Referral letter', 'Show complete case sheet'];
 const AFTER_DS_CHIPS   = ['Add allergy', 'Export PDF', 'Show differentials', 'Edit diagnosis'];
 
 export default function CaseChat({ onDataExtracted, patientContext, liveCase, initialExtracted, disabled = false, caseId, userId }: CaseChatProps) {
@@ -966,7 +966,7 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
       // Only show missing fields on the first case note — addendum has sparse extracted data by design
       const missing = type === 'case_update' && extracted
         ? computeMissingFields(extracted) : [];
-      const needsFeedback = ['case_update', 'addendum', 'discharge_summary', 'referral'].includes(type || '');
+      const needsFeedback = ['case_update', 'addendum', 'discharge_summary', 'referral', 'procedure_note'].includes(type || '');
 
       replace(lid, {
         content: reply || '',
@@ -1039,6 +1039,16 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
       push({ role: 'assistant', content: `Referral letter prepared${liveCase.disposition.referTo ? ` for ${liveCase.disposition.referTo}` : ''}.`, type: 'referral', specialContent: refText });
       return;
     }
+    // Show complete case sheet locally (no AI call needed)
+    const wantsFullNote = lower.includes('case sheet') || lower.includes('complete case') || lower.includes('full case') ||
+      lower.includes('show case') || lower.includes('complete note') || lower.includes('full note') || lower.includes('case note');
+    if (wantsFullNote && liveCase) {
+      push({ role: 'user', content: chip, type: 'text' });
+      push({ role: 'assistant', content: 'Here is the complete case note with all documented data.', type: 'case_update', extracted: undefined, fieldCount: 0 });
+      setHasCaseNote(true);
+      return;
+    }
+    // All other chips (RSI note, central line, etc.) → send to AI
     sendToAI(chip);
   };
 
@@ -1056,10 +1066,13 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
       handleChip(t);
       return;
     }
-    if (lower.includes('case note') && liveCase) {
-      const noteText = generateCaseNote(liveCase);
+    // "Show complete case sheet / full note / case sheet" → render LiveCaseNoteBody without AI call
+    const wantsFullNote = lower.includes('case sheet') || lower.includes('complete case') || lower.includes('full case') ||
+      lower.includes('show case') || lower.includes('complete note') || lower.includes('full note') ||
+      lower.includes('case note') || lower.includes('show note');
+    if (wantsFullNote && liveCase) {
       push({ role: 'user', content: t, type: 'text' });
-      push({ role: 'assistant', content: 'Case note generated from your documented data.', type: 'case_update', extracted: undefined, fieldCount: 0 });
+      push({ role: 'assistant', content: 'Here is the complete case note with all documented data.', type: 'case_update', extracted: undefined, fieldCount: 0 });
       setHasCaseNote(true);
       return;
     }
@@ -1274,6 +1287,17 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
                   >
                     <AddendumBody content={msg.specialContent || msg.content} />
                   </DocCard>
+                  {liveCase ? (
+                    <Pressable
+                      onPress={() => {
+                        push({ role: 'assistant', content: 'Here is the complete case note with all documented data.', type: 'case_update', extracted: undefined, fieldCount: 0 });
+                      }}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6, alignSelf: 'flex-start', paddingVertical: 5, paddingHorizontal: 10, backgroundColor: C.greenLight, borderRadius: 8, borderWidth: 1, borderColor: C.greenBd }}
+                    >
+                      <Feather name="file-text" size={12} color={C.green} />
+                      <Text style={{ fontSize: 11, color: C.green, fontWeight: '600' }}>View complete case note</Text>
+                    </Pressable>
+                  ) : null}
                   {msg.feedbackState ? (
                     <FeedbackPrompt
                       state={msg.feedbackState}
@@ -1340,6 +1364,39 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
                   >
                     <View style={s.docFreeText}>
                       <Text style={s.docFreeTextContent}>{refText}</Text>
+                    </View>
+                  </DocCard>
+                  {msg.feedbackState ? (
+                    <FeedbackPrompt
+                      state={msg.feedbackState}
+                      correctionText={msg.correctionText}
+                      onPositive={() => handleFeedback(msg.id, 'positive')}
+                      onNegative={() => handleFeedback(msg.id, 'negative')}
+                      onTextChange={t => handleCorrectionChange(msg.id, t)}
+                      onSubmit={() => handleCorrectionSubmit(msg.id, msg.correctionText || '')}
+                    />
+                  ) : null}
+                </ErMateResponse>
+              </React.Fragment>
+            );
+          }
+
+          if (msg.type === 'procedure_note' && msg.specialContent) {
+            return (
+              <React.Fragment key={msg.id}>
+                <ErMateResponse subtitle={msg.content}>
+                  <DocCard
+                    type="note"
+                    title="Procedure Note"
+                    tag="PROCEDURE"
+                    onCopy={() => {
+                      Clipboard.setStringAsync(msg.specialContent!);
+                      showToast('Procedure note copied');
+                    }}
+                    onExport={() => showToast('Exporting PDF…')}
+                  >
+                    <View style={s.docFreeText}>
+                      <Text style={s.docFreeTextContent}>{msg.specialContent}</Text>
                     </View>
                   </DocCard>
                   {msg.feedbackState ? (
