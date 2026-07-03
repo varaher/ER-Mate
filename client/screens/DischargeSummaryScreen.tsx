@@ -21,6 +21,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
+import SmartDictation, { SmartDictationExtracted } from "@/components/SmartDictation";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { useDepartment } from "@/context/DepartmentContext";
@@ -936,6 +937,259 @@ export default function DischargeSummaryScreen() {
     obj[keys[keys.length - 1]] = value;
   }, []);
 
+  const handleSmartDictation = (data: SmartDictationExtracted) => {
+    let anyFieldPopulated = false;
+
+    // Patient info section
+    if (data.chiefComplaint) {
+      summaryRef.current.presenting_complaint = data.chiefComplaint;
+      anyFieldPopulated = true;
+    }
+    if (data.historyOfPresentIllness) {
+      summaryRef.current.history_of_present_illness = data.historyOfPresentIllness;
+      anyFieldPopulated = true;
+    }
+    const pmhParts = [data.pastMedicalHistory, data.pastSurgicalHistory].filter(Boolean).join("\n");
+    if (pmhParts) {
+      summaryRef.current.past_medical_history = pmhParts;
+      anyFieldPopulated = true;
+    }
+    if (data.allergies) {
+      summaryRef.current.allergy = data.allergies;
+      anyFieldPopulated = true;
+    }
+    const famHistParts = [data.familyHistory, data.socialHistory].filter(Boolean).join("\n");
+    if (famHistParts) {
+      summaryRef.current.family_history = famHistParts;
+      anyFieldPopulated = true;
+    }
+    if (data.menstrualHistory) {
+      summaryRef.current.lmp = data.menstrualHistory;
+      anyFieldPopulated = true;
+    }
+
+    // Vitals at arrival
+    if (data.vitalsSuggested) {
+      const vs = data.vitalsSuggested;
+      if (vs.hr) summaryRef.current.vitals_arrival.hr = vs.hr;
+      if (vs.bp) summaryRef.current.vitals_arrival.bp = vs.bp;
+      if (vs.rr) summaryRef.current.vitals_arrival.rr = vs.rr;
+      if (vs.spo2) summaryRef.current.vitals_arrival.spo2 = vs.spo2;
+      if (vs.temperature) summaryRef.current.vitals_arrival.temp = vs.temperature;
+      if (vs.grbs) summaryRef.current.vitals_arrival.grbs = vs.grbs;
+      anyFieldPopulated = true;
+    }
+
+    // Primary Assessment (ABCDE)
+    if (data.abcdeFindings) {
+      const af = data.abcdeFindings;
+      if (af.airway) {
+        const parts: string[] = [];
+        if (af.airway.status === "Normal") parts.push("Patent, self-maintained, no obstruction");
+        else {
+          if (af.airway.maintenance) parts.push(af.airway.maintenance);
+          if (af.airway.obstructionCause) parts.push("Cause: " + af.airway.obstructionCause);
+          if (af.airway.interventions?.length) parts.push("Intervention: " + af.airway.interventions.join(", "));
+        }
+        if (af.airway.notes) parts.push(af.airway.notes);
+        if (parts.length) { summaryRef.current.primary_assessment.airway = parts.join(", "); anyFieldPopulated = true; }
+      }
+      if (af.breathing) {
+        const parts: string[] = [];
+        if (af.breathing.status === "Normal") {
+          parts.push("Effortless, bilateral air entry");
+        } else {
+          if (af.breathing.effort) parts.push("WOB: " + af.breathing.effort);
+          if (af.breathing.airEntry) parts.push("Air Entry: " + af.breathing.airEntry);
+          if (af.breathing.addedSounds) parts.push("Added: " + af.breathing.addedSounds);
+          if (af.breathing.o2Device) parts.push("O2: " + af.breathing.o2Device);
+          if (af.breathing.interventions?.length) parts.push("Intervention: " + af.breathing.interventions.join(", "));
+        }
+        if (af.breathing.notes) parts.push(af.breathing.notes);
+        if (parts.length) { summaryRef.current.primary_assessment.breathing = parts.join(", "); anyFieldPopulated = true; }
+      }
+      if (af.circulation) {
+        const parts: string[] = [];
+        if (af.circulation.status === "Normal") {
+          parts.push("Regular pulse, CRT <2s, warm");
+        } else {
+          if (af.circulation.rhythm) parts.push("Rhythm: " + af.circulation.rhythm);
+          if (af.circulation.crt) parts.push("CRT: " + af.circulation.crt);
+          if (af.circulation.skinTemp) parts.push("Skin: " + af.circulation.skinTemp);
+          if (af.circulation.skinColor) parts.push("Skin Color: " + af.circulation.skinColor);
+          if (af.circulation.interventions?.length) parts.push("Intervention: " + af.circulation.interventions.join(", "));
+        }
+        if (af.circulation.notes) parts.push(af.circulation.notes);
+        if (parts.length) { summaryRef.current.primary_assessment.circulation = parts.join(", "); anyFieldPopulated = true; }
+      }
+      if (af.disability) {
+        const parts: string[] = [];
+        if (af.disability.status === "Normal") {
+          parts.push("Alert, PERL, no focal deficits");
+        } else {
+          if (af.disability.motorResponse) parts.push("AVPU: " + af.disability.motorResponse);
+          if (af.disability.pupilSize) parts.push("Pupils: " + af.disability.pupilSize);
+          if (af.disability.pupilReaction) parts.push(af.disability.pupilReaction);
+          if (af.disability.interventions?.length) parts.push("Intervention: " + af.disability.interventions.join(", "));
+        }
+        if (af.disability.notes) parts.push(af.disability.notes);
+        if (parts.length) { summaryRef.current.primary_assessment.disability = parts.join(", "); anyFieldPopulated = true; }
+      }
+      if (af.exposure) {
+        const parts: string[] = [];
+        if (af.exposure.status === "Normal") parts.push("No external injuries, no active bleeding");
+        if (af.exposure.findings?.length) parts.push(af.exposure.findings.join(", "));
+        if (af.exposure.notes) parts.push(af.exposure.notes);
+        if (parts.length) { summaryRef.current.primary_assessment.exposure = parts.join(", "); anyFieldPopulated = true; }
+      }
+    }
+
+    // Secondary Assessment
+    if (data.examStructured) {
+      const es = data.examStructured;
+      if (es.general) {
+        const gen = es.general;
+        if (gen.pallor !== undefined) summaryRef.current.secondary_assessment.pallor = gen.pallor;
+        if (gen.icterus !== undefined) summaryRef.current.secondary_assessment.icterus = gen.icterus;
+        if (gen.cyanosis !== undefined) summaryRef.current.secondary_assessment.cyanosis = gen.cyanosis;
+        if (gen.clubbing !== undefined) summaryRef.current.secondary_assessment.clubbing = gen.clubbing;
+        if (gen.lymphadenopathy !== undefined) summaryRef.current.secondary_assessment.lymphadenopathy = gen.lymphadenopathy;
+        if (gen.edema !== undefined) summaryRef.current.secondary_assessment.edema = gen.edema;
+        anyFieldPopulated = true;
+      }
+      if (es.respiratory) {
+        const parts: string[] = [];
+        if (es.respiratory.status === "Normal") parts.push("Bilateral equal air entry, vesicular breath sounds, no added sounds");
+        else {
+          if (es.respiratory.expansion) parts.push("Expansion: " + es.respiratory.expansion);
+          if (es.respiratory.breathSounds) parts.push("Breath Sounds: " + es.respiratory.breathSounds);
+          if (es.respiratory.addedSounds) parts.push("Added: " + es.respiratory.addedSounds);
+        }
+        if (parts.length) { summaryRef.current.systemic_exam.chest = parts.join(", "); anyFieldPopulated = true; }
+      }
+      if (es.cvs) {
+        const parts: string[] = [];
+        if (es.cvs.status === "Normal") parts.push("S1 S2 heard, no murmurs, JVP normal");
+        else {
+          if (es.cvs.s1s2) parts.push("S1S2: " + es.cvs.s1s2);
+          if (es.cvs.murmurs) parts.push("Murmurs: " + es.cvs.murmurs);
+          if (es.cvs.addedSounds) parts.push("Added: " + es.cvs.addedSounds);
+        }
+        if (parts.length) { summaryRef.current.systemic_exam.cvs = parts.join(", "); anyFieldPopulated = true; }
+      }
+      if (es.abdomen) {
+        const parts: string[] = [];
+        if (es.abdomen.status === "Normal") parts.push("Soft, non-tender, no organomegaly, bowel sounds present");
+        else {
+          if (es.abdomen.bowelSounds) parts.push("Bowel sounds: " + es.abdomen.bowelSounds);
+          if (es.abdomen.organomegaly) parts.push(es.abdomen.organomegaly);
+        }
+        if (parts.length) { summaryRef.current.systemic_exam.pa = parts.join(", "); anyFieldPopulated = true; }
+      }
+      if (es.cns) {
+        const parts: string[] = [];
+        if (es.cns.status === "Normal") parts.push("Higher functions intact, no focal deficits, reflexes normal");
+        else {
+          if (es.cns.higherMentalFunctions) parts.push("HMF: " + es.cns.higherMentalFunctions);
+          if (es.cns.motorSystem) parts.push("Motor: " + es.cns.motorSystem);
+          if (es.cns.reflexes) parts.push("Reflexes: " + es.cns.reflexes);
+        }
+        if (parts.length) { summaryRef.current.systemic_exam.cns = parts.join(", "); anyFieldPopulated = true; }
+      }
+      if (es.extremities) {
+        const parts: string[] = [];
+        if (es.extremities.status === "Normal") parts.push("Pulses present, no edema, no deformity");
+        else {
+          if (es.extremities.edema) parts.push("Pitting edema present");
+          if (es.extremities.deformity) parts.push("Deformity noted");
+        }
+        if (parts.length) { summaryRef.current.systemic_exam.extremities = parts.join(", "); anyFieldPopulated = true; }
+      }
+    }
+
+    // Investigations
+    const invParts: string[] = [];
+    if (data.investigationsOrdered) invParts.push(data.investigationsOrdered);
+    if (data.imagingOrdered) invParts.push("Imaging: " + data.imagingOrdered);
+    if (data.resultsSummary) invParts.push("Results: " + data.resultsSummary);
+    if (invParts.length) {
+      summaryRef.current.investigations = invParts.join("\n");
+      anyFieldPopulated = true;
+    }
+
+    // Diagnosis
+    if (data.diagnosis?.length) {
+      summaryRef.current.diagnosis = data.diagnosis.join("; ");
+      anyFieldPopulated = true;
+    }
+
+    // Discharge medications
+    if (data.prescribedMedications?.length) {
+      const medsText = data.prescribedMedications
+        .map((m) => [m.name, m.dose, m.route, m.frequency].filter(Boolean).join(" "))
+        .join("\n");
+      if (medsText) { summaryRef.current.discharge_medications = medsText; anyFieldPopulated = true; }
+    }
+
+    // Course in hospital (append if already present)
+    const courseParts: string[] = [];
+    if (data.treatmentNotes) courseParts.push(data.treatmentNotes);
+    if (data.dispositionSuggested?.erObservationNotes) courseParts.push(data.dispositionSuggested.erObservationNotes);
+    if (data.addendumNotes) courseParts.push(data.addendumNotes);
+    if (courseParts.length) {
+      const combined = courseParts.join("\n");
+      summaryRef.current.course_in_hospital = summaryRef.current.course_in_hospital
+        ? summaryRef.current.course_in_hospital + "\n\n" + combined
+        : combined;
+      setCourseInHospitalKey((k) => k + 1);
+      anyFieldPopulated = true;
+    }
+
+    // Disposition
+    if (data.dispositionSuggested?.type) {
+      const typeMap: Record<string, string> = {
+        Discharge: "Normal Discharge",
+        Admit: "Normal Discharge",
+        Refer: "Referred",
+        LAMA: "Discharge Against Medical Advice",
+        Absconded: "Discharge Against Medical Advice",
+      };
+      summaryRef.current.disposition_type = typeMap[data.dispositionSuggested.type] || "Normal Discharge";
+      anyFieldPopulated = true;
+    }
+    if (data.dispositionSuggested?.conditionAtShift) {
+      const cond = data.dispositionSuggested.conditionAtShift.toUpperCase();
+      summaryRef.current.condition_at_discharge = cond === "STABLE" ? "STABLE" : "UNSTABLE";
+      anyFieldPopulated = true;
+    }
+    if (data.dispositionSuggested?.emResident && !summaryRef.current.ed_resident) {
+      summaryRef.current.ed_resident = data.dispositionSuggested.emResident;
+      anyFieldPopulated = true;
+    }
+    if (data.dispositionSuggested?.emConsultant && !summaryRef.current.ed_consultant) {
+      summaryRef.current.ed_consultant = data.dispositionSuggested.emConsultant;
+      anyFieldPopulated = true;
+    }
+    if (data.followUpAdvice) {
+      summaryRef.current.follow_up_advice = data.followUpAdvice;
+      anyFieldPopulated = true;
+    }
+
+    // MLC
+    if (data.mlcDetails?.isMLC) {
+      summaryRef.current.mlc = true;
+      anyFieldPopulated = true;
+    }
+
+    if (anyFieldPopulated) {
+      forceUpdate();
+      // Auto-generate / regenerate Course in Hospital after dictation
+      if (!summaryRef.current.course_in_hospital || summaryRef.current.course_in_hospital.length < 100) {
+        setTimeout(() => generateCourseInHospital(), 600);
+      }
+    }
+  };
+
   const ToggleItem = ({ label, value, path }: { label: string; value: boolean; path: string }) => (
     <View style={styles.toggleRow}>
       <Text style={[styles.toggleLabel, { color: theme.text }]}>{label}</Text>
@@ -965,6 +1219,16 @@ export default function DischargeSummaryScreen() {
         contentContainerStyle={[styles.content, { paddingTop: headerHeight + 12, paddingBottom: insets.bottom + Spacing["4xl"] }]}
         showsVerticalScrollIndicator={false}
       >
+        <SmartDictation
+          onDataExtracted={handleSmartDictation}
+          patientContext={{
+            age: parseFloat(caseData?.patient?.age) || undefined,
+            sex: caseData?.patient?.sex,
+            chiefComplaint: summaryRef.current.presenting_complaint || caseData?.presenting_complaint?.text || caseData?.triage?.chief_complaint,
+          }}
+          mode="casesheet"
+        />
+
         <View style={[styles.patientCard, { backgroundColor: theme.card }]}>
           <View style={styles.patientHeader}>
             <View>

@@ -203,6 +203,7 @@ export interface SmartDictationExtracted {
   };
   addendumNotes?: string;
   resultsSummary?: string;
+  followUpAdvice?: string;
   pediatricPrimary?: {
     pat?: {
       appearance?: {

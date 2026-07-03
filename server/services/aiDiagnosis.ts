@@ -935,6 +935,7 @@ Respond in JSON format:
       "deformity": "true if extremity deformity noted"
     }
   },
+  "followUpAdvice": "Follow-up instructions, OPD appointments, wound care, medication review date, dietary advice — if mentioned by the doctor.",
   "mlcDetails": {
     "isMLC": "true if doctor mentions MLC, medico-legal case, police case, RTA, assault, burns, drowning, poisoning, or any medico-legal incident — otherwise omit",
     "natureOfIncident": "Nature of medico-legal incident (e.g. Road Traffic Accident, Assault, Fall from height, Burns, Poisoning, Drowning)",
@@ -1767,6 +1768,7 @@ SCHEMA (fill every field, use "" for not mentioned):
       "deformity": false
     }
   },
+  "followUpAdvice": "Follow-up instructions, OPD date, wound care, medication review, dietary advice — if mentioned.",
   "mlcDetails": {
     "isMLC": "true if MLC, medico-legal case, RTA, assault, fall, burns, poisoning, drowning mentioned — otherwise omit",
     "natureOfIncident": "Nature of medico-legal incident if mentioned",
