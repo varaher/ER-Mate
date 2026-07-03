@@ -66,6 +66,7 @@ export interface SmartDictationExtracted {
     temperature?: string;
     grbs?: string;
   };
+  patientWeight?: string;
   examFindings?: {
     general?: string;
     cvs?: string;
@@ -75,6 +76,7 @@ export interface SmartDictationExtracted {
     musculoskeletal?: string;
     skin?: string;
     heent?: string;
+    back?: string;
   };
   diagnosis?: string[];
   differentialDiagnosis?: string[];
@@ -153,8 +155,20 @@ export interface SmartDictationExtracted {
     performed?: boolean;
     ph?: string;
     pco2?: string;
+    po2?: string;
     hco3?: string;
+    be?: string;
     lactate?: string;
+    sao2?: string;
+    fio2?: string;
+    na?: string;
+    k?: string;
+    cl?: string;
+    ag?: string;
+    glucose?: string;
+    hb?: string;
+    aaGradient?: string;
+    finalAbgDiagnosis?: string;
     notes?: string;
   };
   psychological?: {

@@ -4118,6 +4118,27 @@ CRITICAL RULES:
 4. Psychological flags: only set true if explicitly mentioned. Never infer.
 5. Exam toggles (pallor etc): only set true if present; false if explicitly absent.
 
+PAEDIATRIC-SPECIFIC RULES (apply when age ≤ 16):
+- Extract patientWeight: "12kg child" → "12", "weighs 20 kg" → "20". Always in kg as a string.
+- Drug doses are weight-based: "paracetamol 15mg/kg" → dose:"15mg/kg". Include calculatedDose if weight is known.
+- HEENT findings → examFindings.heent: "throat red", "bulging fontanelle", "sunken fontanelle", "ear discharge", "conjunctival pallor"
+- Back exam → examFindings.back: "spinal tenderness", "sacral edema", "vertebral step-off"
+- Condition at time of shift → dispositionSuggested.conditionAtShift: "stable for transfer" → "Stable"; "unstable" / "critical" / P1 → "Unstable"
+- Full ABG panel — extract ALL values when blood gas is mentioned:
+  abgStructured.po2, .be (base excess), .sao2, .fio2 (21 = room air), .na, .k, .cl, .ag (anion gap = Na - Cl - HCO3, normal 8–12), .glucose, .hb, .aaGradient
+- Auto ABG interpretation: when abgStructured is populated, ALWAYS set finalAbgDiagnosis with a clinical interpretation:
+  • pH <7.35 + low HCO3 → "Metabolic acidosis"  pH <7.35 + high pCO2 → "Respiratory acidosis"
+  • pH >7.45 + high HCO3 → "Metabolic alkalosis"  pH >7.45 + low pCO2 → "Respiratory alkalosis"
+  • Anion gap >12 → "High anion gap metabolic acidosis"  Lactate >2 → append "with elevated lactate"
+  • Example: "Metabolic acidosis with elevated lactate (AG 18, pH 7.26, Lactate 5.2)"
+- Age-appropriate vital flagging — in primarySurveyText note if HR or RR is outside range for age:
+  HR ranges: <1yr 100–160; 1–3yr 90–150; 3–6yr 80–140; 6–12yr 70–120; 12+yr 60–100
+  RR ranges: <1yr 30–60; 1–3yr 24–40; 3–6yr 22–34; 6–12yr 18–30; 12+yr 12–20
+  BP (SBP): <1yr 70–100; 1–3yr 80–110; 3–6yr 80–110; 6–12yr 85–120; 12+yr 90–130
+  Flag: "HR 160 — tachycardic for age (3yr)" in the C section of primarySurveyText
+- Fontanelle findings in HEENT: "bulging fontanelle" → flag raised ICP; "sunken fontanelle" → flag dehydration
+- Paediatric exam has no general toggles (pallor/icterus etc — do NOT set examStructured.general for paeds; include those findings in heent or general text instead)
+
 REPLY EXAMPLES:
 - case_update: "Captured — fever 2 days, vitals including temp 103°F, ABCDE assessment, medications, labs ordered, and admission plan documented."
 - addendum: "Addendum added — vitals, differential diagnoses, and fluids updated."

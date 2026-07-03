@@ -262,6 +262,7 @@ export default function CaseChatScreen({ route, navigation }: Props) {
       }
       if (data.patientAge) next.patient = { ...(next.patient || {}), age: data.patientAge };
       if (data.patientSex) next.patient = { ...(next.patient || {}), sex: data.patientSex };
+      if ((data as any).patientWeight) next.patient = { ...(next.patient || {}), weight: (data as any).patientWeight };
       // Presenting complaint
       if (data.chiefComplaint) {
         next.presenting_complaint = { ...(next.presenting_complaint || {}), text: data.chiefComplaint };
@@ -302,13 +303,15 @@ export default function CaseChatScreen({ route, navigation }: Props) {
       }
       // Examination — structure matches what liveCase reads (exam.{section}.notes)
       const ef = data.examFindings || {};
-      if (ef.general || ef.cvs || ef.respiratory || ef.abdomen || ef.cns) {
+      if (ef.general || ef.cvs || ef.respiratory || ef.abdomen || ef.cns || ef.heent || (ef as any).back) {
         const exam = { ...(next.examination || next.exam || {}) };
         if (ef.general) exam.general = { ...(exam.general || {}), notes: ef.general };
         if (ef.cvs) exam.cvs = { ...(exam.cvs || {}), notes: ef.cvs };
         if (ef.respiratory) exam.respiratory = { ...(exam.respiratory || {}), notes: ef.respiratory };
         if (ef.abdomen) exam.abdomen = { ...(exam.abdomen || {}), notes: ef.abdomen };
         if (ef.cns) exam.cns = { ...(exam.cns || {}), notes: ef.cns };
+        if (ef.heent) exam.heent = { ...(exam.heent || {}), notes: ef.heent };
+        if ((ef as any).back) exam.back = { ...(exam.back || {}), notes: (ef as any).back };
         next.examination = exam;
       }
       // Treatment — medications and diagnosis
@@ -355,8 +358,20 @@ export default function CaseChatScreen({ route, navigation }: Props) {
         if (data.abgSummary) pa.abg_interpretation = data.abgSummary;
         if (data.abgStructured?.ph) pa.abg_ph = data.abgStructured.ph;
         if (data.abgStructured?.pco2) pa.abg_pco2 = data.abgStructured.pco2;
+        if ((data.abgStructured as any)?.po2) pa.abg_po2 = (data.abgStructured as any).po2;
         if (data.abgStructured?.hco3) pa.abg_hco3 = data.abgStructured.hco3;
+        if ((data.abgStructured as any)?.be) pa.abg_be = (data.abgStructured as any).be;
         if (data.abgStructured?.lactate) pa.abg_lactate = data.abgStructured.lactate;
+        if ((data.abgStructured as any)?.sao2) pa.abg_sao2 = (data.abgStructured as any).sao2;
+        if ((data.abgStructured as any)?.fio2) pa.abg_fio2 = (data.abgStructured as any).fio2;
+        if ((data.abgStructured as any)?.na) pa.abg_na = (data.abgStructured as any).na;
+        if ((data.abgStructured as any)?.k) pa.abg_k = (data.abgStructured as any).k;
+        if ((data.abgStructured as any)?.cl) pa.abg_cl = (data.abgStructured as any).cl;
+        if ((data.abgStructured as any)?.ag) pa.abg_ag = (data.abgStructured as any).ag;
+        if ((data.abgStructured as any)?.glucose) pa.abg_glucose = (data.abgStructured as any).glucose;
+        if ((data.abgStructured as any)?.hb) pa.abg_hb = (data.abgStructured as any).hb;
+        if ((data.abgStructured as any)?.aaGradient) pa.abg_aa_gradient = (data.abgStructured as any).aaGradient;
+        if ((data.abgStructured as any)?.finalAbgDiagnosis) pa.abg_interpretation = (data.abgStructured as any).finalAbgDiagnosis;
         if (data.abgStructured?.performed !== undefined) pa.abg_performed = data.abgStructured.performed;
         // ABCDE structured findings → primary_assessment sub-fields
         const abcde = data.abcdeFindings || {};
@@ -442,12 +457,14 @@ export default function CaseChatScreen({ route, navigation }: Props) {
         next.notes = notes;
       }
       // Disposition
-      if (data.dispositionSuggested?.type || data.dispositionSuggested?.admitTo || data.dispositionSuggested?.referTo) {
+      if (data.dispositionSuggested) {
+        const ds = data.dispositionSuggested;
         const disp = { ...(next.disposition || {}) };
-        if (data.dispositionSuggested.type) disp.dispositionType = data.dispositionSuggested.type;
-        if (data.dispositionSuggested.admitTo) disp.admitTo = data.dispositionSuggested.admitTo;
-        if (data.dispositionSuggested.referTo) disp.referTo = data.dispositionSuggested.referTo;
-        if (data.dispositionSuggested.durationInER) disp.durationInER = data.dispositionSuggested.durationInER;
+        if (ds.type) disp.dispositionType = ds.type;
+        if (ds.admitTo) disp.admitTo = ds.admitTo;
+        if (ds.referTo) disp.referTo = ds.referTo;
+        if (ds.durationInER) disp.durationInER = ds.durationInER;
+        if (ds.conditionAtShift) disp.conditionAtShift = ds.conditionAtShift;
         next.disposition = disp;
       }
       return next;

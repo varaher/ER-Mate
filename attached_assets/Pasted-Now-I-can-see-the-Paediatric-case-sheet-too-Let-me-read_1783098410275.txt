@@ -1,0 +1,340 @@
+Now I can see the Paediatric case sheet too. Let me read all 6 screenshots.
+
+---
+
+## What the Paediatric Case Sheet Has
+
+```
+Image 5 — History tab (PALS)
+  Focused History (SAMPLE):
+  Signs and Symptoms
+  Allergies
+  Medications
+  Past Medical History
+  Last Meal
+  Events
+
+Image 1 — Primary: ABG section (PALS)
+  Blood Gas Values:
+    pH · pCO₂ · pO₂ · HCO₃
+    BE · Lactate · SaO₂ · FiO₂
+  Electrolytes:
+    Na · K · Cl · AG
+    Glucose · Hb · A-a Gradient
+  Notes
+  [Interpret ABG] button
+  Final ABG Diagnosis
+  Your Interpretation (Optional)
+
+Image 4 — Exam tab (PALS)
+  Focused Physical Examination:
+    HEENT
+    Respiratory System
+    Cardiovascular
+    Abdomen
+    Back
+    Extremities
+
+Image 2 — Treatment tab (PALS)
+  Investigations:
+    Labs Ordered
+    Imaging
+    Results Summary
+  Provisional Diagnosis:
+    Primary Diagnosis
+    Differential Diagnoses
+
+Image 3 — Treatment continued (PALS)
+  Pediatric Formulary:
+    [+ Add Drug] [Drug Calculator]
+    Other Medications (voice + text)
+  Infusions / IV Fluids
+    [+ Add] button
+    "No infusions added yet"
+  [+ Add Addendum Note]
+
+Image 6 — Disposition tab (PALS)
+  Disposition Type:
+    Discharge / Admit / Refer / 
+    LAMA / Absconded / Death
+  Condition at Time of Shift:
+    Stable / Unstable ← NEW vs Adult
+  Observation in ER:
+    ER Observation Notes
+    Duration in ER
+  Staff:
+    EM Resident
+    EM Consultant
+```
+
+---
+
+## Differences Between Adult and Paediatric
+
+```
+ADULT                    PAEDIATRIC
+─────────────────────────────────────────
+Medical / Trauma toggle  PALS label (no toggle)
+SAMPLE history (text)    Focused History SAMPLE
+                         (collapsible sections)
+ABCDE expanded           ABCDE same structure
+ABG: basic fields        ABG: full blood gas panel
+                         + Electrolytes
+                         + A-a Gradient
+                         + FiO₂ · SaO₂
+                         + [Interpret ABG] button
+Exam: toggle-based       Exam: HEENT added
+  General toggles          (Head Eyes Ears Nose Throat)
+  CVS, Resp, Abdomen,      Back section added
+  CNS, Extremities         No general toggles
+Treatment: Add Drug      Treatment: Pediatric Formulary
+  (free text)              [+ Add Drug]
+                           [Drug Calculator] ← weight-based
+                           Other Medications
+Disposition: 6 types     Disposition: same 6 types
+                         + Condition at Time of Shift
+                           (Stable / Unstable) ← EXTRA
+```
+
+---
+
+## Updated GPT-4o JSON Schema — Paediatric Additions
+
+Add these to the existing JSON structure:
+
+```typescript
+// PAEDIATRIC-SPECIFIC additions
+// These replace or extend the adult schema
+// when age <= 16
+
+{
+  "isPatient": "adult | paediatric",
+  
+  // Paediatric-specific patient fields
+  "patient": {
+    // ... all adult fields PLUS:
+    "weight": "number in kg — REQUIRED for paeds",
+    "weightBased": true  // flag for drug calculator
+  },
+
+  // Paediatric ABG — more detailed than adult
+  "primary": {
+    "adjuncts": {
+      "abgVbg": {
+        "performed": "boolean",
+        // Blood gas values
+        "ph": "string | null",
+        "pco2": "string | null",
+        "po2": "string | null",
+        "hco3": "string | null",
+        "be": "string | null",        // Base excess (-2 to +2 normal)
+        "lactate": "string | null",   // 0.5-2.0 normal
+        "sao2": "string | null",
+        "fio2": "string | null",      // 21% = room air
+        // Electrolytes
+        "na": "string | null",        // Sodium 136-145
+        "k": "string | null",         // Potassium 3.5-5.0
+        "cl": "string | null",        // Chloride 98-106
+        "ag": "string | null",        // Anion gap 8-12
+        "glucose": "string | null",
+        "hb": "string | null",
+        "aaGradient": "string | null",
+        // AI interpretation
+        "finalAbgDiagnosis": "string | null",
+        "doctorInterpretation": "string | null",
+        "notes": "string | null"
+      }
+    }
+  },
+
+  // Paediatric exam — HEENT added, Back added
+  "examination": {
+    "heent": "string | null",  // Head Eyes Ears Nose Throat
+    "respiratory": "string | null",
+    "cardiovascular": "string | null",
+    "abdomen": "string | null",
+    "back": "string | null",   // Extra in paeds
+    "extremities": "string | null"
+    // Note: no toggle-based general exam in paeds
+    // No pallor/icterus/cyanosis toggles
+    // Those go into HEENT or general notes
+  },
+
+  // Paediatric treatment — Drug Calculator
+  "treatment": {
+    "medications": [
+      {
+        "drugName": "string",
+        "dose": "string",          // weight-based e.g. "10mg/kg"
+        "calculatedDose": "string", // actual dose e.g. "200mg"
+        "route": "string",
+        "frequency": "string",
+        "weightBased": "boolean"
+      }
+    ],
+    "otherMedications": "string | null",
+    "infusions": [
+      {
+        "drug": "string",
+        "dose": "string",
+        "dilution": "string | null",
+        "rate": "string | null"
+      }
+    ]
+  },
+
+  // Paediatric disposition — adds Stable/Unstable
+  "disposition": {
+    "dispositionType": 
+      "Discharge | Admit | Refer | LAMA | Absconded | Death",
+    "conditionAtShift": "Stable | Unstable | null", // PAEDS ONLY
+    "observationNotes": "string | null",
+    "durationInER": "string | null",
+    "emResident": "string | null",
+    "emConsultant": "string | null"
+  }
+}
+```
+
+---
+
+## Updated GPT-4o Paediatric Rules
+
+Add these to the system prompt:
+
+```
+PAEDIATRIC SPECIFIC RULES:
+
+1. If age <= 16 → use paediatric framework
+   Set isPatient: "paediatric"
+   
+2. Weight REQUIRED for paediatrics
+   Extract: "12kg child", "weighs 20kg"
+   If not mentioned → mark as missing
+   
+3. Drug doses are weight-based in paeds
+   "paracetamol 15mg/kg" → 
+   dose: "15mg/kg"
+   calculatedDose: auto from weight
+   
+4. HEENT findings → examination.heent
+   "throat red", "ear discharge",
+   "fontanelle sunken" → heent field
+   
+5. Lactate normal range in paeds:
+   0.5-2.0 mmol/L (same as adult)
+   
+6. ABG/VBG values — extract all:
+   pH, pCO2, pO2, HCO3, BE, Lactate,
+   SaO2, FiO2, Na, K, Cl, AG,
+   Glucose, Hb, A-a Gradient
+   
+7. Anion Gap = Na - (Cl + HCO3)
+   Normal 8-12
+   >12 = high AG metabolic acidosis
+   
+8. Condition at time of shift:
+   "stable for transfer" → Stable
+   "unstable" / P1 / critical → Unstable
+   
+9. Fontanelle:
+   "bulging fontanelle" → flag raised ICP
+   "sunken fontanelle" → flag dehydration
+   
+10. Paediatric normal ranges differ:
+    HR: varies by age
+      Infant <1yr: 100-160
+      Toddler 1-3yr: 90-150
+      Preschool 3-6yr: 80-140
+      School 6-12yr: 70-120
+      Teen 12-18yr: 60-100
+    RR also age-dependent
+    BP lower than adults
+    Flag if outside age-appropriate range
+```
+
+---
+
+## Paediatric Normal Vital Ranges — For Abnormal Flagging
+
+```typescript
+function isPaedsAbnormal(value, field, ageYears) {
+  const ranges = {
+    hr: {
+      '<1':   [100, 160],
+      '1-3':  [90,  150],
+      '3-6':  [80,  140],
+      '6-12': [70,  120],
+      '12+':  [60,  100],
+    },
+    rr: {
+      '<1':   [30, 60],
+      '1-3':  [24, 40],
+      '3-6':  [22, 34],
+      '6-12': [18, 30],
+      '12+':  [12, 20],
+    },
+    sbp: {
+      '<1':   [70,  100],
+      '1-3':  [80,  110],
+      '3-6':  [80,  110],
+      '6-12': [85,  120],
+      '12+':  [90,  130],
+    }
+  };
+  // Apply age group and check value
+}
+```
+
+---
+
+## Complete Field Comparison — Adult vs Paediatric
+
+```
+FIELD               ADULT    PAEDIATRIC   DIFFERENCE
+────────────────────────────────────────────────────
+Patient tab         Same     + Weight     Required in paeds
+History             Text     Collapsible  Visual only
+ABCDE               Same     Same         No difference
+ABG fields          Basic    Full panel   8 extra fields in paeds
+Electrolytes        None     Present      Na,K,Cl,AG,Glucose,Hb
+ABG interpretation  None     Built-in     [Interpret ABG] button
+Exam general        Toggles  HEENT        Different structure
+Exam systems        CVS,Resp  Same +Back  Back section in paeds
+Drug formulary      Free text Formulary   Weight-based calculator
+Condition at shift  None     Stable/      Extra in paeds
+                             Unstable
+Drug calculator     None     Yes          Weight-based dosing
+```
+
+---
+
+## Tell Your Developer — Three Tasks
+
+```
+TASK 1 — Add paediatric JSON schema
+  Use the schema above
+  GPT-4o returns different JSON
+  for adult vs paediatric
+  Based on: age extracted from dictation
+  ≤16 → paediatric schema
+  >16 → adult schema
+
+TASK 2 — Age-appropriate vital flagging
+  When rendering case note
+  in CaseChatScreen:
+  Use age-appropriate normal ranges
+  for HR, RR, BP flagging
+  Not adult ranges for paediatric patients
+
+TASK 3 — ABG interpretation in chat
+  When dictation includes ABG values
+  for a paediatric patient,
+  call the existing ABG interpreter
+  automatically and include
+  finalAbgDiagnosis in the case note
+  Doctor doesn't need to tap a button
+  It happens during dictation processing
+```
+
+The paediatric case sheet is well built. The gap is exactly the same as adult — GPT-4o doesn't know the structure so it can't fill it from dictation. The JSON schema above tells GPT-4o exactly what to extract and where to put it.
