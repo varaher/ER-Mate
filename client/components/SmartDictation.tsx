@@ -140,6 +140,14 @@ export interface SmartDictationExtracted {
     };
   };
   ecgInterpretation?: string;
+  mlcDetails?: {
+    isMLC?: boolean;
+    natureOfIncident?: string;
+    dateTimeOfIncident?: string;
+    placeOfIncident?: string;
+    identificationMark?: string;
+    informantBroughtBy?: string;
+  };
   dispositionSuggested?: {
     type?: string;
     admitTo?: string;

@@ -325,6 +325,14 @@ export default function PediatricCaseSheetScreen() {
   });
   const [abgInterpreting, setAbgInterpreting] = useState(false);
   const [abgInterpretation, setAbgInterpretation] = useState<string | null>(null);
+  const [isMLC, setIsMLC] = useState(false);
+  const [mlcDetails, setMLCDetails] = useState({
+    natureOfIncident: "",
+    dateTimeOfIncident: new Date().toISOString().slice(0, 16).replace("T", " "),
+    placeOfIncident: "",
+    identificationMark: "",
+    informantBroughtBy: "Self",
+  });
   const [historyData, setHistoryData] = useState<PediatricHistoryFormData>({
     allergies: "", currentMedications: "", lastDoseMedications: "", medicationsInEnvironment: "", healthHistory: "", underlyingConditions: "", immunizationStatus: "", lastMeal: "", lmp: "", events: "", treatmentBeforeArrival: "",
     signsAndSymptoms: { breathingDifficulty: false, fever: false, vomiting: false, timeCourse: "", decreasedOralIntake: false, notes: "" }
@@ -473,6 +481,18 @@ export default function PediatricCaseSheetScreen() {
         durationInER: caseSheetData.er_observation.duration || "",
       }));
     }
+    if (caseSheetData.mlc !== undefined) {
+      setIsMLC(caseSheetData.mlc === true);
+    }
+    if (caseSheetData.mlc_details) {
+      setMLCDetails({
+        natureOfIncident: caseSheetData.mlc_details.nature_of_incident || "",
+        dateTimeOfIncident: caseSheetData.mlc_details.date_time || "",
+        placeOfIncident: caseSheetData.mlc_details.place || "",
+        identificationMark: caseSheetData.mlc_details.identification_mark || "",
+        informantBroughtBy: caseSheetData.mlc_details.informant || "Self",
+      });
+    }
     return true;
   };
   
@@ -592,7 +612,14 @@ export default function PediatricCaseSheetScreen() {
         identification_mark: "None noted",
         mode_of_arrival: "Walk-in",
         arrival_datetime: new Date().toISOString(),
-        mlc: false,
+        mlc: isMLC,
+        mlc_details: isMLC ? {
+          nature_of_incident: mlcDetails.natureOfIncident,
+          date_time: mlcDetails.dateTimeOfIncident,
+          place: mlcDetails.placeOfIncident,
+          identification_mark: mlcDetails.identificationMark,
+          informant: mlcDetails.informantBroughtBy,
+        } : undefined,
         weight: patient.weight || "",
       } : undefined,
       presenting_complaint: {
@@ -1177,6 +1204,18 @@ export default function PediatricCaseSheetScreen() {
         if (parts.length) setExamData((prev) => ({ ...prev, abdomen: (prev.abdomen ? prev.abdomen + " " : "") + parts.join(", ") }));
       }
     }
+    if (data.mlcDetails) {
+      const mlc = data.mlcDetails;
+      if (mlc.isMLC) setIsMLC(true);
+      setMLCDetails((prev) => ({
+        ...prev,
+        ...(mlc.natureOfIncident ? { natureOfIncident: mlc.natureOfIncident } : {}),
+        ...(mlc.dateTimeOfIncident ? { dateTimeOfIncident: mlc.dateTimeOfIncident } : {}),
+        ...(mlc.placeOfIncident ? { placeOfIncident: mlc.placeOfIncident } : {}),
+        ...(mlc.identificationMark ? { identificationMark: mlc.identificationMark } : {}),
+        ...(mlc.informantBroughtBy ? { informantBroughtBy: mlc.informantBroughtBy } : {}),
+      }));
+    }
     if (data.dispositionSuggested) {
       const ds = data.dispositionSuggested;
       setDispositionData((prev: any) => ({
@@ -1718,7 +1757,74 @@ export default function PediatricCaseSheetScreen() {
               <Text style={[styles.fieldValue, { color: theme.textSecondary }]}>{patient.brought_by || "Not specified"}</Text>
               <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.md }]}>Informant</Text>
               <Text style={[styles.fieldValue, { color: theme.textSecondary }]}>{patient.informant_name || "Not specified"}{patient.informant_reliability ? ` (${patient.informant_reliability})` : ""}</Text>
+              <View style={styles.mlcRow}>
+                <Text style={[styles.fieldLabel, { color: theme.text, flex: 1 }]}>MLC Case</Text>
+                <Switch
+                  value={isMLC}
+                  onValueChange={setIsMLC}
+                  trackColor={{ false: theme.backgroundSecondary, true: "#4CAF50" }}
+                  thumbColor="#FFFFFF"
+                />
+              </View>
             </View>
+            {isMLC && (
+              <View style={[styles.mlcCard, { backgroundColor: "#FFF8E1", borderColor: "#FFB300" }]}>
+                <View style={styles.mlcHeader}>
+                  <Feather name="alert-triangle" size={18} color="#FF8F00" />
+                  <Text style={[styles.mlcTitle, { color: "#FF8F00" }]}>MLC Details</Text>
+                </View>
+                <View style={styles.field}>
+                  <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Nature of Incident</Text>
+                  <TextInput
+                    style={[styles.inputField, { backgroundColor: theme.card, color: theme.text, borderColor: "#FFB300" }]}
+                    value={mlcDetails.natureOfIncident}
+                    onChangeText={(v) => setMLCDetails((prev) => ({ ...prev, natureOfIncident: v }))}
+                    placeholder="e.g., Road Traffic Accident, Assault, Fall"
+                    placeholderTextColor={theme.textMuted}
+                  />
+                </View>
+                <View style={styles.field}>
+                  <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Date & Time of Incident</Text>
+                  <TextInput
+                    style={[styles.inputField, { backgroundColor: theme.card, color: theme.text, borderColor: "#FFB300" }]}
+                    value={mlcDetails.dateTimeOfIncident}
+                    onChangeText={(v) => setMLCDetails((prev) => ({ ...prev, dateTimeOfIncident: v }))}
+                    placeholder="DD/MM/YYYY HH:MM"
+                    placeholderTextColor={theme.textMuted}
+                  />
+                </View>
+                <View style={styles.field}>
+                  <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Place of Incident</Text>
+                  <TextInput
+                    style={[styles.inputField, { backgroundColor: theme.card, color: theme.text, borderColor: "#FFB300" }]}
+                    value={mlcDetails.placeOfIncident}
+                    onChangeText={(v) => setMLCDetails((prev) => ({ ...prev, placeOfIncident: v }))}
+                    placeholder="Location where incident occurred"
+                    placeholderTextColor={theme.textMuted}
+                  />
+                </View>
+                <View style={styles.field}>
+                  <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Identification Mark</Text>
+                  <TextInput
+                    style={[styles.inputField, { backgroundColor: theme.card, color: theme.text, borderColor: "#FFB300" }]}
+                    value={mlcDetails.identificationMark}
+                    onChangeText={(v) => setMLCDetails((prev) => ({ ...prev, identificationMark: v }))}
+                    placeholder="Any identifying marks"
+                    placeholderTextColor={theme.textMuted}
+                  />
+                </View>
+                <View style={styles.field}>
+                  <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Informant/Brought By</Text>
+                  <TextInput
+                    style={[styles.inputField, { backgroundColor: theme.card, color: theme.text, borderColor: "#FFB300" }]}
+                    value={mlcDetails.informantBroughtBy}
+                    onChangeText={(v) => setMLCDetails((prev) => ({ ...prev, informantBroughtBy: v }))}
+                    placeholder="Parent / Guardian / Self"
+                    placeholderTextColor={theme.textMuted}
+                  />
+                </View>
+              </View>
+            )}
           </View>
           </>
         )}
@@ -2617,6 +2723,10 @@ const styles = StyleSheet.create({
   fieldWithVoice: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: Spacing.md, marginBottom: Spacing.sm },
   fieldLabel: { ...Typography.bodyMedium },
   fieldValue: { ...Typography.body },
+  mlcRow: { flexDirection: "row", alignItems: "center", paddingTop: Spacing.sm },
+  mlcCard: { padding: Spacing.lg, borderRadius: BorderRadius.lg, marginBottom: Spacing.lg, borderWidth: 1 },
+  mlcHeader: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginBottom: Spacing.lg },
+  mlcTitle: { ...Typography.h4 } as any,
   voiceBtn: { width: 36, height: 36, borderRadius: 18, justifyContent: "center", alignItems: "center" },
   voiceBtnSmall: { width: 28, height: 28, borderRadius: 14 },
   inputField: { height: 42, paddingHorizontal: Spacing.md, borderRadius: BorderRadius.md, ...Typography.body },

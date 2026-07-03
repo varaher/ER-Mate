@@ -2350,6 +2350,18 @@ export default function CaseSheetScreen() {
     if (data.addendumNotes) {
       setTreatmentData((prev) => ({ ...prev, addendumNotes: prev.addendumNotes ? prev.addendumNotes + "\n" + data.addendumNotes : data.addendumNotes! }));
     }
+    if (data.mlcDetails) {
+      const mlc = data.mlcDetails;
+      if (mlc.isMLC) setIsMLC(true);
+      setMLCDetails((prev) => ({
+        ...prev,
+        ...(mlc.natureOfIncident ? { natureOfIncident: mlc.natureOfIncident } : {}),
+        ...(mlc.dateTimeOfIncident ? { dateTimeOfIncident: mlc.dateTimeOfIncident } : {}),
+        ...(mlc.placeOfIncident ? { placeOfIncident: mlc.placeOfIncident } : {}),
+        ...(mlc.identificationMark ? { identificationMark: mlc.identificationMark } : {}),
+        ...(mlc.informantBroughtBy ? { informantBroughtBy: mlc.informantBroughtBy } : {}),
+      }));
+    }
     if (data.dispositionSuggested) {
       const ds = data.dispositionSuggested;
       setDispositionData((prev) => ({

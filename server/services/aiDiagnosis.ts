@@ -935,6 +935,14 @@ Respond in JSON format:
       "deformity": "true if extremity deformity noted"
     }
   },
+  "mlcDetails": {
+    "isMLC": "true if doctor mentions MLC, medico-legal case, police case, RTA, assault, burns, drowning, poisoning, or any medico-legal incident — otherwise omit",
+    "natureOfIncident": "Nature of medico-legal incident (e.g. Road Traffic Accident, Assault, Fall from height, Burns, Poisoning, Drowning)",
+    "dateTimeOfIncident": "Date and time of the incident if mentioned",
+    "placeOfIncident": "Place where incident occurred if mentioned",
+    "identificationMark": "Any identifying marks mentioned",
+    "informantBroughtBy": "Person who brought the patient or informant name if mentioned"
+  },
   "dispositionSuggested": {
     "type": "Only if doctor explicitly mentions disposition: one of Discharge | Admit | Refer | LAMA | Absconded | Death",
     "admitTo": "If admitting, one of: General Ward | Medical ICU | Cardiac ICU | Surgical ICU | Neuro ICU | Pediatric ICU | NICU | HDU | Observation Ward | Other",
@@ -1758,6 +1766,14 @@ SCHEMA (fill every field, use "" for not mentioned):
       "edema": false,
       "deformity": false
     }
+  },
+  "mlcDetails": {
+    "isMLC": "true if MLC, medico-legal case, RTA, assault, fall, burns, poisoning, drowning mentioned — otherwise omit",
+    "natureOfIncident": "Nature of medico-legal incident if mentioned",
+    "dateTimeOfIncident": "Date and time of incident if mentioned",
+    "placeOfIncident": "Place of incident if mentioned",
+    "identificationMark": "Identifying marks if mentioned",
+    "informantBroughtBy": "Informant or person who brought the child if mentioned"
   },
   "dispositionSuggested": {
     "type": "Only if explicitly mentioned: Discharge | Admit | Refer | LAMA | Absconded | Death",
