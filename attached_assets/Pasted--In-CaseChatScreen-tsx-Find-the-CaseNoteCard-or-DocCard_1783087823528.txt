@@ -1,0 +1,205 @@
+// In CaseChatScreen.tsx
+// Find the CaseNoteCard or DocCard component
+// Replace the entire styled card with
+// simple formatted text:
+
+function CaseNoteText({ data }) {
+  const v = data.vitals || {};
+  const h = data.history || {};
+  const p = data.primary || {};
+  const e = data.examination || {};
+  const t = data.treatment || {};
+  const d = data.disposition || {};
+  
+  const val = (x, fallback = '—') => 
+    x && x !== '' ? x : fallback;
+
+  return (
+    <View style={styles.caseText}>
+      
+      <Text style={styles.docTitle}>
+        EMERGENCY CASE NOTE
+      </Text>
+      
+      <Text style={styles.section}>PATIENT</Text>
+      <Text style={styles.body}>
+        {val(data.patientName, 'Unknown')} · {val(data.age)}
+        {data.gender ? data.gender[0] : ''} · {val(data.priority, 'P4')}
+      </Text>
+      
+      <Text style={styles.section}>VITALS</Text>
+      <Text style={styles.body}>
+        HR: {val(v.hr)} · BP: {val(v.bp)} · 
+        SpO₂: {val(v.spo2)} · RR: {val(v.rr)} · 
+        Temp: {val(v.temp)} · GCS: {val(v.gcs)} · 
+        GRBS: {val(v.grbs)}
+      </Text>
+      
+      <Text style={styles.section}>HISTORY (SAMPLE)</Text>
+      <Text style={styles.body}>
+        Symptoms: {val(h.symptoms)}{'\n'}
+        Allergies: {val(h.allergies, 'NKDA')}{'\n'}
+        Medications: {val(h.medications, 'None')}{'\n'}
+        Past Hx: {val(h.pastHistory, 'Nil significant')}{'\n'}
+        Last meal: {val(h.lastMeal)}{'\n'}
+        Events: {val(h.events)}
+      </Text>
+      
+      <Text style={styles.section}>
+        PRIMARY SURVEY (ABCDE)
+      </Text>
+      <Text style={styles.body}>
+        A: {val(p.airway, 'Patent')}{'\n'}
+        B: {val(p.breathing)}{'\n'}
+        C: {val(p.circulation)}{'\n'}
+        D: {val(p.disability)}{'\n'}
+        E: {val(p.exposure)}
+      </Text>
+      
+      <Text style={styles.section}>EXAMINATION</Text>
+      <Text style={styles.body}>
+        General: {val(e.general)}{'\n'}
+        CVS: {val(e.cvs)}{'\n'}
+        Resp: {val(e.respiratory)}{'\n'}
+        Abdomen: {val(e.abdomen)}{'\n'}
+        Neuro: {val(e.neuro)}
+      </Text>
+      
+      <Text style={styles.section}>TREATMENT GIVEN</Text>
+      <Text style={styles.body}>
+        {formatMeds(t.medications)}{'\n'}
+        Procedures: {val(t.procedures, 'None')}{'\n'}
+        IV Access: {val(t.ivAccess)}{'\n'}
+        Fluids: {val(t.fluids, 'None')}{'\n'}
+        Oxygen: {val(t.oxygen, 'Not required')}
+      </Text>
+      
+      <Text style={styles.section}>INVESTIGATIONS</Text>
+      <Text style={styles.body}>
+        ECG: {val(p.ecg)}{'\n'}
+        ABG/VBG: {val(p.abg)}{'\n'}
+        Other: {val(data.investigations)}
+      </Text>
+      
+      <Text style={styles.section}>IMPRESSION</Text>
+      <Text style={styles.body}>
+        {val(d.diagnosis, 'Pending')}
+      </Text>
+      
+      <Text style={styles.section}>PLAN</Text>
+      <Text style={styles.body}>
+        {val(d.plan)}{'\n'}
+        Decision: {val(d.decision, 'Pending')}{'\n'}
+        Referral: {val(d.referralSpecialty)}
+      </Text>
+
+      {/* Not captured — only truly missing */}
+      {getMissing(data).length > 0 && (
+        <Text style={styles.missing}>
+          ⚠ Not captured: {getMissing(data).join(' · ')}
+        </Text>
+      )}
+
+      {/* Actions */}
+      <View style={styles.actions}>
+        <TouchableOpacity 
+          style={styles.copyBtn}
+          onPress={() => copyToClipboard(
+            formatAsPlainText(data)
+          )}>
+          <Text style={styles.copyText}>
+            Copy all
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.saveBtn}>
+          <Text style={styles.saveText}>Save</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+// Styles — clean, minimal like Claude
+const styles = {
+  caseText: {
+    paddingHorizontal: 4,
+    paddingVertical: 8,
+  },
+  docTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0D2B1A',
+    marginBottom: 16,
+    letterSpacing: 0.3,
+  },
+  section: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: '#6B9E80',    // emerald muted
+    marginTop: 14,
+    marginBottom: 4,
+  },
+  body: {
+    fontSize: 14,
+    color: '#0D2B1A',
+    lineHeight: 22,
+  },
+  missing: {
+    fontSize: 12,
+    color: '#D97706',
+    marginTop: 12,
+    lineHeight: 18,
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 16,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#D4E8DC',
+  },
+  copyBtn: {
+    backgroundColor: '#15924F',
+    borderRadius: 9,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+  },
+  copyText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: 'white',
+  },
+  saveBtn: {
+    backgroundColor: 'white',
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: '#D4E8DC',
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+  },
+  saveText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#3D6B52',
+  },
+};
+
+// Fix the "Not captured" banner
+// Only flag fields that are truly empty
+function getMissing(data) {
+  const missing = [];
+  const v = data.vitals || {};
+  const h = data.history || {};
+  const d = data.disposition || {};
+  
+  // Only flag if truly absent
+  if (!data.patientName) missing.push('Name');
+  if (!h.symptoms && !data.chiefComplaint) 
+    missing.push('Chief complaint');
+  if (!d.diagnosis) missing.push('Impression');
+  // DO NOT flag HR/BP/SpO₂ if they have values
+  
+  return missing;
+}

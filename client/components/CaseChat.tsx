@@ -758,6 +758,187 @@ function LiveCaseNoteBody({ c }: { c: CaseData }) {
   );
 }
 
+// ── FlatCaseNote — card-free plain text layout ────────────────────────────────
+function FlatCaseNote({ c, onCopy, onSave }: { c: CaseData; onCopy: () => void; onSave?: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const v = c.vitals; const h = c.history; const p = c.primary;
+  const e = c.exam;   const t = c.treatment; const d = c.disposition;
+
+  const val = (x?: string | null, fallback = '—') => (x && x.trim() ? x.trim() : fallback);
+
+  const handleCopy = () => { onCopy(); setCopied(true); setTimeout(() => setCopied(false), 2200); };
+
+  const hasVitals  = !!(v.hr || v.bp || v.spo2 || v.rr || v.temp || v.gcs || v.grbs);
+  const hasHistory = !!(h.symptoms || h.events || h.allergies || h.medications || h.pastHistory || h.lastMeal || h.pastSurgical || h.other);
+  const hasPrimary = !!(p.airway || p.breathing || p.circulation || p.disability || p.exposure || p.ecg || p.abg);
+  const hasExam    = !!(e.general || e.cvs || e.respiratory || e.abdomen || e.neuro || e.extremities);
+  const hasTreat   = !!(t.medications || t.infusions || t.ivFluids || t.procedures || t.labsOrdered || t.imaging || t.otherMedications);
+  const hasDx      = !!(d.diagnosis || d.differentials || d.decision);
+
+  const missing: string[] = [];
+  if (!c.name) missing.push('Name');
+  if (!h.symptoms && !c.chiefComplaint) missing.push('Chief complaint');
+  if (!d.diagnosis) missing.push('Impression');
+
+  const fns = StyleSheet.create({
+    wrap:    { paddingHorizontal: 4, paddingVertical: 8 },
+    title:   { fontSize: 15, fontWeight: '700', color: '#0D2B1A', marginBottom: 14, letterSpacing: 0.3 },
+    sec:     { fontSize: 11, fontWeight: '700', letterSpacing: 1.2, color: '#6B9E80', marginTop: 14, marginBottom: 4 },
+    body:    { fontSize: 14, color: '#0D2B1A', lineHeight: 22 },
+    missing: { fontSize: 12, color: '#D97706', marginTop: 12, lineHeight: 18 },
+    actions: { flexDirection: 'row' as const, gap: 10, marginTop: 16, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#D4E8DC' },
+    copyBtn: { backgroundColor: copied ? '#0D8A46' : '#15924F', borderRadius: 9, paddingHorizontal: 16, paddingVertical: 9 },
+    copyTxt: { fontSize: 13, fontWeight: '700' as const, color: '#fff' },
+    saveBtn: { backgroundColor: '#fff', borderRadius: 9, borderWidth: 1, borderColor: '#D4E8DC', paddingHorizontal: 16, paddingVertical: 9 },
+    saveTxt: { fontSize: 13, fontWeight: '600' as const, color: '#3D6B52' },
+  });
+
+  return (
+    <View style={fns.wrap}>
+      <Text style={fns.title}>EMERGENCY CASE NOTE</Text>
+
+      {/* PATIENT */}
+      <Text style={fns.sec}>PATIENT</Text>
+      <Text style={fns.body}>
+        {val(c.name, 'Unknown')}
+        {c.age ? ` · ${c.age}` : ''}
+        {c.sex ? ` ${c.sex[0]?.toUpperCase() ?? ''}` : ''}
+        {c.priority ? ` · ${c.priority}` : ''}
+        {c.chiefComplaint ? `\nComplaint: ${c.chiefComplaint}` : ''}
+      </Text>
+
+      {/* VITALS */}
+      {hasVitals ? (
+        <>
+          <Text style={fns.sec}>VITALS</Text>
+          <Text style={fns.body}>
+            {[
+              v.hr   ? `HR: ${v.hr} bpm` : null,
+              v.bp   ? `BP: ${v.bp} mmHg` : null,
+              v.spo2 ? `SpO₂: ${v.spo2}%` : null,
+              v.rr   ? `RR: ${v.rr}/min` : null,
+              v.temp ? `Temp: ${v.temp}°C` : null,
+              v.gcs  ? `GCS: ${v.gcs}` : null,
+              v.grbs ? `GRBS: ${v.grbs} mg/dL` : null,
+            ].filter(Boolean).join(' · ')}
+          </Text>
+        </>
+      ) : null}
+
+      {/* HISTORY */}
+      {hasHistory ? (
+        <>
+          <Text style={fns.sec}>HISTORY (SAMPLE)</Text>
+          <Text style={fns.body}>
+            {[
+              h.symptoms     ? `Symptoms: ${h.symptoms}` : null,
+              h.allergies    ? `Allergies: ${h.allergies}` : 'Allergies: NKDA',
+              h.medications  ? `Medications: ${h.medications}` : 'Medications: None',
+              h.pastHistory  ? `Past Hx: ${h.pastHistory}` : null,
+              h.pastSurgical ? `Past surgery: ${h.pastSurgical}` : null,
+              h.lastMeal     ? `Last meal: ${h.lastMeal}` : null,
+              h.events       ? `Events: ${h.events}` : null,
+              h.other        ? `Other: ${h.other}` : null,
+            ].filter(Boolean).join('\n')}
+          </Text>
+        </>
+      ) : null}
+
+      {/* PRIMARY SURVEY */}
+      {hasPrimary ? (
+        <>
+          <Text style={fns.sec}>PRIMARY SURVEY (ABCDE)</Text>
+          <Text style={fns.body}>
+            {[
+              `A — Airway: ${val(p.airway, 'Patent')}`,
+              p.breathing   ? `B — Breathing: ${p.breathing}` : null,
+              p.circulation ? `C — Circulation: ${p.circulation}` : null,
+              p.disability  ? `D — Disability: ${p.disability}` : null,
+              p.exposure    ? `E — Exposure: ${p.exposure}` : null,
+              p.ecg         ? `ECG: ${p.ecg}` : null,
+              p.abg         ? `ABG/VBG: ${p.abg}` : null,
+            ].filter(Boolean).join('\n')}
+          </Text>
+        </>
+      ) : null}
+
+      {/* EXAMINATION */}
+      {hasExam ? (
+        <>
+          <Text style={fns.sec}>EXAMINATION</Text>
+          <Text style={fns.body}>
+            {[
+              e.general     ? `General: ${e.general}` : null,
+              e.cvs         ? `CVS: ${e.cvs}` : null,
+              e.respiratory ? `Resp: ${e.respiratory}` : null,
+              e.abdomen     ? `Abdomen: ${e.abdomen}` : null,
+              e.neuro       ? `Neuro: ${e.neuro}` : null,
+              e.extremities ? `Extremities: ${e.extremities}` : null,
+            ].filter(Boolean).join('\n')}
+          </Text>
+        </>
+      ) : null}
+
+      {/* TREATMENT */}
+      {hasTreat ? (
+        <>
+          <Text style={fns.sec}>TREATMENT GIVEN</Text>
+          <Text style={fns.body}>
+            {[
+              t.medications      ? `Medications: ${t.medications}` : null,
+              t.infusions        ? `Infusions: ${t.infusions}` : null,
+              t.otherMedications ? `Other meds: ${t.otherMedications}` : null,
+              t.ivFluids         ? `IV Fluids: ${t.ivFluids}` : null,
+              t.procedures       ? `Procedures: ${t.procedures}` : null,
+              t.labsOrdered      ? `Labs: ${t.labsOrdered}` : null,
+              t.imaging          ? `Imaging: ${t.imaging}` : null,
+            ].filter(Boolean).join('\n')}
+          </Text>
+        </>
+      ) : null}
+
+      {/* NOTES */}
+      {c.notes ? (
+        <>
+          <Text style={fns.sec}>NOTES</Text>
+          <Text style={fns.body}>{c.notes}</Text>
+        </>
+      ) : null}
+
+      {/* IMPRESSION */}
+      {hasDx ? (
+        <>
+          <Text style={fns.sec}>IMPRESSION & PLAN</Text>
+          <Text style={fns.body}>
+            {[
+              d.diagnosis     ? `Diagnosis: ${d.diagnosis}` : null,
+              d.differentials ? `Differentials: ${d.differentials}` : null,
+              d.decision      ? `Disposition: ${d.decision}${d.admitTo ? ` — ${d.admitTo}` : ''}${d.referTo ? ` · Referral: ${d.referTo}` : ''}` : null,
+            ].filter(Boolean).join('\n')}
+          </Text>
+        </>
+      ) : null}
+
+      {/* Missing fields */}
+      {missing.length > 0 ? (
+        <Text style={fns.missing}>Not captured: {missing.join(' · ')}</Text>
+      ) : null}
+
+      {/* Actions */}
+      <View style={fns.actions}>
+        <Pressable style={fns.copyBtn} onPress={handleCopy}>
+          <Text style={fns.copyTxt}>{copied ? 'Copied!' : 'Copy all'}</Text>
+        </Pressable>
+        {onSave ? (
+          <Pressable style={fns.saveBtn} onPress={onSave}>
+            <Text style={fns.saveTxt}>Save</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
 // ── DocCard ───────────────────────────────────────────────────────────────────
 function DocCard({
   type,
@@ -1234,25 +1415,28 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
                     ? 'Case note — live from all tabs'
                     : `Case note ready · ${fc} field${fc !== 1 ? 's' : ''} captured`}
                 >
-                  <DocCard
-                    type="case"
-                    title="Emergency Case Note"
-                    tag="CASE NOTE"
-                    onCopy={() => {
-                      const txt = useLive
-                        ? generateCaseNote(liveCase!)
-                        : buildCopyText(msg.extracted!, patientContext);
-                      Clipboard.setStringAsync(txt);
-                      showToast('Case note copied to clipboard');
-                    }}
-                    onSave={() => showToast('Saved to dashboard')}
-                  >
-                    {useLive
-                      ? <LiveCaseNoteBody c={liveCase!} />
-                      : msg.extracted
-                        ? <CaseNoteBody extracted={msg.extracted} patientContext={patientContext} />
-                        : null}
-                  </DocCard>
+                  {useLive ? (
+                    <FlatCaseNote
+                      c={liveCase!}
+                      onCopy={() => {
+                        Clipboard.setStringAsync(generateCaseNote(liveCase!));
+                        showToast('Case note copied to clipboard');
+                      }}
+                      onSave={() => showToast('Saved to dashboard')}
+                    />
+                  ) : msg.extracted ? (
+                    <DocCard
+                      type="case"
+                      title="Emergency Case Note"
+                      tag="CASE NOTE"
+                      onCopy={() => {
+                        Clipboard.setStringAsync(buildCopyText(msg.extracted!, patientContext));
+                        showToast('Case note copied to clipboard');
+                      }}
+                    >
+                      <CaseNoteBody extracted={msg.extracted} patientContext={patientContext} />
+                    </DocCard>
+                  ) : null}
                   {msg.missingFields && msg.missingFields.length > 0
                     ? <MissingFieldsBanner fields={msg.missingFields} /> : null}
                   {msg.feedbackState ? (
