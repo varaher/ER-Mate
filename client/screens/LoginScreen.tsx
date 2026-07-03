@@ -69,6 +69,34 @@ export default function LoginScreen() {
   const [qrStatus, setQrStatus] = useState<"idle" | "loading" | "waiting" | "expired">("idle");
   const qrPollRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Desktop right-panel tab: 'qr' = show QR code, 'code' = type the code from phone
+  const [desktopLinkTab, setDesktopLinkTab] = useState<"qr" | "code">("qr");
+  const [linkCode, setLinkCode] = useState("");
+  const [linkCodeLoading, setLinkCodeLoading] = useState(false);
+  const [linkCodeError, setLinkCodeError] = useState<string | null>(null);
+
+  const verifyLinkCode = async () => {
+    const code = linkCode.trim().toUpperCase();
+    if (code.length < 6) return;
+    setLinkCodeLoading(true);
+    setLinkCodeError(null);
+    try {
+      const baseUrl = getApiUrl();
+      const res = await fetch(`${baseUrl}/api/auth/verify-link-code?code=${encodeURIComponent(code)}`);
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        setLinkCodeError(data.error || "Invalid or expired code. Please try again.");
+        return;
+      }
+      const userData = { id: data.user?.id || "", name: data.user?.name || "", email: data.user?.email || "" };
+      await loginWithToken(data.access_token, userData);
+    } catch (err: any) {
+      setLinkCodeError(err?.message || "Something went wrong. Please try again.");
+    } finally {
+      setLinkCodeLoading(false);
+    }
+  };
+
   const stopQrPoll = () => {
     if (qrPollRef.current) {
       clearInterval(qrPollRef.current);
@@ -602,52 +630,128 @@ export default function LoginScreen() {
               </View>
               <Text style={[styles.desktopQrTitle, { color: theme.text }]}>Link your device</Text>
               <Text style={[styles.desktopQrSubtitle, { color: theme.textSecondary }]}>
-                Already using ErMate on your phone?{"\n"}Scan to log in instantly — no password needed.
+                Already using ErMate on your phone?{"\n"}Connect instantly — no password needed.
               </Text>
 
-              {/* QR code area */}
-              {qrStatus === "loading" ? (
-                <View style={styles.desktopQrLoadingBox}>
-                  <ActivityIndicator color={theme.primary} size="large" />
-                  <Text style={[styles.desktopQrHint, { color: theme.textMuted }]}>Generating QR code...</Text>
-                </View>
-              ) : qrStatus === "expired" ? (
-                <View style={styles.desktopQrLoadingBox}>
-                  <Text style={{ color: theme.danger || "#ef4444", ...Typography.bodyMedium, fontWeight: "600", marginBottom: Spacing.md }}>QR expired</Text>
-                  <Pressable style={[styles.qrRetryBtn, { backgroundColor: theme.primary }]} onPress={startQrLogin}>
-                    <Text style={styles.qrRetryText}>Generate New QR</Text>
-                  </Pressable>
-                </View>
-              ) : qrUrl ? (
-                <View style={[styles.desktopQrImageWrap, { borderColor: theme.border }]}>
-                  {React.createElement(require("react-native").Image, {
-                    source: { uri: `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(qrUrl)}` },
-                    style: styles.desktopQrImage,
-                    resizeMode: "contain",
-                  })}
-                </View>
-              ) : (
-                <Pressable style={[styles.qrButton, { borderColor: theme.primary, marginVertical: Spacing.xl }]} onPress={startQrLogin}>
-                  <Feather name="refresh-cw" size={18} color={theme.primary} />
-                  <Text style={[styles.qrButtonText, { color: theme.primary }]}>Generate QR Code</Text>
+              {/* Tab switcher */}
+              <View style={[styles.desktopLinkTabs, { backgroundColor: theme.backgroundDefault, borderColor: theme.border }]}>
+                <Pressable
+                  style={[styles.desktopLinkTab, desktopLinkTab === "qr" && { backgroundColor: theme.card, shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 2 }]}
+                  onPress={() => { setDesktopLinkTab("qr"); if (qrStatus === "idle") startQrLogin(); }}
+                >
+                  <Feather name="camera" size={13} color={desktopLinkTab === "qr" ? theme.primary : theme.textMuted} />
+                  <Text style={[styles.desktopLinkTabText, { color: desktopLinkTab === "qr" ? theme.text : theme.textMuted }]}>Scan QR</Text>
                 </Pressable>
-              )}
-
-              {/* Steps */}
-              <View style={styles.desktopSteps}>
-                {([
-                  { n: "1", label: "Open ErMate on your phone" },
-                  { n: "2", label: "Profile  →  Link to Web" },
-                  { n: "3", label: "Tap Approve — you're in!" },
-                ] as const).map(({ n, label }) => (
-                  <View key={n} style={styles.desktopStep}>
-                    <View style={[styles.desktopStepBadge, { backgroundColor: theme.primary }]}>
-                      <Text style={styles.desktopStepNum}>{n}</Text>
-                    </View>
-                    <Text style={[styles.desktopStepText, { color: theme.textSecondary }]}>{label}</Text>
-                  </View>
-                ))}
+                <Pressable
+                  style={[styles.desktopLinkTab, desktopLinkTab === "code" && { backgroundColor: theme.card, shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 2 }]}
+                  onPress={() => { setDesktopLinkTab("code"); setLinkCodeError(null); setLinkCode(""); }}
+                >
+                  <Feather name="hash" size={13} color={desktopLinkTab === "code" ? theme.primary : theme.textMuted} />
+                  <Text style={[styles.desktopLinkTabText, { color: desktopLinkTab === "code" ? theme.text : theme.textMuted }]}>Enter Code</Text>
+                </Pressable>
               </View>
+
+              {desktopLinkTab === "qr" ? (
+                <>
+                  {/* QR code area */}
+                  {qrStatus === "loading" ? (
+                    <View style={styles.desktopQrLoadingBox}>
+                      <ActivityIndicator color={theme.primary} size="large" />
+                      <Text style={[styles.desktopQrHint, { color: theme.textMuted }]}>Generating QR code...</Text>
+                    </View>
+                  ) : qrStatus === "expired" ? (
+                    <View style={styles.desktopQrLoadingBox}>
+                      <Text style={{ color: theme.danger || "#ef4444", fontSize: 14, fontWeight: "600", marginBottom: Spacing.md }}>QR expired</Text>
+                      <Pressable style={[styles.qrRetryBtn, { backgroundColor: theme.primary }]} onPress={startQrLogin}>
+                        <Text style={styles.qrRetryText}>Generate New QR</Text>
+                      </Pressable>
+                    </View>
+                  ) : qrUrl ? (
+                    <View style={[styles.desktopQrImageWrap, { borderColor: theme.border }]}>
+                      {React.createElement(require("react-native").Image, {
+                        source: { uri: `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(qrUrl)}` },
+                        style: styles.desktopQrImage,
+                        resizeMode: "contain",
+                      })}
+                    </View>
+                  ) : (
+                    <Pressable style={[styles.qrButton, { borderColor: theme.primary, marginVertical: Spacing.xl }]} onPress={startQrLogin}>
+                      <Feather name="refresh-cw" size={18} color={theme.primary} />
+                      <Text style={[styles.qrButtonText, { color: theme.primary }]}>Generate QR Code</Text>
+                    </Pressable>
+                  )}
+                  <View style={styles.desktopSteps}>
+                    {([
+                      { n: "1", label: "Open ErMate on your phone" },
+                      { n: "2", label: "Profile → Link to Web → Scan QR" },
+                      { n: "3", label: "Tap Approve — you're in!" },
+                    ] as const).map(({ n, label }) => (
+                      <View key={n} style={styles.desktopStep}>
+                        <View style={[styles.desktopStepBadge, { backgroundColor: theme.primary }]}>
+                          <Text style={styles.desktopStepNum}>{n}</Text>
+                        </View>
+                        <Text style={[styles.desktopStepText, { color: theme.textSecondary }]}>{label}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </>
+              ) : (
+                <>
+                  {/* Enter code area */}
+                  <View style={styles.desktopCodeBox}>
+                    <Text style={[styles.desktopCodeLabel, { color: theme.textSecondary }]}>
+                      Enter the code from your phone's{"\n"}"Share Code" tab
+                    </Text>
+                    <View style={[styles.desktopCodeInputWrap, { borderColor: linkCodeError ? (theme.danger || "#ef4444") : linkCode.length === 6 ? theme.primary : theme.border, backgroundColor: theme.backgroundDefault }]}>
+                      <TextInput
+                        style={[styles.desktopCodeInput, { color: theme.text }]}
+                        value={linkCode}
+                        onChangeText={(t) => { setLinkCode(t.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6)); setLinkCodeError(null); }}
+                        placeholder="A B C 1 2 3"
+                        placeholderTextColor={theme.textMuted}
+                        autoCapitalize="characters"
+                        autoCorrect={false}
+                        maxLength={6}
+                        onSubmitEditing={verifyLinkCode}
+                      />
+                    </View>
+                    {linkCodeError ? (
+                      <View style={[styles.desktopCodeError, { backgroundColor: (theme.danger || "#ef4444") + "14", borderColor: (theme.danger || "#ef4444") + "40" }]}>
+                        <Feather name="alert-circle" size={13} color={theme.danger || "#ef4444"} />
+                        <Text style={[styles.desktopCodeErrorText, { color: theme.danger || "#ef4444" }]}>{linkCodeError}</Text>
+                      </View>
+                    ) : null}
+                    <Pressable
+                      style={[styles.desktopCodeBtn, { backgroundColor: linkCode.length === 6 ? theme.primary : theme.border, opacity: linkCodeLoading ? 0.7 : 1 }]}
+                      onPress={verifyLinkCode}
+                      disabled={linkCode.length < 6 || linkCodeLoading}
+                    >
+                      {linkCodeLoading ? (
+                        <ActivityIndicator color="#fff" size="small" />
+                      ) : (
+                        <>
+                          <Feather name="log-in" size={15} color="#fff" />
+                          <Text style={styles.desktopCodeBtnText}>Connect</Text>
+                        </>
+                      )}
+                    </Pressable>
+                  </View>
+                  <View style={styles.desktopSteps}>
+                    {([
+                      { n: "1", label: "Open ErMate on your phone" },
+                      { n: "2", label: "Profile → Link to Web → Share Code" },
+                      { n: "3", label: "Type the 6-character code above" },
+                    ] as const).map(({ n, label }) => (
+                      <View key={n} style={styles.desktopStep}>
+                        <View style={[styles.desktopStepBadge, { backgroundColor: theme.primary }]}>
+                          <Text style={styles.desktopStepNum}>{n}</Text>
+                        </View>
+                        <Text style={[styles.desktopStepText, { color: theme.textSecondary }]}>{label}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </>
+              )}
             </View>
           </View>
         </View>
@@ -1191,5 +1295,79 @@ const styles = StyleSheet.create({
   desktopStepText: {
     ...Typography.body,
     flex: 1,
+  },
+  desktopLinkTabs: {
+    flexDirection: "row",
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    padding: 4,
+    gap: 4,
+    width: "100%",
+  },
+  desktopLinkTab: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: BorderRadius.sm,
+  },
+  desktopLinkTabText: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  desktopCodeBox: {
+    width: "100%",
+    alignItems: "center",
+    gap: Spacing.md,
+  },
+  desktopCodeLabel: {
+    ...Typography.small,
+    textAlign: "center",
+    lineHeight: 20,
+  },
+  desktopCodeInputWrap: {
+    width: "100%",
+    borderWidth: 2,
+    borderRadius: BorderRadius.md,
+  },
+  desktopCodeInput: {
+    fontSize: 30,
+    fontWeight: "700",
+    textAlign: "center",
+    letterSpacing: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+  },
+  desktopCodeError: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    width: "100%",
+  },
+  desktopCodeErrorText: {
+    fontSize: 12,
+    flex: 1,
+    lineHeight: 16,
+  },
+  desktopCodeBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    width: "100%",
+    paddingVertical: 14,
+    borderRadius: BorderRadius.md,
+  },
+  desktopCodeBtnText: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "700",
   },
 });
