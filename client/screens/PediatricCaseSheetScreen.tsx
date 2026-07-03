@@ -1184,6 +1184,8 @@ export default function PediatricCaseSheetScreen() {
         ...(ds.type ? { dispositionType: ds.type } : {}),
         ...(ds.admitTo ? { admitTo: ds.admitTo } : {}),
         ...(ds.referTo ? { referTo: ds.referTo } : {}),
+        ...(ds.conditionAtShift ? { conditionAtShift: ds.conditionAtShift } : {}),
+        ...(ds.durationInER ? { durationInER: ds.durationInER } : {}),
         ...(ds.emResident ? { emResident: ds.emResident } : {}),
         ...(ds.emConsultant ? { emConsultant: ds.emConsultant } : {}),
         ...(ds.erObservationNotes ? { erObservationNotes: prev.erObservationNotes ? prev.erObservationNotes + "\n" + ds.erObservationNotes : ds.erObservationNotes } : {}),

@@ -939,6 +939,8 @@ Respond in JSON format:
     "type": "Only if doctor explicitly mentions disposition: one of Discharge | Admit | Refer | LAMA | Absconded | Death",
     "admitTo": "If admitting, one of: General Ward | Medical ICU | Cardiac ICU | Surgical ICU | Neuro ICU | Pediatric ICU | NICU | HDU | Observation Ward | Other",
     "referTo": "Hospital name, specialty or physician name if referral is mentioned",
+    "conditionAtShift": "Only if explicitly stated: Stable | Unstable",
+    "durationInER": "Duration the patient stayed in ER if mentioned (e.g. '4 hours', '2 hours 30 minutes')",
     "emResident": "Resident doctor's name if mentioned",
     "emConsultant": "Consultant's name if mentioned",
     "erObservationNotes": "Patient's response to treatment, course in ER if described"
@@ -1759,8 +1761,10 @@ SCHEMA (fill every field, use "" for not mentioned):
   },
   "dispositionSuggested": {
     "type": "Only if explicitly mentioned: Discharge | Admit | Refer | LAMA | Absconded | Death",
-    "admitTo": "General Ward | Medical ICU | Cardiac ICU | Surgical ICU | Neuro ICU | Pediatric ICU | NICU | HDU | Observation Ward | Other — if specified",
+    "admitTo": "Pediatric Ward | Pediatric ICU | NICU | Medical ICU | Surgical ICU | HDU | Observation Ward | Other — if specified",
     "referTo": "",
+    "conditionAtShift": "Only if explicitly stated: Stable | Unstable",
+    "durationInER": "Duration in ER if mentioned (e.g. '4 hours')",
     "erObservationNotes": "Patient's response to treatment, course in ER"
   },
   "fieldsPopulated": ["Array of field names that were populated"]

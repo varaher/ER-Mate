@@ -2357,6 +2357,7 @@ export default function CaseSheetScreen() {
         ...(ds.type ? { dispositionType: ds.type } : {}),
         ...(ds.admitTo ? { admitTo: ds.admitTo } : {}),
         ...(ds.referTo ? { referTo: ds.referTo } : {}),
+        ...(ds.durationInER ? { durationInER: ds.durationInER } : {}),
         ...(ds.emResident ? { emResident: ds.emResident } : {}),
         ...(ds.emConsultant ? { emConsultant: ds.emConsultant } : {}),
         ...(ds.erObservationNotes ? { erObservationNotes: prev.erObservationNotes ? prev.erObservationNotes + "\n" + ds.erObservationNotes : ds.erObservationNotes } : {}),

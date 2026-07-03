@@ -144,6 +144,8 @@ export interface SmartDictationExtracted {
     type?: string;
     admitTo?: string;
     referTo?: string;
+    conditionAtShift?: string;
+    durationInER?: string;
     emResident?: string;
     emConsultant?: string;
     erObservationNotes?: string;
