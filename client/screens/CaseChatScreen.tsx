@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, StyleSheet, ActivityIndicator,
-  Platform, StatusBar,
+  Platform, StatusBar, Pressable,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RootStackParamList } from '@/navigation/RootStackNavigator';
@@ -303,8 +304,17 @@ export default function CaseChatScreen({ route, navigation }: Props) {
   // ── Render ─────────────────────────────────────────────────────────────────
   const header = (
     <View style={styles.header}>
-      <Text style={styles.headerTitle}>ErMate</Text>
-      <Text style={styles.headerSub} numberOfLines={1}>{effectiveName}</Text>
+      <Pressable
+        onPress={() => navigation.goBack()}
+        style={({ pressed }) => [styles.backBtn, { opacity: pressed ? 0.6 : 1 }]}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      >
+        <Feather name="arrow-left" size={22} color="#FFFFFF" />
+      </Pressable>
+      <View style={styles.headerTextGroup}>
+        <Text style={styles.headerTitle}>ErMate</Text>
+        <Text style={styles.headerSub} numberOfLines={1}>{effectiveName}</Text>
+      </View>
     </View>
   );
 
@@ -370,10 +380,21 @@ export default function CaseChatScreen({ route, navigation }: Props) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: LIGHT_BG },
   header: {
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     backgroundColor: HEADER_BG,
   },
+  backBtn: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 18,
+  },
+  headerTextGroup: { flex: 1 },
   headerTitle: { fontSize: 17, fontWeight: '700', color: '#FFFFFF', letterSpacing: 0.2 },
   headerSub:   { fontSize: 13, color: 'rgba(255,255,255,0.70)', marginTop: 2 },
   center:      { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
