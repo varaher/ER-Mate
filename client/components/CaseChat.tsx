@@ -527,120 +527,124 @@ function CaseNoteBody({
   const vs   = extracted.vitalsSuggested || {};
   const ex   = extracted.examFindings || {};
 
-  const bpAbnormal = (bp: string) => {
-    const parts = bp.split('/');
-    if (parts.length === 2) {
-      const sys = parseInt(parts[0]);
-      return sys < 90 || sys > 160;
-    }
-    return false;
-  };
-  const hrAbnormal = (hr: string) => {
-    const v = parseInt(hr);
-    return v > 100 || v < 60;
-  };
-  const spo2Abnormal = (s: string) => parseInt(s) < 94;
-  const rrAbnormal  = (r: string) => { const v = parseInt(r); return v > 20 || v < 12; };
+  const bpAbn = (bp: string) => { const s = parseInt(bp.split('/')[0]); return s < 90 || s > 160; };
+  const hrAbn = (hr: string) => { const v = parseInt(hr); return v > 100 || v < 60; };
+  const spo2Abn = (s: string) => parseInt(s) < 94;
+  const rrAbn  = (r: string)  => { const v = parseInt(r); return v > 20 || v < 12; };
 
-  const hasVitals = vs.hr || vs.bp || vs.spo2 || vs.rr || vs.temperature || vs.grbs;
-  const hasHistory = cc || extracted.historyOfPresentIllness || extracted.allergies ||
-    extracted.currentMedications || extracted.pastMedicalHistory || extracted.associatedSymptoms;
-  const hasPrimary = !!(extracted.primarySurveyText || extracted.ecgInterpretation || extracted.abgSummary);
-  const hasExam = ex.general || ex.cvs || ex.respiratory || ex.abdomen || ex.cns || ex.skin;
-  const hasTreatment = extracted.treatmentNotes ||
-    (extracted.prescribedMedications?.length) ||
-    (extracted.prescribedInfusions?.length) ||
-    extracted.investigationsOrdered || extracted.imagingOrdered;
-  const hasDx = extracted.diagnosis?.length || extracted.differentialDiagnosis?.length;
-  const hasDisposition = !!(extracted.dispositionSuggested?.type || extracted.dispositionSuggested?.admitTo || extracted.dispositionSuggested?.referTo);
+  // Parse primarySurveyText into per-letter strings (AI returns "A: ... B: ... C: ...")
+  const parseAbcde = (text: string | undefined) => {
+    const out: Record<string, string> = {};
+    if (!text) return out;
+    const rx = /([ABCDE])\s*[:\-–]\s*([^ABCDE]*?)(?=\s*[ABCDE]\s*[:\-–]|$)/g;
+    let m: RegExpExecArray | null;
+    while ((m = rx.exec(text)) !== null) {
+      out[m[1]] = m[2].trim().replace(/\.$/, '');
+    }
+    return out;
+  };
+
+  const abcde = parseAbcde(extracted.primarySurveyText);
+  const A = abcde['A'] || 'Patent, self-maintained';
+  const B = abcde['B'] || 'Equal bilateral air entry, no respiratory distress';
+  const C = abcde['C'] || 'Adequate perfusion, no features of shock';
+  const D = abcde['D'] || 'GCS 15, alert and oriented, pupils equal and reactive';
+  const E = abcde['E'] || 'No significant findings on exposure';
+
+  const pastHx = extracted.pastMedicalHistory
+    ? (typeof extracted.pastMedicalHistory === 'string'
+        ? extracted.pastMedicalHistory
+        : (extracted.pastMedicalHistory as string[]).join(', '))
+    : 'No significant past medical history';
+
+  const medsText = extracted.prescribedMedications?.length
+    ? extracted.prescribedMedications.map(m =>
+        [m.name, m.dose, m.route, m.frequency].filter(Boolean).join(' ')
+      ).join(' · ')
+    : '';
+
+  const infusionsText = extracted.prescribedInfusions?.length
+    ? extracted.prescribedInfusions.map(i =>
+        [i.name, i.dose, i.dilution ? `in ${i.dilution}` : '', i.rate ? `@ ${i.rate}` : ''].filter(Boolean).join(' ')
+      ).join(' · ')
+    : '';
+
+  const dxText = extracted.diagnosis?.length ? extracted.diagnosis.join(', ') : 'Under assessment';
+  const ddxText = extracted.differentialDiagnosis?.length ? extracted.differentialDiagnosis.join(', ') : '';
+  const dispositionText = extracted.dispositionSuggested?.type
+    ? [
+        extracted.dispositionSuggested.type,
+        extracted.dispositionSuggested.admitTo ? `\u2192 ${extracted.dispositionSuggested.admitTo}` : null,
+        extracted.dispositionSuggested.referTo ? `Refer: ${extracted.dispositionSuggested.referTo}` : null,
+      ].filter(Boolean).join(' ')
+    : 'Pending clinical decision';
 
   return (
     <View>
       {/* Patient header */}
       <View style={s.docPatientHeader}>
         <Text style={s.docPatientName}>
-          {name}{age ? `, ${age}` : ''}{sex ? sex[0].toUpperCase() : ''}
+          {name}{age ? `, ${age}` : ''}{sex ? ` ${sex[0].toUpperCase()}` : ''}
         </Text>
+        {cc ? <Text style={[s.docFieldValue, { marginTop: 2, fontStyle: 'italic' }]}>{cc}</Text> : null}
       </View>
 
-      {hasVitals ? (
-        <DocSection title="Vitals">
-          {vs.hr  ? <DocField label="HR"    value={`${vs.hr} bpm`}  abnormal={hrAbnormal(vs.hr)} /> : null}
-          {vs.bp  ? <DocField label="BP"    value={`${vs.bp} mmHg`} abnormal={bpAbnormal(vs.bp)} /> : null}
-          {vs.spo2? <DocField label="SpO₂"  value={`${vs.spo2}%`}   abnormal={spo2Abnormal(vs.spo2)} /> : null}
-          {vs.rr  ? <DocField label="RR"    value={`${vs.rr}/min`}  abnormal={rrAbnormal(vs.rr)} /> : null}
-          {vs.temperature ? <DocField label="Temp"  value={vs.temperature} /> : null}
-          {vs.grbs ? <DocField label="GRBS" value={`${vs.grbs} mg/dL`} /> : null}
-        </DocSection>
-      ) : null}
+      {/* Vitals — always shown; recorded values or "Not recorded" */}
+      <DocSection title="Vitals">
+        {vs.hr   ? <DocField label="HR"   value={`${vs.hr} bpm`}  abnormal={hrAbn(vs.hr)} />   : <DocField label="HR"   value="Not recorded" />}
+        {vs.bp   ? <DocField label="BP"   value={`${vs.bp} mmHg`} abnormal={bpAbn(vs.bp)} />   : <DocField label="BP"   value="Not recorded" />}
+        {vs.spo2 ? <DocField label="SpO₂" value={`${vs.spo2}%`}   abnormal={spo2Abn(vs.spo2)} /> : <DocField label="SpO₂" value="Not recorded" />}
+        {vs.rr   ? <DocField label="RR"   value={`${vs.rr}/min`}  abnormal={rrAbn(vs.rr)} />   : <DocField label="RR"   value="Not recorded" />}
+        {vs.temperature ? <DocField label="Temp" value={vs.temperature} /> : <DocField label="Temp" value="Not recorded" />}
+        {vs.grbs ? <DocField label="GRBS" value={`${vs.grbs} mg/dL`} /> : null}
+      </DocSection>
 
-      {hasHistory ? (
-        <DocSection title="History">
-          {cc  ? <DocField label="Complaint" value={cc} /> : null}
-          {extracted.historyOfPresentIllness ? <DocField label="Events"    value={extracted.historyOfPresentIllness} /> : null}
-          {extracted.associatedSymptoms      ? <DocField label="Symptoms"  value={extracted.associatedSymptoms} /> : null}
-          {extracted.pastMedicalHistory      ? <DocField label="Past Hx"   value={typeof extracted.pastMedicalHistory === 'string' ? extracted.pastMedicalHistory : (extracted.pastMedicalHistory as string[]).join(', ')} /> : null}
-          {extracted.allergies               ? <DocField label="Allergies" value={extracted.allergies} /> : null}
-          {extracted.currentMedications      ? <DocField label="Home meds" value={extracted.currentMedications} /> : null}
-        </DocSection>
-      ) : null}
+      {/* History — always shown with defaults */}
+      <DocSection title="History (SAMPLE)">
+        {cc ? <DocField label="Complaint" value={cc} /> : null}
+        {extracted.historyOfPresentIllness ? <DocField label="Events"   value={extracted.historyOfPresentIllness} /> : null}
+        {extracted.associatedSymptoms      ? <DocField label="Symptoms" value={extracted.associatedSymptoms} /> : null}
+        <DocField label="Past Hx"   value={pastHx} />
+        <DocField label="Allergies" value={extracted.allergies || 'NKDA'} />
+        <DocField label="Home meds" value={extracted.currentMedications || 'Nil'} />
+      </DocSection>
 
-      {hasPrimary ? (
-        <DocSection title="Primary Survey (ABCDE)">
-          {extracted.primarySurveyText ? <DocField label="" value={extracted.primarySurveyText} /> : null}
-          {extracted.ecgInterpretation ? <DocField label="ECG" value={extracted.ecgInterpretation} /> : null}
-          {extracted.abgSummary        ? <DocField label="ABG" value={extracted.abgSummary} /> : null}
-        </DocSection>
-      ) : null}
+      {/* Primary Survey — always shown; parsed from AI or full defaults */}
+      <DocSection title="Primary Survey (ABCDE)">
+        <DocField label="A \u2014 Airway"      value={A} />
+        <DocField label="B \u2014 Breathing"   value={B} />
+        <DocField label="C \u2014 Circulation" value={C} />
+        <DocField label="D \u2014 Disability"  value={D} />
+        <DocField label="E \u2014 Exposure"    value={E} />
+        <DocField label="ECG" value={extracted.ecgInterpretation || 'Not done'} />
+        <DocField label="ABG" value={extracted.abgSummary        || 'Not done'} />
+      </DocSection>
 
-      {hasExam ? (
-        <DocSection title="Examination">
-          {ex.general      ? <DocField label="General"    value={ex.general} /> : null}
-          {ex.cvs          ? <DocField label="CVS"        value={ex.cvs} /> : null}
-          {ex.respiratory  ? <DocField label="Resp"       value={ex.respiratory} /> : null}
-          {ex.abdomen      ? <DocField label="Abdomen"    value={ex.abdomen} /> : null}
-          {ex.cns          ? <DocField label="CNS"        value={ex.cns} /> : null}
-          {ex.skin         ? <DocField label="Skin"       value={ex.skin} /> : null}
-        </DocSection>
-      ) : null}
+      {/* Examination — always shown with defaults */}
+      <DocSection title="Examination">
+        <DocField label="General"  value={ex.general     || 'Conscious, alert, well-oriented, no acute distress'} />
+        <DocField label="CVS"      value={ex.cvs         || 'S1S2 heard, no murmurs, no added heart sounds'} />
+        <DocField label="Resp"     value={ex.respiratory || 'Air entry bilaterally equal and clear, no adventitious sounds'} />
+        <DocField label="Abdomen"  value={ex.abdomen     || 'Soft, non-tender, bowel sounds present'} />
+        <DocField label="CNS"      value={ex.cns         || 'No focal neurological deficit'} />
+        {ex.skin ? <DocField label="Skin" value={ex.skin} /> : null}
+      </DocSection>
 
-      {hasTreatment ? (
-        <DocSection title="Treatment Given">
-          {extracted.prescribedMedications?.length ? (
-            <DocField label="Medications"
-              value={extracted.prescribedMedications.map(m =>
-                [m.name, m.dose, m.route, m.frequency].filter(Boolean).join(' ')
-              ).join(' · ')} />
-          ) : null}
-          {extracted.prescribedInfusions?.length ? (
-            <DocField label="IV Fluids"
-              value={extracted.prescribedInfusions.map(i =>
-                [i.name, i.dose, i.dilution ? `in ${i.dilution}` : '', i.rate ? `@ ${i.rate}` : ''].filter(Boolean).join(' ')
-              ).join(' · ')} />
-          ) : null}
-          {extracted.investigationsOrdered ? <DocField label="Labs"      value={extracted.investigationsOrdered} /> : null}
-          {extracted.imagingOrdered        ? <DocField label="Imaging"   value={extracted.imagingOrdered} /> : null}
-          {extracted.treatmentNotes        ? <DocField label="Notes"     value={extracted.treatmentNotes} /> : null}
-        </DocSection>
-      ) : null}
+      {/* Treatment — always shown */}
+      <DocSection title="Treatment Given">
+        <DocField label="Medications" value={medsText || 'None administered'} />
+        {infusionsText ? <DocField label="IV Fluids"    value={infusionsText} /> : null}
+        <DocField label="Labs"    value={extracted.investigationsOrdered || 'Not ordered'} />
+        {extracted.imagingOrdered   ? <DocField label="Imaging" value={extracted.imagingOrdered} /> : null}
+        {extracted.treatmentNotes   ? <DocField label="Notes"   value={extracted.treatmentNotes} /> : null}
+      </DocSection>
 
-      {(hasDx || hasDisposition) ? (
-        <DocSection title="Impression">
-          {extracted.diagnosis?.length ? (
-            <DocField label="Diagnosis"     value={extracted.diagnosis.join(', ')} />
-          ) : null}
-          {extracted.differentialDiagnosis?.length ? (
-            <DocField label="Differentials" value={extracted.differentialDiagnosis.join(', ')} />
-          ) : null}
-          {hasDisposition ? (
-            <DocField label="Disposition" value={[
-              extracted.dispositionSuggested?.type,
-              extracted.dispositionSuggested?.admitTo ? `→ ${extracted.dispositionSuggested.admitTo}` : null,
-              extracted.dispositionSuggested?.referTo ? `Refer: ${extracted.dispositionSuggested.referTo}` : null,
-            ].filter(Boolean).join(' ')} />
-          ) : null}
-        </DocSection>
-      ) : null}
+      {/* Impression — always shown */}
+      <DocSection title="Impression">
+        <DocField label="Diagnosis"   value={dxText} />
+        {ddxText ? <DocField label="Differentials" value={ddxText} /> : null}
+        <DocField label="Disposition" value={dispositionText} />
+      </DocSection>
     </View>
   );
 }

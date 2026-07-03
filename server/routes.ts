@@ -4037,20 +4037,33 @@ DISPOSITION (extract if doctor mentions what happens to the patient after ER):
 - dispositionSuggested.admitTo: Ward/ICU type if admitting (e.g. "General Ward", "Medical ICU")
 - dispositionSuggested.referTo: Specialty or consultant if referring (e.g. "Medicine", "Cardiology", "Dr. Neeraj")
 
-FIELD DEFAULT RULES — apply ONLY for type=case_update or type=addendum when real clinical content is present:
-- examFindings.general: default "Conscious, alert, well-oriented, no acute distress" if not mentioned
-- examFindings.cvs: default "S1S2 heard, no murmurs, no added heart sounds" if not mentioned
-- examFindings.respiratory: default "Air entry bilaterally equal and clear, no adventitious sounds" if not mentioned
-- examFindings.abdomen: default "Soft, non-tender, bowel sounds present" if not mentioned
-- examFindings.cns: default "No focal neurological deficit" if not mentioned
-- allergies: default "NKDA" if not mentioned
+COMPLETENESS MANDATE — For type=case_update AND type=addendum, you MUST return ALL of the sections below in "extracted". Use real dictated data where mentioned; fill the standard default for anything not mentioned. A case note that omits a section is incomplete.
+
+Required fields and their defaults when not dictated:
+- pastMedicalHistory → "No significant past medical history"
+- allergies → "NKDA"
+- currentMedications → "Nil"
+- primarySurveyText → ALWAYS return a full A–E string. For any letter the doctor did NOT address, use the defaults below. Combine real findings with defaults:
+    A default: "Patent, self-maintained"
+    B default: "Equal bilateral air entry, no respiratory distress"
+    C default: "Adequate perfusion, no features of shock"
+    D default: "GCS 15, alert and oriented, pupils equal and reactive"
+    E default: "No significant findings on exposure"
+    If temperature is mentioned, include it in E. Format: "A: <finding>. B: <finding>. C: <finding>. D: <finding>. E: <finding>."
+- ecgInterpretation → "Not done"
+- abgSummary → "Not done"
+- examFindings.general → "Conscious, alert, well-oriented, no acute distress"
+- examFindings.cvs → "S1S2 heard, no murmurs, no added heart sounds"
+- examFindings.respiratory → "Air entry bilaterally equal and clear, no adventitious sounds"
+- examFindings.abdomen → "Soft, non-tender, bowel sounds present"
+- examFindings.cns → "No focal neurological deficit"
 
 CRITICAL RULES:
-1. currentMedications = what patient was taking before ER. prescribedMedications = what YOU are giving now in ER. NEVER mix these.
-2. primarySurveyText must include temperature in E (Exposure) if temperature is mentioned.
-3. If doctor says "temperature around 103" without unit, assume Fahrenheit → write "103°F".
-4. Extract investigationsOrdered whenever doctor says "send for", "order", "check" labs.
-5. Extract prescribedInfusions for any IV fluid: "give 1 pint NS" → {name:"Normal saline",dose:"500ml",rate:"bolus"}, "100ml/hr" → add rate.
+1. currentMedications = what patient was taking BEFORE this ER visit. prescribedMedications = what YOU are giving NOW in the ER. NEVER mix these.
+2. If doctor says "temperature around 103" without unit, assume Fahrenheit → write "103°F" in vitalsSuggested.temperature AND in the E portion of primarySurveyText.
+3. Extract investigationsOrdered whenever doctor says "send for", "order", "get", "check" labs.
+4. Extract prescribedInfusions for any IV fluid: "give 1 pint NS" → {name:"Normal saline",dose:"500ml",rate:"bolus"}, "100ml/hr" → add rate field.
+5. chiefComplaint: if not explicitly stated in dictation but patient context is provided, use the patient context chief complaint.
 
 REPLY EXAMPLES:
 - case_update: "Captured — fever 2 days, vitals including temp 103°F, ABCDE assessment, medications, labs ordered, and admission plan documented."
