@@ -10,6 +10,7 @@ import { Feather } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RootStackParamList } from '@/navigation/RootStackNavigator';
 import { useAuth } from '@/context/AuthContext';
+import { useDepartment } from '@/context/DepartmentContext';
 import { getApiUrl } from '@/lib/query-client';
 import { invalidateCases } from '@/lib/api';
 import CaseChat, { CaseData } from '@/components/CaseChat';
@@ -24,6 +25,7 @@ const ACCENT      = '#1DB870';
 export default function CaseChatScreen({ route, navigation }: Props) {
   const { caseId: paramCaseId, patientName: paramPatientName } = route.params ?? {};
   const { user } = useAuth();
+  const { shiftSession, activeShift, department } = useDepartment();
   const insets  = useSafeAreaInsets();
 
   const [activeCaseId, setActiveCaseId] = useState<string | undefined>(paramCaseId);
@@ -35,6 +37,9 @@ export default function CaseChatScreen({ route, navigation }: Props) {
 
   // Tracks whether we already kicked off the silent create (so StrictMode doesn't double-fire)
   const creatingRef = useRef(false);
+  // Stable ref to latest caseData so handleDataExtracted closure stays fresh
+  const caseDataRef = useRef<any>(null);
+  useEffect(() => { caseDataRef.current = caseData; }, [caseData]);
 
   // ── Fetch an existing case ─────────────────────────────────────────────────
   const fetchCase = useCallback(async (id: string) => {
@@ -219,7 +224,32 @@ export default function CaseChatScreen({ route, navigation }: Props) {
         },
         body: JSON.stringify({ extracted: data }),
       });
+      // Register case in shift system so consultants can see it in their shift view
+      if (shiftSession && activeShift && department) {
+        const current = caseDataRef.current;
+        await fetch(`${getApiUrl()}/api/cases/${activeCaseId}/register-shift`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            shiftSessionId: shiftSession.id,
+            shiftId: activeShift.id,
+            departmentId: department.id,
+            patientName: data.patientName || current?.patient?.name || '',
+            patientAge: data.patientAge || current?.patient?.age || '',
+            chiefComplaint: data.chiefComplaint || current?.presenting_complaint?.text || '',
+            triagePriority: current?.triage_priority || null,
+            doctorName: user?.name || '',
+            doctorUserId: user?.id || '',
+            roleForShift: shiftSession.roleForShift,
+          }),
+        });
+      }
     } catch {}
+    // Invalidate cases list so Cases tab reflects any patient name / complaint updates
+    invalidateCases().catch(() => {});
     // Merge extracted data into local caseData immediately so liveCase
     // (and therefore discharge summary / case note) reflects the latest dictation
     // without needing to re-fetch from the backend.
@@ -299,7 +329,7 @@ export default function CaseChatScreen({ route, navigation }: Props) {
       }
       return next;
     });
-  }, [activeCaseId]);
+  }, [activeCaseId, shiftSession, activeShift, department, user]);
 
   // ── Render ─────────────────────────────────────────────────────────────────
   const header = (

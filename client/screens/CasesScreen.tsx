@@ -101,7 +101,8 @@ export default function CasesScreen() {
       getAllDrafts().then((all) => {
         setInProgressDrafts(all.filter((d) => d.status === "draft" && !!d.backendCaseId));
       });
-    }, []),
+      refetch();
+    }, [refetch]),
   );
 
   const [reviewModal, setReviewModal] = useState<ShiftCaseItem | null>(null);
@@ -283,16 +284,12 @@ export default function CasesScreen() {
   };
 
   const navigateToCase = (item: CaseItem) => {
-    const patientAge = parseFloat(item.patient?.age) || 0;
-    const screenName = isPediatric(patientAge) ? "PediatricCaseSheet" : "CaseSheet";
-    navigation.navigate(screenName, { caseId: item.id });
+    navigation.navigate("CaseChat", { caseId: item.id, patientName: item.patient?.name });
   };
 
   const handleShiftCaseTap = (sc: ShiftCaseItem) => {
     if (sc.isOwn) {
-      const patientAge = parseFloat(sc.patientAge || "0") || 0;
-      const screenName = isPediatric(patientAge) ? "PediatricCaseSheet" : "CaseSheet";
-      navigation.navigate(screenName, { caseId: sc.caseId });
+      navigation.navigate("CaseChat", { caseId: sc.caseId, patientName: sc.patientName || undefined });
     } else if (isConsultantOrHOD) {
       setReviewNote(sc.consultantNote || "");
       setReviewModal(sc);
@@ -540,12 +537,10 @@ export default function CasesScreen() {
             const completion = draftOverallCompletion(draft);
             const barColor = completion >= 75 ? "#10b981" : completion >= 30 ? "#f59e0b" : "#9ca3af";
             const heldAt = draft.heldAt ? new Date(draft.heldAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : null;
-            const patientAge = parseFloat(draft.triageData?.patient?.age || "0") || 0;
-            const screenName = isPediatric(patientAge) ? "PediatricCaseSheet" : "CaseSheet";
             return (
               <Pressable
                 key={draft.draftId}
-                onPress={() => navigation.navigate(screenName as any, { caseId: draft.backendCaseId! })}
+                onPress={() => navigation.navigate("CaseChat", { caseId: draft.backendCaseId!, patientName: draft.triageData?.patient?.name || draft.caseSheetData?.patient?.name })}
                 style={({ pressed }) => [
                   styles.inProgressCard,
                   { backgroundColor: theme.card, borderColor: theme.border, opacity: pressed ? 0.85 : 1 },
