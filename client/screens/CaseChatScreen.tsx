@@ -192,24 +192,55 @@ export default function CaseChatScreen({ route, navigation }: Props) {
     const diagnosis     = treat.primaryDiagnosis || treat.primary_diagnosis || disp.diagnosis || '';
     const differentials = treat.differentialDiagnoses || treat.differential_diagnoses || disp.differentials || '';
 
+    const ageNum = p.age ? parseInt(String(p.age)) : null;
+    const examGen = exam.general || {};
     return {
-      name:       p.name || paramPatientName || '',
-      age:        p.age ? String(p.age) : '',
-      sex:        p.sex || '',
-      priority:   caseData.triage_priority ? `P${caseData.triage_priority}` : '',
-      caseNumber: caseData.case_number || '',
-      date:       caseData.created_at ? new Date(caseData.created_at).toLocaleDateString() : new Date().toLocaleDateString(),
-      doctorName: p.doctor_name || '',
-      department: '',
+      name:                p.name || paramPatientName || '',
+      age:                 p.age ? String(p.age) : '',
+      sex:                 p.sex || '',
+      priority:            caseData.triage_priority ? `P${caseData.triage_priority}` : '',
+      caseNumber:          caseData.case_number || '',
+      date:                caseData.created_at ? new Date(caseData.created_at).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN'),
+      doctorName:          p.doctor_name || caseData.created_by_name || '',
+      department:          '',
+      patientType:         ageNum !== null && ageNum <= 16 ? 'Pediatric' : 'Adult',
+      isMLC:               !!(caseData.mlc || caseData.is_mlc),
+      userName:            user?.name || '',
+      userRole:            shiftSession?.roleForShift || '',
+      conditionAtDischarge: disp.conditionAtShift || disp.condition_at_shift || '',
       vitals: { hr, bp: bpS && bpD ? `${bpS}/${bpD}` : (bpS || ''), spo2, rr, temp, gcs: gcsTotal > 0 ? String(gcsTotal) : '', grbs },
       history: { symptoms, allergies, medications, pastHistory, lastMeal, events, pastSurgical, other: otherHist },
       primary: { airway: airwayStatus, breathing: breathingNotes, circulation: circulationNotes, disability: disabilityNote, exposure: exposureNote, ecg: pa.ecg_status || '', abg: pa.abg_interpretation || '' },
+      examToggles: {
+        pallor:          examGen.pallor === true,
+        icterus:         examGen.icterus === true,
+        cyanosis:        examGen.cyanosis === true,
+        clubbing:        examGen.clubbing === true,
+        lymphadenopathy: examGen.lymphadenopathy === true,
+        edema:           examGen.edema === true,
+      },
       exam: { general: examGeneral, cvs: examCvs, respiratory: examResp, abdomen: examAbdo, neuro: examNeuro, extremities: examExtremities },
-      treatment: { medications: meds, infusions, otherMedications: treat.otherMedications || '', ivFluids: treat.ivFluids || treat.iv_fluids || '', procedures, labsOrdered, imaging },
+      treatment: {
+        medications:     meds,
+        infusions,
+        otherMedications: treat.otherMedications || '',
+        ivFluids:        treat.ivFluids || treat.iv_fluids || '',
+        procedures,
+        labsOrdered,
+        imaging,
+        resultsSummary:  treat.resultsSummary || treat.results_summary || caseData.results_summary || '',
+      },
       notes:       treat.addendumNotes || caseData.clinical_notes || '',
-      disposition: { diagnosis, differentials, decision: disp.dispositionType || disp.disposition_type || '', admitTo: disp.admitTo || disp.admit_to || '', referTo: disp.referTo || disp.refer_to || '' },
+      disposition: {
+        diagnosis,
+        differentials,
+        decision:  disp.dispositionType || disp.disposition_type || '',
+        admitTo:   disp.admitTo || disp.admit_to || '',
+        referTo:   disp.referTo || disp.refer_to || '',
+        followUp:  disp.observationNotes || disp.observation_notes || disp.followUpAdvice || '',
+      },
     };
-  }, [caseData, paramPatientName]);
+  }, [caseData, paramPatientName, user, shiftSession]);
 
   // ── Save dictated data back to the case ───────────────────────────────────
   const handleDataExtracted = useCallback(async (data: SmartDictationExtracted) => {

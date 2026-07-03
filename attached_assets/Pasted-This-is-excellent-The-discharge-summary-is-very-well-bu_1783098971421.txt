@@ -1,0 +1,463 @@
+This is excellent. The discharge summary is very well built. Let me read every section from all 8 screenshots.
+
+---
+
+## Complete Discharge Summary Structure
+
+```
+Image 7 — Full overview (collapsed sections):
+  Patient: Pe · 6yrs · Male · Pediatric
+  Non-MLC badge · MLC toggle
+  
+  SECTIONS:
+  1. Patient Information & Arrival
+  2. Primary Assessment (ABCDE)
+  3. Secondary Assessment
+  4. Hospital Course & Treatment
+  5. Discharge Information
+  6. Signatures & Documentation
+
+Image 1 — Patient Information & Arrival:
+  Smart mic dictation at top
+  Patient details: Pe · 6yrs · Male · Pediatric
+  MLC toggle
+  
+  Patient Information & Arrival (expanded):
+    Allergy: "No known allergies"
+    Vitals at Time of Arrival:
+      HR · BP · RR · SpO₂
+      GCS · Pain · GRBS · Temp (°F)
+    Presenting Complaints (text)
+    History of Present Illness ↓
+
+Image 3 — Patient Info continued:
+  Chief complaint (text)
+  History of Present Illness (text)
+  Past Medical/Surgical Histories (text)
+  Family / Gynae History (text)
+  
+  Primary Assessment (ABCDE) expanded:
+    Airway: "Patent, self-maintained, 
+             no obstruction"
+    Breathing: "Effortless, bilateral 
+               air entry"
+    Circulation: "Regular pulse, CRT <2s, warm"
+
+Image 4 — ABCDE continued + Secondary:
+  Disability: "GCS 15/15, Alert, 
+               PERL, no focal deficits"
+  Exposure: "No external injuries, 
+             no bleeding"
+  EFAST: (blank)
+  
+  Secondary Assessment (expanded):
+  General Examination:
+    Pallor (toggle)
+    Icterus (toggle)
+    Cyanosis (toggle)
+    Clubbing (toggle)
+    Lymphadenopathy (toggle)
+    Edema (toggle)
+  Systemic Examination: ↓
+
+Image 5 — Systemic Examination:
+  General Examination toggles (all off)
+  Systemic Examination:
+    CHEST: "Bilateral equal air entry, 
+            vesicular breath sounds"
+    CVS: "S1 S2 heard, no murmurs, 
+          JVP normal"
+    P/A: "Soft, non-tender, no organomegaly,
+          bowel sounds present"
+    CNS: "Higher functions intact, 
+          no focal deficits, reflexes..."
+    EXTREMITIES: "Pulses present, 
+                  no edema, no deformity"
+  
+  Hospital Course & Treatment (collapsed)
+
+Image 2 — Hospital Course & Treatment:
+  "AI reads the entire case sheet — 
+   history, vitals, ABCDE, examination,
+   investigations, and treatment — 
+   to write a complete clinical narrative."
+  
+  [Regenerate Course in Hospital] button
+  
+  Course in Hospital with Medications 
+  and Procedures:
+  "A 6-year-old male patient named Pe 
+   presented to the emergency department 
+   with an unspecified complaint. His past 
+   medical and surgical history were 
+   unremarkable, and he had no known drug 
+   allergies. On examination, the patient 
+   was conscious, oriented, and..."
+  
+  Investigations (text)
+  Diagnosis at Time of Discharge (text)
+  "Primary diagnosis"
+
+Image 6 — Discharge Information:
+  Discharge Medications (text)
+  
+  Disposition:
+    ☑ Normal Discharge (selected, green)
+    ☐ Discharge at Request
+    ☐ Discharge Against Medical Advice
+    ☐ Referred
+  
+  Condition at Time of Discharge:
+    [STABLE] [UNSTABLE]
+  
+  Vitals at Time of Discharge:
+    HR · BP · RR · SpO₂
+    GCS · Pain · GRBS · Temp (°F)
+  
+  Follow-Up Advice (text)
+
+Image 8 — Signatures & Documentation:
+  ED Resident: Neeraj Akkarachittoor
+  ED Consultant: Neeraj Akkarachittoor
+  Sign and Time (Resident): Time
+  Sign and Time (Consultant): Time
+  Date: 03/07/2026
+  
+  Legal disclaimer at bottom:
+  "This discharge summary provides clinical 
+   information meant to facilitate continuity 
+   of patient care. For statutory purposes, a 
+   treatment/discharge certificate shall be 
+   issued on request. For a disability 
+   certificate, approach a Government-
+   constituted Medical..."
+```
+
+---
+
+## What's Working Well
+
+```
+✓ AI narrative auto-generates from case sheet
+✓ [Regenerate Course in Hospital] button
+✓ All ABCDE fields pre-filled from case
+✓ General exam toggles pre-filled
+✓ Systemic exam pre-filled from case
+✓ MLC toggle on patient
+✓ Consultant auto-filled from logged-in user
+✓ Date auto-filled
+✓ Condition at discharge (Stable/Unstable)
+✓ Disposition type selection
+✓ Legal disclaimer included
+✓ Vitals at arrival AND at discharge separately
+```
+
+---
+
+## What's Missing or Wrong
+
+```
+✗ ED Resident shows "Neeraj Akkarachittoor"
+  Should be the resident who documented
+  Not the HOD/consultant
+
+✗ "Diagnosis at Time of Discharge" shows
+  placeholder "Primary diagnosis"
+  Should auto-fill from case disposition
+
+✗ Course in Hospital says
+  "unspecified complaint"
+  Chief complaint not flowing through
+
+✗ Investigations section is blank
+  Labs and imaging from case not flowing
+
+✗ Discharge medications blank
+  Treatment medications not flowing
+```
+
+---
+
+## When Doctor Types "Discharge Summary" in Chat
+
+Right now the chat generates a simple text version. It should instead generate a complete version matching this exact structure. Tell your developer:
+
+```typescript
+// When "discharge summary" command received
+// in CaseChatScreen, generate this structure
+// from caseData:
+
+const dischargeSummary = {
+  
+  // Patient Info — from case
+  patient: {
+    name: caseData.patient.name,
+    age: caseData.patient.age,
+    gender: caseData.patient.gender,
+    type: age <= 16 ? "Pediatric" : "Adult",
+    mlc: caseData.mlc || false,
+  },
+  
+  // Section 1: Patient Info & Arrival
+  patientInfoArrival: {
+    allergies: caseData.history.allergies || "NKDA",
+    vitalsAtArrival: {
+      hr:   caseData.patient.vitals.hr,
+      bp:   caseData.patient.vitals.bp,
+      rr:   caseData.patient.vitals.rr,
+      spo2: caseData.patient.vitals.spo2,
+      gcs:  caseData.patient.vitals.gcs,
+      pain: caseData.patient.vitals.painScore,
+      grbs: caseData.patient.vitals.grbs,
+      temp: caseData.patient.vitals.temp,
+    },
+    presentingComplaints: caseData.patient.chiefComplaint,
+    historyOfPresentIllness: caseData.history.signsSymptoms,
+    pastMedicalSurgicalHistory: 
+      caseData.history.pastMedicalHistory + 
+      " " + caseData.history.pastSurgicalHistory,
+    familyGynaeHistory: caseData.history.familyHistory,
+  },
+  
+  // Section 2: Primary Assessment
+  primaryAssessment: {
+    airway:      caseData.primary.airway.notes || "Patent",
+    breathing:   caseData.primary.breathing.notes,
+    circulation: caseData.primary.circulation.notes,
+    disability:  caseData.primary.disability.notes,
+    exposure:    caseData.primary.exposure.notes,
+    efast:       caseData.primary.adjuncts.efast.findings,
+  },
+  
+  // Section 3: Secondary Assessment
+  secondaryAssessment: {
+    generalExam: {
+      pallor:         caseData.examination.general.pallor,
+      icterus:        caseData.examination.general.icterus,
+      cyanosis:       caseData.examination.general.cyanosis,
+      clubbing:       caseData.examination.general.clubbing,
+      lymphadenopathy: caseData.examination.general.lymphadenopathy,
+      edema:          caseData.examination.general.edema,
+    },
+    systemicExam: {
+      chest:       caseData.examination.respiratory,
+      cvs:         caseData.examination.cardiovascular,
+      abdomen:     caseData.examination.abdomen,
+      cns:         caseData.examination.cns,
+      extremities: caseData.examination.extremities,
+    },
+  },
+  
+  // Section 4: Hospital Course — AI generated
+  hospitalCourse: {
+    narrative: await generateNarrative(caseData), // GPT-4o
+    investigations: caseData.treatment.investigations.resultsSummary,
+    diagnosisAtDischarge: caseData.treatment.provisionalDiagnosis.primaryDiagnosis,
+  },
+  
+  // Section 5: Discharge Information
+  dischargeInfo: {
+    dischargeMedications: formatMedsForDischarge(caseData.treatment.medications),
+    disposition: caseData.disposition.dispositionType,
+    conditionAtDischarge: caseData.disposition.conditionAtShift || "Stable",
+    vitalsAtDischarge: {}, // Doctor fills at time of discharge
+    followUpAdvice: caseData.disposition.observationNotes,
+  },
+  
+  // Section 6: Signatures
+  signatures: {
+    edResident: req.user.role === "resident" ? req.user.name : "",
+    edConsultant: req.user.role === "consultant" || "hod" 
+                  ? req.user.name : "",
+    date: new Date().toLocaleDateString("en-IN"),
+  },
+};
+```
+
+---
+
+## The Chat Output — What "Discharge Summary" Should Show
+
+When typed in chat, show this formatted text:
+
+```
+DISCHARGE SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Date: 03/07/2026
+Non-MLC
+
+PATIENT
+Pe · 6 years · Male · Paediatric
+
+PATIENT INFORMATION & ARRIVAL
+Allergies: No known allergies
+
+Vitals on Arrival:
+HR: — · BP: — · RR: — · SpO₂: —
+GCS: 15 · Pain: 0 · GRBS: 100 · Temp: 36.8°C
+
+Presenting Complaint:
+[from chiefComplaint]
+
+History of Present Illness:
+[from signsSymptoms]
+
+Past History:
+[from pastMedicalHistory + pastSurgicalHistory]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PRIMARY ASSESSMENT (ABCDE)
+Airway:      Patent, self-maintained, no obstruction
+Breathing:   Effortless, bilateral air entry
+Circulation: Regular pulse, CRT <2s, warm
+Disability:  GCS 15/15, Alert, PERL, no focal deficits
+Exposure:    No external injuries, no bleeding
+EFAST:       Not performed
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECONDARY ASSESSMENT
+
+General Examination:
+Pallor: Absent · Icterus: Absent · Cyanosis: Absent
+Clubbing: Absent · Lymphadenopathy: Absent · Edema: Absent
+
+Systemic Examination:
+Chest:       Bilateral equal air entry, vesicular breath sounds
+CVS:         S1 S2 heard, no murmurs, JVP normal
+Abdomen:     Soft, non-tender, no organomegaly, bowel sounds present
+CNS:         Higher functions intact, no focal deficits
+Extremities: Pulses present, no edema, no deformity
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+HOSPITAL COURSE & TREATMENT
+
+[AI generated narrative from all case data]
+
+Investigations:
+[from labs + imaging + results]
+
+Diagnosis at Time of Discharge:
+[from primaryDiagnosis]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DISCHARGE INFORMATION
+
+Discharge Medications:
+[from treatment.medications list]
+
+Disposition: Normal Discharge
+Condition at Discharge: STABLE
+
+Vitals at Time of Discharge:
+HR: — · BP: — · RR: — · SpO₂: —
+GCS: — · Pain: — · GRBS: — · Temp: —
+
+Follow-Up Advice:
+[from followUpAdvice]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SIGNATURES
+
+ED Resident:    [residentName]     Time: ____
+ED Consultant:  Neeraj Akkarachittoor   Time: ____
+Date: 03/07/2026
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+This discharge summary provides clinical 
+information to facilitate continuity of 
+patient care.
+
+[Copy all]  [Export PDF]
+```
+
+---
+
+## Three Bugs to Fix Right Now
+
+**Bug 1 — ED Resident shows consultant name**
+
+```typescript
+// In discharge summary screen and chat output:
+
+// CURRENT (wrong):
+edResident: loggedInUser.name  // always shows HOD
+
+// FIX:
+edResident: activeCase.documentedBy?.name || ""
+// The resident who created/documented the case
+// NOT the currently logged-in HOD
+
+// In chat output:
+signatures: {
+  edResident: caseData.doctorName,  // who documented
+  edConsultant: consultantName,     // consultant on shift
+}
+```
+
+**Bug 2 — "Unspecified complaint" in narrative**
+
+```typescript
+// In generateNarrative() prompt:
+// Currently not passing chiefComplaint
+
+// FIX — pass full context:
+const narrativePrompt = `
+Generate a clinical narrative for this case:
+Patient: ${caseData.patient.name}, 
+         ${caseData.patient.age}yr ${caseData.patient.gender}
+Complaint: ${caseData.patient.chiefComplaint}
+History: ${caseData.history.signsSymptoms}
+...rest of case data
+`;
+
+// "unspecified complaint" means 
+// chiefComplaint is empty or not being passed
+// Fix the GPT-4o extraction first (from earlier)
+// Then this auto-fixes
+```
+
+**Bug 3 — Diagnosis shows placeholder text**
+
+```typescript
+// Discharge summary shows "Primary diagnosis"
+// as placeholder — not the actual diagnosis
+
+// Fix: auto-fill from case data:
+diagnosisAtDischarge: 
+  caseData.treatment.provisionalDiagnosis.primaryDiagnosis
+  || caseData.disposition.dispositionType
+  || "Pending"
+```
+
+---
+
+## Summary — Tell Your Developer
+
+```
+The discharge summary form is 
+perfectly built. The structure 
+is exactly right.
+
+Three things to fix:
+
+1. ED Resident field
+   Show the doctor who documented the case
+   NOT the logged-in HOD
+   Source: caseData.doctorName
+
+2. Chief complaint in narrative
+   Pass chiefComplaint to the
+   generateNarrative() GPT-4o prompt
+   Fix the upstream extraction too
+
+3. Diagnosis auto-fill
+   Map provisionalDiagnosis.primaryDiagnosis
+   to "Diagnosis at Time of Discharge" field
+
+And in the chat UI:
+When "discharge summary" is typed,
+generate the full structured output
+matching all 6 sections above
+including resident and consultant
+names in the signatures section.
+```

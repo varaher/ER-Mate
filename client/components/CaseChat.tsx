@@ -26,6 +26,11 @@ export interface CaseData {
   date: string;
   doctorName: string;
   department: string;
+  patientType: string;
+  isMLC: boolean;
+  userName: string;
+  userRole: string;
+  conditionAtDischarge: string;
   vitals: {
     hr: string; bp: string; spo2: string;
     rr: string; temp: string; gcs: string; grbs: string;
@@ -39,6 +44,10 @@ export interface CaseData {
     airway: string; breathing: string; circulation: string;
     disability: string; exposure: string; ecg: string; abg: string;
   };
+  examToggles: {
+    pallor: boolean; icterus: boolean; cyanosis: boolean;
+    clubbing: boolean; lymphadenopathy: boolean; edema: boolean;
+  };
   exam: {
     general: string; cvs: string; respiratory: string;
     abdomen: string; neuro: string; extremities: string;
@@ -46,11 +55,13 @@ export interface CaseData {
   treatment: {
     medications: string; infusions: string; otherMedications: string;
     ivFluids: string; procedures: string; labsOrdered: string; imaging: string;
+    resultsSummary: string;
   };
   notes: string;
   disposition: {
     diagnosis: string; differentials: string;
     decision: string; admitTo: string; referTo: string;
+    followUp: string;
   };
 }
 
@@ -117,42 +128,195 @@ export function generateCaseNote(c: CaseData): string {
   return L.join('\n');
 }
 
+const SEP = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
+function tog(val: boolean) { return val ? 'Present' : 'Absent'; }
+
 export function generateDischargeSummary(c: CaseData): string {
-  const L: string[] = ['DISCHARGE SUMMARY'];
-  L.push(`${c.name || '—'}${c.age ? `, ${c.age}` : ''}${c.sex ? ` ${c.sex}` : ''}`);
-  if (c.date) L.push(`Date: ${c.date}${c.department ? ` · ${c.department}` : ''}`);
-  if (c.doctorName) L.push(`Doctor: ${c.doctorName}`);
+  const L: string[] = [];
+  const today = c.date || new Date().toLocaleDateString('en-IN');
+
+  // ── Header ──
+  L.push('DISCHARGE SUMMARY');
+  L.push(SEP);
+  L.push(`Date: ${today}`);
+  L.push(c.isMLC ? 'MLC' : 'Non-MLC');
+
+  // ── Patient ──
   L.push('');
-  L.push('PRESENTING COMPLAINT');
-  // symptoms = chief complaint / signs; events = HPI narrative
-  // Fall back through every available source so this section is never blank
-  const complaint = [c.history.symptoms, c.history.events].filter(Boolean).join('\n')
-    || c.notes?.split('\n')[0]
-    || (c.disposition.diagnosis ? `Working diagnosis: ${c.disposition.diagnosis}` : '')
-    || 'Not documented';
-  L.push(complaint);
+  L.push('PATIENT');
+  const patientLine = [
+    c.name || '—',
+    c.age ? `${c.age} years` : '',
+    c.sex || '',
+    c.patientType || '',
+  ].filter(Boolean).join(' · ');
+  L.push(patientLine);
+
+  // ── Section 1: Patient Information & Arrival ──
   L.push('');
-  L.push('BACKGROUND');
-  const bg = [
-    `Past history: ${c.history.pastHistory || 'Not mentioned'}`,
-    `Home medications: ${c.history.medications || 'None'}`,
-    `Allergies: ${c.history.allergies || 'NKDA'}`,
-    c.history.pastSurgical && `Past surgical: ${c.history.pastSurgical}`,
-  ].filter(Boolean);
-  L.push((bg as string[]).join('\n'));
+  L.push(SEP);
+  L.push('PATIENT INFORMATION & ARRIVAL');
+  L.push('');
+  L.push(`Allergies: ${c.history.allergies || 'No known allergies'}`);
   const v = c.vitals;
-  const vp = [v.hr && `HR ${v.hr}`, v.bp && `BP ${v.bp}`, v.spo2 && `SpO₂ ${v.spo2}`, v.rr && `RR ${v.rr}`, v.temp && `Temp ${v.temp}`, v.gcs && `GCS ${v.gcs}`].filter(Boolean);
-  if (vp.length) { L.push(''); L.push('VITALS ON ARRIVAL'); L.push(vp.join(' · ')); }
-  const inv = [c.primary.ecg && `ECG: ${c.primary.ecg}`, c.primary.abg && `ABG: ${c.primary.abg}`, c.treatment.labsOrdered && `Labs: ${c.treatment.labsOrdered}`, c.treatment.imaging && `Imaging: ${c.treatment.imaging}`].filter(Boolean);
-  if (inv.length) { L.push(''); L.push('INVESTIGATIONS'); inv.forEach(x => L.push(x!)); }
-  if (c.disposition.diagnosis) { L.push(''); L.push('DIAGNOSIS'); L.push(c.disposition.diagnosis); }
-  if (c.disposition.differentials) { L.push(''); L.push('DIFFERENTIALS'); L.push(c.disposition.differentials); }
+  const vArr = [
+    v.hr   ? `HR: ${v.hr}` : 'HR: —',
+    v.bp   ? `BP: ${v.bp}` : 'BP: —',
+    v.rr   ? `RR: ${v.rr}` : 'RR: —',
+    v.spo2 ? `SpO₂: ${v.spo2}%` : 'SpO₂: —',
+  ];
+  const vArr2 = [
+    v.gcs  ? `GCS: ${v.gcs}` : 'GCS: —',
+    v.grbs ? `GRBS: ${v.grbs}` : 'GRBS: —',
+    v.temp ? `Temp: ${v.temp}` : 'Temp: —',
+  ];
+  L.push('');
+  L.push('Vitals on Arrival:');
+  L.push(vArr.join(' · '));
+  L.push(vArr2.join(' · '));
+  const complaint = c.history.symptoms || c.history.events?.split('.')[0] || 'Not documented';
+  L.push('');
+  L.push('Presenting Complaint:');
+  L.push(complaint);
+  if (c.history.events) {
+    L.push('');
+    L.push('History of Present Illness:');
+    L.push(c.history.events);
+  }
+  const pmhLine = [c.history.pastHistory, c.history.pastSurgical].filter(Boolean).join(' · ');
+  if (pmhLine) {
+    L.push('');
+    L.push('Past Medical & Surgical History:');
+    L.push(pmhLine);
+  }
+  if (c.history.other) {
+    L.push('');
+    L.push('Family / Social History:');
+    L.push(c.history.other);
+  }
+
+  // ── Section 2: Primary Assessment (ABCDE) ──
+  L.push('');
+  L.push(SEP);
+  L.push('PRIMARY ASSESSMENT (ABCDE)');
+  L.push('');
+  const p = c.primary;
+  L.push(`A (Airway):      ${p.airway || 'Patent, self-maintained'}`);
+  L.push(`B (Breathing):   ${p.breathing || 'Equal bilateral air entry, no respiratory distress'}`);
+  L.push(`C (Circulation): ${p.circulation || 'Adequate perfusion, no features of shock'}`);
+  L.push(`D (Disability):  ${p.disability || 'GCS 15, alert and oriented'}`);
+  L.push(`E (Exposure):    ${p.exposure || 'No significant findings'}`);
+  if (p.ecg && p.ecg !== 'Not done') L.push(`ECG:             ${p.ecg}`);
+  if (p.abg && p.abg !== 'Not done') L.push(`ABG/VBG:         ${p.abg}`);
+
+  // ── Section 3: Secondary Assessment ──
+  L.push('');
+  L.push(SEP);
+  L.push('SECONDARY ASSESSMENT');
+  L.push('');
+  const et = c.examToggles;
+  const anyToggle = et.pallor || et.icterus || et.cyanosis || et.clubbing || et.lymphadenopathy || et.edema;
+  if (anyToggle || c.exam.general) {
+    L.push('General Examination:');
+    L.push(`Pallor: ${tog(et.pallor)} · Icterus: ${tog(et.icterus)} · Cyanosis: ${tog(et.cyanosis)}`);
+    L.push(`Clubbing: ${tog(et.clubbing)} · Lymphadenopathy: ${tog(et.lymphadenopathy)} · Edema: ${tog(et.edema)}`);
+    L.push('');
+  }
+  const e = c.exam;
+  L.push('Systemic Examination:');
+  L.push(`Respiratory:  ${e.respiratory || 'Air entry bilaterally equal, no adventitious sounds'}`);
+  L.push(`CVS:          ${e.cvs || 'S1S2 heard, no murmurs'}`);
+  L.push(`Abdomen:      ${e.abdomen || 'Soft, non-tender, bowel sounds present'}`);
+  L.push(`CNS:          ${e.neuro || 'No focal neurological deficit'}`);
+  if (e.extremities) L.push(`Extremities:  ${e.extremities}`);
+
+  // ── Section 4: Hospital Course & Treatment ──
+  L.push('');
+  L.push(SEP);
+  L.push('HOSPITAL COURSE & TREATMENT');
+  L.push('');
+  // Build a brief clinical narrative from available data
+  const age   = c.age ? `${c.age}-year-old` : '';
+  const sex   = c.sex ? c.sex.toLowerCase() : 'patient';
+  const pType = c.patientType === 'Pediatric' ? 'paediatric' : '';
+  const cx    = complaint !== 'Not documented' ? complaint : (c.disposition.diagnosis || 'unspecified complaint');
+  let narrative = `${age ? `A ${age} ${pType} ${sex}` : 'The patient'} named ${c.name || 'the patient'} presented to the emergency department with ${cx}.`;
+  if (c.history.events) narrative += ` ${c.history.events}`;
+  const pmh = c.history.pastHistory;
+  if (pmh && pmh.toLowerCase() !== 'no significant past medical history') {
+    narrative += ` Background includes: ${pmh}.`;
+  }
+  narrative += ` On examination, the patient was ${c.exam.general || 'conscious, alert, and oriented'}.`;
   const t = c.treatment;
-  const tp = [t.medications, t.infusions, t.ivFluids, t.procedures].filter(Boolean);
-  if (tp.length) { L.push(''); L.push('TREATMENT GIVEN'); tp.forEach(x => L.push(x!)); }
+  if (t.medications) narrative += ` Treatment administered included: ${t.medications}.`;
+  if (t.infusions) narrative += ` IV fluids: ${t.infusions}.`;
+  if (t.procedures) narrative += ` Procedures performed: ${t.procedures}.`;
+  L.push(narrative);
+  const invLines = [
+    t.labsOrdered && `Labs Ordered: ${t.labsOrdered}`,
+    t.imaging && `Imaging: ${t.imaging}`,
+    t.resultsSummary && `Results: ${t.resultsSummary}`,
+    p.ecg && p.ecg !== 'Not done' && `ECG: ${p.ecg}`,
+    p.abg && p.abg !== 'Not done' && `ABG: ${p.abg}`,
+  ].filter(Boolean);
+  if (invLines.length) {
+    L.push('');
+    L.push('Investigations:');
+    invLines.forEach(x => L.push(x as string));
+  }
   const d = c.disposition;
-  if (d.decision) { L.push(''); L.push('DISPOSITION'); L.push(`${d.decision}${d.admitTo ? ` — ${d.admitTo}` : ''}${d.referTo ? ` · Referral: ${d.referTo}` : ''}`); }
-  if (c.notes) { L.push(''); L.push('ADDITIONAL NOTES'); L.push(c.notes); }
+  if (d.diagnosis) {
+    L.push('');
+    L.push('Diagnosis at Time of Discharge:');
+    L.push(d.diagnosis);
+  }
+  if (d.differentials) {
+    L.push('');
+    L.push('Differentials:');
+    L.push(d.differentials);
+  }
+
+  // ── Section 5: Discharge Information ──
+  L.push('');
+  L.push(SEP);
+  L.push('DISCHARGE INFORMATION');
+  L.push('');
+  if (t.medications || t.otherMedications) {
+    L.push('Discharge Medications:');
+    if (t.medications) L.push(t.medications);
+    if (t.otherMedications) L.push(t.otherMedications);
+    L.push('');
+  }
+  if (d.decision) {
+    L.push(`Disposition: ${d.decision}${d.admitTo ? ` — ${d.admitTo}` : ''}${d.referTo ? ` | Referral: ${d.referTo}` : ''}`);
+  }
+  if (c.conditionAtDischarge) {
+    L.push(`Condition at Discharge: ${c.conditionAtDischarge.toUpperCase()}`);
+  }
+  if (d.followUp || c.notes) {
+    L.push('');
+    L.push('Follow-Up Advice:');
+    L.push(d.followUp || c.notes);
+  }
+
+  // ── Section 6: Signatures ──
+  const isConsultant = c.userRole === 'consultant' || c.userRole === 'hod';
+  const residentName  = isConsultant ? (c.doctorName || '') : (c.userName || c.doctorName || '');
+  const consultantName = isConsultant ? c.userName : '';
+  L.push('');
+  L.push(SEP);
+  L.push('SIGNATURES');
+  L.push('');
+  L.push(`ED Resident:    ${residentName || '____________________'}     Time: ____`);
+  L.push(`ED Consultant:  ${consultantName || '____________________'}     Time: ____`);
+  L.push(`Date: ${today}`);
+
+  // ── Legal disclaimer ──
+  L.push('');
+  L.push(SEP);
+  L.push('This discharge summary provides clinical information to facilitate continuity of patient care.');
+  L.push('For statutory purposes, a treatment/discharge certificate shall be issued on request.');
+
   return L.join('\n');
 }
 
