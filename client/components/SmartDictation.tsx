@@ -142,6 +142,58 @@ export interface SmartDictationExtracted {
     };
   };
   ecgInterpretation?: string;
+  ecgStructured?: {
+    performed?: boolean;
+    findings?: string;
+    rhythm?: string;
+    stChanges?: string;
+  };
+  abgSummary?: string;
+  abgStructured?: {
+    performed?: boolean;
+    ph?: string;
+    pco2?: string;
+    hco3?: string;
+    lactate?: string;
+    notes?: string;
+  };
+  psychological?: {
+    suicidalIdeation?: boolean;
+    selfHarmHistory?: boolean;
+    intentToHarmOthers?: boolean;
+    substanceAbuse?: boolean;
+    psychiatricHistory?: boolean;
+    currentlyOnPsychiatricTreatment?: boolean;
+    hasSupportSystem?: boolean;
+    notes?: string;
+  };
+  procedures?: {
+    resuscitation?: { cpr?: boolean };
+    airway?: {
+      endotrachealIntubation?: boolean;
+      lmaInsertion?: boolean;
+      cricothyrotomy?: boolean;
+      bvmVentilation?: boolean;
+      niv?: boolean;
+    };
+    vascular?: {
+      centralLine?: boolean;
+      peripheralIV?: boolean;
+      intraosseousAccess?: boolean;
+      arterialLine?: boolean;
+    };
+    chest?: {
+      chestTube?: boolean;
+      needleDecompression?: boolean;
+      pericardiocentesis?: boolean;
+      thoracentesis?: boolean;
+    };
+    neuro?: { lumbarPuncture?: boolean };
+    gu?: { foleyCatheter?: boolean };
+    gi?: { ngTube?: boolean; gastricLavage?: boolean };
+    wound?: { woundClosure?: boolean; woundIrrigation?: boolean };
+    ortho?: { fractureSplinting?: boolean; jointReduction?: boolean };
+  };
   mlcDetails?: {
     isMLC?: boolean;
     natureOfIncident?: string;

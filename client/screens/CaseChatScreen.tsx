@@ -344,12 +344,102 @@ export default function CaseChatScreen({ route, navigation }: Props) {
         }
         next.treatment = treat;
       }
-      // Primary Survey — ECG, ABG, ABCDE summary
-      if (data.ecgInterpretation || (data as any).abgSummary || (data as any).primarySurveyText) {
+      // Primary Survey — ECG, ABG, ABCDE summary + structured
+      {
         const pa = { ...(next.primary_assessment || {}) };
         if (data.ecgInterpretation) pa.ecg_status = data.ecgInterpretation;
-        if ((data as any).abgSummary) pa.abg_interpretation = (data as any).abgSummary;
+        if (data.ecgStructured?.findings) pa.ecg_status = data.ecgStructured.findings;
+        if (data.ecgStructured?.performed !== undefined) pa.ecg_performed = data.ecgStructured.performed;
+        if (data.ecgStructured?.rhythm) pa.ecg_rhythm = data.ecgStructured.rhythm;
+        if (data.ecgStructured?.stChanges) pa.ecg_st_changes = data.ecgStructured.stChanges;
+        if (data.abgSummary) pa.abg_interpretation = data.abgSummary;
+        if (data.abgStructured?.ph) pa.abg_ph = data.abgStructured.ph;
+        if (data.abgStructured?.pco2) pa.abg_pco2 = data.abgStructured.pco2;
+        if (data.abgStructured?.hco3) pa.abg_hco3 = data.abgStructured.hco3;
+        if (data.abgStructured?.lactate) pa.abg_lactate = data.abgStructured.lactate;
+        if (data.abgStructured?.performed !== undefined) pa.abg_performed = data.abgStructured.performed;
+        // ABCDE structured findings → primary_assessment sub-fields
+        const abcde = data.abcdeFindings || {};
+        if (abcde.airway?.status) pa.airway_status = abcde.airway.status;
+        if (abcde.airway?.patency) pa.airway_patency = abcde.airway.patency;
+        if (abcde.airway?.position) pa.airway_position = abcde.airway.position;
+        if (abcde.airway?.cause) pa.airway_cause = abcde.airway.cause;
+        if (abcde.airway?.notes) pa.airway_notes = abcde.airway.notes;
+        if (abcde.breathing?.status) pa.breathing_status = abcde.breathing.status;
+        if (abcde.breathing?.notes) pa.breathing_rr = abcde.breathing.notes;
+        if (abcde.circulation?.status) pa.circulation_status = abcde.circulation.status;
+        if (abcde.circulation?.notes) pa.circulation_hr = abcde.circulation.notes;
+        if (abcde.disability?.status) pa.disability_status = abcde.disability.status;
+        if (abcde.disability?.notes) pa.disability_gcs_total = abcde.disability.notes;
+        if (abcde.exposure?.status) pa.exposure_status = abcde.exposure.status;
+        if (abcde.exposure?.notes) pa.exposure_temperature = abcde.exposure.notes;
         next.primary_assessment = pa;
+      }
+      // Examination structured toggles (pallor, icterus, etc.)
+      if (data.examStructured?.general) {
+        const eg = data.examStructured.general;
+        const exam = { ...(next.examination || next.exam || {}) };
+        const gen = { ...(exam.general || {}) };
+        if (eg.pallor !== undefined) gen.pallor = eg.pallor;
+        if (eg.icterus !== undefined) gen.icterus = eg.icterus;
+        if (eg.cyanosis !== undefined) gen.cyanosis = eg.cyanosis;
+        if (eg.clubbing !== undefined) gen.clubbing = eg.clubbing;
+        if (eg.lymphadenopathy !== undefined) gen.lymphadenopathy = eg.lymphadenopathy;
+        if (eg.edema !== undefined) gen.edema = eg.edema;
+        exam.general = gen;
+        next.examination = exam;
+      }
+      // Psychological assessment flags
+      if (data.psychological) {
+        const psych = data.psychological;
+        const hist = { ...(next.history || {}) };
+        const py = { ...(hist.psychological || {}) };
+        if (psych.suicidalIdeation !== undefined) py.suicidal_ideation = psych.suicidalIdeation;
+        if (psych.selfHarmHistory !== undefined) py.self_harm_history = psych.selfHarmHistory;
+        if (psych.intentToHarmOthers !== undefined) py.intent_to_harm_others = psych.intentToHarmOthers;
+        if (psych.substanceAbuse !== undefined) py.substance_abuse = psych.substanceAbuse;
+        if (psych.psychiatricHistory !== undefined) py.psychiatric_history = psych.psychiatricHistory;
+        if (psych.currentlyOnPsychiatricTreatment !== undefined) py.currently_on_treatment = psych.currentlyOnPsychiatricTreatment;
+        if (psych.hasSupportSystem !== undefined) py.has_support_system = psych.hasSupportSystem;
+        if (psych.notes) py.notes = psych.notes;
+        hist.psychological = py;
+        next.history = hist;
+      }
+      // Procedures performed
+      if (data.procedures) {
+        const pr = data.procedures;
+        const notes = { ...(next.notes || {}) };
+        const proc = { ...(notes.procedures_performed || {}) };
+        if (pr.resuscitation?.cpr !== undefined) proc.cpr = pr.resuscitation.cpr;
+        const aw = pr.airway || {};
+        if (aw.endotrachealIntubation !== undefined) proc.ett_intubation = aw.endotrachealIntubation;
+        if (aw.lmaInsertion !== undefined) proc.lma_insertion = aw.lmaInsertion;
+        if (aw.cricothyrotomy !== undefined) proc.cricothyrotomy = aw.cricothyrotomy;
+        if (aw.bvmVentilation !== undefined) proc.bvm_ventilation = aw.bvmVentilation;
+        if (aw.niv !== undefined) proc.niv = aw.niv;
+        const va = pr.vascular || {};
+        if (va.centralLine !== undefined) proc.central_line = va.centralLine;
+        if (va.peripheralIV !== undefined) proc.peripheral_iv = va.peripheralIV;
+        if (va.intraosseousAccess !== undefined) proc.io_access = va.intraosseousAccess;
+        if (va.arterialLine !== undefined) proc.arterial_line = va.arterialLine;
+        const ch = pr.chest || {};
+        if (ch.chestTube !== undefined) proc.chest_tube = ch.chestTube;
+        if (ch.needleDecompression !== undefined) proc.needle_decompression = ch.needleDecompression;
+        if (ch.pericardiocentesis !== undefined) proc.pericardiocentesis = ch.pericardiocentesis;
+        if (ch.thoracentesis !== undefined) proc.thoracentesis = ch.thoracentesis;
+        if (pr.neuro?.lumbarPuncture !== undefined) proc.lumbar_puncture = pr.neuro.lumbarPuncture;
+        if (pr.gu?.foleyCatheter !== undefined) proc.foley_catheter = pr.gu.foleyCatheter;
+        const gi = pr.gi || {};
+        if (gi.ngTube !== undefined) proc.ng_tube = gi.ngTube;
+        if (gi.gastricLavage !== undefined) proc.gastric_lavage = gi.gastricLavage;
+        const wo = pr.wound || {};
+        if (wo.woundClosure !== undefined) proc.wound_closure = wo.woundClosure;
+        if (wo.woundIrrigation !== undefined) proc.wound_irrigation = wo.woundIrrigation;
+        const or = pr.ortho || {};
+        if (or.fractureSplinting !== undefined) proc.fracture_splinting = or.fractureSplinting;
+        if (or.jointReduction !== undefined) proc.joint_reduction = or.jointReduction;
+        notes.procedures_performed = proc;
+        next.notes = notes;
       }
       // Disposition
       if (data.dispositionSuggested?.type || data.dispositionSuggested?.admitTo || data.dispositionSuggested?.referTo) {
@@ -357,6 +447,7 @@ export default function CaseChatScreen({ route, navigation }: Props) {
         if (data.dispositionSuggested.type) disp.dispositionType = data.dispositionSuggested.type;
         if (data.dispositionSuggested.admitTo) disp.admitTo = data.dispositionSuggested.admitTo;
         if (data.dispositionSuggested.referTo) disp.referTo = data.dispositionSuggested.referTo;
+        if (data.dispositionSuggested.durationInER) disp.durationInER = data.dispositionSuggested.durationInER;
         next.disposition = disp;
       }
       return next;

@@ -3998,77 +3998,111 @@ ADDITIONAL TREATMENT
 INVESTIGATIONS
 • ECG: Sinus tachycardia resolving"
 
-EXTRACTION SCHEMA — Extract ALL of the following from the dictation when mentioned. All fields optional. Return as nested JSON inside "extracted".
+EXTRACTION SCHEMA — Extract from the dictation. Return as nested JSON inside "extracted". All fields are optional unless stated.
 
 PATIENT:
-- patientName: Patient's full name
-- patientAge: Age in years (string, e.g. "45")
+- patientName: full name (string)
+- patientAge: age in years as string (e.g. "45")
 - patientSex: "Male" | "Female" | "Other"
+- chiefComplaint: ALWAYS extract — brief phrase (e.g. "Chest pain × 2 hours"). Use patient context if not dictated.
 
-HISTORY (extract ALL when doctor gives a history):
-- chiefComplaint: ALWAYS extract when complaint is mentioned — brief phrase, e.g. "Fever and loose stools × 2 days"
-- historyOfPresentIllness: 2–4 sentence prose narrative. Include: onset, duration, progression, context, associated history. Do NOT include vitals, examination, or investigation findings here.
-- onset: When symptoms started (e.g. "sudden", "2 days ago")
-- duration: How long the problem has been present
-- associatedSymptoms: Other symptoms alongside the main complaint (string)
-- pastMedicalHistory: Known medical conditions BEFORE this visit — e.g. "Diabetes mellitus on OHA, Hypertension"
-- pastSurgicalHistory: Previous surgeries if mentioned
-- allergies: Drug/food allergies — if doctor says "no allergies" use "NKDA"
-- currentMedications: Medications patient was taking BEFORE this ER visit (NOT what you are giving now)
-- familyHistory: Family history if mentioned
-- socialHistory: Social habits, occupation if mentioned
-- symptoms: Array of individual symptoms mentioned
+HISTORY:
+- historyOfPresentIllness: 2–4 sentence prose narrative (onset, duration, progression, context). No vitals/exam/investigations here.
+- associatedSymptoms: other symptoms alongside main complaint
+- pastMedicalHistory: known conditions BEFORE this visit — default "No significant past medical history"
+- pastSurgicalHistory: previous surgeries if mentioned
+- allergies: drug/food allergies — default "NKDA" if none stated
+- currentMedications: medications patient was taking BEFORE this ER visit (NOT what you are giving now) — default "Nil"
+- familyHistory: family history if mentioned
+- socialHistory: social habits, occupation if mentioned
+- symptoms: array of individual symptoms mentioned
 
-VITALS (extract numbers precisely):
-- vitalsSuggested.hr: Heart rate number only (e.g. "112")
-- vitalsSuggested.bp: "systolic/diastolic" format (e.g. "100/60")
+- psychological: only set fields to true if EXPLICITLY mentioned by doctor:
+  { suicidalIdeation: bool, selfHarmHistory: bool, intentToHarmOthers: bool, substanceAbuse: bool,
+    psychiatricHistory: bool, currentlyOnPsychiatricTreatment: bool, hasSupportSystem: bool, notes: string }
+
+VITALS (numbers precisely):
+- vitalsSuggested.hr: heart rate number only (e.g. "112")
+- vitalsSuggested.bp: "systolic/diastolic" (e.g. "100/60")
 - vitalsSuggested.spo2: SpO2 percentage only (e.g. "94")
-- vitalsSuggested.rr: Respiratory rate number only (e.g. "18")
-- vitalsSuggested.temperature: Temperature with unit — if value > 41 assume Fahrenheit (e.g. "103°F"). If in Celsius write as "39.4°C". Always include the unit.
-- vitalsSuggested.grbs: Blood glucose number (e.g. "280")
+- vitalsSuggested.rr: respiratory rate (e.g. "18")
+- vitalsSuggested.temperature: with unit — if value > 41 assume Fahrenheit. Always include unit (e.g. "103°F", "38.5°C")
+- vitalsSuggested.grbs: blood glucose number (e.g. "280")
 
-PRIMARY SURVEY (extract when doctor describes ABCDE or primary assessment):
-- primarySurveyText: ABCDE summary as a single string. Include ONLY the letters actually mentioned. Format: "A: patent, self-maintained. B: clear bilateral air entry, SpO2 94%. C: HR 112, BP 100/60, sinus tachycardia. D: GCS 15, oriented. E: Temp 103°F, rash all over body."
-- ecgInterpretation: Plain-text ECG finding if ECG is mentioned — e.g. "Sinus tachycardia", "Normal sinus rhythm", "ST elevation V1–V4", "Atrial fibrillation"
-- abgSummary: Plain-text ABG/VBG interpretation if blood gas is mentioned — e.g. "Metabolic acidosis — pH 7.28, HCO3 16, lactate 5 mmol/L", "Respiratory alkalosis"
+PRIMARY SURVEY (ABCDE):
+- primarySurveyText: full A–E one-line-per-letter summary string (always return for case_update, using defaults for letters not mentioned)
+- abcdeFindings.airway: { status:"Normal"|"Abnormal", position:"Self-maintained"|"Head tilt/Chin lift"|"Jaw thrust", patency:"Patent"|"Partially obstructed"|"Completely obstructed", cause:"None"|"Tongue fall"|"Secretions"|"Blood/Vomitus"|"Foreign body"|"Edema", notes:string }
+- abcdeFindings.breathing: { status:"Normal"|"Abnormal", notes:string }
+- abcdeFindings.circulation: { status:"Normal"|"Abnormal", notes:string }
+- abcdeFindings.disability: { status:"Normal"|"Abnormal", notes:string }
+- abcdeFindings.exposure: { status:"Normal"|"Abnormal", notes:string }
 
-EXAMINATION (extract all findings; apply defaults for unmentioned systems when actual content exists):
-- examFindings.general: General examination — pallor, icterus, cyanosis, edema
-- examFindings.cvs: Cardiovascular findings
-- examFindings.respiratory: Respiratory examination
-- examFindings.abdomen: Abdominal examination
-- examFindings.cns: Neurological findings
-- examFindings.skin: Skin findings — rashes, wounds, burns (extract from exposure/examination context)
+ADJUNCTS:
+- ecgInterpretation: plain text ECG finding (e.g. "STEMI anterior wall", "Atrial fibrillation", "Normal sinus rhythm") — default "Not done"
+- ecgStructured: { performed:bool, findings:string, rhythm:string, stChanges:string }
+- abgSummary: plain text ABG/VBG interpretation (e.g. "Metabolic acidosis — pH 7.28, HCO3 16, lactate 5") — default "Not done"
+- abgStructured: { performed:bool, ph:string, pco2:string, hco3:string, lactate:string, notes:string }
 
-TREATMENT (ER treatments — what you are giving NOW):
-- prescribedMedications: [{name, dose, route, frequency}] — drugs given in ER (IV/IM/SC/stat/push/administer)
-- prescribedInfusions: [{name, dose, rate}] — IV fluids and drips (NS bolus, RL, Dopamine drip, fluid @ rate)
-- investigationsOrdered: Comma-separated lab tests ordered (e.g. "CBC, RFT, LFT, urine routine, electrolytes, blood culture")
-- imagingOrdered: Imaging ordered (X-ray, CT, USG, Echo)
-- treatmentNotes: Other management plans, referrals ordered, or freeform notes
+EXAMINATION:
+- examFindings.general: general exam text — default "Conscious, alert, well-oriented, no acute distress"
+- examFindings.cvs: cardiovascular — default "S1S2 heard, no murmurs"
+- examFindings.respiratory: respiratory — default "Air entry bilaterally equal, no adventitious sounds"
+- examFindings.abdomen: abdominal — default "Soft, non-tender, bowel sounds present"
+- examFindings.cns: neurological — default "No focal neurological deficit"
+- examStructured.general: { pallor:bool, icterus:bool, cyanosis:bool, clubbing:bool, lymphadenopathy:bool, edema:bool }
+  Rules: "pallor present" → pallor:true. "no pallor" → pallor:false. Only set to true if explicitly mentioned.
+
+TREATMENT (ER — what you are giving NOW, not what patient was taking before):
+- prescribedMedications: [{name, dose, route, frequency}] — drugs administered in ER
+  Indian drug name mapping: Ecosprin→Aspirin, Brilinta→Ticagrelor, Zidot→Azithromycin, Calpol→Paracetamol, Pan/Ompras→Pantoprazole, Duolin→Ipratropium+Salbutamol, OHG→Metformin, Aug→Amoxiclav-Clavulanate, Budecort→Budesonide
+- prescribedInfusions: [{name, dose, dilution, rate}] — IV fluids and drips (NS bolus, RL, Dopamine drip)
+- investigationsOrdered: comma-separated lab tests ordered (CBC, RFT, LFT, troponin, d-dimer, etc.)
+- imagingOrdered: imaging ordered (X-ray chest, CT head, USG abdomen, Echo)
+- treatmentNotes: other management plans, freeform notes
+
+PROCEDURES — set boolean true ONLY if doctor says they performed or are performing it:
+- procedures.resuscitation.cpr: "CPR", "chest compressions", "resuscitation started"
+- procedures.airway.endotrachealIntubation: "intubated", "ETT", "RSI", "rapid sequence intubation"
+- procedures.airway.lmaInsertion: "LMA", "supraglottic airway"
+- procedures.airway.cricothyrotomy: "cric", "surgical airway", "cricothyrotomy"
+- procedures.airway.bvmVentilation: "BVM", "bag-mask", "bagged the patient"
+- procedures.airway.niv: "BiPAP", "CPAP", "NIV", "non-invasive ventilation"
+- procedures.vascular.centralLine: "central line", "CVC", "internal jugular", "subclavian", "femoral line"
+- procedures.vascular.peripheralIV: "IV access", "cannula", "peripheral line", "drip started"
+- procedures.vascular.intraosseousAccess: "IO access", "intraosseous"
+- procedures.vascular.arterialLine: "arterial line", "A-line", "radial line"
+- procedures.chest.chestTube: "chest tube", "intercostal drain", "ICD inserted"
+- procedures.chest.needleDecompression: "needle decompression", "tension pneumo treated"
+- procedures.chest.pericardiocentesis: "pericardiocentesis", "cardiac tamponade drained"
+- procedures.chest.thoracentesis: "thoracentesis", "pleural tap"
+- procedures.neuro.lumbarPuncture: "LP", "lumbar puncture", "CSF sent"
+- procedures.gu.foleyCatheter: "Foley's", "urinary catheter", "catheterized"
+- procedures.gi.ngTube: "NG tube", "nasogastric tube", "Ryle's tube"
+- procedures.gi.gastricLavage: "gastric lavage", "gastric wash"
+- procedures.wound.woundClosure: "sutured", "wound closure", "stitched"
+- procedures.wound.woundIrrigation: "wound irrigated", "wound washed"
+- procedures.ortho.fractureSplinting: "splint", "POP", "plaster"
+- procedures.ortho.jointReduction: "reduction done", "joint reduced", "relocated"
 
 DIAGNOSIS:
-- diagnosis: Array of working diagnoses — first is primary
-- differentialDiagnosis: Array of differential diagnoses
+- diagnosis: array of working diagnoses (first = primary)
+- differentialDiagnosis: array of differential diagnoses
 
-DISPOSITION (extract if doctor mentions what happens to the patient after ER):
-- dispositionSuggested.type: "Admit" | "Discharge" | "Refer" | "LAMA" — if explicitly mentioned
-- dispositionSuggested.admitTo: Ward/ICU type if admitting (e.g. "General Ward", "Medical ICU")
-- dispositionSuggested.referTo: Specialty or consultant if referring (e.g. "Medicine", "Cardiology", "Dr. Neeraj")
+DISPOSITION:
+- dispositionSuggested.type: "Admit" | "Discharge" | "Refer" | "LAMA" | "Absconded" | "Death" — if explicitly mentioned
+- dispositionSuggested.admitTo: ward/ICU if admitting (e.g. "Medical ICU", "CCU", "General Ward")
+- dispositionSuggested.referTo: specialty or consultant if referring (e.g. "Cardiology", "Medicine", "Dr. Neeraj")
+- dispositionSuggested.durationInER: time in ER if mentioned
 
-COMPLETENESS MANDATE — For type=case_update AND type=addendum, you MUST return ALL of the sections below in "extracted". Use real dictated data where mentioned; fill the standard default for anything not mentioned. A case note that omits a section is incomplete.
-
-Required fields and their defaults when not dictated:
+COMPLETENESS MANDATE — For type=case_update, ALWAYS return defaults for every section not explicitly dictated:
 - pastMedicalHistory → "No significant past medical history"
 - allergies → "NKDA"
 - currentMedications → "Nil"
-- primarySurveyText → ALWAYS return a full A–E string. For any letter the doctor did NOT address, use the defaults below. Combine real findings with defaults:
-    A default: "Patent, self-maintained"
-    B default: "Equal bilateral air entry, no respiratory distress"
-    C default: "Adequate perfusion, no features of shock"
-    D default: "GCS 15, alert and oriented, pupils equal and reactive"
+- primarySurveyText → ALWAYS return full A–E string. For any letter not mentioned, use:
+    A default: "Patent, self-maintained"  B default: "Equal bilateral air entry, no respiratory distress"
+    C default: "Adequate perfusion, no features of shock"  D default: "GCS 15, alert and oriented"
     E default: "No significant findings on exposure"
-    If temperature is mentioned, include it in E. Format: "A: <finding>. B: <finding>. C: <finding>. D: <finding>. E: <finding>."
+    Format: "A: <finding>. B: <finding>. C: <finding>. D: <finding>. E: <finding>."
 - ecgInterpretation → "Not done"
 - abgSummary → "Not done"
 - examFindings.general → "Conscious, alert, well-oriented, no acute distress"
@@ -4078,11 +4112,11 @@ Required fields and their defaults when not dictated:
 - examFindings.cns → "No focal neurological deficit"
 
 CRITICAL RULES:
-1. currentMedications = what patient was taking BEFORE this ER visit. prescribedMedications = what YOU are giving NOW in the ER. NEVER mix these.
-2. If doctor says "temperature around 103" without unit, assume Fahrenheit → write "103°F" in vitalsSuggested.temperature AND in the E portion of primarySurveyText.
-3. Extract investigationsOrdered whenever doctor says "send for", "order", "get", "check" labs.
-4. Extract prescribedInfusions for any IV fluid: "give 1 pint NS" → {name:"Normal saline",dose:"500ml",rate:"bolus"}, "100ml/hr" → add rate field.
-5. chiefComplaint: if not explicitly stated in dictation but patient context is provided, use the patient context chief complaint.
+1. currentMedications = BEFORE ER visit. prescribedMedications = what you are giving NOW. NEVER mix.
+2. Temperature without unit: if > 41 → Fahrenheit ("103°F"). Always include unit.
+3. Procedures: only set true if the doctor PERFORMED or IS PERFORMING them. "Give IV access" → peripheralIV:true.
+4. Psychological flags: only set true if explicitly mentioned. Never infer.
+5. Exam toggles (pallor etc): only set true if present; false if explicitly absent.
 
 REPLY EXAMPLES:
 - case_update: "Captured — fever 2 days, vitals including temp 103°F, ABCDE assessment, medications, labs ordered, and admission plan documented."

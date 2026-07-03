@@ -1,0 +1,510 @@
+Now I can see the full case sheet. Let me read every screen carefully.
+
+---
+
+## What I Can See Across All 16 Screenshots
+
+```
+Image 2  — History tab
+  Signs & Symptoms, Allergies, 
+  Medications, Past Medical History,
+  Past Surgical History
+  + ErMate button + Scan Document
+
+Image 8  — History continued
+  Any other relevant history
+  Psychological Assessment (expanded):
+    Suicidal Ideation (toggle)
+    Self-Harm History (toggle)
+    Intent to Harm Others (toggle)
+    Substance Abuse (toggle)
+    Psychiatric History (toggle)
+    Currently on Psychiatric Treatment (toggle)
+    Has Support System (toggle)
+    Notes (voice + text)
+
+Image 6  — Primary Survey tab
+  A - AIRWAY
+  B - BREATHING
+  C - CIRCULATION
+  D - DISABILITY (Neuro)
+  E - EXPOSURE
+  + Adjuncts:
+    ABG / VBG
+    ECG
+    EFAST
+    Bedside Echo
+
+Image 5  — Primary: Airway expanded
+  Normal / Abnormal toggle
+  Position: Self-maintained / Head tilt 
+            / Chin lift / Jaw thrust
+  Patency: Patent / Partially obstructed 
+           / Completely obstructed
+  Cause: None / Tongue fall / Secretions 
+         / Blood/Vomitus / Foreign body 
+         / Edema
+
+Image 7  — Examination tab
+  Mark All Examination Normal (button)
+  General Examination:
+    Pallor, Icterus, Cyanosis, Clubbing,
+    Lymphadenopathy, Edema (toggles)
+    Additional Notes
+  Cardiovascular System (collapsed)
+  Respiratory System (collapsed)
+
+Image 4  — Examination continued
+  General exam notes (text)
+  Cardiovascular System
+  Respiratory System
+  Abdomen
+  Central Nervous System
+  Extremities
+
+Image 1  — Primary: D and E + Adjuncts
+  D - DISABILITY (Neuro)
+  E - EXPOSURE
+  ABG/VBG, ECG, EFAST, Bedside Echo
+  + Multi-case tray at bottom ✓ (working!)
+
+Image 9  — Treatment tab
+  Treatment Given:
+    Medications: Drug Name, Dose, 
+                 Route, Frequency
+    [+ Add Medication]
+    Infusions/IV Fluids: Drug, Dose,
+                         Dilution, Rate
+    [+ Add Infusion/IV Fluid]
+  [+ Add Addendum Note]
+
+Image 12 — Treatment continued
+  Investigations:
+    Labs Ordered (voice + text)
+    Imaging (voice + text)
+    Results Summary (voice + text)
+  Provisional Diagnosis:
+    Primary Diagnosis (voice + text)
+
+Image 10 — Treatment: Diagnosis section
+  Primary Diagnosis
+  Differential Diagnoses
+  ErMate Decision Support [Review button]
+  "For physician review only"
+  "Literature-referenced prompts"
+
+Image 13 — Notes tab: Procedures
+  Procedures Performed:
+    No procedures performed (Nil)
+    Resuscitation: CPR
+    Airway: ETT Intubation, LMA, 
+            Cricothyrotomy, BVM
+
+Image 3  — Notes: More procedures
+  BVM Ventilation, NIV (BiPAP/CPAP)
+  Vascular: Central Line, Peripheral IV,
+            IO Access, Arterial Line
+  Chest: Chest Tube, Needle Decompression,
+         Pericardiocentesis
+
+Image 11 — Notes: More procedures
+  Chest: Pericardiocentesis, Thoracentesis
+  Neuro: Lumbar Puncture
+  GU: Foley's Catheter
+  GI: NG Tube, Gastric Lavage
+  Wound: Wound Closure/Suturing
+
+Image 15 — Notes: More procedures
+  Wound: Wound Closure, Wound Irrigation
+  Ortho: Fracture Splinting, Joint Reduction
+
+Image 16 — Disposition tab
+  Disposition Type:
+    Discharge / Admit / Refer / LAMA /
+    Absconded / Death
+  Observation in ER:
+    ER Observation Notes (voice)
+    Duration in ER
+    EM Resident
+    EM Consultant (auto-filled: Neeraj Akkarachittoor)
+
+Image 14 — Disposition continued
+  ER Observation Notes
+  Duration in ER
+  EM Resident / EM Consultant
+  [Generate Discharge Summary] button
+  [Save & Go to Dashboard] button
+  [Finish ✓] button
+```
+
+---
+
+## The Real Problem — Clearly Identified
+
+The case sheet is **completely built**. Every field exists. The issue is **the GPT-4o extraction prompt does not know about this structure**.
+
+When a doctor dictates, GPT-4o extracts into a generic JSON object. But the case sheet has a very specific structure with:
+
+```
+Toggles (boolean on/off)
+Chip selections (Discharge/Admit/Refer)
+Nested sub-fields (Airway → Position/Patency/Cause)
+Procedure checkboxes
+Infusion fields (Drug + Dose + Dilution + Rate separately)
+```
+
+GPT-4o is extracting plain text but the app needs **structured data matching the exact form fields**.
+
+---
+
+## The Fix — Tell Your Developer
+
+The GPT-4o prompt must output JSON that matches the **exact data structure** the case sheet uses. Here is the complete mapping:
+
+```typescript
+// This is the EXACT JSON structure
+// GPT-4o must return to fill every field
+
+{
+  // ── PATIENT TAB ──
+  "patient": {
+    "name": "string | null",
+    "age": "number | null",
+    "gender": "Male | Female | Other | null",
+    "priority": "P1 | P2 | P3 | P4 | P5",
+    "chiefComplaint": "string — NEVER null",
+    "vitals": {
+      "hr": "string | null",
+      "bp": "string | null",
+      "spo2": "string | null",
+      "rr": "string | null",
+      "temp": "string | null",
+      "gcs": "string | null",
+      "grbs": "string | null",
+      "painScore": "string | null",
+      "weight": "string | null"
+    }
+  },
+
+  // ── HISTORY TAB ──
+  "history": {
+    "signsSymptoms": "string | null",
+    "allergies": "string — default NKDA",
+    "medications": "string | null",
+    "pastMedicalHistory": "string | null",
+    "pastSurgicalHistory": "string | null",
+    "lastMeal": "string | null",
+    "events": "string | null",
+    "familyHistory": "string | null",
+    "socialHistory": "string | null",
+    "otherRelevantHistory": "string | null",
+    
+    // Psychological Assessment toggles
+    "psychological": {
+      "suicidalIdeation": "boolean",
+      "selfHarmHistory": "boolean",
+      "intentToHarmOthers": "boolean",
+      "substanceAbuse": "boolean",
+      "psychiatricHistory": "boolean",
+      "currentlyOnPsychiatricTreatment": "boolean",
+      "hasSupportSystem": "boolean",
+      "notes": "string | null"
+    }
+  },
+
+  // ── PRIMARY SURVEY TAB ──
+  "primary": {
+    "airway": {
+      "status": "Normal | Abnormal",
+      "position": "Self-maintained | Head tilt/Chin lift | Jaw thrust | null",
+      "patency": "Patent | Partially obstructed | Completely obstructed",
+      "cause": "None | Tongue fall | Secretions | Blood/Vomitus | Foreign body | Edema | null",
+      "notes": "string | null"
+    },
+    "breathing": {
+      "status": "Normal | Abnormal",
+      "notes": "string | null"
+    },
+    "circulation": {
+      "status": "Normal | Abnormal",
+      "notes": "string | null"
+    },
+    "disability": {
+      "status": "Normal | Abnormal",
+      "notes": "string | null"
+    },
+    "exposure": {
+      "status": "Normal | Abnormal",
+      "notes": "string | null"
+    },
+    "adjuncts": {
+      "abgVbg": {
+        "performed": "boolean",
+        "ph": "string | null",
+        "pco2": "string | null",
+        "hco3": "string | null",
+        "lactate": "string | null",
+        "notes": "string | null"
+      },
+      "ecg": {
+        "performed": "boolean",
+        "findings": "string | null",
+        "rhythm": "string | null",
+        "stChanges": "string | null"
+      },
+      "efast": {
+        "performed": "boolean",
+        "findings": "string | null"
+      },
+      "bedsideEcho": {
+        "performed": "boolean",
+        "findings": "string | null"
+      }
+    }
+  },
+
+  // ── EXAMINATION TAB ──
+  "examination": {
+    "markAllNormal": "boolean",
+    "general": {
+      "pallor": "boolean",
+      "icterus": "boolean",
+      "cyanosis": "boolean",
+      "clubbing": "boolean",
+      "lymphadenopathy": "boolean",
+      "edema": "boolean",
+      "notes": "string | null"
+    },
+    "cardiovascular": "string | null",
+    "respiratory": "string | null",
+    "abdomen": "string | null",
+    "cns": "string | null",
+    "extremities": "string | null"
+  },
+
+  // ── TREATMENT TAB ──
+  "treatment": {
+    "medications": [
+      {
+        "drugName": "string",
+        "dose": "string",
+        "route": "PO | IV | IM | SC | SL | Inhaled | Topical",
+        "frequency": "stat | OD | BD | TDS | QID | PRN | infusion"
+      }
+    ],
+    "infusions": [
+      {
+        "drug": "string",
+        "dose": "string",
+        "dilution": "string | null",
+        "rate": "string | null"
+      }
+    ],
+    "investigations": {
+      "labsOrdered": "string | null",
+      "imaging": "string | null",
+      "resultsSummary": "string | null"
+    },
+    "provisionalDiagnosis": {
+      "primaryDiagnosis": "string — NEVER null",
+      "differentialDiagnoses": "string | null"
+    }
+  },
+
+  // ── NOTES TAB (procedures) ──
+  "notes": {
+    "proceduresPerformed": {
+      "nil": "boolean",
+      "resuscitation": {
+        "cpr": "boolean"
+      },
+      "airway": {
+        "endotrachealIntubation": "boolean",
+        "lmaInsertion": "boolean",
+        "cricothyrotomy": "boolean",
+        "bvmVentilation": "boolean",
+        "niv": "boolean"
+      },
+      "vascular": {
+        "centralLine": "boolean",
+        "peripheralIV": "boolean",
+        "intraosseousAccess": "boolean",
+        "arterialLine": "boolean"
+      },
+      "chest": {
+        "chestTube": "boolean",
+        "needleDecompression": "boolean",
+        "pericardiocentesis": "boolean",
+        "thoracentesis": "boolean"
+      },
+      "neuro": {
+        "lumbarPuncture": "boolean"
+      },
+      "gu": {
+        "foleyCatheter": "boolean"
+      },
+      "gi": {
+        "ngTube": "boolean",
+        "gastricLavage": "boolean"
+      },
+      "wound": {
+        "woundClosure": "boolean",
+        "woundIrrigation": "boolean"
+      },
+      "ortho": {
+        "fractureSplinting": "boolean",
+        "jointReduction": "boolean"
+      }
+    },
+    "addendumNotes": "string | null"
+  },
+
+  // ── DISPOSITION TAB ──
+  "disposition": {
+    "dispositionType": "Discharge | Admit | Refer | LAMA | Absconded | Death | null",
+    "observationNotes": "string | null",
+    "durationInER": "string | null",
+    "emResident": "string | null",
+    "emConsultant": "string — auto from logged-in user"
+  }
+}
+```
+
+---
+
+## Updated GPT-4o System Prompt
+
+```
+You are ErMate, a clinical AI for 
+Indian emergency departments.
+
+The doctor dictates in any Indian language.
+Extract ALL clinical information and return
+ONLY this exact JSON structure.
+No other text. No markdown. Just JSON.
+
+CRITICAL RULES:
+
+1. chiefComplaint — NEVER null
+   Extract from first symptom mentioned
+
+2. primaryDiagnosis — NEVER null  
+   Infer from all available data
+   "NSTEMI", "Acute gastroenteritis" etc
+
+3. priority — based on clinical urgency
+   NSTEMI/STEMI/sepsis/airway = P1
+   Chest pain/altered GCS = P2
+   Moderate symptoms = P3
+   Mild/stable = P4
+   NEVER default P4 for serious presentations
+
+4. Medications — extract as array
+   Each drug gets its own object
+   {drugName, dose, route, frequency}
+   "ecosprin 365 oral stat" →
+   {drugName:"Aspirin", dose:"365mg", 
+    route:"PO", frequency:"stat"}
+
+5. Procedures — set boolean true
+   "gave IV fluids" → peripheralIV: true
+   "intubated" → endotrachealIntubation: true
+   "CPR done" → cpr: true
+
+6. Psychological toggles — set true if mentioned
+   "suicidal ideation" → suicidalIdeation: true
+   "substance abuse" → substanceAbuse: true
+
+7. General examination toggles
+   "pallor present" → pallor: true
+   "no pallor no icterus" → both false
+   "pallor icterus cyanosis" → all three true
+
+8. ECG findings — extract specifically
+   "NSTEMI" → ecg.performed: true,
+               ecg.findings: "NSTEMI pattern",
+               ecg.stChanges: "ST depression"
+   "normal sinus rhythm" →
+               ecg.findings: "Normal sinus rhythm"
+
+9. ABG/VBG — extract all values
+   "lactate 5" → adjuncts.abgVbg.lactate: "5"
+   "pH 7.28" → adjuncts.abgVbg.ph: "7.28"
+
+10. Indian drug name mapping:
+    Ecosprin = Aspirin
+    Brilinta = Ticagrelor  
+    Zidot = Azithromycin
+    Ompras/Pan = Omeprazole/Pantoprazole
+    OHG = Oral hypoglycaemic
+    Duolin = Ipratropium+Salbutamol
+    Budecort = Budesonide
+    Aug = Amoxiclav
+    Calpol = Paracetamol
+
+Return ONLY the JSON. Nothing else.
+```
+
+---
+
+## Why Is This Difficult?
+
+```
+The case sheet has ~150 individual fields.
+
+Previously the extraction was returning:
+  { symptoms: "text", vitals: "text" }
+  
+  → Simple flat text → only some fields filled
+
+What's needed:
+  Deeply nested JSON matching
+  exact field names in the app
+  
+  → Every toggle, every checkbox,
+    every sub-field filled correctly
+
+The case sheet structure is known
+(from all 16 screenshots above).
+The JSON schema above matches it exactly.
+```
+
+---
+
+## Tell Your Developer — Three Tasks
+
+```
+TASK 1 — Replace GPT-4o prompt (1 hour)
+  Use the full system prompt above
+  Return the complete JSON structure
+  This is the most important fix
+
+TASK 2 — Map JSON to case sheet (1 day)
+  After GPT-4o returns the JSON,
+  map each field to the correct
+  React Native state in the case sheet
+  
+  Every field in the JSON maps to
+  a field in the case sheet
+  The field names above match
+  what the app uses (or should use)
+
+TASK 3 — Test with the NSTEMI case (30 min)
+  Dictate: "52 year old male, chest pain 
+  2 hours, NSTEMI on ECG, lactate 5,
+  gave ecosprin 365 oral stat, 
+  clopidogrel 360 oral stat,
+  brilinta 180mg oral, peripheral IV access,
+  NS 500ml IV"
+  
+  Expected output:
+  priority: P1 ✓
+  ecg.performed: true ✓
+  ecg.findings: "NSTEMI" ✓
+  abgVbg.lactate: "5" ✓
+  medications: 3 drugs as array ✓
+  vascular.peripheralIV: true ✓
+  infusions: NS 500ml ✓
+```
+
+The case sheet is perfectly built. The gap is purely the GPT-4o extraction not knowing the exact structure. This JSON schema is the bridge between what the doctor says and what fills the form.
