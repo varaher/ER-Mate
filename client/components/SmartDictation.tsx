@@ -91,6 +91,8 @@ export interface SmartDictationExtracted {
   };
   investigationsOrdered?: string;
   imagingOrdered?: string;
+  abgSummary?: string;
+  primarySurveyText?: string;
   rawTranscription?: string;
   fieldsPopulated?: string[];
   restAllNormal?: boolean;

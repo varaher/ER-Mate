@@ -319,6 +319,23 @@ export default function CaseChatScreen({ route, navigation }: Props) {
         }));
         next.treatment = treat;
       }
+      if (data.prescribedInfusions?.length) {
+        const treat = { ...(next.treatment || {}) };
+        treat.infusions = (data.prescribedInfusions as any[]).map((i: any) =>
+          [i.name, i.dose, i.rate ? `@ ${i.rate}` : ''].filter(Boolean).join(' ')
+        ).join('; ');
+        next.treatment = treat;
+      }
+      if (data.investigationsOrdered) {
+        const treat = { ...(next.treatment || {}) };
+        treat.labsOrdered = data.investigationsOrdered;
+        next.treatment = treat;
+      }
+      if (data.imagingOrdered) {
+        const treat = { ...(next.treatment || {}) };
+        treat.imaging = data.imagingOrdered;
+        next.treatment = treat;
+      }
       if (data.diagnosis?.length) {
         const treat = { ...(next.treatment || {}) };
         treat.primary_diagnosis = Array.isArray(data.diagnosis) ? data.diagnosis[0] : String(data.diagnosis);
@@ -326,6 +343,21 @@ export default function CaseChatScreen({ route, navigation }: Props) {
           treat.differential_diagnoses = data.differentialDiagnosis;
         }
         next.treatment = treat;
+      }
+      // Primary Survey — ECG, ABG, ABCDE summary
+      if (data.ecgInterpretation || (data as any).abgSummary || (data as any).primarySurveyText) {
+        const pa = { ...(next.primary_assessment || {}) };
+        if (data.ecgInterpretation) pa.ecg_status = data.ecgInterpretation;
+        if ((data as any).abgSummary) pa.abg_interpretation = (data as any).abgSummary;
+        next.primary_assessment = pa;
+      }
+      // Disposition
+      if (data.dispositionSuggested?.type || data.dispositionSuggested?.admitTo || data.dispositionSuggested?.referTo) {
+        const disp = { ...(next.disposition || {}) };
+        if (data.dispositionSuggested.type) disp.dispositionType = data.dispositionSuggested.type;
+        if (data.dispositionSuggested.admitTo) disp.admitTo = data.dispositionSuggested.admitTo;
+        if (data.dispositionSuggested.referTo) disp.referTo = data.dispositionSuggested.referTo;
+        next.disposition = disp;
       }
       return next;
     });

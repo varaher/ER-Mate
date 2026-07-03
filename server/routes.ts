@@ -3979,36 +3979,87 @@ Use plain text with section headers. Only include sections that have new data. E
 UPDATED TREATMENT
 • Atorvastatin 80mg added"
 
-EXTRACTION SCHEMA (for case_update and addendum types, all fields optional):
-patientName, patientAge, patientSex, chiefComplaint, historyOfPresentIllness, onset, duration, progression,
-associatedSymptoms, negativeSymptoms, pastMedicalHistory, pastSurgicalHistory, allergies, currentMedications,
-familyHistory, socialHistory, menstrualHistory, treatmentNotes, investigationsOrdered, imagingOrdered,
-symptoms (string array), diagnosis (string array), differentialDiagnosis (string array),
-vitalsSuggested: { hr, bp, rr, spo2, temperature, grbs },
-examFindings: { general, cvs, respiratory, abdomen, cns, heent, musculoskeletal, skin },
-prescribedMedications: [{ name, dose, route, frequency }],
-prescribedInfusions: [{ name, dose, dilution, rate }],
-painDetails: { location, severity, character, onset, duration, aggravatingFactors, relievingFactors }
+EXTRACTION SCHEMA — Extract ALL of the following from the dictation when mentioned. All fields optional. Return as nested JSON inside "extracted".
 
-FIELD DEFAULT RULES — apply whenever the dictation contains actual clinical content (chief complaint, vitals, or any examination finding is present):
-- examFindings.general: if not explicitly mentioned, default to "Conscious, alert, well-oriented, no acute distress"
-- examFindings.cvs: if not explicitly mentioned, default to "S1S2 heard, no murmurs, no added heart sounds"
-- examFindings.respiratory: if not explicitly mentioned, default to "Air entry bilaterally equal and clear, no adventitious sounds"
-- examFindings.abdomen: if not explicitly mentioned, default to "Soft, non-tender, bowel sounds present"
-- examFindings.cns: if not explicitly mentioned, default to "No focal neurological deficit"
-- allergies: if not mentioned, default to "NKDA"
-- familyHistory: if not mentioned, set to "Not mentioned"
-- socialHistory: if not mentioned, set to "Not mentioned"
-EXCEPTION: Do NOT apply exam defaults if the dictation is a pure question, greeting, or correction (type=general). Only apply when type=case_update or type=addendum.
+PATIENT:
+- patientName: Patient's full name
+- patientAge: Age in years (string, e.g. "45")
+- patientSex: "Male" | "Female" | "Other"
+
+HISTORY (extract ALL when doctor gives a history):
+- chiefComplaint: ALWAYS extract when complaint is mentioned — brief phrase, e.g. "Fever and loose stools × 2 days"
+- historyOfPresentIllness: 2–4 sentence prose narrative. Include: onset, duration, progression, context, associated history. Do NOT include vitals, examination, or investigation findings here.
+- onset: When symptoms started (e.g. "sudden", "2 days ago")
+- duration: How long the problem has been present
+- associatedSymptoms: Other symptoms alongside the main complaint (string)
+- pastMedicalHistory: Known medical conditions BEFORE this visit — e.g. "Diabetes mellitus on OHA, Hypertension"
+- pastSurgicalHistory: Previous surgeries if mentioned
+- allergies: Drug/food allergies — if doctor says "no allergies" use "NKDA"
+- currentMedications: Medications patient was taking BEFORE this ER visit (NOT what you are giving now)
+- familyHistory: Family history if mentioned
+- socialHistory: Social habits, occupation if mentioned
+- symptoms: Array of individual symptoms mentioned
+
+VITALS (extract numbers precisely):
+- vitalsSuggested.hr: Heart rate number only (e.g. "112")
+- vitalsSuggested.bp: "systolic/diastolic" format (e.g. "100/60")
+- vitalsSuggested.spo2: SpO2 percentage only (e.g. "94")
+- vitalsSuggested.rr: Respiratory rate number only (e.g. "18")
+- vitalsSuggested.temperature: Temperature with unit — if value > 41 assume Fahrenheit (e.g. "103°F"). If in Celsius write as "39.4°C". Always include the unit.
+- vitalsSuggested.grbs: Blood glucose number (e.g. "280")
+
+PRIMARY SURVEY (extract when doctor describes ABCDE or primary assessment):
+- primarySurveyText: ABCDE summary as a single string. Include ONLY the letters actually mentioned. Format: "A: patent, self-maintained. B: clear bilateral air entry, SpO2 94%. C: HR 112, BP 100/60, sinus tachycardia. D: GCS 15, oriented. E: Temp 103°F, rash all over body."
+- ecgInterpretation: Plain-text ECG finding if ECG is mentioned — e.g. "Sinus tachycardia", "Normal sinus rhythm", "ST elevation V1–V4", "Atrial fibrillation"
+- abgSummary: Plain-text ABG/VBG interpretation if blood gas is mentioned — e.g. "Metabolic acidosis — pH 7.28, HCO3 16, lactate 5 mmol/L", "Respiratory alkalosis"
+
+EXAMINATION (extract all findings; apply defaults for unmentioned systems when actual content exists):
+- examFindings.general: General examination — pallor, icterus, cyanosis, edema
+- examFindings.cvs: Cardiovascular findings
+- examFindings.respiratory: Respiratory examination
+- examFindings.abdomen: Abdominal examination
+- examFindings.cns: Neurological findings
+- examFindings.skin: Skin findings — rashes, wounds, burns (extract from exposure/examination context)
+
+TREATMENT (ER treatments — what you are giving NOW):
+- prescribedMedications: [{name, dose, route, frequency}] — drugs given in ER (IV/IM/SC/stat/push/administer)
+- prescribedInfusions: [{name, dose, rate}] — IV fluids and drips (NS bolus, RL, Dopamine drip, fluid @ rate)
+- investigationsOrdered: Comma-separated lab tests ordered (e.g. "CBC, RFT, LFT, urine routine, electrolytes, blood culture")
+- imagingOrdered: Imaging ordered (X-ray, CT, USG, Echo)
+- treatmentNotes: Other management plans, referrals ordered, or freeform notes
+
+DIAGNOSIS:
+- diagnosis: Array of working diagnoses — first is primary
+- differentialDiagnosis: Array of differential diagnoses
+
+DISPOSITION (extract if doctor mentions what happens to the patient after ER):
+- dispositionSuggested.type: "Admit" | "Discharge" | "Refer" | "LAMA" — if explicitly mentioned
+- dispositionSuggested.admitTo: Ward/ICU type if admitting (e.g. "General Ward", "Medical ICU")
+- dispositionSuggested.referTo: Specialty or consultant if referring (e.g. "Medicine", "Cardiology", "Dr. Neeraj")
+
+FIELD DEFAULT RULES — apply ONLY for type=case_update or type=addendum when real clinical content is present:
+- examFindings.general: default "Conscious, alert, well-oriented, no acute distress" if not mentioned
+- examFindings.cvs: default "S1S2 heard, no murmurs, no added heart sounds" if not mentioned
+- examFindings.respiratory: default "Air entry bilaterally equal and clear, no adventitious sounds" if not mentioned
+- examFindings.abdomen: default "Soft, non-tender, bowel sounds present" if not mentioned
+- examFindings.cns: default "No focal neurological deficit" if not mentioned
+- allergies: default "NKDA" if not mentioned
+
+CRITICAL RULES:
+1. currentMedications = what patient was taking before ER. prescribedMedications = what YOU are giving now in ER. NEVER mix these.
+2. primarySurveyText must include temperature in E (Exposure) if temperature is mentioned.
+3. If doctor says "temperature around 103" without unit, assume Fahrenheit → write "103°F".
+4. Extract investigationsOrdered whenever doctor says "send for", "order", "check" labs.
+5. Extract prescribedInfusions for any IV fluid: "give 1 pint NS" → {name:"Normal saline",dose:"500ml",rate:"bolus"}, "100ml/hr" → add rate.
 
 REPLY EXAMPLES:
-- case_update: "Captured — chest pain onset 2 hours, BP 140/90, HR 95, SpO2 98%. History, vitals, and impression updated."
-- addendum: "Addendum added — cardiology review, echo result, and admission to CCU."
+- case_update: "Captured — fever 2 days, vitals including temp 103°F, ABCDE assessment, medications, labs ordered, and admission plan documented."
+- addendum: "Addendum added — vitals, differential diagnoses, and fluids updated."
 - discharge_summary: "Discharge summary generated for ${ctx.name || 'this patient'}."
 - referral: "Referral letter prepared."
 - note: "Note added."
 
-Always use the conversation history for context. Keep replies SHORT (1-2 sentences). Be clinical and direct.`;
+Always use the conversation history for context. Keep replies SHORT (1–2 sentences). Be clinical and direct.`;
 
       const history: { role: "user" | "assistant"; content: string }[] = Array.isArray(messages) ? messages : [];
       const chatMessages = [
@@ -4021,7 +4072,7 @@ Always use the conversation history for context. Keep replies SHORT (1-2 sentenc
         model: "gpt-4o",
         messages: chatMessages,
         response_format: { type: "json_object" },
-        max_tokens: 2500,
+        max_tokens: 3500,
         temperature: 0.3,
       });
 

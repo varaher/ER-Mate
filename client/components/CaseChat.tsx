@@ -545,12 +545,14 @@ function CaseNoteBody({
   const hasVitals = vs.hr || vs.bp || vs.spo2 || vs.rr || vs.temperature || vs.grbs;
   const hasHistory = cc || extracted.historyOfPresentIllness || extracted.allergies ||
     extracted.currentMedications || extracted.pastMedicalHistory || extracted.associatedSymptoms;
-  const hasExam = ex.general || ex.cvs || ex.respiratory || ex.abdomen || ex.cns;
+  const hasPrimary = !!(extracted.primarySurveyText || extracted.ecgInterpretation || extracted.abgSummary);
+  const hasExam = ex.general || ex.cvs || ex.respiratory || ex.abdomen || ex.cns || ex.skin;
   const hasTreatment = extracted.treatmentNotes ||
     (extracted.prescribedMedications?.length) ||
     (extracted.prescribedInfusions?.length) ||
-    extracted.investigationsOrdered;
+    extracted.investigationsOrdered || extracted.imagingOrdered;
   const hasDx = extracted.diagnosis?.length || extracted.differentialDiagnosis?.length;
+  const hasDisposition = !!(extracted.dispositionSuggested?.type || extracted.dispositionSuggested?.admitTo || extracted.dispositionSuggested?.referTo);
 
   return (
     <View>
@@ -577,9 +579,17 @@ function CaseNoteBody({
           {cc  ? <DocField label="Complaint" value={cc} /> : null}
           {extracted.historyOfPresentIllness ? <DocField label="Events"    value={extracted.historyOfPresentIllness} /> : null}
           {extracted.associatedSymptoms      ? <DocField label="Symptoms"  value={extracted.associatedSymptoms} /> : null}
+          {extracted.pastMedicalHistory      ? <DocField label="Past Hx"   value={typeof extracted.pastMedicalHistory === 'string' ? extracted.pastMedicalHistory : (extracted.pastMedicalHistory as string[]).join(', ')} /> : null}
           {extracted.allergies               ? <DocField label="Allergies" value={extracted.allergies} /> : null}
-          {extracted.currentMedications      ? <DocField label="Medications" value={extracted.currentMedications} /> : null}
-          {extracted.pastMedicalHistory      ? <DocField label="Past Hx"   value={extracted.pastMedicalHistory} /> : null}
+          {extracted.currentMedications      ? <DocField label="Home meds" value={extracted.currentMedications} /> : null}
+        </DocSection>
+      ) : null}
+
+      {hasPrimary ? (
+        <DocSection title="Primary Survey (ABCDE)">
+          {extracted.primarySurveyText ? <DocField label="" value={extracted.primarySurveyText} /> : null}
+          {extracted.ecgInterpretation ? <DocField label="ECG" value={extracted.ecgInterpretation} /> : null}
+          {extracted.abgSummary        ? <DocField label="ABG" value={extracted.abgSummary} /> : null}
         </DocSection>
       ) : null}
 
@@ -590,6 +600,7 @@ function CaseNoteBody({
           {ex.respiratory  ? <DocField label="Resp"       value={ex.respiratory} /> : null}
           {ex.abdomen      ? <DocField label="Abdomen"    value={ex.abdomen} /> : null}
           {ex.cns          ? <DocField label="CNS"        value={ex.cns} /> : null}
+          {ex.skin         ? <DocField label="Skin"       value={ex.skin} /> : null}
         </DocSection>
       ) : null}
 
@@ -599,27 +610,34 @@ function CaseNoteBody({
             <DocField label="Medications"
               value={extracted.prescribedMedications.map(m =>
                 [m.name, m.dose, m.route, m.frequency].filter(Boolean).join(' ')
-              ).join(', ')} />
+              ).join(' · ')} />
           ) : null}
           {extracted.prescribedInfusions?.length ? (
             <DocField label="IV Fluids"
               value={extracted.prescribedInfusions.map(i =>
                 [i.name, i.dose, i.dilution ? `in ${i.dilution}` : '', i.rate ? `@ ${i.rate}` : ''].filter(Boolean).join(' ')
-              ).join(', ')} />
+              ).join(' · ')} />
           ) : null}
-          {extracted.treatmentNotes     ? <DocField label="Notes"  value={extracted.treatmentNotes} /> : null}
-          {extracted.investigationsOrdered ? <DocField label="Investigations" value={extracted.investigationsOrdered} /> : null}
-          {extracted.imagingOrdered        ? <DocField label="Imaging"        value={extracted.imagingOrdered} /> : null}
+          {extracted.investigationsOrdered ? <DocField label="Labs"      value={extracted.investigationsOrdered} /> : null}
+          {extracted.imagingOrdered        ? <DocField label="Imaging"   value={extracted.imagingOrdered} /> : null}
+          {extracted.treatmentNotes        ? <DocField label="Notes"     value={extracted.treatmentNotes} /> : null}
         </DocSection>
       ) : null}
 
-      {hasDx ? (
+      {(hasDx || hasDisposition) ? (
         <DocSection title="Impression">
           {extracted.diagnosis?.length ? (
             <DocField label="Diagnosis"     value={extracted.diagnosis.join(', ')} />
           ) : null}
           {extracted.differentialDiagnosis?.length ? (
             <DocField label="Differentials" value={extracted.differentialDiagnosis.join(', ')} />
+          ) : null}
+          {hasDisposition ? (
+            <DocField label="Disposition" value={[
+              extracted.dispositionSuggested?.type,
+              extracted.dispositionSuggested?.admitTo ? `→ ${extracted.dispositionSuggested.admitTo}` : null,
+              extracted.dispositionSuggested?.referTo ? `Refer: ${extracted.dispositionSuggested.referTo}` : null,
+            ].filter(Boolean).join(' ')} />
           ) : null}
         </DocSection>
       ) : null}
