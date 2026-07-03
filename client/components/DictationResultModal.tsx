@@ -96,23 +96,28 @@ export function calculateDictationCompletion(
         f(data.vitalsSuggested?.grbs),
         f(data.vitalsSuggested?.temperature),
         f(data.vbgResults?.ph),
+        f(data.abcdeFindings?.airway?.status) || f(data.abcdeFindings?.airway?.interventions),
+        f(data.abcdeFindings?.breathing?.status) || f(data.abcdeFindings?.breathing?.addedSounds),
+        f(data.abcdeFindings?.circulation?.status) || f(data.abcdeFindings?.circulation?.rhythm),
+        f(data.abcdeFindings?.disability?.status) || f(data.abcdeFindings?.disability?.pupilSize),
+        f(data.ecgInterpretation),
       ] as boolean[]
     ).filter(Boolean).length,
-    total: 5,
+    total: 10,
   };
 
   const exam: TabCompletion = {
     filled: (
       [
-        f(data.examFindings?.general) || !!data.restAllNormal,
+        f(data.examFindings?.general) || f(data.examStructured?.general) || !!data.restAllNormal,
         f(data.examFindings?.heent),
-        f(data.examFindings?.respiratory) || !!data.restAllNormal,
-        f(data.examFindings?.cvs) || !!data.restAllNormal,
-        f(data.examFindings?.abdomen) || !!data.restAllNormal,
-        f(data.examFindings?.cns) || !!data.restAllNormal,
+        f(data.examFindings?.respiratory) || f(data.examStructured?.respiratory) || !!data.restAllNormal,
+        f(data.examFindings?.cvs) || f(data.examStructured?.cvs) || !!data.restAllNormal,
+        f(data.examFindings?.abdomen) || f(data.examStructured?.abdomen) || !!data.restAllNormal,
+        f(data.examFindings?.cns) || f(data.examStructured?.cns) || !!data.restAllNormal,
         !!data.restAllNormal,
         f(data.examFindings?.skin),
-        f(data.examFindings?.musculoskeletal) || !!data.restAllNormal,
+        f(data.examFindings?.musculoskeletal) || f(data.examStructured?.extremities) || !!data.restAllNormal,
       ] as boolean[]
     ).filter(Boolean).length,
     total: 9,
@@ -126,13 +131,14 @@ export function calculateDictationCompletion(
         f(data.treatmentNotes),
         f(data.investigationsOrdered),
         f(data.imagingOrdered),
+        f(data.resultsSummary),
       ] as boolean[]
     ).filter(Boolean).length,
-    total: 5,
+    total: 6,
   };
 
   const notes: TabCompletion = {
-    filled: ([f(data.treatmentNotes)] as boolean[]).filter(Boolean).length,
+    filled: ([f(data.treatmentNotes) || f(data.addendumNotes)] as boolean[]).filter(Boolean).length,
     total: 1,
   };
 
@@ -141,10 +147,11 @@ export function calculateDictationCompletion(
       [
         !!(data.diagnosis && data.diagnosis.length > 0),
         !!(data.differentialDiagnosis && data.differentialDiagnosis.length > 0),
-        f(data.treatmentNotes),
+        f(data.dispositionSuggested?.type),
+        f(data.dispositionSuggested?.admitTo) || f(data.dispositionSuggested?.referTo),
       ] as boolean[]
     ).filter(Boolean).length,
-    total: 3,
+    total: 4,
   };
 
   const totalFilled =

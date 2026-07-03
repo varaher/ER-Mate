@@ -94,6 +94,105 @@ export interface SmartDictationExtracted {
   rawTranscription?: string;
   fieldsPopulated?: string[];
   restAllNormal?: boolean;
+  abcdeFindings?: {
+    airway?: {
+      status?: "Normal" | "Abnormal";
+      maintenance?: string;
+      obstructionCause?: string;
+      speech?: string;
+      interventions?: string[];
+      notes?: string;
+    };
+    breathing?: {
+      status?: "Normal" | "Abnormal";
+      effort?: string;
+      o2Device?: string;
+      pattern?: string;
+      chestExpansion?: string;
+      airEntry?: string;
+      addedSounds?: string;
+      interventions?: string[];
+      notes?: string;
+    };
+    circulation?: {
+      status?: "Normal" | "Abnormal";
+      rhythm?: string;
+      crt?: string;
+      skinTemp?: string;
+      skinColor?: string;
+      ivAccess?: string;
+      interventions?: string[];
+      notes?: string;
+    };
+    disability?: {
+      status?: "Normal" | "Abnormal";
+      pupilSize?: string;
+      pupilReaction?: string;
+      motorResponse?: string;
+      interventions?: string[];
+      notes?: string;
+    };
+    exposure?: {
+      status?: "Normal" | "Abnormal";
+      findings?: string[];
+      interventions?: string[];
+      notes?: string;
+    };
+  };
+  ecgInterpretation?: string;
+  dispositionSuggested?: {
+    type?: string;
+    admitTo?: string;
+    referTo?: string;
+    emResident?: string;
+    emConsultant?: string;
+    erObservationNotes?: string;
+  };
+  examStructured?: {
+    general?: {
+      pallor?: boolean;
+      icterus?: boolean;
+      cyanosis?: boolean;
+      clubbing?: boolean;
+      lymphadenopathy?: boolean;
+      edema?: boolean;
+    };
+    cvs?: {
+      status?: string;
+      s1s2?: string;
+      pulse?: string;
+      pulseRate?: string;
+      murmurs?: string;
+      addedSounds?: string;
+    };
+    respiratory?: {
+      status?: string;
+      expansion?: string;
+      percussion?: string;
+      breathSounds?: string;
+      addedSounds?: string;
+    };
+    abdomen?: {
+      status?: string;
+      bowelSounds?: string;
+      organomegaly?: string;
+      percussion?: string;
+    };
+    cns?: {
+      status?: string;
+      higherMentalFunctions?: string;
+      cranialNerves?: string;
+      motorSystem?: string;
+      reflexes?: string;
+    };
+    extremities?: {
+      status?: string;
+      edema?: boolean;
+      deformity?: boolean;
+    };
+  };
+  addendumNotes?: string;
+  resultsSummary?: string;
 }
 
 interface SmartDictationProps {

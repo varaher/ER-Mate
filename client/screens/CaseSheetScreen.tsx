@@ -2203,6 +2203,212 @@ export default function CaseSheetScreen() {
       updateFormData("adjuncts", "abgStatus", "done");
       if (vbg.sampleType) updateFormData("adjuncts", "abgSampleType", vbg.sampleType);
     }
+    if (data.abcdeFindings) {
+      const af = data.abcdeFindings;
+      if (af.airway) {
+        if (af.airway.status) setABCDEStatus((prev) => ({ ...prev, airway: af.airway!.status! }));
+        if (af.airway.maintenance) updateFormData("airway", "maintenance", af.airway.maintenance);
+        if (af.airway.obstructionCause) updateFormData("airway", "obstructionCause", af.airway.obstructionCause);
+        if (af.airway.speech) updateFormData("airway", "speech", af.airway.speech);
+        if (af.airway.interventions && af.airway.interventions.length > 0) {
+          setFormData((prev) => ({ ...prev, airway: { ...prev.airway, interventions: [...new Set([...prev.airway.interventions, ...af.airway!.interventions!])] } }));
+        }
+        if (af.airway.notes) updateFormData("airway", "notes", af.airway.notes);
+      }
+      if (af.breathing) {
+        if (af.breathing.status) setABCDEStatus((prev) => ({ ...prev, breathing: af.breathing!.status! }));
+        if (af.breathing.effort) updateFormData("breathing", "effort", af.breathing.effort);
+        if (af.breathing.o2Device) updateFormData("breathing", "o2Device", af.breathing.o2Device);
+        if (af.breathing.pattern) updateFormData("breathing", "pattern", af.breathing.pattern);
+        if (af.breathing.chestExpansion) updateFormData("breathing", "chestExpansion", af.breathing.chestExpansion);
+        if (af.breathing.airEntry) updateFormData("breathing", "airEntry", af.breathing.airEntry);
+        if (af.breathing.addedSounds) updateFormData("breathing", "addedSounds", af.breathing.addedSounds);
+        if (af.breathing.interventions && af.breathing.interventions.length > 0) {
+          setFormData((prev) => ({ ...prev, breathing: { ...prev.breathing, interventions: [...new Set([...prev.breathing.interventions, ...af.breathing!.interventions!])] } }));
+        }
+        if (af.breathing.notes) updateFormData("breathing", "notes", af.breathing.notes);
+      }
+      if (af.circulation) {
+        if (af.circulation.status) setABCDEStatus((prev) => ({ ...prev, circulation: af.circulation!.status! }));
+        if (af.circulation.rhythm) updateFormData("circulation", "pulseQuality", af.circulation.rhythm);
+        if (af.circulation.crt) updateFormData("circulation", "capillaryRefill", af.circulation.crt);
+        if (af.circulation.skinTemp) updateFormData("circulation", "skinTemperature", af.circulation.skinTemp);
+        if (af.circulation.skinColor) updateFormData("circulation", "skinColor", af.circulation.skinColor);
+        if (af.circulation.ivAccess) updateFormData("circulation", "ivAccess", af.circulation.ivAccess);
+        if (af.circulation.interventions && af.circulation.interventions.length > 0) {
+          setFormData((prev) => ({ ...prev, circulation: { ...prev.circulation, interventions: [...new Set([...prev.circulation.interventions, ...af.circulation!.interventions!])] } }));
+        }
+        if (af.circulation.notes) updateFormData("circulation", "notes", af.circulation.notes);
+      }
+      if (af.disability) {
+        if (af.disability.status) setABCDEStatus((prev) => ({ ...prev, disability: af.disability!.status! }));
+        if (af.disability.pupilSize) updateFormData("disability", "pupilSize", af.disability.pupilSize);
+        if (af.disability.pupilReaction) updateFormData("disability", "pupilReaction", af.disability.pupilReaction);
+        if (af.disability.motorResponse) updateFormData("disability", "motorResponse", af.disability.motorResponse);
+        if (af.disability.interventions && af.disability.interventions.length > 0) {
+          setFormData((prev) => ({ ...prev, disability: { ...prev.disability, interventions: [...new Set([...prev.disability.interventions, ...af.disability!.interventions!])] } }));
+        }
+        if (af.disability.notes) updateFormData("disability", "notes", af.disability.notes);
+      }
+      if (af.exposure) {
+        if (af.exposure.status) setABCDEStatus((prev) => ({ ...prev, exposure: af.exposure!.status! }));
+        if (af.exposure.findings && af.exposure.findings.length > 0) {
+          setFormData((prev) => ({ ...prev, exposure: { ...prev.exposure, findings: [...new Set([...prev.exposure.findings, ...af.exposure!.findings!])] } }));
+        }
+        if (af.exposure.interventions && af.exposure.interventions.length > 0) {
+          setFormData((prev) => ({ ...prev, exposure: { ...prev.exposure, interventions: [...new Set([...prev.exposure.interventions, ...af.exposure!.interventions!])] } }));
+        }
+        if (af.exposure.notes) updateFormData("exposure", "notes", af.exposure.notes);
+      }
+    }
+    if (data.ecgInterpretation) {
+      updateFormData("adjuncts", "ecgStatus", data.ecgInterpretation);
+    }
+    if (data.examStructured) {
+      const es = data.examStructured;
+      if (es.general) {
+        setExamData((prev) => ({
+          ...prev,
+          general: {
+            ...prev.general,
+            pallor: es.general!.pallor ?? prev.general.pallor,
+            icterus: es.general!.icterus ?? prev.general.icterus,
+            cyanosis: es.general!.cyanosis ?? prev.general.cyanosis,
+            clubbing: es.general!.clubbing ?? prev.general.clubbing,
+            lymphadenopathy: es.general!.lymphadenopathy ?? prev.general.lymphadenopathy,
+            edema: es.general!.edema ?? prev.general.edema,
+          },
+        }));
+      }
+      if (es.cvs) {
+        setExamData((prev) => ({
+          ...prev,
+          cvs: {
+            ...prev.cvs,
+            ...(es.cvs!.status ? { status: es.cvs!.status } : {}),
+            ...(es.cvs!.s1s2 ? { s1s2: es.cvs!.s1s2 } : {}),
+            ...(es.cvs!.pulse ? { pulse: es.cvs!.pulse } : {}),
+            ...(es.cvs!.pulseRate ? { pulseRate: es.cvs!.pulseRate } : {}),
+            ...(es.cvs!.murmurs ? { murmurs: es.cvs!.murmurs } : {}),
+            ...(es.cvs!.addedSounds ? { addedSounds: es.cvs!.addedSounds } : {}),
+          },
+        }));
+      }
+      if (es.respiratory) {
+        setExamData((prev) => ({
+          ...prev,
+          respiratory: {
+            ...prev.respiratory,
+            ...(es.respiratory!.status ? { status: es.respiratory!.status } : {}),
+            ...(es.respiratory!.expansion ? { expansion: es.respiratory!.expansion } : {}),
+            ...(es.respiratory!.percussion ? { percussion: es.respiratory!.percussion } : {}),
+            ...(es.respiratory!.breathSounds ? { breathSounds: es.respiratory!.breathSounds } : {}),
+            ...(es.respiratory!.addedSounds ? { addedSounds: es.respiratory!.addedSounds } : {}),
+          },
+        }));
+      }
+      if (es.abdomen) {
+        setExamData((prev) => ({
+          ...prev,
+          abdomen: {
+            ...prev.abdomen,
+            ...(es.abdomen!.status ? { status: es.abdomen!.status } : {}),
+            ...(es.abdomen!.bowelSounds ? { bowelSounds: es.abdomen!.bowelSounds } : {}),
+            ...(es.abdomen!.organomegaly ? { organomegaly: es.abdomen!.organomegaly } : {}),
+            ...(es.abdomen!.percussion ? { percussion: es.abdomen!.percussion } : {}),
+          },
+        }));
+      }
+      if (es.cns) {
+        setExamData((prev) => ({
+          ...prev,
+          cns: {
+            ...prev.cns,
+            ...(es.cns!.status ? { status: es.cns!.status } : {}),
+            ...(es.cns!.higherMentalFunctions ? { higherMentalFunctions: es.cns!.higherMentalFunctions } : {}),
+            ...(es.cns!.cranialNerves ? { cranialNerves: es.cns!.cranialNerves } : {}),
+            ...(es.cns!.motorSystem ? { motorSystem: es.cns!.motorSystem } : {}),
+            ...(es.cns!.reflexes ? { reflexes: es.cns!.reflexes } : {}),
+          },
+        }));
+      }
+      if (es.extremities) {
+        setExamData((prev) => ({
+          ...prev,
+          extremities: {
+            ...prev.extremities,
+            ...(es.extremities!.status ? { status: es.extremities!.status } : {}),
+            ...(es.extremities!.edema !== undefined ? { edema: es.extremities!.edema } : {}),
+            ...(es.extremities!.deformity !== undefined ? { deformity: es.extremities!.deformity } : {}),
+          },
+        }));
+      }
+    }
+    if (data.resultsSummary) {
+      setTreatmentData((prev) => ({ ...prev, resultsSummary: prev.resultsSummary ? prev.resultsSummary + "\n" + data.resultsSummary : data.resultsSummary! }));
+    }
+    if (data.addendumNotes) {
+      setTreatmentData((prev) => ({ ...prev, addendumNotes: prev.addendumNotes ? prev.addendumNotes + "\n" + data.addendumNotes : data.addendumNotes! }));
+    }
+    if (data.dispositionSuggested) {
+      const ds = data.dispositionSuggested;
+      setDispositionData((prev) => ({
+        ...prev,
+        ...(ds.type ? { dispositionType: ds.type } : {}),
+        ...(ds.admitTo ? { admitTo: ds.admitTo } : {}),
+        ...(ds.referTo ? { referTo: ds.referTo } : {}),
+        ...(ds.emResident ? { emResident: ds.emResident } : {}),
+        ...(ds.emConsultant ? { emConsultant: ds.emConsultant } : {}),
+        ...(ds.erObservationNotes ? { erObservationNotes: prev.erObservationNotes ? prev.erObservationNotes + "\n" + ds.erObservationNotes : ds.erObservationNotes } : {}),
+      }));
+    }
+    const raw = data as any;
+    if (raw.emResident || raw.emConsultant) {
+      setDispositionData((prev) => ({
+        ...prev,
+        ...(raw.emResident && !prev.emResident ? { emResident: raw.emResident } : {}),
+        ...(raw.emConsultant && !prev.emConsultant ? { emConsultant: raw.emConsultant } : {}),
+      }));
+    }
+    if (raw.adjuncts) {
+      if (raw.adjuncts.ecgDone && raw.adjuncts.ecgFindings && !data.ecgInterpretation) {
+        const findings: string = raw.adjuncts.ecgFindings.toLowerCase();
+        let ecgStatus = "other";
+        if (findings.includes("normal sinus") || findings.includes("nsr")) ecgStatus = "nsr";
+        else if (findings.includes("sinus tachycardia") || (findings.includes("sinus") && findings.includes("tachy"))) ecgStatus = "sinus_tachy";
+        else if (findings.includes("sinus bradycardia") || (findings.includes("sinus") && findings.includes("brady"))) ecgStatus = "sinus_brady";
+        else if (findings.includes("atrial fibrillation") || findings.includes("af ") || findings === "af") ecgStatus = "afib";
+        else if (findings.includes("atrial flutter")) ecgStatus = "aflutter";
+        else if (findings.includes("svt") || findings.includes("supraventricular tachycardia")) ecgStatus = "svt";
+        else if (findings.includes("ventricular tachycardia") || findings.includes(" vt")) ecgStatus = "vt";
+        else if (findings.includes("ventricular fibrillation") || findings.includes(" vf")) ecgStatus = "vf";
+        else if (findings.includes("stemi") || findings.includes("st elevation")) ecgStatus = "stemi";
+        else if (findings.includes("nstemi") || findings.includes("st depression") || findings.includes("ischemia")) ecgStatus = "nstemi";
+        else if (findings.includes("heart block") || findings.includes("av block")) ecgStatus = "heart_block";
+        updateFormData("adjuncts", "ecgStatus", ecgStatus);
+        updateFormData("adjuncts", "ecgNotes", raw.adjuncts.ecgFindings);
+      }
+      if (raw.adjuncts.efastDone && raw.adjuncts.efastFindings) {
+        updateFormData("adjuncts", "efastNotes", raw.adjuncts.efastFindings);
+      }
+      if (raw.adjuncts.echoDone && raw.adjuncts.echoFindings) {
+        updateFormData("adjuncts", "echoNotes", raw.adjuncts.echoFindings);
+      }
+    }
+    if (raw.psychologicalAssessment && raw.psychologicalAssessment.assessed) {
+      const psa = raw.psychologicalAssessment;
+      setPsychData((prev) => ({
+        ...prev,
+        suicidalIdeation: psa.suicidalIdeation ?? prev.suicidalIdeation,
+        selfHarmHistory: psa.selfHarm ?? prev.selfHarmHistory,
+        intentToHarmOthers: psa.intentToHarmOthers ?? prev.intentToHarmOthers,
+        substanceAbuse: psa.substanceAbuse ?? prev.substanceAbuse,
+        psychiatricHistory: psa.psychiatricHistory ?? prev.psychiatricHistory,
+        currentlyOnTreatment: psa.currentlyOnPsychiatricTreatment ?? prev.currentlyOnTreatment,
+        hasSupportSystem: psa.hasSupportSystem ?? prev.hasSupportSystem,
+        notes: psa.notes ? (prev.notes ? prev.notes + " " + psa.notes : psa.notes) : prev.notes,
+      }));
+    }
     const completion = calculateDictationCompletion(data);
     setDictationCompletion(completion);
     setPendingExtracted(data);

@@ -850,7 +850,101 @@ Respond in JSON format:
   "investigationsOrdered": "Labs ordered (CBC, RFT, LFT, etc.)",
   "imagingOrdered": "Imaging ordered (X-ray, CT, USG, etc.)",
   "treatmentNotes": "Any other treatment plans or notes not captured above",
-  "restAllNormal": false
+  "restAllNormal": false,
+  "abcdeFindings": {
+    "airway": {
+      "status": "Normal or Abnormal — set Abnormal if ANY of the following is mentioned: airway compromise, obstruction, stridor, gurgling, hoarse voice, secretions, tongue fall, ETT/LMA/OPA/NPA placed, suction done, cricothyrotomy, difficult airway",
+      "maintenance": "If mentioned, one of: self_maintained | recovery_position | head_tilt_chin_lift | jaw_thrust",
+      "obstructionCause": "If obstruction mentioned, one of: none | tongue_fall | secretions | blood_vomitus | foreign_body | edema | trauma",
+      "speech": "If assessed, one of: clear | hoarse | stridor | gurgling | unable_to_speak",
+      "interventions": ["Array of applicable: suction | opa | npa | lma | ett | cricothyrotomy"]
+    },
+    "breathing": {
+      "status": "Normal or Abnormal — set Abnormal if ANY: tachypnea, bradypnea, SpO2<95%, wheeze, crackles, rhonchi, reduced air entry, respiratory distress, increased work of breathing, O2 given, nebulization, intubation, ventilator",
+      "effort": "If mentioned, one of: normal | mild | moderate | severe | exhaustion",
+      "o2Device": "If O2 support mentioned, one of: room_air | nasal_prongs | simple_face_mask | nrm | hfnc | niv_bipap | mechanical_ventilation",
+      "pattern": "If mentioned, one of: regular | tachypneic | bradypneic | kussmaul | cheyne_stokes | ataxic | apneic_spells",
+      "chestExpansion": "If assessed, one of: equal_bilateral | reduced_left | reduced_right | reduced_bilateral | paradoxical",
+      "airEntry": "If mentioned, one of: equal_bilateral | reduced_left | reduced_right | reduced_bilateral | absent_left | absent_right",
+      "addedSounds": "If mentioned, one of: none | wheeze | crackles | rhonchi | pleural_rub | stridor | diminished",
+      "interventions": ["Array of applicable: nebulization | icd_insertion | needle_decompression | bag_mask_ventilation | intubation"]
+    },
+    "circulation": {
+      "status": "Normal or Abnormal — set Abnormal if ANY: tachycardia, bradycardia, hypotension, poor perfusion, delayed CRT, shock, pale/mottled/cold extremities, arrhythmia, IV fluid bolus given, vasopressors, blood transfusion, CPR",
+      "rhythm": "If pulse assessed, one of: strong_regular | weak | thready | bounding | irregular | absent_peripherally",
+      "crt": "If CRT mentioned, one of: normal | delayed_mild | delayed_moderate | delayed_severe",
+      "skinTemp": "If assessed, one of: warm | cool_peripherally | cold | diaphoretic",
+      "skinColor": "If assessed, one of: normal | pale | mottled | cyanotic | flushed | jaundiced",
+      "ivAccess": "If mentioned, one of: none | peripheral_iv | central_line | io_access | multiple_access",
+      "interventions": ["Array of applicable: iv_ns | iv_rl | blood_transfusion | vasopressors | cpr | defibrillation | cardioversion"]
+    },
+    "disability": {
+      "status": "Normal or Abnormal — set Abnormal if ANY: GCS<15, confusion, drowsiness, altered consciousness, focal neuro deficit, unequal pupils, seizure, abnormal motor response, neuro intervention",
+      "pupilSize": "If mentioned, one of: normal | dilated | constricted | anisocoric",
+      "pupilReaction": "If mentioned, one of: reactive_bilateral | sluggish_bilateral | non_reactive_bilateral | reactive_left | reactive_right",
+      "motorResponse": "If deficit mentioned, one of: normal_bilateral | weakness_left | weakness_right | weakness_bilateral | paralysis | decorticate | decerebrate",
+      "interventions": ["Array of applicable: head_elevation | seizure_precautions | mannitol | hypertonic_saline | anticonvulsants | glucose_correction"]
+    },
+    "exposure": {
+      "status": "Normal or Abnormal — set Abnormal if: fever/hypothermia, trauma, wounds, burns, rash, deformity, bruising, open injuries",
+      "findings": ["Array of applicable: no_injuries | lacerations | contusions | deformity | open_wounds | burns | rash"],
+      "interventions": ["Array of applicable: warming_blanket | cooling | log_roll | splinting | wound_care | tetanus"]
+    }
+  },
+  "ecgInterpretation": "If ECG is mentioned, provide one value from: not_done | nsr | sinus_tachy | sinus_brady | afib | aflutter | svt | vt | vf | stemi | nstemi | heart_block | other. Map: 'ECG tachycardia'→sinus_tachy, 'ECG normal'→nsr, 'AF'→afib, 'STEMI'→stemi, 'heart block'→heart_block. Use 'other' for abnormal ECG that doesn't fit. Only include if ECG is actually mentioned.",
+  "examStructured": {
+    "general": {
+      "pallor": "true if pallor mentioned",
+      "icterus": "true if jaundice/icterus/yellow sclera mentioned",
+      "cyanosis": "true if cyanosis mentioned (peripheral or central)",
+      "clubbing": "true if clubbing mentioned",
+      "lymphadenopathy": "true if lymph node enlargement mentioned",
+      "edema": "true if pedal edema, ankle swelling, or peripheral edema mentioned"
+    },
+    "cvs": {
+      "status": "Normal or Abnormal — Abnormal if any CVS finding is abnormal",
+      "s1s2": "One of: Normal | Soft | Loud — based on heart sounds description",
+      "pulse": "One of: Regular | Irregular — based on pulse description",
+      "pulseRate": "Numeric heart rate if separately mentioned as examination finding",
+      "murmurs": "Description of murmurs if mentioned (e.g. 'systolic murmur grade 3/6')",
+      "addedSounds": "S3, S4, or other added heart sounds if mentioned"
+    },
+    "respiratory": {
+      "status": "Normal or Abnormal",
+      "expansion": "One of: Equal | Reduced",
+      "percussion": "One of: Resonant | Dull | Hyper-resonant",
+      "breathSounds": "One of: Vesicular | Bronchial | Diminished",
+      "addedSounds": "Any added breath sounds in examination context (crackles, wheeze, rhonchi)"
+    },
+    "abdomen": {
+      "status": "Normal or Abnormal",
+      "bowelSounds": "One of: Present | Absent | Hyperactive",
+      "organomegaly": "Description if hepatomegaly/splenomegaly/organomegaly mentioned",
+      "percussion": "One of: Tympanic | Dull | Shifting — use Shifting for ascites/shifting dullness"
+    },
+    "cns": {
+      "status": "Normal or Abnormal",
+      "higherMentalFunctions": "One of: Intact | Impaired",
+      "cranialNerves": "One of: Intact | Deficit",
+      "motorSystem": "One of: Normal | Weakness",
+      "reflexes": "One of: Normal | Brisk | Diminished"
+    },
+    "extremities": {
+      "status": "Normal or Abnormal",
+      "edema": "true if pedal/pitting edema on examination",
+      "deformity": "true if extremity deformity noted"
+    }
+  },
+  "dispositionSuggested": {
+    "type": "Only if doctor explicitly mentions disposition: one of Discharge | Admit | Refer | LAMA | Absconded | Death",
+    "admitTo": "If admitting, one of: General Ward | Medical ICU | Cardiac ICU | Surgical ICU | Neuro ICU | Pediatric ICU | NICU | HDU | Observation Ward | Other",
+    "referTo": "Hospital name, specialty or physician name if referral is mentioned",
+    "emResident": "Resident doctor's name if mentioned",
+    "emConsultant": "Consultant's name if mentioned",
+    "erObservationNotes": "Patient's response to treatment, course in ER if described"
+  },
+  "resultsSummary": "Key investigation results mentioned (lab values, imaging findings). Format as brief clinical summary, e.g. 'Hb 8.2, WBC 15000, CXR cardiomegaly, CT head no bleed'.",
+  "addendumNotes": "Clinical notes, management plan summary, follow-up instructions, or any freeform physician remarks not captured in other fields."
 }
 
 IMPORTANT RULES:
@@ -878,7 +972,7 @@ IMPORTANT RULES:
         { role: "user", content: prompt },
       ],
       temperature: 0.2,
-      max_tokens: 1500,
+      max_tokens: 2500,
       response_format: { type: "json_object" },
     });
 
@@ -1535,12 +1629,103 @@ SCHEMA (fill every field, use "" for not mentioned):
   "investigationsOrdered": "",
   "imagingOrdered": "",
   "resultsSummary": "Key investigation results mentioned by the doctor — lab values, imaging reports, any results",
+  "addendumNotes": "Clinical notes, management plan summary, follow-up instructions, or any freeform physician remarks not captured in other fields",
   "sectionConfidence": {
     "patient": "", "chiefComplaint": "", "hpi": "", "pastHistory": "",
     "primarySurvey": "", "examination": "", "investigations": "",
     "treatment": "", "diagnosis": "", "disposition": ""
   },
   "restAllNormal": false,
+  "abcdeFindings": {
+    "airway": {
+      "status": "Normal or Abnormal — Abnormal if: airway compromise, obstruction, stridor, gurgling, hoarse voice, secretions, tongue fall, ETT/LMA/OPA/NPA placed, suction done, cricothyrotomy",
+      "maintenance": "If mentioned: self_maintained | recovery_position | head_tilt_chin_lift | jaw_thrust",
+      "obstructionCause": "If obstruction: none | tongue_fall | secretions | blood_vomitus | foreign_body | edema | trauma",
+      "speech": "If assessed: clear | hoarse | stridor | gurgling | unable_to_speak",
+      "interventions": ["suction | opa | npa | lma | ett | cricothyrotomy"]
+    },
+    "breathing": {
+      "status": "Normal or Abnormal — Abnormal if: tachypnea, bradypnea, SpO2<95%, wheeze, crackles, reduced air entry, O2 given, nebulization, intubation",
+      "effort": "normal | mild | moderate | severe | exhaustion",
+      "o2Device": "room_air | nasal_prongs | simple_face_mask | nrm | hfnc | niv_bipap | mechanical_ventilation",
+      "pattern": "regular | tachypneic | bradypneic | kussmaul | cheyne_stokes | ataxic | apneic_spells",
+      "chestExpansion": "equal_bilateral | reduced_left | reduced_right | reduced_bilateral | paradoxical",
+      "airEntry": "equal_bilateral | reduced_left | reduced_right | reduced_bilateral | absent_left | absent_right",
+      "addedSounds": "none | wheeze | crackles | rhonchi | pleural_rub | stridor | diminished",
+      "interventions": ["nebulization | icd_insertion | needle_decompression | bag_mask_ventilation | intubation"]
+    },
+    "circulation": {
+      "status": "Normal or Abnormal — Abnormal if: tachycardia, bradycardia, hypotension, poor perfusion, delayed CRT, shock, arrhythmia, IV fluids given, vasopressors",
+      "rhythm": "strong_regular | weak | thready | bounding | irregular | absent_peripherally",
+      "crt": "normal | delayed_mild | delayed_moderate | delayed_severe",
+      "skinTemp": "warm | cool_peripherally | cold | diaphoretic",
+      "skinColor": "normal | pale | mottled | cyanotic | flushed | jaundiced",
+      "ivAccess": "none | peripheral_iv | central_line | io_access | multiple_access",
+      "interventions": ["iv_ns | iv_rl | blood_transfusion | vasopressors | cpr | defibrillation | cardioversion"]
+    },
+    "disability": {
+      "status": "Normal or Abnormal — Abnormal if: GCS<15, confusion, drowsiness, altered consciousness, focal deficit, unequal pupils, seizure",
+      "pupilSize": "normal | dilated | constricted | anisocoric",
+      "pupilReaction": "reactive_bilateral | sluggish_bilateral | non_reactive_bilateral | reactive_left | reactive_right",
+      "motorResponse": "normal_bilateral | weakness_left | weakness_right | weakness_bilateral | paralysis | decorticate | decerebrate",
+      "interventions": ["head_elevation | seizure_precautions | mannitol | hypertonic_saline | anticonvulsants | glucose_correction"]
+    },
+    "exposure": {
+      "status": "Normal or Abnormal — Abnormal if: fever/hypothermia, trauma, wounds, burns, rash, deformity",
+      "findings": ["no_injuries | lacerations | contusions | deformity | open_wounds | burns | rash"],
+      "interventions": ["warming_blanket | cooling | log_roll | splinting | wound_care | tetanus"]
+    }
+  },
+  "ecgInterpretation": "Map ECG finding to one of: nsr | sinus_tachy | sinus_brady | afib | aflutter | svt | vt | vf | stemi | nstemi | heart_block | other. 'ECG tachycardia'→sinus_tachy, 'ECG normal'→nsr, 'AF'→afib, 'STEMI'→stemi. Leave empty if ECG not mentioned.",
+  "examStructured": {
+    "general": {
+      "pallor": false,
+      "icterus": false,
+      "cyanosis": false,
+      "clubbing": false,
+      "lymphadenopathy": false,
+      "edema": false
+    },
+    "cvs": {
+      "status": "Normal or Abnormal",
+      "s1s2": "Normal | Soft | Loud",
+      "pulse": "Regular | Irregular",
+      "pulseRate": "",
+      "murmurs": "",
+      "addedSounds": ""
+    },
+    "respiratory": {
+      "status": "Normal or Abnormal",
+      "expansion": "Equal | Reduced",
+      "percussion": "Resonant | Dull | Hyper-resonant",
+      "breathSounds": "Vesicular | Bronchial | Diminished",
+      "addedSounds": ""
+    },
+    "abdomen": {
+      "status": "Normal or Abnormal",
+      "bowelSounds": "Present | Absent | Hyperactive",
+      "organomegaly": "",
+      "percussion": "Tympanic | Dull | Shifting"
+    },
+    "cns": {
+      "status": "Normal or Abnormal",
+      "higherMentalFunctions": "Intact | Impaired",
+      "cranialNerves": "Intact | Deficit",
+      "motorSystem": "Normal | Weakness",
+      "reflexes": "Normal | Brisk | Diminished"
+    },
+    "extremities": {
+      "status": "Normal or Abnormal",
+      "edema": false,
+      "deformity": false
+    }
+  },
+  "dispositionSuggested": {
+    "type": "Only if explicitly mentioned: Discharge | Admit | Refer | LAMA | Absconded | Death",
+    "admitTo": "General Ward | Medical ICU | Cardiac ICU | Surgical ICU | Neuro ICU | Pediatric ICU | NICU | HDU | Observation Ward | Other — if specified",
+    "referTo": "",
+    "erObservationNotes": "Patient's response to treatment, course in ER"
+  },
   "fieldsPopulated": ["Array of field names that were populated"]
 }
 

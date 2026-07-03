@@ -1158,6 +1158,37 @@ export default function PediatricCaseSheetScreen() {
     if (data.imagingOrdered) {
       setTreatmentData((prev) => ({ ...prev, imaging: prev.imaging ? prev.imaging + ", " + data.imagingOrdered : data.imagingOrdered! }));
     }
+    if (data.resultsSummary) {
+      setTreatmentData((prev) => ({ ...prev, resultsSummary: prev.resultsSummary ? prev.resultsSummary + "\n" + data.resultsSummary : data.resultsSummary! }));
+    }
+    if (data.addendumNotes) {
+      setTreatmentData((prev) => ({ ...prev, otherMedications: (prev.otherMedications ? prev.otherMedications + "\n" : "") + data.addendumNotes }));
+    }
+    if (data.examStructured) {
+      const es = data.examStructured;
+      if (es.cvs) {
+        setExamData((prev) => ({ ...prev, cardiovascular: (prev.cardiovascular ? prev.cardiovascular + " " : "") + [es.cvs!.s1s2 ? `S1S2 ${es.cvs!.s1s2}` : "", es.cvs!.pulse ? `Pulse ${es.cvs!.pulse}` : "", es.cvs!.murmurs ? `Murmurs: ${es.cvs!.murmurs}` : ""].filter(Boolean).join(", ") }));
+      }
+      if (es.respiratory) {
+        setExamData((prev) => ({ ...prev, respiratory: (prev.respiratory ? prev.respiratory + " " : "") + [es.respiratory!.expansion ? `Expansion: ${es.respiratory!.expansion}` : "", es.respiratory!.percussion ? `Percussion: ${es.respiratory!.percussion}` : "", es.respiratory!.breathSounds ? `BS: ${es.respiratory!.breathSounds}` : "", es.respiratory!.addedSounds ? `Added: ${es.respiratory!.addedSounds}` : ""].filter(Boolean).join(", ") }));
+      }
+      if (es.abdomen) {
+        const parts = [es.abdomen!.bowelSounds ? `Bowel sounds ${es.abdomen!.bowelSounds}` : "", es.abdomen!.organomegaly || ""].filter(Boolean);
+        if (parts.length) setExamData((prev) => ({ ...prev, abdomen: (prev.abdomen ? prev.abdomen + " " : "") + parts.join(", ") }));
+      }
+    }
+    if (data.dispositionSuggested) {
+      const ds = data.dispositionSuggested;
+      setDispositionData((prev: any) => ({
+        ...prev,
+        ...(ds.type ? { dispositionType: ds.type } : {}),
+        ...(ds.admitTo ? { admitTo: ds.admitTo } : {}),
+        ...(ds.referTo ? { referTo: ds.referTo } : {}),
+        ...(ds.emResident ? { emResident: ds.emResident } : {}),
+        ...(ds.emConsultant ? { emConsultant: ds.emConsultant } : {}),
+        ...(ds.erObservationNotes ? { erObservationNotes: prev.erObservationNotes ? prev.erObservationNotes + "\n" + ds.erObservationNotes : ds.erObservationNotes } : {}),
+      }));
+    }
     const completion = calculateDictationCompletion(data);
     setDictationCompletion(completion);
     setShowDictationResult(true);
