@@ -205,12 +205,13 @@ export default function CaseChatScreen({ route, navigation }: Props) {
     const pupils = pa.disability_pupils || '';
 
     // ── Temperature display ──
-    function buildTempDisplay(raw: string): string {
-      if (!raw) return '';
-      const isFahr = raw.includes('°F') || raw.includes('F');
-      const isCels = raw.includes('°C') || raw.includes('C');
-      const num = parseFloat(raw.replace(/[^0-9.]/g, ''));
-      if (!num) return raw;
+    function buildTempDisplay(raw: any): string {
+      if (raw === null || raw === undefined || raw === '') return '';
+      const str = String(raw);
+      const isFahr = str.includes('°F') || (str.includes('F') && !str.includes('°C'));
+      const isCels = str.includes('°C') || str.includes('C');
+      const num = parseFloat(str.replace(/[^0-9.]/g, ''));
+      if (!num) return str;
       if (isFahr || (!isCels && num > 41)) {
         const cel = ((num - 32) * 5 / 9).toFixed(1);
         return `${num}°F (${cel}°C)`;
