@@ -3962,8 +3962,9 @@ RESPONSE FORMAT (respond ONLY as valid JSON, nothing else):
 }
 
 TYPE RULES:
-- "case_update": doctor dictates clinical data AND no case note exists yet (hasCaseNote=false) → extract ALL fields into extracted; reply confirms what was captured
-- "addendum": doctor dictates NEW clinical info AND a case note already exists (hasCaseNote=true) → extract ONLY the NEW fields into extracted; put a concise addendum text in specialContent (new data only, section headers); reply is a 1-line summary
+- "case_update": doctor provides ANY clinical data — whether by voice dictation OR by typing (corrections, additions, updates). hasCaseNote=false → extract ALL provided fields into extracted; reply confirms what was captured. Also use when doctor types something like "presenting complaint is X", "patient is Y years old", "diagnosis is Z", "differential is A and B", "patient is allergic to X", "vitals are HR X BP Y".
+- "addendum": doctor provides ANY clinical data AND hasCaseNote=true → extract ONLY the new/changed fields into extracted; put a brief addendum text in specialContent; reply is a 1-line confirmation of what changed. Also use when doctor TYPES a correction after a case note already exists.
+- CORRECTION RULE (CRITICAL): When a doctor types a correction or additional clinical fact — e.g. "presenting complaint is neck pain", "differentials are fibromyalgia and thyroiditis", "patient has no allergies" — this is ALWAYS case_update (hasCaseNote=false) or addendum (hasCaseNote=true). It is NEVER "general". Always populate extracted with the corrected fields.
 - "discharge_summary": doctor says "discharge summary", "DS", "summary" → generate complete professional ER discharge summary in specialContent; extracted = null
 - "referral": doctor says "referral letter", "refer to [hospital/specialist]" → generate formal referral letter in specialContent; extracted = null
 - "procedure_note": doctor asks for ANY of the following → generate a complete formal procedure note in specialContent; extracted = null:
@@ -3986,7 +3987,7 @@ TYPE RULES:
     OUTCOME / STATUS: [Successful / Unsuccessful / finding]
     POST-PROCEDURE CARE: [monitoring, checks, follow-up]
 - "note": doctor says "add a note", "note:", "clinical note" → put note text in specialContent AND in extracted.treatmentNotes
-- "general": clinical questions, corrections, clarifications, general EM queries → answer concisely with clinical accuracy; if it's a correction, apply it and confirm; extracted = null
+- "general": ONLY for pure clinical questions with NO patient data — e.g. "What is the dose of amoxicillin?", "What are the criteria for STEMI?", "Explain GCS". If the doctor is providing ANY patient-specific clinical information (even typed as a sentence), use case_update or addendum instead. extracted = null ONLY for general.
 - Current hasCaseNote status: ${hasCaseNote ? "TRUE — case note already exists, new dictations are ADDENDUM" : "FALSE — no case note yet, use case_update"}
 
 ADDENDUM FORMAT (for specialContent when type=addendum):
@@ -4004,7 +4005,17 @@ PATIENT:
 - patientName: full name (string)
 - patientAge: age in years as string (e.g. "45")
 - patientSex: "Male" | "Female" | "Other"
-- chiefComplaint: ALWAYS extract — brief phrase (e.g. "Chest pain × 2 hours"). Use patient context if not dictated.
+- chiefComplaint: ALWAYS extract — brief phrase with duration (e.g. "Chest pain × 2 hours", "Neck pain and body ache × 1-2 months").
+  Recognize ALL of these dictation patterns:
+  • "presented with complaint of [X]" → chiefComplaint: X
+  • "presented with [X]" → chiefComplaint: X
+  • "presenting complaint is [X]" → chiefComplaint: X
+  • "complaint of [X]" / "c/o [X]" → chiefComplaint: X
+  • "came with [X]" / "brought with [X]" → chiefComplaint: X
+  • "chief complaint is [X]" → chiefComplaint: X
+  • "patient has [X] since [duration]" → chiefComplaint: X × duration
+  • First symptom or symptom cluster mentioned in the dictation
+  NEVER output null or omit chiefComplaint if ANY symptom is mentioned. Duration is mandatory if stated.
 
 HISTORY:
 - historyOfPresentIllness: 2–4 sentence prose narrative (onset, duration, progression, context). No vitals/exam/investigations here.
@@ -4024,7 +4035,7 @@ HISTORY:
 VITALS (numbers precisely):
 - vitalsSuggested.hr: heart rate number only (e.g. "112")
 - vitalsSuggested.bp: "systolic/diastolic" (e.g. "100/60")
-- vitalsSuggested.spo2: SpO2 percentage only (e.g. "94")
+- vitalsSuggested.spo2: SpO2 percentage only (e.g. "94"). If two readings are mentioned (e.g. "SpO2 89, then 100% on O2" or "SpO2 89 room air, 100% with oxygen"), extract the FIRST (room air) reading as the value, and include both readings in abcdeFindings.breathing.notes (e.g. "SpO2 89% on room air → 100% on supplemental O2"). Never average or invent a value between the two.
 - vitalsSuggested.rr: respiratory rate (e.g. "18")
 - vitalsSuggested.temperature: with unit — if value > 41 assume Fahrenheit. Always include unit (e.g. "103°F", "38.5°C")
 - vitalsSuggested.grbs: blood glucose number (e.g. "280")

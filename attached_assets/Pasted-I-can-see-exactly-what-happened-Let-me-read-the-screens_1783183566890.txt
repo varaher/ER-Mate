@@ -1,0 +1,292 @@
+I can see exactly what happened. Let me read the screenshots carefully.
+
+---
+
+## What the Doctor Said (Dictation — Image 1)
+
+```
+"Patient name unknown, 25-year-old female 
+patient presented with complaint of neck pain, 
+body ache since one to two months.
+History of hyperthyroidism.
+No history of fever, vomiting, loose stools.
+Generalized tiredness.
+Airway patent, RR 16, SpO2 89, SpO2 100%,
+CRT normal, peripheral pulses felt, warm 
+extremities, exposure normal, GCS E4V5M6."
+```
+
+## What Image 2 Shows — Doctor Typed Correction
+
+```
+Doctor typed in chat:
+"Presenting complaint is neck pain and myalgia.
+Differential diagnosis: fibromyalgia, thyroiditis."
+
+ErMate responded:
+"Noted — thank you"
+
+Then generated a NEW case note — but the
+chief complaint is STILL "Not documented"
+in the new note shown at bottom of Image 2.
+```
+
+---
+
+## Three Problems
+
+**Problem 1 — Chief complaint not extracted from dictation**
+
+```
+Doctor clearly said:
+"presented with complaint of neck pain, 
+body ache since one to two months"
+
+GPT-4o should extract:
+chiefComplaint: "Neck pain and body ache 
+                × 1-2 months"
+
+But it outputs: "Not documented"
+
+The extraction prompt must recognise:
+"presented with complaint of [X]"
+"complaint of [X]"
+"came with [X]"
+"c/o [X]"
+→ all map to chiefComplaint
+```
+
+**Problem 2 — Typed correction "Noted" but not applied**
+
+```
+Doctor typed:
+"Presenting complaint is neck pain and myalgia.
+Differential diagnosis: fibromyalgia, thyroiditis."
+
+ErMate said "Noted — thank you"
+Then generated another case note
+But the complaint is STILL "Not documented"
+
+"Noted" means nothing if the case isn't updated.
+When doctor types a correction, ErMate must:
+1. Update the case data immediately
+2. Regenerate the case note with the new data
+3. Show the UPDATED note — not a new empty one
+```
+
+**Problem 3 — SpO2 says 89 in dictation but shows 98 in note**
+
+```
+Doctor said: "SPO2 89, SPO2 100%"
+(doctor mentioned two readings — 89 on air, 100 on O2)
+
+Case note shows: SpO2 98%
+This is wrong — neither 89 nor 100
+
+ErMate should extract:
+SpO2: 89% (room air) → abnormal flag ⚠
+Then on oxygen → 100%
+```
+
+---
+
+## The Core Issue — Chat Is Not Behaving Like Chat
+
+```
+WHAT DOCTOR EXPECTS (like Claude):
+  Type: "Presenting complaint is neck pain"
+  → ErMate immediately updates the field
+  → Regenerates case note with new data
+  → Shows updated note inline
+  → Everything is connected
+
+WHAT ACTUALLY HAPPENS:
+  Type: "Presenting complaint is neck pain"
+  → ErMate says "Noted — thank you"
+  → Generates a NEW case note from scratch
+  → New note doesn't have the correction
+  → Doctor is confused
+```
+
+---
+
+## The Fix — Tell Your Developer
+
+**Fix 1 — Chief complaint extraction**
+
+```typescript
+// In the GPT-4o system prompt, add:
+
+CHIEF COMPLAINT EXTRACTION — CRITICAL:
+Extract the chief complaint from ANY of these patterns:
+- "presented with complaint of [X]"
+- "presented with [X]"
+- "complaint of [X]"
+- "c/o [X]"
+- "came with [X]"
+- "brought with [X]"
+- "patient has [X] since [duration]"
+- First symptom mentioned in dictation
+
+For this case: "neck pain, body ache since 
+one to two months" 
+→ chiefComplaint: "Neck pain and body ache × 1-2 months"
+
+NEVER output "Not documented" if ANY 
+symptom is mentioned in the dictation.
+```
+
+**Fix 2 — When doctor types a correction, apply it**
+
+```typescript
+// In handleTextMessage() in CaseChatScreen:
+
+// CURRENT (wrong):
+if (message includes correction) {
+  say "Noted — thank you"
+  generate new case note from scratch
+  // ← doesn't apply the correction
+}
+
+// FIX:
+if (message includes correction) {
+  // Step 1: Extract what changed
+  const update = await extractUpdate(message, currentCaseData);
+  // e.g. { chiefComplaint: "neck pain and myalgia",
+  //         differentials: ["fibromyalgia", "thyroiditis"] }
+  
+  // Step 2: Merge into existing case data
+  const updatedCase = { ...currentCaseData, ...update };
+  
+  // Step 3: Regenerate case note with updated data
+  const newNote = formatCaseNote(updatedCase);
+  
+  // Step 4: Show the UPDATED note
+  addMessage({
+    type: 'caseNote',
+    content: newNote,
+    subtitle: 'Updated from your correction'
+  });
+  
+  // Step 5: Save to backend
+  await saveCaseToBackend(updatedCase);
+}
+```
+
+**Fix 3 — Update extraction prompt for corrections**
+
+```typescript
+// When doctor sends a text message 
+// (not a voice dictation), use this prompt:
+
+const correctionPrompt = `
+The doctor is correcting or adding to their case.
+Current case data: ${JSON.stringify(currentCaseData)}
+Doctor says: "${doctorMessage}"
+
+Extract what they want to update and return 
+ONLY the fields that changed as JSON.
+
+Examples:
+"presenting complaint is neck pain" 
+→ { "chiefComplaint": "Neck pain" }
+
+"differential diagnosis fibromyalgia, thyroiditis"
+→ { "disposition": { "differentials": 
+    ["Fibromyalgia", "Thyroiditis"] } }
+
+"patient is allergic to penicillin"
+→ { "history": { "allergies": "Penicillin" } }
+
+"diagnosis is cervical spondylosis"
+→ { "treatment": { "provisionalDiagnosis": 
+    { "primaryDiagnosis": "Cervical spondylosis" } } }
+
+Return ONLY the changed fields as JSON.
+Then update the full case with these changes.
+`;
+```
+
+---
+
+## What the Conversation Should Look Like
+
+```
+Doctor types:
+"Presenting complaint is neck pain and myalgia.
+ Differential diagnosis: fibromyalgia, thyroiditis."
+
+ErMate responds:
+
+✓ Updated case:
+  Chief complaint: Neck pain and myalgia
+  Differentials: Fibromyalgia, Thyroiditis
+
+INITIAL ASSESSMENT AND EMERGENCY 
+DEPARTMENT CASE RECORD
+CASE SEEN BY DR. NEERAJ AKKARACHITTOOR
+ON 4-7-2026 AT 10:04 PM
+
+Presenting Complaint: Neck pain and myalgia
+× 1-2 months
+
+Primary Assessment:
+· Airway → Patent
+· Breathing → RR 16/min, SpO₂ 89% (room air) ⚠
+· Circulation → CRT <2s, HR 80, BP 120/80
+· Disability → GCS: E4 V5 M6
+· Exposure → Temp 36.8°C
+
+History of Present Illness:
+25-year-old female presented with neck pain
+and body ache for 1-2 months. Associated 
+generalised tiredness. Background history of
+hyperthyroidism. No fever, vomiting, or
+loose stools.
+
+Secondary Survey:
+· Signs and Symptoms: Neck pain, body ache,
+  generalised fatigue × 1-2 months
+· Past Medical History: Hyperthyroidism
+· Allergies: No known allergies
+
+...
+
+Differential Diagnosis:
+• Fibromyalgia (generalised pain, fatigue,
+  hyperthyroidism background)
+• Thyroiditis (hyperthyroid history, 
+  neck pain, fatigue)
+• Cervical spondylosis
+
+EM Resident: Dr. Neeraj Akkarachittoor
+EM Consultant: Dr. _______________
+
+[Copy all] [Save]
+```
+
+---
+
+## Summary for Developer
+
+```
+Two root causes:
+
+1. GPT-4o extraction missing chief complaint
+   Fix: update prompt with all patterns that
+   indicate a presenting complaint
+
+2. Text message corrections not applied
+   Fix: when doctor types a correction:
+   a) Extract the change with GPT-4o
+   b) Merge into existing caseData
+   c) Regenerate and show updated note
+   d) Auto-save to backend
+   
+   "Noted — thank you" is not enough.
+   The case must actually change.
+
+This is the most important fix right now.
+When a doctor types something in the chat,
+it must update the case — not just be acknowledged.
+```

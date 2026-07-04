@@ -455,11 +455,13 @@ export default function CaseChatScreen({ route, navigation }: Props) {
         treat.imaging = data.imagingOrdered;
         next.treatment = treat;
       }
-      if (data.diagnosis?.length) {
+      if (data.diagnosis?.length || (data as any).differentialDiagnosis?.length) {
         const treat = { ...(next.treatment || {}) };
-        treat.primary_diagnosis = Array.isArray(data.diagnosis) ? data.diagnosis[0] : String(data.diagnosis);
-        if (data.differentialDiagnosis?.length) {
-          treat.differential_diagnoses = data.differentialDiagnosis;
+        if (data.diagnosis?.length) {
+          treat.primary_diagnosis = Array.isArray(data.diagnosis) ? data.diagnosis[0] : String(data.diagnosis);
+        }
+        if ((data as any).differentialDiagnosis?.length) {
+          treat.differential_diagnoses = (data as any).differentialDiagnosis;
         }
         next.treatment = treat;
       }
