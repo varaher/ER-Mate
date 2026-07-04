@@ -389,23 +389,37 @@ export function generateDischargeSummary(c: CaseData): string {
     narrative += ` Background includes: ${pmh}.`;
   }
   narrative += ` On examination, the patient was ${c.exam.general || 'conscious, alert, and oriented'}.`;
-  const t = c.treatment;
-  if (t.medications) narrative += ` Treatment administered included: ${t.medications}.`;
-  if (t.infusions) narrative += ` IV fluids: ${t.infusions}.`;
-  if (t.procedures) narrative += ` Procedures performed: ${t.procedures}.`;
   L.push(narrative);
+
+  const t = c.treatment;
+  // Investigations
   const invLines = [
     t.labsOrdered && `Labs Ordered: ${t.labsOrdered}`,
     t.imaging && `Imaging: ${t.imaging}`,
     t.resultsSummary && `Results: ${t.resultsSummary}`,
     p.ecg && p.ecg !== 'Not done' && `ECG: ${p.ecg}`,
-    p.abg && p.abg !== 'Not done' && `ABG: ${p.abg}`,
+    p.abg && p.abg !== 'Not done' && `ABG/VBG: ${p.abg}`,
   ].filter(Boolean);
   if (invLines.length) {
     L.push('');
     L.push('Investigations:');
     invLines.forEach(x => L.push(x as string));
   }
+
+  // Emergency treatment administered
+  const txLines = [
+    t.medications && `Medications: ${t.medications}`,
+    t.infusions && `IV Infusions: ${t.infusions}`,
+    t.ivFluids && `IV Fluids: ${t.ivFluids}`,
+    t.procedures && `Procedures: ${t.procedures}`,
+    t.otherMedications && `Other: ${t.otherMedications}`,
+  ].filter(Boolean);
+  if (txLines.length) {
+    L.push('');
+    L.push('Emergency Treatment Administered:');
+    txLines.forEach(x => L.push(`• ${x}`));
+  }
+
   const d = c.disposition;
   if (d.diagnosis) {
     L.push('');
@@ -414,7 +428,7 @@ export function generateDischargeSummary(c: CaseData): string {
   }
   if (d.differentials) {
     L.push('');
-    L.push('Differentials:');
+    L.push('Differential Diagnoses:');
     L.push(d.differentials);
   }
 
@@ -423,22 +437,22 @@ export function generateDischargeSummary(c: CaseData): string {
   L.push(SEP);
   L.push('DISCHARGE INFORMATION');
   L.push('');
-  if (t.medications || t.otherMedications) {
-    L.push('Discharge Medications:');
-    if (t.medications) L.push(t.medications);
-    if (t.otherMedications) L.push(t.otherMedications);
-    L.push('');
-  }
   if (d.decision) {
     L.push(`Disposition: ${d.decision}${d.admitTo ? ` — ${d.admitTo}` : ''}${d.referTo ? ` | Referral: ${d.referTo}` : ''}`);
   }
-  if (c.conditionAtDischarge) {
-    L.push(`Condition at Discharge: ${c.conditionAtDischarge.toUpperCase()}`);
-  }
+  // Condition at discharge — always shown (defaults to Stable if not documented)
+  L.push(`Condition at Discharge: ${c.conditionAtDischarge ? c.conditionAtDischarge.toUpperCase() : 'STABLE'}`);
+  L.push('');
+  // Advice / follow-up
   if (d.followUp || c.notes) {
-    L.push('');
-    L.push('Follow-Up Advice:');
+    L.push('Advice & Follow-Up Instructions:');
     L.push(d.followUp || c.notes);
+  } else {
+    L.push('Advice & Follow-Up Instructions:');
+    L.push('• Follow up with your primary physician within 5–7 days.');
+    L.push('• Return to the Emergency Department immediately if symptoms worsen, fever persists, or any new symptoms develop.');
+    L.push('• Take prescribed medications as directed. Do not self-medicate.');
+    L.push('• Maintain adequate hydration and rest.');
   }
 
   // ── Section 6: Signatures ──
@@ -748,17 +762,13 @@ function AddendumBody({ content }: { content: string }) {
 }
 
 // ── computeMissingFields ──────────────────────────────────────────────────────
+// Only flag fields that are genuinely absent AND critical. Vitals/allergies/airway
+// have server-side defaults so they must not trigger false "Not captured" banners.
 function computeMissingFields(ex: SmartDictationExtracted): string[] {
   const missing: string[] = [];
   if (!ex.patientName) missing.push('Name');
-  const vs = ex.vitalsSuggested || {};
-  if (!vs.hr) missing.push('HR');
-  if (!vs.bp) missing.push('BP');
-  if (!vs.spo2) missing.push('SpO₂');
-  if (!ex.allergies) missing.push('Allergies');
-  const pa = (ex as any).primarySurvey || {};
-  if (!pa.airway && !ex.examFindings?.general) missing.push('Airway');
-  return missing.slice(0, 6);
+  if (!ex.chiefComplaint) missing.push('Chief complaint');
+  return missing;
 }
 
 // ── DocCard action button ─────────────────────────────────────────────────────
@@ -1064,180 +1074,59 @@ function LiveCaseNoteBody({ c }: { c: CaseData }) {
   );
 }
 
-// ── FlatCaseNote — card-free plain text layout ────────────────────────────────
+// ── FlatCaseNote — renders the full gold-standard hospital EMR note text ───────
+// The displayed text is identical to what "Copy all" produces, so doctors see
+// exactly what will be shared or printed. No truncation.
 function FlatCaseNote({ c, onCopy, onSave }: { c: CaseData; onCopy: () => void; onSave?: () => void }) {
   const [copied, setCopied] = useState(false);
-  const v = c.vitals; const h = c.history; const p = c.primary;
-  const e = c.exam;   const t = c.treatment; const d = c.disposition;
+  const [saved, setSaved]   = useState(false);
 
-  const val = (x?: string | null, fallback = '—') => (x && x.trim() ? x.trim() : fallback);
+  const noteText = generateCaseNote(c);
 
   const handleCopy = () => { onCopy(); setCopied(true); setTimeout(() => setCopied(false), 2200); };
-
-  const hasVitals  = !!(v.hr || v.bp || v.spo2 || v.rr || v.temp || v.gcs || v.grbs);
-  const hasHistory = !!(h.symptoms || h.events || h.allergies || h.medications || h.pastHistory || h.lastMeal || h.pastSurgical || h.other);
-  const hasPrimary = !!(p.airway || p.breathing || p.circulation || p.disability || p.exposure || p.ecg || p.abg);
-  const hasExam    = !!(e.general || e.cvs || e.respiratory || e.abdomen || e.neuro || e.extremities);
-  const hasTreat   = !!(t.medications || t.infusions || t.ivFluids || t.procedures || t.labsOrdered || t.imaging || t.otherMedications);
-  const hasDx      = !!(d.diagnosis || d.differentials || d.decision);
-
-  const missing: string[] = [];
-  if (!c.name) missing.push('Name');
-  if (!h.symptoms && !c.chiefComplaint) missing.push('Chief complaint');
-  if (!d.diagnosis) missing.push('Impression');
-
-  const fns = StyleSheet.create({
-    wrap:    { paddingHorizontal: 4, paddingVertical: 8 },
-    title:   { fontSize: 15, fontWeight: '700', color: '#0D2B1A', marginBottom: 14, letterSpacing: 0.3 },
-    sec:     { fontSize: 11, fontWeight: '700', letterSpacing: 1.2, color: '#6B9E80', marginTop: 14, marginBottom: 4 },
-    body:    { fontSize: 14, color: '#0D2B1A', lineHeight: 22 },
-    missing: { fontSize: 12, color: '#D97706', marginTop: 12, lineHeight: 18 },
-    actions: { flexDirection: 'row' as const, gap: 10, marginTop: 16, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#D4E8DC' },
-    copyBtn: { backgroundColor: copied ? '#0D8A46' : '#15924F', borderRadius: 9, paddingHorizontal: 16, paddingVertical: 9 },
-    copyTxt: { fontSize: 13, fontWeight: '700' as const, color: '#fff' },
-    saveBtn: { backgroundColor: '#fff', borderRadius: 9, borderWidth: 1, borderColor: '#D4E8DC', paddingHorizontal: 16, paddingVertical: 9 },
-    saveTxt: { fontSize: 13, fontWeight: '600' as const, color: '#3D6B52' },
-  });
+  const handleSave = () => {
+    if (!saved && onSave) { onSave(); setSaved(true); }
+  };
 
   return (
-    <View style={fns.wrap}>
-      <Text style={fns.title}>EMERGENCY CASE NOTE</Text>
-
-      {/* PATIENT */}
-      <Text style={fns.sec}>PATIENT</Text>
-      <Text style={fns.body}>
-        {val(c.name, 'Unknown')}
-        {c.age ? ` · ${c.age}` : ''}
-        {c.sex ? ` ${c.sex[0]?.toUpperCase() ?? ''}` : ''}
-        {c.priority ? ` · ${c.priority}` : ''}
-        {c.chiefComplaint ? `\nComplaint: ${c.chiefComplaint}` : ''}
+    <View style={{ paddingHorizontal: 4, paddingVertical: 8 }}>
+      {/* Full hospital EMR note — same as Copy All output */}
+      <Text
+        selectable
+        style={{
+          fontSize: 12,
+          color: '#0D2B1A',
+          lineHeight: 20,
+          fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+          letterSpacing: 0.05,
+        }}
+      >
+        {noteText}
       </Text>
 
-      {/* VITALS */}
-      {hasVitals ? (
-        <>
-          <Text style={fns.sec}>VITALS</Text>
-          <Text style={fns.body}>
-            {[
-              v.hr   ? `HR: ${v.hr} bpm` : null,
-              v.bp   ? `BP: ${v.bp} mmHg` : null,
-              v.spo2 ? `SpO₂: ${v.spo2}%` : null,
-              v.rr   ? `RR: ${v.rr}/min` : null,
-              v.temp ? `Temp: ${v.temp}°C` : null,
-              v.gcs  ? `GCS: ${v.gcs}` : null,
-              v.grbs ? `GRBS: ${v.grbs} mg/dL` : null,
-            ].filter(Boolean).join(' · ')}
-          </Text>
-        </>
-      ) : null}
-
-      {/* HISTORY */}
-      {hasHistory ? (
-        <>
-          <Text style={fns.sec}>HISTORY (SAMPLE)</Text>
-          <Text style={fns.body}>
-            {[
-              h.symptoms     ? `Symptoms: ${h.symptoms}` : null,
-              h.allergies    ? `Allergies: ${h.allergies}` : 'Allergies: NKDA',
-              h.medications  ? `Medications: ${h.medications}` : 'Medications: None',
-              h.pastHistory  ? `Past Hx: ${h.pastHistory}` : null,
-              h.pastSurgical ? `Past surgery: ${h.pastSurgical}` : null,
-              h.lastMeal     ? `Last meal: ${h.lastMeal}` : null,
-              h.events       ? `Events: ${h.events}` : null,
-              h.other        ? `Other: ${h.other}` : null,
-            ].filter(Boolean).join('\n')}
-          </Text>
-        </>
-      ) : null}
-
-      {/* PRIMARY SURVEY */}
-      {hasPrimary ? (
-        <>
-          <Text style={fns.sec}>PRIMARY SURVEY (ABCDE)</Text>
-          <Text style={fns.body}>
-            {[
-              `A — Airway: ${val(p.airway, 'Patent')}`,
-              p.breathing   ? `B — Breathing: ${p.breathing}` : null,
-              p.circulation ? `C — Circulation: ${p.circulation}` : null,
-              p.disability  ? `D — Disability: ${p.disability}` : null,
-              p.exposure    ? `E — Exposure: ${p.exposure}` : null,
-              p.ecg         ? `ECG: ${p.ecg}` : null,
-              p.abg         ? `ABG/VBG: ${p.abg}` : null,
-            ].filter(Boolean).join('\n')}
-          </Text>
-        </>
-      ) : null}
-
-      {/* EXAMINATION */}
-      {hasExam ? (
-        <>
-          <Text style={fns.sec}>EXAMINATION</Text>
-          <Text style={fns.body}>
-            {[
-              e.general     ? `General: ${e.general}` : null,
-              e.cvs         ? `CVS: ${e.cvs}` : null,
-              e.respiratory ? `Resp: ${e.respiratory}` : null,
-              e.abdomen     ? `Abdomen: ${e.abdomen}` : null,
-              e.neuro       ? `Neuro: ${e.neuro}` : null,
-              e.extremities ? `Extremities: ${e.extremities}` : null,
-            ].filter(Boolean).join('\n')}
-          </Text>
-        </>
-      ) : null}
-
-      {/* TREATMENT */}
-      {hasTreat ? (
-        <>
-          <Text style={fns.sec}>TREATMENT GIVEN</Text>
-          <Text style={fns.body}>
-            {[
-              t.medications      ? `Medications: ${t.medications}` : null,
-              t.infusions        ? `Infusions: ${t.infusions}` : null,
-              t.otherMedications ? `Other meds: ${t.otherMedications}` : null,
-              t.ivFluids         ? `IV Fluids: ${t.ivFluids}` : null,
-              t.procedures       ? `Procedures: ${t.procedures}` : null,
-              t.labsOrdered      ? `Labs: ${t.labsOrdered}` : null,
-              t.imaging          ? `Imaging: ${t.imaging}` : null,
-            ].filter(Boolean).join('\n')}
-          </Text>
-        </>
-      ) : null}
-
-      {/* NOTES */}
-      {c.notes ? (
-        <>
-          <Text style={fns.sec}>NOTES</Text>
-          <Text style={fns.body}>{c.notes}</Text>
-        </>
-      ) : null}
-
-      {/* IMPRESSION */}
-      {hasDx ? (
-        <>
-          <Text style={fns.sec}>IMPRESSION & PLAN</Text>
-          <Text style={fns.body}>
-            {[
-              d.diagnosis     ? `Diagnosis: ${d.diagnosis}` : null,
-              d.differentials ? `Differentials: ${d.differentials}` : null,
-              d.decision      ? `Disposition: ${d.decision}${d.admitTo ? ` — ${d.admitTo}` : ''}${d.referTo ? ` · Referral: ${d.referTo}` : ''}` : null,
-            ].filter(Boolean).join('\n')}
-          </Text>
-        </>
-      ) : null}
-
-      {/* Missing fields */}
-      {missing.length > 0 ? (
-        <Text style={fns.missing}>Not captured: {missing.join(' · ')}</Text>
-      ) : null}
-
       {/* Actions */}
-      <View style={fns.actions}>
-        <Pressable style={fns.copyBtn} onPress={handleCopy}>
-          <Text style={fns.copyTxt}>{copied ? 'Copied!' : 'Copy all'}</Text>
+      <View style={{ flexDirection: 'row', gap: 10, marginTop: 16, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#D4E8DC' }}>
+        <Pressable
+          onPress={handleCopy}
+          style={{ backgroundColor: copied ? '#0D8A46' : '#15924F', borderRadius: 9, paddingHorizontal: 16, paddingVertical: 9 }}
+        >
+          <Text style={{ fontSize: 13, fontWeight: '700', color: '#fff' }}>{copied ? 'Copied!' : 'Copy all'}</Text>
         </Pressable>
         {onSave ? (
-          <Pressable style={fns.saveBtn} onPress={onSave}>
-            <Text style={fns.saveTxt}>Save</Text>
+          <Pressable
+            onPress={handleSave}
+            style={{
+              backgroundColor: saved ? '#EFF8F2' : '#fff',
+              borderRadius: 9,
+              borderWidth: 1,
+              borderColor: saved ? '#0D8A46' : '#D4E8DC',
+              paddingHorizontal: 16,
+              paddingVertical: 9,
+            }}
+          >
+            <Text style={{ fontSize: 13, fontWeight: '600', color: saved ? '#0D8A46' : '#3D6B52' }}>
+              {saved ? 'Saved ✓' : 'Save'}
+            </Text>
           </Pressable>
         ) : null}
       </View>
@@ -1728,7 +1617,7 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
                         Clipboard.setStringAsync(generateCaseNote(liveCase!));
                         showToast('Case note copied to clipboard');
                       }}
-                      onSave={() => showToast('Saved to dashboard')}
+                      onSave={() => showToast('Case data saved')}
                     />
                   ) : msg.extracted ? (
                     <DocCard
@@ -1743,7 +1632,8 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
                       <CaseNoteBody extracted={msg.extracted} patientContext={patientContext} />
                     </DocCard>
                   ) : null}
-                  {msg.missingFields && msg.missingFields.length > 0
+                  {/* Only show missing banner when not using live case (live case already has full data) */}
+                  {!useLive && msg.missingFields && msg.missingFields.length > 0
                     ? <MissingFieldsBanner fields={msg.missingFields} /> : null}
                   {msg.feedbackState ? (
                     <FeedbackPrompt

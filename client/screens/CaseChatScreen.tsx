@@ -221,9 +221,12 @@ export default function CaseChatScreen({ route, navigation }: Props) {
     }
     const tempDisplay = buildTempDisplay(temp);
 
-    // ── Case time ──
+    // ── Case time — HH:MM 24h so generateCaseNote's timeStr IIFE converts to 12h AM/PM without double-suffix ──
     const caseTime = caseData.created_at
-      ? new Date(caseData.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+      ? (() => {
+          const d = new Date(caseData.created_at);
+          return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+        })()
       : '';
 
     // ── Differentials — array → newline string ──

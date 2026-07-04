@@ -1,0 +1,366 @@
+Now I can see everything clearly. Let me read all 6 screenshots and give precise feedback.
+
+---
+
+## What I Can See
+
+**Image 3 — Dictation bubble (correct)**
+```
+Doctor dictated a complete case:
+25F, abdominal pain since yesterday 5:30pm
+Airway patent, RR 20, SpO2 98, room air
+CRT <2s, HR 130, BP 100/70
+ECG done, GCS E4V5M6
+Temperature 98°F
+HPI — pain started epigastric → RIF
+Nausea, no vomiting
+Secondary survey — LMP 14/6/26
+No allergies, examination all normal
+Psychological assessment normal
+✓ Very complete dictation
+```
+
+**Image 1 — Case note output (incomplete display)**
+```
+EMERGENCY CASE NOTE
+
+PATIENT: New Patient U · P4
+VITALS: HR 80 · BP 120/80 · SpO₂ 98% · RR 16 · Temp 36.8°C · GCS 15 · GRBS 100
+PRIMARY SURVEY (ABCDE)
+A — Airway: Patent
+B — Breathing: SpO₂ 98% · RR 16/min
+C — Circulation: HR 80 · BP 120/80
+D — Disability: GCS 15 · Alert
+E — Exposure: Temp 36.8°C
+
+⚠ Not captured: Chief complaint · Impression
+[Copy all] [Save]
+⚠ Not captured: Name · HR · BP · SpO₂ · Allergies · Airway
+```
+
+**Image 2 — What Copy All produces (excellent!)**
+```
+INITIAL ASSESSMENT AND EMERGENCY 
+DEPARTMENT CASE RECORD
+CASE SEEN BY DR. NEERAJ AKKARACHITTOOR 
+ON 4-7-2026 AT 12:37 pmPM
+
+Presenting Complaint: Not documented
+Primary Assessment:
+· Airway → Patent
+· Breathing → RR: 16/min, SpO2: 98% on room air
+· Circulation → CRT 2, HR: 80/min, BP: 120/80
+· Disability → GCS: E4 V5 M6, Pupils bilaterally equal
+· Exposure → Temp: 36.8°C
+
+History of Present Illness: History to be documented.
+
+Secondary Survey:
+· Signs and Symptoms: Not mentioned
+· Past Medical History: Nil
+· Surgical History: Nil
+· Family/Gynae History: Nil
+· Allergies: No known allergies
+
+General Examination: No pallor, icterus, cyanosis, clubbing, or edema.
+Systemic Examination:
+· CVS: S1 and S2 heard and normal
+· Chest: Normal expansion, vesicular breath sounds
+· Abdomen: Soft, non-distended, non-tender
+· CNS: Conscious, Oriented, No focal neurological deficit
+· Extremities: No visible abnormalities noted.
+Psychological Assessment: No features of depression, anxiety, psychosis, agitation, suicidal ideation, or substance use.
+Investigations:
+Treatment Plan:
+```
+
+**Images 4 & 5 — Discharge summary output**
+```
+DISCHARGE SUMMARY
+Date: 4/7/2026
+Non-MLC
+
+PATIENT: New Patient · Unknown · Adult
+
+PATIENT INFORMATION & ARRIVAL
+Allergies: No known allergies
+Vitals on Arrival: HR 80 · BP 120/80 · RR 16 · SpO₂ 98%
+
+[then only shows Discharge Information + Signatures]
+
+ED Resident: Neeraj Akkarachittoor
+ED Consultant: (blank)
+Date: 4/7/2026
+
+Legal disclaimer ✓
+Copy all + Export PDF ✓
+```
+
+**Image 6 — Discharge summary continues**
+```
+👍 👎 feedback ✓
+Show differentials chip ✓
+Edit diagnosis chip ✓
+Add allergy chip ✓
+Export PDF chip ✓
+```
+
+---
+
+## Issues Identified — In Priority Order
+
+---
+
+### Issue 1 — Display shows half, Copy All shows full (your main point)
+
+```
+CURRENT:
+  Display → truncated, partial
+  Copy All → complete hospital EMR format ✓
+
+THIS IS THE RIGHT APPROACH but
+the display is too short — doctors
+can't verify before copying
+
+FIX: Show the FULL text in the chat
+bubble — same as what Copy All produces
+No truncation. Scroll to read all of it.
+```
+
+---
+
+### Issue 2 — "Not captured" banner is WRONG
+
+```
+Banner says:
+⚠ Name · HR · BP · SpO₂ · Allergies · Airway
+
+But looking at the case note display:
+✓ HR: 80 bpm — IS shown
+✓ BP: 120/80 — IS shown
+✓ SpO₂: 98% — IS shown
+✓ Airway: Patent — IS shown
+✓ Allergies: No known allergies — IS in Copy All
+
+The banner is reading from the wrong source.
+It checks raw extraction fields
+but those fields ARE populated.
+
+FIX: Only flag as "not captured" if
+the field is truly blank in the final output.
+Check the formatted output, not the raw JSON.
+```
+
+---
+
+### Issue 3 — Chief complaint truly missing
+
+```
+Doctor said:
+"25-year-old female presented with 
+complaint of abdominal pain since 
+yesterday at around 5:30 pm"
+
+This SHOULD extract as:
+chiefComplaint: "Abdominal pain since 
+                yesterday evening"
+
+But it shows: Not documented
+
+The GPT-4o prompt is not extracting
+the chief complaint correctly.
+"presented with complaint of [X]"
+should map to chiefComplaint.
+```
+
+---
+
+### Issue 4 — History of Present Illness blank
+
+```
+Copy All shows:
+"History of Present Illness: History to 
+be documented."
+
+But doctor dictated the full HPI:
+"pain started in epigastric region,
+migrated to right iliac fossa,
+nausea, no vomiting"
+
+This is in the dictation bubble clearly.
+GPT-4o is not extracting it into
+the history.signsSymptoms field.
+
+The extraction prompt needs:
+"History of Present Illness = detailed
+narrative from dictation including:
+onset, location, character, migration,
+associated symptoms, relieving/aggravating
+factors, negative history"
+```
+
+---
+
+### Issue 5 — Save button not working
+
+```
+Doctor taps Save → nothing happens.
+
+This is a critical bug.
+After dictation, the case note MUST
+save to the cases list automatically.
+
+Tell developer:
+The Save button in CaseChatScreen
+should call the same save endpoint
+as the case sheet form:
+PUT /api/proxy/cases/:caseId
+
+If no caseId exists yet (new case),
+call POST /api/proxy/cases to create it first,
+then save the extracted data to it.
+
+After save:
+Show "Saved ✓" confirmation
+Case appears in Cases tab list
+Doctor can reopen it later
+```
+
+---
+
+### Issue 6 — Discharge summary incomplete
+
+```
+CURRENT output shows only:
+- Date
+- Non-MLC
+- Patient (unknown)
+- Allergies
+- Vitals on Arrival
+- [gap — missing middle sections]
+- Discharge Information (blank)
+- Signatures
+
+MISSING from discharge summary:
+- Chief complaint
+- History of Present Illness (paragraph)
+- Primary Assessment (ABCDE)
+- Secondary Survey
+- General Examination
+- Systemic Examination
+- Psychological Assessment
+- Hospital Course narrative
+- Investigations
+- Treatment Plan
+- Diagnosis at discharge
+- Differentials
+- Discharge medications
+- Condition at discharge
+- Follow-up advice
+```
+
+---
+
+### Issue 7 — "12:37 pmPM" time format bug
+
+```
+Copy All shows: "AT 12:37 pmPM"
+Should be: "AT 12:37 PM"
+
+The time is being formatted twice.
+Fix: toLocaleTimeString() returning
+"12:37 pm" then concatenating "PM"
+
+Fix the time formatting function:
+const time = new Date()
+  .toLocaleTimeString('en-IN', {
+    hour: '2-digit',
+    minute: '2-digit', 
+    hour12: true
+  }).toUpperCase();
+// Result: "12:37 PM" not "12:37 pmPM"
+```
+
+---
+
+## Tell Your Developer — Exact Fixes
+
+```
+CRITICAL (do today):
+
+1. DISPLAY = COPY ALL TEXT
+   Show the full hospital EMR format
+   in the chat bubble itself
+   Same text as what Copy All produces
+   Scrollable — not truncated
+
+2. SAVE BUTTON
+   Wire to PUT /api/proxy/cases/:caseId
+   If new case → POST first, then PUT
+   Show "Saved ✓" toast
+   Case appears in Cases tab
+
+3. NOT CAPTURED BANNER
+   Only flag fields truly absent
+   from the formatted output
+   HR/BP/SpO₂/Airway are captured —
+   remove them from the banner
+
+4. CHIEF COMPLAINT EXTRACTION
+   Doctor says "presented with complaint of X"
+   → extract X as chiefComplaint
+   Never show "Not documented" if
+   the dictation mentions a symptom
+
+5. TIME FORMAT
+   Fix "12:37 pmPM" → "12:37 PM"
+
+THIS WEEK:
+
+6. HISTORY OF PRESENT ILLNESS
+   Extract as a clinical narrative paragraph
+   from the dictation
+   Include: onset, location, character,
+   migration, associated symptoms,
+   negative history
+
+7. DISCHARGE SUMMARY — ALL SECTIONS
+   Must include ALL sections from the
+   discharge summary form:
+   Primary Assessment → Systemic Exam →
+   Hospital Course → Investigations →
+   Diagnosis → Discharge Info →
+   Signatures with resident + consultant
+
+8. DISCHARGE SUMMARY — HOSPITAL COURSE
+   Call GPT-4o to generate a proper
+   clinical narrative paragraph
+   from all available case data
+   Not just "History to be documented"
+```
+
+---
+
+## The Good News
+
+```
+✓ Chat UI working beautifully
+✓ Emerald light theme looks professional
+✓ Copy All produces correct hospital EMR format
+✓ GCS E4 V5 M6 extracted correctly
+✓ Psychological assessment sentence correct
+✓ Systemic examination all correct
+✓ Legal disclaimer included
+✓ Date and doctor name included
+✓ 👍 👎 feedback working
+✓ Show differentials chip working
+✓ Suggestion chips working
+
+The output FORMAT is correct.
+The extraction is partially working.
+The display needs to show the full text.
+The save needs to be wired.
+
+These are all fixable in 2-3 days.
+The hard work is done.
+```
