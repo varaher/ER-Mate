@@ -192,8 +192,65 @@ export default function CaseChatScreen({ route, navigation }: Props) {
     const diagnosis     = treat.primaryDiagnosis || treat.primary_diagnosis || disp.diagnosis || '';
     const differentials = treat.differentialDiagnoses || treat.differential_diagnoses || disp.differentials || '';
 
-    const ageNum = p.age ? parseInt(String(p.age)) : null;
+    const ageNum  = p.age ? parseInt(String(p.age)) : null;
     const examGen = exam.general || {};
+
+    // ── GCS components ──
+    const gcsEStr  = String(pa.disability_gcs_e || '');
+    const gcsVStr  = String(pa.disability_gcs_v || '');
+    const gcsMStr  = String(pa.disability_gcs_m || '');
+
+    // ── CRT & pupils ──
+    const crt    = pa.circulation_cap_refill || pa.circulation_crt || '';
+    const pupils = pa.disability_pupils || '';
+
+    // ── Temperature display ──
+    function buildTempDisplay(raw: string): string {
+      if (!raw) return '';
+      const isFahr = raw.includes('°F') || raw.includes('F');
+      const isCels = raw.includes('°C') || raw.includes('C');
+      const num = parseFloat(raw.replace(/[^0-9.]/g, ''));
+      if (!num) return raw;
+      if (isFahr || (!isCels && num > 41)) {
+        const cel = ((num - 32) * 5 / 9).toFixed(1);
+        return `${num}°F (${cel}°C)`;
+      }
+      const fah = (num * 9 / 5 + 32).toFixed(1);
+      return `${num}°C (${fah}°F)`;
+    }
+    const tempDisplay = buildTempDisplay(temp);
+
+    // ── Case time ──
+    const caseTime = caseData.created_at
+      ? new Date(caseData.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+      : '';
+
+    // ── Differentials — array → newline string ──
+    function formatDifferentials(raw: any): string {
+      if (!raw) return '';
+      if (Array.isArray(raw)) return raw.join('\n');
+      return String(raw);
+    }
+    const differentialsStr = formatDifferentials(
+      treat.differentialDiagnoses || treat.differential_diagnoses ||
+      (Array.isArray(disp.differentials) ? disp.differentials : null) ||
+      differentials
+    );
+
+    // ── LMP ──
+    const lmp = hist.lmp || sample.lmp || hist.menstrual_history || '';
+
+    // ── Psychological toggles ──
+    const psych = caseData.psychological || {};
+    const psychToggles = {
+      depression:      !!(psych.depression        || psych.features_of_depression),
+      anxiety:         !!(psych.anxiety            || psych.anxiety_present),
+      psychosis:       !!(psych.psychosis          || psych.psychiatricHistory || psych.psychiatric_history),
+      agitation:       !!(psych.agitation),
+      suicidalIdeation:!!(psych.suicidalIdeation   || psych.suicidal_ideation),
+      substanceUse:    !!(psych.substanceAbuse     || psych.substance_abuse || psych.substanceUse),
+    };
+
     return {
       name:                p.name || paramPatientName || '',
       age:                 p.age ? String(p.age) : '',
@@ -208,9 +265,33 @@ export default function CaseChatScreen({ route, navigation }: Props) {
       userName:            user?.name || '',
       userRole:            shiftSession?.roleForShift || '',
       conditionAtDischarge: disp.conditionAtShift || disp.condition_at_shift || '',
-      vitals: { hr, bp: bpS && bpD ? `${bpS}/${bpD}` : (bpS || ''), spo2, rr, temp, gcs: gcsTotal > 0 ? String(gcsTotal) : '', grbs },
-      history: { symptoms, allergies, medications, pastHistory, lastMeal, events, pastSurgical, other: otherHist },
-      primary: { airway: airwayStatus, breathing: breathingNotes, circulation: circulationNotes, disability: disabilityNote, exposure: exposureNote, ecg: pa.ecg_status || '', abg: pa.abg_interpretation || '' },
+      caseTime,
+      patientTitle:        p.title || '',
+      bedNumber:           caseData.bed_number || caseData.bed || '',
+      erNumber:            caseData.er_number || caseData.case_number || '',
+      efast:               pa.efast_findings || caseData.efast_findings || '',
+      psychological:       psychToggles,
+      vitals: {
+        hr, spo2, rr, temp, grbs,
+        bp:          bpS && bpD ? `${bpS}/${bpD}` : (bpS || ''),
+        gcs:         gcsTotal > 0 ? String(gcsTotal) : '',
+        gcsE:        gcsEStr,
+        gcsV:        gcsVStr,
+        gcsM:        gcsMStr,
+        crt,
+        pupils,
+        tempDisplay,
+      },
+      history: { symptoms, allergies, medications, pastHistory, lastMeal, events, pastSurgical, other: otherHist, lmp },
+      primary: {
+        airway:      airwayStatus,
+        breathing:   breathingNotes,
+        circulation: circulationNotes,
+        disability:  disabilityNote,
+        exposure:    exposureNote,
+        ecg:         pa.ecg_status || '',
+        abg:         pa.abg_interpretation || '',
+      },
       examToggles: {
         pallor:          examGen.pallor === true,
         icterus:         examGen.icterus === true,
@@ -221,19 +302,19 @@ export default function CaseChatScreen({ route, navigation }: Props) {
       },
       exam: { general: examGeneral, cvs: examCvs, respiratory: examResp, abdomen: examAbdo, neuro: examNeuro, extremities: examExtremities },
       treatment: {
-        medications:     meds,
+        medications:      meds,
         infusions,
         otherMedications: treat.otherMedications || '',
-        ivFluids:        treat.ivFluids || treat.iv_fluids || '',
+        ivFluids:         treat.ivFluids || treat.iv_fluids || '',
         procedures,
         labsOrdered,
         imaging,
-        resultsSummary:  treat.resultsSummary || treat.results_summary || caseData.results_summary || '',
+        resultsSummary:   treat.resultsSummary || treat.results_summary || caseData.results_summary || '',
       },
       notes:       treat.addendumNotes || caseData.clinical_notes || '',
       disposition: {
         diagnosis,
-        differentials,
+        differentials: differentialsStr,
         decision:  disp.dispositionType || disp.disposition_type || '',
         admitTo:   disp.admitTo || disp.admit_to || '',
         referTo:   disp.referTo || disp.refer_to || '',
@@ -435,21 +516,42 @@ export default function CaseChatScreen({ route, navigation }: Props) {
         exam.general = gen;
         next.examination = exam;
       }
-      // Psychological assessment flags
+      // LMP — always capture for female patients
+      if (data.menstrualHistory) {
+        const h2 = { ...(next.history || {}) };
+        h2.lmp = data.menstrualHistory;
+        next.history = h2;
+      }
+      // EFAST
+      if ((data as any).efastFindings) {
+        next.efast_findings = (data as any).efastFindings;
+      }
+      // GCS components from abcdeFindings.disability
+      {
+        const abcde = data.abcdeFindings || {};
+        const disa = abcde.disability || {};
+        const pa2 = { ...(next.primary_assessment || {}) };
+        let pa2Changed = false;
+        if ((disa as any).gcsE) { pa2.disability_gcs_e = (disa as any).gcsE; pa2Changed = true; }
+        if ((disa as any).gcsV) { pa2.disability_gcs_v = (disa as any).gcsV; pa2Changed = true; }
+        if ((disa as any).gcsM) { pa2.disability_gcs_m = (disa as any).gcsM; pa2Changed = true; }
+        if ((disa as any).pupils) { pa2.disability_pupils = (disa as any).pupils; pa2Changed = true; }
+        if ((abcde.circulation as any)?.crt) { pa2.circulation_cap_refill = (abcde.circulation as any).crt; pa2Changed = true; }
+        if (pa2Changed) next.primary_assessment = pa2;
+      }
+      // Psychological assessment flags — write to top-level next.psychological so liveCase reads it
       if (data.psychological) {
         const psych = data.psychological;
-        const hist = { ...(next.history || {}) };
-        const py = { ...(hist.psychological || {}) };
-        if (psych.suicidalIdeation !== undefined) py.suicidal_ideation = psych.suicidalIdeation;
-        if (psych.selfHarmHistory !== undefined) py.self_harm_history = psych.selfHarmHistory;
-        if (psych.intentToHarmOthers !== undefined) py.intent_to_harm_others = psych.intentToHarmOthers;
-        if (psych.substanceAbuse !== undefined) py.substance_abuse = psych.substanceAbuse;
-        if (psych.psychiatricHistory !== undefined) py.psychiatric_history = psych.psychiatricHistory;
-        if (psych.currentlyOnPsychiatricTreatment !== undefined) py.currently_on_treatment = psych.currentlyOnPsychiatricTreatment;
-        if (psych.hasSupportSystem !== undefined) py.has_support_system = psych.hasSupportSystem;
-        if (psych.notes) py.notes = psych.notes;
-        hist.psychological = py;
-        next.history = hist;
+        const py = { ...(next.psychological || {}) };
+        if (psych.suicidalIdeation !== undefined) py.suicidalIdeation = psych.suicidalIdeation;
+        if (psych.selfHarmHistory !== undefined)  py.selfHarmHistory  = psych.selfHarmHistory;
+        if (psych.substanceAbuse !== undefined)   py.substanceAbuse   = psych.substanceAbuse;
+        if (psych.psychiatricHistory !== undefined) py.psychiatricHistory = psych.psychiatricHistory;
+        next.psychological = py;
+        // Also write to hist.psychological for backward compat
+        const h3 = { ...(next.history || {}) };
+        h3.psychological = py;
+        next.history = h3;
       }
       // Procedures performed
       if (data.procedures) {

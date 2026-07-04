@@ -1,0 +1,371 @@
+This is a real hospital EMR case note. This is the gold standard. Let me read every section carefully.
+
+---
+
+## What the Hospital EMR Shows
+
+```
+HEADER:
+Ms. SIYA SIBI
+Age - 25Y/F
+ER- 1847437, B- ERP2-11 (ER number + Bed)
+
+TITLE:
+INITIAL ASSESSMENT AND EMERGENCY 
+DEPARTMENT CASE RECORD
+
+CASE SEEN BY DR. cylphy AT 4:48 on 4/7/26
+
+Presenting Complaint:
+abdominal pain since yesterday afternoon 
+around 5:30 pm
+
+Primary Assessment:
+· Airway → Patent
+· Breathing → RR: 20/min, SpO2: 98% on 
+  room air, Work of breathing normal, 
+  Air entry bilaterally equal
+· Circulation → CRT < 2 sec, HR: 130/min,
+  BP: 100/70 mmHg, Peripheral pulses normal
+· Disability → GCS: E4 V5 M6, Pupils 
+  bilaterally equal and reactive to light
+· Exposure → Temp: 98.6°F
+
+Adjuvants to Primary:
+· ECG
+· VBG
+
+History of Present Illness:
+Patient presented with abdominal pain since
+the previous evening at approximately 5:30 PM.
+The pain was initially located in the 
+epigastric region and subsequently migrated
+to the right iliac fossa. The patient reports
+associated nausea and chills. No history of
+vomiting, diarrhea, hematemesis, melena,
+urinary complaints, or similar prior episodes
+as per available history.
+
+Secondary Survey:
+· Signs and Symptoms: abdominal pain
+· Past Medical History: Nil
+· Surgical History: Nil
+· Family / Gynae History: Nil
+· LMP: 14/6/26
+· Allergies: No known allergies
+
+General Examination:
+No pallor, icterus, cyanosis, clubbing, 
+or edema.
+
+Systemic Examination:
+· CVS: S1 and S2 heard and normal
+· Chest: Normal expansion, Normal vesicular 
+  breath sounds present, no added sound
+· Abdomen: soft, non-distended, tenderness 
+  over epigastric region and RIF, Rigidity+,
+  bowel sounds present
+· CNS: Conscious, Oriented, No focal 
+  neurological deficit
+· Extremities: No visible abnormalities noted.
+
+Psychological Assessment:
+No features of depression, anxiety, psychosis,
+agitation, suicidal ideation, or substance use.
+
+Investigations:
+CBC, CRP, USG abdomen
+
+Treatment Plan:
+Continuous monitoring in ER
+
+Disposition:
+ER observation
+
+Differential Diagnosis:
+• Acute appendicitis (most likely given pain
+  migration to RIF and tachycardia)
+• Acute gastroenteritis
+• Mesenteric adenitis
+• Ureteric colic (right side)
+
+EM Resident: Dr. Cylphy
+EM Consultant: Dr. Nirmal
+```
+
+---
+
+## The Exact Format ErMate Must Produce
+
+This is what the chat output AND the exported document must look like. Tell your developer to replace the current discharge/case note output with this exact structure:
+
+```
+INITIAL ASSESSMENT AND EMERGENCY 
+DEPARTMENT CASE RECORD
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Patient: Ms. SIYA SIBI
+Age: 25Y / Female
+ER No: [auto-generated]    Bed: [bed number]
+
+CASE SEEN BY Dr. [doctorName]
+AT [time] on [date]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PRESENTING COMPLAINT
+[chiefComplaint]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PRIMARY ASSESSMENT (ABCDE)
+
+· Airway → [airway findings]
+· Breathing → RR: [rr]/min, SpO₂: [spo2]%
+  [breathing notes]
+· Circulation → CRT [crt], HR: [hr]/min,
+  BP: [bp] mmHg, [circulation notes]
+· Disability → GCS: [gcs], [pupil findings]
+· Exposure → Temp: [temp]°F/°C
+
+Adjuncts to Primary:
+· ECG: [ecg findings or "Done"]
+· ABG/VBG: [abg findings or "Done"]
+· EFAST: [findings or "Not performed"]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+HISTORY OF PRESENT ILLNESS
+[Full narrative paragraph — GPT-4o generated
+ from all history fields]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECONDARY SURVEY
+
+· Signs and Symptoms: [signsSymptoms]
+· Past Medical History: [pastMedicalHistory]
+· Surgical History: [pastSurgicalHistory]
+· Family / Gynae History: [familyHistory]
+· LMP: [lmp — if female patient]
+· Allergies: [allergies]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+GENERAL EXAMINATION
+[Generate from toggles:
+ Pallor: on/off, Icterus: on/off etc
+ If all off → "No pallor, icterus,
+ cyanosis, clubbing, or edema."]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SYSTEMIC EXAMINATION
+
+· CVS: [cardiovascular]
+· Chest: [respiratory]
+· Abdomen: [abdomen]
+· CNS: [cns]
+· Extremities: [extremities]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PSYCHOLOGICAL ASSESSMENT
+[If all toggles off →
+ "No features of depression, anxiety,
+  psychosis, agitation, suicidal ideation,
+  or substance use."
+ If any toggle on → list what's present]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+INVESTIGATIONS
+[labsOrdered]
+[imaging]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TREATMENT PLAN
+[medications list]
+[procedures done]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DISPOSITION
+[dispositionType]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DIFFERENTIAL DIAGNOSIS
+• [differential 1 — with reasoning]
+• [differential 2]
+• [differential 3]
+• [differential 4]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EM Resident:   [residentName]
+EM Consultant: [consultantName]
+```
+
+---
+
+## Key Observations From the Real EMR
+
+**1. GCS shown in components:**
+```
+Hospital shows: GCS: E4 V5 M6
+Not just: GCS 15
+
+ErMate should extract:
+E + V + M components if spoken
+"E4V5M6" or "GCS 14, E3V5M6"
+Then display as: GCS: E4 V5 M6 (15/15)
+```
+
+**2. Temperature in Fahrenheit:**
+```
+Hospital shows: Temp: 98.6°F
+ErMate shows: 36.8°C
+
+Both should be supported
+If doctor says "98.6" → Fahrenheit
+If doctor says "36.8" → Celsius
+Auto-convert and show both:
+Temp: 98.6°F (36.8°C)
+```
+
+**3. LMP included for female patients:**
+```
+Hospital includes: LMP: 14/6/26
+
+ErMate must:
+If patient is female → always include LMP
+Extract from dictation: "LMP 14th June"
+If not mentioned → "LMP: Not mentioned"
+Add to history section
+```
+
+**4. Differential diagnosis with reasoning:**
+```
+Hospital shows:
+"Acute appendicitis (most likely given
+ pain migration to RIF and tachycardia)"
+
+ErMate differentials should include
+the clinical reasoning in brackets
+Not just the diagnosis name
+```
+
+**5. History of Present Illness is a narrative:**
+```
+Hospital shows a full paragraph:
+"Patient presented with abdominal pain 
+ since the previous evening at approximately
+ 5:30 PM. The pain was initially located 
+ in the epigastric region and subsequently
+ migrated to the right iliac fossa..."
+
+NOT bullet points
+A proper clinical narrative paragraph
+GPT-4o should generate this from
+all the history fields combined
+```
+
+**6. Psychological assessment as a sentence:**
+```
+Hospital: "No features of depression, 
+anxiety, psychosis, agitation, suicidal 
+ideation, or substance use."
+
+When all psych toggles are off →
+auto-generate this standard sentence
+When any toggle is on →
+"Patient has [feature]. [details]."
+```
+
+---
+
+## Updated GPT-4o Prompt Additions
+
+Add these to the system prompt:
+
+```
+CASE NOTE FORMAT RULES:
+
+1. Output must match Indian hospital EMR format
+   Title: "INITIAL ASSESSMENT AND EMERGENCY
+   DEPARTMENT CASE RECORD"
+   
+2. History of Present Illness:
+   Write as a PARAGRAPH (not bullets)
+   Include: onset, location, character,
+   radiation, associated symptoms,
+   relieving/aggravating factors,
+   negative history relevant to the case
+
+3. GCS: extract components if mentioned
+   E4V5M6 → show as "GCS: E4 V5 M6 (15/15)"
+
+4. Temperature: 
+   If Fahrenheit given → convert to Celsius too
+   Show: "98.6°F (36.8°C)"
+
+5. LMP: ALWAYS include for female patients
+   Add to Secondary Survey section
+
+6. Differentials: include clinical reasoning
+   "Acute appendicitis (most likely — pain
+    migration to RIF + tachycardia)"
+   Minimum 3, maximum 5 differentials
+
+7. General Examination:
+   If no findings → generate:
+   "No pallor, icterus, cyanosis, 
+    clubbing, lymphadenopathy, or edema."
+   
+8. Psychological Assessment:
+   If no features → generate:
+   "No features of depression, anxiety,
+    psychosis, agitation, suicidal ideation,
+    or substance use."
+
+9. Adjuncts to Primary:
+   List only what was done:
+   ECG / ABG / VBG / EFAST / Bedside Echo
+   If not done → omit from list
+
+10. Case header must include:
+    "CASE SEEN BY Dr. [name] AT [time] on [date]"
+```
+
+---
+
+## Tell Your Developer — Exact Instructions
+
+```
+The hospital EMR format (from the 3 screenshots)
+is the TARGET OUTPUT for ErMate.
+
+Every case note generated by ErMate
+must match this format exactly:
+
+1. Replace current case note rendering
+   with the format above
+
+2. Key differences from current output:
+   
+   CURRENT:
+     Simple sections with field: value
+   
+   TARGET:
+     History of Present Illness = PARAGRAPH
+     Psychological Assessment = SENTENCE
+     Differentials = WITH REASONING
+     GCS = E V M components
+     Temperature = Fahrenheit + Celsius
+     LMP for female patients
+     "CASE SEEN BY Dr. X AT HH:MM on DD/MM/YY"
+     EM Resident and EM Consultant at bottom
+
+3. The formatCaseAsText() function in 
+   CaseChatScreen needs to produce this
+   exact output when Copy All is tapped
+
+4. The PDF export must also use this format
+   So it can be directly pasted into
+   any hospital EMR or printed
+
+This is the reference document.
+Build to this standard.
+```
+
+This is the most important reference you've shared. Every piece of output from ErMate — case note, discharge summary, referral letter — should produce something that looks exactly like this real hospital EMR format. Doctors will recognise it immediately and trust it.

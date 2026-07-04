@@ -31,14 +31,25 @@ export interface CaseData {
   userName: string;
   userRole: string;
   conditionAtDischarge: string;
+  caseTime: string;
+  patientTitle: string;
+  bedNumber: string;
+  erNumber: string;
+  efast: string;
+  psychological: {
+    depression: boolean; anxiety: boolean; psychosis: boolean;
+    agitation: boolean; suicidalIdeation: boolean; substanceUse: boolean;
+  };
   vitals: {
     hr: string; bp: string; spo2: string;
     rr: string; temp: string; gcs: string; grbs: string;
+    gcsE: string; gcsV: string; gcsM: string;
+    crt: string; pupils: string; tempDisplay: string;
   };
   history: {
     symptoms: string; allergies: string; medications: string;
     pastHistory: string; lastMeal: string; events: string;
-    pastSurgical: string; other: string;
+    pastSurgical: string; other: string; lmp: string;
   };
   primary: {
     airway: string; breathing: string; circulation: string;
@@ -73,58 +84,216 @@ function hasClinicalContent(c: CaseData): boolean {
     v.hr || v.bp || v.spo2 || v.rr || v.temp);
 }
 
+const NOTE_SEP = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
+
+function buildGcsDisplay(c: CaseData): string {
+  const { gcsE, gcsV, gcsM, gcs } = c.vitals;
+  if (gcsE && gcsV && gcsM) {
+    const total = (parseInt(gcsE) || 0) + (parseInt(gcsV) || 0) + (parseInt(gcsM) || 0);
+    return `GCS: E${gcsE} V${gcsV} M${gcsM} (${total || gcs}/15)`;
+  }
+  return gcs ? `GCS: ${gcs}` : 'GCS: 15';
+}
+
 export function generateCaseNote(c: CaseData): string {
-  const L: string[] = ['EMERGENCY CASE NOTE'];
-  if (c.caseNumber) L.push(`Case #${c.caseNumber} · ${c.date}`);
-  if (c.doctorName) L.push(`Doctor: ${c.doctorName}${c.department ? ` · ${c.department}` : ''}`);
-  L.push('');
-  L.push('PATIENT');
-  L.push(`${c.name || '—'}${c.age ? `, ${c.age}` : ''}${c.sex ? ` ${c.sex}` : ''}${c.priority ? ` · ${c.priority}` : ''}`);
-  const v = c.vitals;
-  const vp = [v.hr && `HR: ${v.hr}`, v.bp && `BP: ${v.bp}`, v.spo2 && `SpO₂: ${v.spo2}`, v.rr && `RR: ${v.rr}`, v.temp && `Temp: ${v.temp}`, v.gcs && `GCS: ${v.gcs}`, v.grbs && `GRBS: ${v.grbs}`].filter(Boolean);
-  if (vp.length) { L.push(''); L.push('VITALS'); L.push(vp.join(' · ')); }
+  const L: string[] = [];
   const h = c.history;
-  const hp = [
-    h.symptoms && `Symptoms: ${h.symptoms}`,
-    h.events && `Events: ${h.events}`,
-    `Allergies: ${h.allergies || 'NKDA'}`,
-    h.medications ? `Medications: ${h.medications}` : 'Medications: Not mentioned',
-    h.pastHistory ? `Past Hx: ${h.pastHistory}` : 'Past Hx: Not mentioned',
-    h.lastMeal && `Last meal: ${h.lastMeal}`,
-    h.pastSurgical && `Past surgical: ${h.pastSurgical}`,
-    h.other && `Other: ${h.other}`,
-  ].filter(Boolean);
-  if (hp.length) { L.push(''); L.push('HISTORY (SAMPLE)'); hp.forEach(x => L.push(x!)); }
+  const v = c.vitals;
   const p = c.primary;
-  const pp = [p.airway && `A: ${p.airway}`, p.breathing && `B: ${p.breathing}`, p.circulation && `C: ${p.circulation}`, p.disability && `D: ${p.disability}`, p.exposure && `E: ${p.exposure}`, p.ecg && `ECG: ${p.ecg}`, p.abg && `ABG: ${p.abg}`].filter(Boolean);
-  if (pp.length) { L.push(''); L.push('PRIMARY SURVEY (ABCDE)'); pp.forEach(x => L.push(x!)); }
   const e = c.exam;
-  // When clinical content exists, fill Normal defaults for unmentioned exam findings
-  const hasContent = hasClinicalContent(c);
-  const ep = hasContent ? [
-    `General: ${e.general || 'Conscious, alert, well-oriented, no acute distress'}`,
-    `CVS: ${e.cvs || 'S1S2 heard, no murmurs, no added heart sounds'}`,
-    `Resp: ${e.respiratory || 'Air entry bilaterally equal and clear, no adventitious sounds'}`,
-    `Abdomen: ${e.abdomen || 'Soft, non-tender, bowel sounds present'}`,
-    `Neuro: ${e.neuro || 'No focal neurological deficit'}`,
-    e.extremities && `Extremities: ${e.extremities}`,
-  ].filter(Boolean) : [
-    e.general && `General: ${e.general}`,
-    e.cvs && `CVS: ${e.cvs}`,
-    e.respiratory && `Resp: ${e.respiratory}`,
-    e.abdomen && `Abdomen: ${e.abdomen}`,
-    e.neuro && `Neuro: ${e.neuro}`,
-    e.extremities && `Extremities: ${e.extremities}`,
-  ].filter(Boolean);
-  if (ep.length) { L.push(''); L.push('EXAMINATION'); ep.forEach(x => L.push(x!)); }
   const t = c.treatment;
-  const tp = [t.medications && `Medications: ${t.medications}`, t.infusions && `Infusions: ${t.infusions}`, t.ivFluids && `IV Fluids: ${t.ivFluids}`, t.procedures && `Procedures: ${t.procedures}`, t.labsOrdered && `Labs: ${t.labsOrdered}`, t.imaging && `Imaging: ${t.imaging}`].filter(Boolean);
-  if (tp.length) { L.push(''); L.push('TREATMENT GIVEN'); tp.forEach(x => L.push(x!)); }
-  if (c.notes) { L.push(''); L.push('NOTES'); L.push(c.notes); }
   const d = c.disposition;
-  if (d.diagnosis) { L.push(''); L.push('IMPRESSION'); L.push(d.diagnosis); }
-  if (d.differentials) { L.push(''); L.push('DIFFERENTIALS'); L.push(d.differentials); }
-  if (d.decision) { L.push(''); L.push('DISPOSITION'); L.push(`${d.decision}${d.admitTo ? ` — ${d.admitTo}` : ''}${d.referTo ? ` | Referral: ${d.referTo}` : ''}`); }
+  const hasContent = hasClinicalContent(c);
+
+  // ── Title ──────────────────────────────────────────────────────────────────
+  L.push('INITIAL ASSESSMENT AND EMERGENCY');
+  L.push('DEPARTMENT CASE RECORD');
+  L.push(NOTE_SEP);
+
+  // ── Patient header ──────────────────────────────────────────────────────────
+  const isFemale = c.sex?.toLowerCase().startsWith('f');
+  const autoTitle = c.patientTitle || (isFemale ? 'Ms.' : c.sex?.toLowerCase().startsWith('m') ? 'Mr.' : '');
+  L.push(`Patient: ${autoTitle ? autoTitle + ' ' : ''}${c.name || '—'}`);
+  L.push(`Age: ${c.age ? c.age + 'Y' : '—'} / ${c.sex || '—'}`);
+  const idParts = [
+    c.erNumber ? `ER No: ${c.erNumber}` : '',
+    c.bedNumber ? `Bed: ${c.bedNumber}` : '',
+    c.caseNumber ? `Case: ${c.caseNumber}` : '',
+  ].filter(Boolean);
+  if (idParts.length) L.push(idParts.join('    '));
+  L.push('');
+  L.push(`CASE SEEN BY Dr. ${c.doctorName || '____'}${c.caseTime ? ' AT ' + c.caseTime : ''} on ${c.date || '____'}`);
+
+  // ── Presenting Complaint ────────────────────────────────────────────────────
+  L.push('');
+  L.push(NOTE_SEP);
+  L.push('PRESENTING COMPLAINT');
+  L.push(h.symptoms || (h.events ? h.events.split('.')[0] : '') || 'Not documented');
+
+  // ── Primary Assessment (ABCDE) ──────────────────────────────────────────────
+  L.push('');
+  L.push(NOTE_SEP);
+  L.push('PRIMARY ASSESSMENT (ABCDE)');
+  L.push('');
+
+  // A — Airway
+  L.push(`· Airway → ${p.airway || 'Patent'}`);
+
+  // B — Breathing
+  const bParts: string[] = [];
+  if (v.rr) bParts.push(`RR: ${v.rr}/min`);
+  if (v.spo2) bParts.push(`SpO₂: ${v.spo2}% on room air`);
+  if (p.breathing) bParts.push(p.breathing);
+  else bParts.push('Work of breathing normal, Air entry bilaterally equal');
+  L.push(`· Breathing → ${bParts.join(', ')}`);
+
+  // C — Circulation
+  const cParts: string[] = [];
+  if (v.crt) cParts.push(`CRT ${v.crt}`);
+  if (v.hr) cParts.push(`HR: ${v.hr}/min`);
+  if (v.bp) cParts.push(`BP: ${v.bp} mmHg`);
+  if (p.circulation) cParts.push(p.circulation);
+  else cParts.push('Peripheral pulses normal');
+  L.push(`· Circulation → ${cParts.join(', ')}`);
+
+  // D — Disability
+  const gcsStr = buildGcsDisplay(c);
+  const pupilStr = v.pupils ? `, ${v.pupils}` : ', Pupils bilaterally equal and reactive to light';
+  L.push(`· Disability → ${gcsStr}${pupilStr}`);
+
+  // E — Exposure
+  const tempStr = v.tempDisplay || (v.temp ? `Temp: ${v.temp}` : '');
+  L.push(`· Exposure → ${tempStr || 'Temperature normal'}`);
+
+  // Adjuncts
+  const adjuncts: string[] = [];
+  if (p.ecg && p.ecg !== 'Not done') adjuncts.push(`· ECG: ${p.ecg}`);
+  if (p.abg && p.abg !== 'Not done') adjuncts.push(`· ABG/VBG: ${p.abg}`);
+  if (c.efast && c.efast !== 'Not done' && c.efast !== 'Not performed') adjuncts.push(`· EFAST: ${c.efast}`);
+  if (adjuncts.length) {
+    L.push('');
+    L.push('Adjuncts to Primary:');
+    adjuncts.forEach(a => L.push(a));
+  }
+
+  // ── History of Present Illness ──────────────────────────────────────────────
+  L.push('');
+  L.push(NOTE_SEP);
+  L.push('HISTORY OF PRESENT ILLNESS');
+  L.push(h.events || 'History to be documented.');
+
+  // ── Secondary Survey ────────────────────────────────────────────────────────
+  L.push('');
+  L.push(NOTE_SEP);
+  L.push('SECONDARY SURVEY');
+  L.push('');
+  L.push(`· Signs and Symptoms: ${h.symptoms || 'Not mentioned'}`);
+  L.push(`· Past Medical History: ${h.pastHistory || 'Nil'}`);
+  L.push(`· Surgical History: ${h.pastSurgical || 'Nil'}`);
+  L.push(`· Family / Gynae History: ${h.other || 'Nil'}`);
+  if (isFemale) L.push(`· LMP: ${h.lmp || 'Not mentioned'}`);
+  L.push(`· Allergies: ${h.allergies || 'No known allergies'}`);
+
+  // ── General Examination ─────────────────────────────────────────────────────
+  L.push('');
+  L.push(NOTE_SEP);
+  L.push('GENERAL EXAMINATION');
+  const et = c.examToggles;
+  const present: string[] = [];
+  if (et.pallor) present.push('pallor');
+  if (et.icterus) present.push('icterus');
+  if (et.cyanosis) present.push('cyanosis');
+  if (et.clubbing) present.push('clubbing');
+  if (et.lymphadenopathy) present.push('lymphadenopathy');
+  if (et.edema) present.push('edema');
+  if (present.length === 0) {
+    L.push('No pallor, icterus, cyanosis, clubbing, lymphadenopathy, or edema.');
+  } else {
+    const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+    const absent = ['pallor','icterus','cyanosis','clubbing','lymphadenopathy','edema'].filter(f => !present.includes(f));
+    L.push(`${present.map(cap).join(', ')} present.${absent.length ? ' No ' + absent.join(', ') + '.' : ''}`);
+  }
+
+  // ── Systemic Examination ────────────────────────────────────────────────────
+  L.push('');
+  L.push(NOTE_SEP);
+  L.push('SYSTEMIC EXAMINATION');
+  L.push('');
+  L.push(`· CVS: ${e.cvs || (hasContent ? 'S1 and S2 heard and normal' : 'Not examined')}`);
+  L.push(`· Chest: ${e.respiratory || (hasContent ? 'Normal expansion, Normal vesicular breath sounds present, no added sounds' : 'Not examined')}`);
+  L.push(`· Abdomen: ${e.abdomen || (hasContent ? 'Soft, non-distended, bowel sounds present' : 'Not examined')}`);
+  L.push(`· CNS: ${e.neuro || (hasContent ? 'Conscious, Oriented, No focal neurological deficit' : 'Not examined')}`);
+  L.push(`· Extremities: ${e.extremities || 'No visible abnormalities noted'}`);
+
+  // ── Psychological Assessment ────────────────────────────────────────────────
+  L.push('');
+  L.push(NOTE_SEP);
+  L.push('PSYCHOLOGICAL ASSESSMENT');
+  const psych = c.psychological;
+  const psychPresent: string[] = [];
+  if (psych.depression)        psychPresent.push('depression');
+  if (psych.anxiety)           psychPresent.push('anxiety');
+  if (psych.psychosis)         psychPresent.push('psychosis');
+  if (psych.agitation)         psychPresent.push('agitation');
+  if (psych.suicidalIdeation)  psychPresent.push('suicidal ideation');
+  if (psych.substanceUse)      psychPresent.push('substance use');
+  if (psychPresent.length === 0) {
+    L.push('No features of depression, anxiety, psychosis, agitation, suicidal ideation, or substance use.');
+  } else {
+    L.push(`Features of ${psychPresent.join(', ')} noted.`);
+  }
+
+  // ── Investigations ──────────────────────────────────────────────────────────
+  if (t.labsOrdered || t.imaging) {
+    L.push('');
+    L.push(NOTE_SEP);
+    L.push('INVESTIGATIONS');
+    if (t.labsOrdered) L.push(t.labsOrdered);
+    if (t.imaging) L.push(t.imaging);
+  }
+
+  // ── Treatment Plan ──────────────────────────────────────────────────────────
+  if (t.medications || t.infusions || t.ivFluids || t.procedures) {
+    L.push('');
+    L.push(NOTE_SEP);
+    L.push('TREATMENT PLAN');
+    if (t.medications)  L.push(t.medications);
+    if (t.infusions)    L.push(t.infusions);
+    if (t.ivFluids)     L.push(t.ivFluids);
+    if (t.procedures)   L.push(t.procedures);
+  }
+
+  // ── Disposition ─────────────────────────────────────────────────────────────
+  L.push('');
+  L.push(NOTE_SEP);
+  L.push('DISPOSITION');
+  L.push([
+    d.decision || 'ER observation',
+    d.admitTo ? `— ${d.admitTo}` : '',
+    d.referTo ? `| Referral to ${d.referTo}` : '',
+  ].filter(Boolean).join(' '));
+
+  // ── Differential Diagnosis ──────────────────────────────────────────────────
+  if (d.differentials) {
+    L.push('');
+    L.push(NOTE_SEP);
+    L.push('DIFFERENTIAL DIAGNOSIS');
+    const diffs = d.differentials.split('\n').map((s: string) => s.trim()).filter(Boolean);
+    diffs.forEach((diff: string) => {
+      const clean = diff.replace(/^[•\-·\*]\s*/, '');
+      L.push(`• ${clean}`);
+    });
+  }
+
+  // ── Signatures ──────────────────────────────────────────────────────────────
+  const isConsultant = c.userRole === 'consultant' || c.userRole === 'hod';
+  const residentSig   = isConsultant ? (c.doctorName || '') : (c.userName || c.doctorName || '');
+  const consultantSig = isConsultant ? c.userName : '';
+  L.push('');
+  L.push(NOTE_SEP);
+  L.push(`EM Resident:   Dr. ${residentSig || '____________________'}`);
+  L.push(`EM Consultant: Dr. ${consultantSig || '____________________'}`);
+
   return L.join('\n');
 }
 

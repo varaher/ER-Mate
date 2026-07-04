@@ -4084,9 +4084,32 @@ PROCEDURES — set boolean true ONLY if doctor says they performed or are perfor
 - procedures.ortho.fractureSplinting: "splint", "POP", "plaster"
 - procedures.ortho.jointReduction: "reduction done", "joint reduced", "relocated"
 
+LMP RULE: If patient is female, ALWAYS extract LMP from the history and populate menstrualHistory.
+- If not mentioned → menstrualHistory: "Not mentioned"
+- Format: "DD/MM/YY" or "Not mentioned"
+
+GCS COMPONENTS: When GCS is mentioned, extract individual E/V/M components if stated:
+- abcdeFindings.disability.gcsE, gcsV, gcsM (as strings, e.g. "4", "5", "6")
+- In primarySurveyText D section, show: "GCS: E4 V5 M6 (15/15)" format
+
+TEMPERATURE: Always output with unit. Auto-convert for display:
+- If > 41 → Fahrenheit. Output as "103°F" AND also include Celsius in notes: "103°F (39.4°C)"
+- If ≤ 41 → Celsius. Output as "38.5°C" AND also include Fahrenheit: "38.5°C (101.3°F)"
+- vitalsSuggested.temperature: always include unit + conversion in parentheses
+
+EFAST: If mentioned → extract to a new field efastFindings: string (e.g. "No free fluid seen", "Pericardial effusion noted")
+
+HISTORY OF PRESENT ILLNESS: historyOfPresentIllness MUST be a full paragraph (2–5 sentences):
+- Include: time of onset, character of symptom, location, radiation, associated symptoms, relieving/aggravating factors, relevant negative history
+- NOT bullet points. A clinical narrative paragraph.
+- Example: "Patient presented with abdominal pain since the previous evening at approximately 5:30 PM. The pain was initially located in the epigastric region and subsequently migrated to the right iliac fossa. The patient reports associated nausea and chills. No history of vomiting, diarrhea, hematemesis, melena, or urinary complaints."
+
 DIAGNOSIS:
 - diagnosis: array of working diagnoses (first = primary)
-- differentialDiagnosis: array of differential diagnoses
+- differentialDiagnosis: array of differential diagnoses — each WITH clinical reasoning in parentheses
+  Format: "Diagnosis name (reasoning — key finding 1 + key finding 2)"
+  Example: ["Acute appendicitis (most likely — pain migration to RIF + tachycardia)", "Acute gastroenteritis (possible — nausea and diarrhea)", "Mesenteric adenitis (possible — young female, lymphadenopathy pattern)", "Ureteric colic right side (less likely — no urinary symptoms)"]
+  Minimum 3 differentials, maximum 5. Always include reasoning.
 
 DISPOSITION:
 - dispositionSuggested.type: "Admit" | "Discharge" | "Refer" | "LAMA" | "Absconded" | "Death" — if explicitly mentioned
