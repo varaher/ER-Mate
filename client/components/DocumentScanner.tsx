@@ -127,10 +127,6 @@ export function DocumentScanner({ onDataExtracted, context, userId }: DocumentSc
         return;
       }
 
-      if (response.status === 402) {
-        Alert.alert("No ErMate Credits", data?.error || "No ErMate credits remaining. Upgrade to Pro for unlimited access.");
-        return;
-      }
       if (!response.ok) {
         Alert.alert("Scan Failed", data?.error || "Could not extract data from image. Please try again.");
         return;

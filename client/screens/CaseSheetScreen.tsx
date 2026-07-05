@@ -1839,11 +1839,6 @@ export default function CaseSheetScreen() {
         }),
       });
       
-      if (response.status === 402) {
-        const errData = await response.json().catch(() => ({}));
-        Alert.alert("No ErMate Credits", errData.error || "No ErMate credits remaining. Upgrade to Pro for unlimited access.");
-        return;
-      }
       if (!response.ok) {
         throw new Error("Failed to interpret ABG");
       }
@@ -1868,11 +1863,6 @@ export default function CaseSheetScreen() {
         body: JSON.stringify({ imageBase64, userId: user?.id }),
       });
 
-      if (response.status === 402) {
-        const errData = await response.json().catch(() => ({}));
-        Alert.alert("No ErMate Credits", errData.error || "No ErMate credits remaining. Upgrade to Pro for unlimited access.");
-        return;
-      }
       if (!response.ok) {
         throw new Error("Failed to scan ABG");
       }

@@ -546,15 +546,6 @@ const styles = StyleSheet.create({
   identityEmail: { fontSize: 12, marginTop: 1 },
   planBadge: { fontSize: 11, fontWeight: "700" },
 
-  creditBar: { borderRadius: 14, padding: 14, borderWidth: 1, marginBottom: 12 },
-  creditBarTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
-  creditBarTitle: { fontSize: 12, fontWeight: "700" },
-  creditBarUsed: { fontSize: 11 },
-  creditTrack: { height: 6, backgroundColor: "rgba(0,0,0,0.06)", borderRadius: 99, overflow: "hidden", marginBottom: 10 },
-  creditFill: { height: "100%", borderRadius: 99 },
-  creditBarDesc: { fontSize: 11, lineHeight: 16, marginBottom: 0 },
-  creditUpgradeBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, borderRadius: 10, paddingVertical: 10, marginTop: 10 },
-  creditUpgradeBtnText: { fontSize: 13, fontWeight: "700", color: C.white },
 
   combinedBanner: { borderRadius: 16, padding: 16, borderWidth: 1, marginBottom: 12 },
   combinedLabel: { fontSize: 10, fontWeight: "700", letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 },

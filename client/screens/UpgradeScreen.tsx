@@ -742,11 +742,6 @@ const s = StyleSheet.create({
   pillDot: { width: 6, height: 6, borderRadius: 3 },
   pillText: { fontSize: 10, fontWeight: "700" },
 
-  creditPreview: { borderRadius: 11, padding: 12, marginBottom: 12, borderWidth: 1 },
-  creditPreviewTitle: { fontSize: 11, fontWeight: "700", marginBottom: 6 },
-  creditTrack: { height: 5, backgroundColor: "rgba(0,0,0,0.06)", borderRadius: 99, overflow: "hidden", marginBottom: 6 },
-  creditFill: { height: "100%", borderRadius: 99 },
-  creditPreviewSub: { fontSize: 11 },
 
   frow: { flexDirection: "row", alignItems: "flex-start", gap: 9, marginBottom: 9 },
   fcheckBg: { width: 15, height: 15, borderRadius: 7.5, alignItems: "center", justifyContent: "center", marginTop: 1, flexShrink: 0 },

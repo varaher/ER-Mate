@@ -5032,17 +5032,14 @@ Always use the conversation history for context. Keep replies SHORT (1–2 sente
     const status = req.query.razorpay_payment_link_status as string || "";
     const plan = req.query.plan as string || "";
     const cycle = req.query.cycle as string || "";
-    const type = req.query.type as string || "";
     const paid = status === "paid";
 
     const title = paid
-      ? type === "credits" ? "Credits Purchased!" : `${plan ? plan.charAt(0).toUpperCase() + plan.slice(1) : ""} Plan Activated!`
+      ? `${plan ? plan.charAt(0).toUpperCase() + plan.slice(1) : ""} Plan Activated!`
       : "Payment Pending";
 
     const subtitle = paid
-      ? type === "credits"
-        ? "Your AI credits have been added to your account. Return to the ErMate app to continue."
-        : `Your ${cycle === "annual" ? "annual" : "monthly"} subscription is now active. Return to the ErMate app to get started.`
+      ? `Your ${cycle === "annual" ? "annual" : "monthly"} subscription is now active. Return to the ErMate app to get started.`
       : "Your payment is being processed. Return to the ErMate app — your account will be updated shortly.";
 
     const color = paid ? "#1DB870" : "#F59E0B";

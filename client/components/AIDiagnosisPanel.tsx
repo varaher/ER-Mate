@@ -201,9 +201,9 @@ export function AIDiagnosisPanel({
         }),
       });
 
-      if (response.status === 402) {
+      if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
-        setError(errData.error || "No ErMate credits remaining. Upgrade to Pro for unlimited access.");
+        setError(errData.error || "Unable to generate suggestions. Please try again.");
       } else if (response.ok) {
         const data = await response.json();
         if (data.suggestions?.length === 0 && data.redFlags?.length === 0) {

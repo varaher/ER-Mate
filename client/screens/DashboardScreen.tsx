@@ -83,7 +83,6 @@ export default function DashboardScreen() {
   const [selectedCase, setSelectedCase] = useState<CaseItem | null>(null);
   const [exporting, setExporting] = useState(false);
   const [draftsMap, setDraftsMap] = useState<Record<string, DraftCase>>({});
-  const [aiCredits, setAiCredits] = useState<number | null>(null);
   const [localPlan, setLocalPlan] = useState<string | null>(null);
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialChecked, setTutorialChecked] = useState(false);
@@ -119,7 +118,7 @@ export default function DashboardScreen() {
   );
 
   useEffect(() => {
-    const fetchCredits = async () => {
+    const fetchPlan = async () => {
       if (!user?.id) return;
       try {
         const baseUrl = getApiUrl();
@@ -129,19 +128,10 @@ export default function DashboardScreen() {
         try {
           const data = JSON.parse(text);
           setLocalPlan(data.plan ?? "free");
-          if (data.plan === "free") {
-            setAiCredits(data.credits_balance ?? 0);
-          } else {
-            setAiCredits(null);
-          }
-        } catch {
-          setAiCredits(null);
-        }
-      } catch {
-        setAiCredits(null);
-      }
+        } catch { /* non-fatal */ }
+      } catch { /* non-fatal */ }
     };
-    fetchCredits();
+    fetchPlan();
   }, [user?.id]);
 
   useEffect(() => {
@@ -757,35 +747,6 @@ export default function DashboardScreen() {
           <Feather name="chevron-right" size={20} color="#818CF8" />
         </Pressable>
 
-        {aiCredits !== null ? (
-          <Pressable
-            style={({ pressed }) => [
-              styles.creditsWidget,
-              {
-                backgroundColor: theme.card,
-                borderColor: aiCredits === 0 ? TriageColors.red : aiCredits <= 2 ? "#d97706" : theme.primary,
-                opacity: pressed ? 0.9 : 1,
-              },
-            ]}
-            onPress={() => navigation.navigate("Upgrade", {})}
-          >
-            <View style={styles.creditsWidgetLeft}>
-              <Feather name="cpu" size={20} color={theme.primary} />
-              <View>
-                <Text style={[styles.creditsWidgetTitle, { color: theme.text }]}>ErMate Credits</Text>
-                {aiCredits === 0 ? (
-                  <Text style={[styles.creditsWidgetStatus, { color: TriageColors.red }]}>Exhausted</Text>
-                ) : aiCredits <= 2 ? (
-                  <Text style={[styles.creditsWidgetStatus, { color: "#d97706" }]}>Low balance</Text>
-                ) : null}
-              </View>
-            </View>
-            <View style={styles.creditsWidgetRight}>
-              <Text style={[styles.creditsWidgetValue, { color: aiCredits === 0 ? TriageColors.red : theme.primary }]}>{aiCredits}</Text>
-              <Text style={[styles.creditsWidgetLabel, { color: theme.textSecondary }]}>remaining</Text>
-            </View>
-          </Pressable>
-        ) : null}
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -1211,26 +1172,6 @@ const styles = StyleSheet.create({
   },
   statsNavTitle: { ...Typography.bodyMedium, fontSize: 14 },
   statsNavSub: { fontSize: 12, marginTop: 2 },
-  creditsWidget: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: Spacing.md,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1.5,
-    marginHorizontal: Spacing.lg,
-    marginTop: Spacing.md,
-  },
-  creditsWidgetLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-  },
-  creditsWidgetTitle: { ...Typography.bodyMedium, fontSize: 14 },
-  creditsWidgetStatus: { fontSize: 11, fontWeight: "600" },
-  creditsWidgetRight: { alignItems: "flex-end" },
-  creditsWidgetValue: { fontSize: 24, fontWeight: "800" },
-  creditsWidgetLabel: { fontSize: 10, fontWeight: "500" },
   newPatientModalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
