@@ -64,9 +64,10 @@ export async function sarvamSpeechToTextTranslate(
     filename: filename,
     contentType: getAudioMimeType(filename),
   });
-  formData.append("model", "saaras:v2.5");
+  formData.append("model", "saaras:v3");
+  formData.append("mode", "translate");
 
-  const response = await fetch(`${SARVAM_API_BASE}/speech-to-text-translate`, {
+  const response = await fetch(`${SARVAM_API_BASE}/speech-to-text`, {
     method: "POST",
     headers: {
       "api-subscription-key": apiKey,
