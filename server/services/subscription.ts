@@ -5,10 +5,7 @@ import { eq } from "drizzle-orm";
 const FREE_CASE_LIMIT = 10;
 const PREMIUM_CASE_LIMIT = 999999;
 const TRIAL_CASE_LIMIT = 999999;
-const TRIAL_AI_CREDITS = 999;
 const PREMIUM_PRICE_INR = 559;
-const BASE_AI_CREDITS = 20;
-const PRO_AI_CREDITS = 50;
 
 function isTrialActive(sub: { plan: string; currentPeriodEnd: Date | null }): boolean {
   if (sub.plan !== "trial") return false;
@@ -25,9 +22,9 @@ export async function getOrCreateSubscription(userId: string, userEmail: string)
     // Auto-expire trial: if plan is "trial" and period ended, downgrade to free
     if (sub.plan === "trial" && sub.currentPeriodEnd && new Date() >= new Date(sub.currentPeriodEnd)) {
       await db.update(subscriptions)
-        .set({ plan: "free", casesLimit: FREE_CASE_LIMIT, casesUsed: 0, aiCredits: 5, updatedAt: new Date() })
+        .set({ plan: "free", casesLimit: FREE_CASE_LIMIT, casesUsed: 0, updatedAt: new Date() })
         .where(eq(subscriptions.id, sub.id));
-      return { ...sub, plan: "free", casesLimit: FREE_CASE_LIMIT, casesUsed: 0, aiCredits: 5 };
+      return { ...sub, plan: "free", casesLimit: FREE_CASE_LIMIT, casesUsed: 0 };
     }
     return sub;
   }
@@ -44,7 +41,6 @@ export async function getOrCreateSubscription(userId: string, userEmail: string)
     status: "active",
     casesUsed: 0,
     casesLimit: TRIAL_CASE_LIMIT,
-    aiCredits: TRIAL_AI_CREDITS,
     currentPeriodStart: now,
     currentPeriodEnd: trialEnd,
   }).returning();
@@ -113,7 +109,6 @@ export async function activatePlan(
       plan,
       status: "active",
       casesLimit: PREMIUM_CASE_LIMIT,
-      aiCredits: plan === "pro" ? PRO_AI_CREDITS : BASE_AI_CREDITS,
       currentPeriodStart: now,
       currentPeriodEnd: periodEnd,
       stripeCustomerId: stripeCustomerId || sub.stripeCustomerId,
@@ -164,25 +159,4 @@ export async function resetMonthlyCases(userId: string) {
     .where(eq(subscriptions.id, sub.id));
 }
 
-export async function deductAiCredit(userId: string): Promise<{ ok: boolean; remaining: number }> {
-  const db = getDb()!;
-  const sub = await getOrCreateSubscription(userId, "");
-  // Paid plans and active trials: unlimited, never deduct
-  if (sub.plan !== "free") return { ok: true, remaining: 9999 };
-  if (sub.aiCredits <= 0) return { ok: false, remaining: 0 };
-  await db.update(subscriptions)
-    .set({ aiCredits: sub.aiCredits - 1, updatedAt: new Date() })
-    .where(eq(subscriptions.id, sub.id));
-  return { ok: true, remaining: sub.aiCredits - 1 };
-}
-
-export async function addAiCredits(userId: string, amount: number) {
-  const db = getDb()!;
-  const sub = await getOrCreateSubscription(userId, "");
-  await db.update(subscriptions)
-    .set({ aiCredits: sub.aiCredits + amount, updatedAt: new Date() })
-    .where(eq(subscriptions.id, sub.id));
-  return { aiCredits: sub.aiCredits + amount };
-}
-
-export { FREE_CASE_LIMIT, PREMIUM_CASE_LIMIT, PREMIUM_PRICE_INR, BASE_AI_CREDITS, PRO_AI_CREDITS };
+export { FREE_CASE_LIMIT, PREMIUM_CASE_LIMIT, PREMIUM_PRICE_INR };

@@ -48,7 +48,6 @@ interface SubStatus {
   plan: string;
   casesUsed: number;
   casesLimit: number;
-  aiCredits?: number;
 }
 
 function FRow({ text, ok = true, bold = false, color = C.green, sub = "" }: {
@@ -284,24 +283,16 @@ export default function UpgradeScreen() {
                 </View>
               </View>
               <Text style={[s.planDesc, { color: C.faint }]}>
-                10 cases to try ErMate. Includes 5 ErMate credits to experience Decision Support and Rounds before upgrading.
+                10 cases to try ErMate — all AI features fully included. No credits. No limits on what you can do within those 10 cases.
               </Text>
-              <View style={[s.creditPreview, { backgroundColor: "#F0FDF6", borderColor: C.greenBorder }]}>
-                <Text style={[s.creditPreviewTitle, { color: C.greenDark }]}>5 free ErMate credits included</Text>
-                <View style={s.creditTrack}>
-                  <View style={[s.creditFill, { width: 0, backgroundColor: C.green }]} />
-                </View>
-                <Text style={[s.creditPreviewSub, { color: C.muted }]}>Try Decision Support, Rounds, OCR — 1 credit each</Text>
-              </View>
               {[
                 { text: "10 cases (lifetime)", ok: true },
-                { text: "Smart Dictation — always free", ok: true },
-                { text: "ErMate Discharge Summary — always free", ok: true },
+                { text: "Smart Dictation — fully included", ok: true },
+                { text: "Clinical Decision Support — fully included", ok: true },
+                { text: "Discharge Summary — fully included", ok: true },
                 { text: "ATLS adult + PALS paediatric", ok: true },
                 { text: "PDF / WhatsApp export", ok: true },
-                { text: "5 ErMate credits (one-time)", ok: true },
                 { text: "Unlimited cases", ok: false },
-                { text: "Unlimited ErMate features", ok: false },
                 { text: "Rounds & Clinical Memory", ok: false },
               ].map((f, i) => <FRow key={i} {...f} color={C.muted} />)}
             </View>
@@ -311,7 +302,7 @@ export default function UpgradeScreen() {
               {/* Green tag bar */}
               <View style={[s.proTagBar, { backgroundColor: C.green }]}>
                 <Text style={s.proTagLeft}>Individual Pro · Recommended</Text>
-                <Text style={s.proTagRight}>No credits · No limits</Text>
+                <Text style={s.proTagRight}>All AI included · No limits</Text>
               </View>
 
               {/* Dark price header */}
@@ -350,7 +341,7 @@ export default function UpgradeScreen() {
               </View>
 
               <View style={{ padding: 16 }}>
-                <SecLabel text="Documentation — unlimited, no credits" color={C.greenDark} />
+                <SecLabel text="Documentation — unlimited" color={C.greenDark} />
                 {[
                   { text: "Unlimited cases", bold: true },
                   { text: "Smart Dictation — always free, always unlimited", bold: true },
@@ -388,7 +379,7 @@ export default function UpgradeScreen() {
                 ].map((f, i) => <FRow key={i} ok bold={!!f.bold} text={f.text} color={C.green} />)}
 
                 <View style={[s.noCreditsNote, { backgroundColor: C.surface }]}>
-                  <Text style={[s.noCreditsText, { color: C.faint }]}>No credits on Pro. No limits. No walls. One price — everything works.</Text>
+                  <Text style={[s.noCreditsText, { color: C.faint }]}>One price — everything works. No walls, no counting, no mid-shift surprises.</Text>
                 </View>
 
                 <Pressable
@@ -423,12 +414,10 @@ export default function UpgradeScreen() {
               </View>
             </View>
 
-            {/* No credits note */}
             <View style={[s.card, { backgroundColor: C.white, borderColor: C.border }]}>
-              <Text style={[s.noCreditsCardTitle, { color: C.ink }]}>No ErMate credits on Pro?</Text>
+              <Text style={[s.noCreditsCardTitle, { color: C.ink }]}>Everything works on Pro</Text>
               <Text style={[s.noCreditsCardBody, { color: C.muted }]}>
-                Correct. On Pro, every ErMate feature just works — no counting, no topping up, no mid-shift surprises.
-                Credits only exist on the Free plan as a one-time taste before you decide to upgrade.
+                Smart Dictation, Decision Support, Rounds, OCR, Discharge Summaries — every feature, every shift, no walls, no counting.
               </Text>
             </View>
           </>
@@ -493,7 +482,7 @@ export default function UpgradeScreen() {
                 <View style={[s.teamCard, { borderColor: C.greenBorder }]}>
                   <View style={[s.teamCardTag, { backgroundColor: "rgba(29,184,112,0.1)", borderBottomColor: "rgba(29,184,112,0.1)" }]}>
                     <Text style={[s.teamTagLeft, { color: C.green }]}>Team Plan · Dynamic pricing</Text>
-                    <Text style={[s.teamTagRight, { color: "rgba(255,255,255,0.3)" }]}>No credit walls. Ever.</Text>
+                    <Text style={[s.teamTagRight, { color: "rgba(255,255,255,0.3)" }]}>Everything included.</Text>
                   </View>
                   <View style={{ padding: 18, paddingBottom: 0 }}>
                     <View style={s.teamPriceRow}>
@@ -567,7 +556,7 @@ export default function UpgradeScreen() {
                       { text: "Unlimited cases, Dictation, Discharge Summary" },
                       { text: "Decision Support, OCR, ABG, EM Reference" },
                       { text: "Rounds with all 7 lenses, unlimited", bold: true },
-                      { text: "No credits. No limits. Ever.", bold: true },
+                      { text: "No limits. Everything included.", bold: true },
                     ].map((f, i) => (
                       <View key={i} style={s.frow}>
                         <View style={[s.fcheckBg, { backgroundColor: C.green + "20" }]}>

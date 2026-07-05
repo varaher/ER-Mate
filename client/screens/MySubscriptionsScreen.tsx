@@ -47,12 +47,11 @@ interface SubStatus {
   casesLimit: number;
   casesRemaining: number | null;
   currentPeriodEnd: string | null;
-  credits_balance: number;
   isTrial?: boolean;
   trialEnd?: string | null;
 }
 
-function getAccess(sub: { plan: string; teamActive: boolean; casesUsed: number; aiCredits: number }) {
+function getAccess(sub: { plan: string; teamActive: boolean; casesUsed: number }) {
   const unlimited = sub.teamActive || sub.plan === "pro" || sub.plan === "trial";
   const isFree = !unlimited && sub.plan === "free";
   return {
@@ -61,53 +60,11 @@ function getAccess(sub: { plan: string; teamActive: boolean; casesUsed: number; 
     cases: unlimited ? "unlimited" : `${sub.casesUsed || 0} of 10`,
     smartDictation: true,
     discharge: true,
-    aiFeatures: unlimited ? "unlimited" : (sub.aiCredits > 0 ? "credits" : "blocked"),
-    aiCredits: sub.aiCredits || 0,
-    rounds: unlimited ? "unlimited" : (sub.aiCredits > 0 ? "credits" : "blocked"),
     clinicalMemory: sub.plan === "pro",
     handover: sub.teamActive,
     shiftMgmt: sub.teamActive,
-    showCreditBar: isFree,
     showUpgrade: isFree,
   };
-}
-
-function CreditBar({ credits, maxCredits = 5, onUpgrade }: { credits: number; maxCredits?: number; onUpgrade: () => void }) {
-  const used = maxCredits - credits;
-  const pct = Math.min(100, (used / Math.max(1, maxCredits)) * 100);
-  const low = credits <= 2 && credits > 0;
-  const gone = credits === 0;
-  const barColor = gone ? C.red : low ? C.orange : C.green;
-  const bgColor = gone ? "#FEF2F2" : low ? C.orangeLight : C.greenLight;
-  const borderColor = gone ? "#FECACA" : low ? C.orangeBorder : C.greenBorder;
-  const titleColor = gone ? C.red : low ? "#92400E" : C.greenDark;
-
-  return (
-    <View style={[styles.creditBar, { backgroundColor: bgColor, borderColor }]}>
-      <View style={styles.creditBarTop}>
-        <Text style={[styles.creditBarTitle, { color: titleColor }]}>
-          {gone ? "ErMate credits used up" : `${credits} ErMate credit${credits === 1 ? "" : "s"} remaining`}
-        </Text>
-        <Text style={[styles.creditBarUsed, { color: C.faint }]}>{used}/{maxCredits} used</Text>
-      </View>
-      <View style={styles.creditTrack}>
-        <View style={[styles.creditFill, { width: `${pct}%` as any, backgroundColor: barColor }]} />
-      </View>
-      <Text style={[styles.creditBarDesc, { color: C.muted }]}>
-        {gone
-          ? "Upgrade to Pro for unlimited access — Decision Support, Rounds, OCR, and more."
-          : low
-          ? `${credits} credit${credits === 1 ? "" : "s"} left. Each ErMate action uses 1 credit.`
-          : "Each ErMate action (Decision Support, Rounds, OCR) uses 1 credit."}
-      </Text>
-      {(gone || low) && (
-        <Pressable style={[styles.creditUpgradeBtn, { backgroundColor: C.green }]} onPress={onUpgrade}>
-          <Text style={styles.creditUpgradeBtnText}>Upgrade to Pro — Unlimited</Text>
-          <Feather name="arrow-right" size={14} color={C.white} />
-        </Pressable>
-      )}
-    </View>
-  );
 }
 
 function StatusPill({ status }: { status: "active" | "inactive" | "trial" }) {
@@ -157,13 +114,10 @@ export default function MySubscriptionsScreen() {
   const plan = subStatus?.plan ?? "free";
   const isTrial = plan === "trial";
   const showPro = plan === "pro";
-  const aiCredits = subStatus?.credits_balance ?? 0;
-
   const access = getAccess({
     plan,
     teamActive: showTeam,
     casesUsed: subStatus?.casesUsed ?? 0,
-    aiCredits,
   });
 
   const showFree = access.isFree;
@@ -241,11 +195,6 @@ export default function MySubscriptionsScreen() {
           {!showPro && !showTeam && !isTrial && <Text style={[styles.planBadge, { color: C.faint }]}>Free</Text>}
         </View>
       </View>
-
-      {/* Credit bar — Free users only */}
-      {access.showCreditBar && (
-        <CreditBar credits={aiCredits} onUpgrade={handleUpgrade} />
-      )}
 
       {/* Combined banner — both plans active */}
       {showBoth && (
@@ -555,16 +504,15 @@ export default function MySubscriptionsScreen() {
             { label: "Case documentation", val: access.cases === "unlimited" ? "Unlimited" : access.cases },
             { label: "Smart Dictation", val: "Always free" },
             { label: "ErMate Discharge Summary", val: "Always free" },
-            { label: "Decision Support", val: access.unlimited ? "Unlimited" : access.aiCredits > 0 ? `${access.aiCredits} credits left` : "Upgrade to unlock" },
-            { label: "Rounds debriefs", val: access.unlimited ? "Unlimited" : access.aiCredits > 0 ? `${access.aiCredits} credits left` : "Upgrade to unlock" },
+            { label: "Decision Support", val: access.unlimited ? "Unlimited" : "Upgrade to unlock" },
+            { label: "Rounds debriefs", val: access.unlimited ? "Unlimited" : "Upgrade to unlock" },
             { label: "Clinical Memory", val: access.clinicalMemory ? "Private ✓" : "Add Pro" },
             { label: "Shift management", val: access.shiftMgmt ? "Active ✓" : "—" },
             { label: "Case handover", val: access.handover ? "Active ✓" : "—" },
           ].map((item, i, arr) => {
             const isGood = item.val.includes("Unlimited") || item.val.includes("✓") || item.val.includes("free");
-            const isCredit = item.val.includes("credits");
             const isLocked = item.val.includes("Upgrade") || item.val.includes("Add") || item.val === "—";
-            const valColor = isGood ? C.greenDark : isCredit ? C.orange : isLocked ? (item.val === "—" ? C.faint : C.red) : C.faint;
+            const valColor = isGood ? C.greenDark : isLocked ? (item.val === "—" ? C.faint : C.red) : C.faint;
             return (
               <View key={i} style={[styles.accessRow, i < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: C.surface }]}>
                 <Text style={[styles.accessLabel, { color: C.inkSoft }]}>{item.label}</Text>

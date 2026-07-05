@@ -5,9 +5,9 @@ import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, Bord
 import multer from "multer";
 import crypto from "crypto";
 import { generateDiagnosisSuggestions, recordFeedback, getFeedbackStats, getLearningInsights, generateCourseInHospital, extractClinicalDataFromVoice, transcribeAndExtractVoice, generateRoundsDebrief, type AIFeedback, type FeedbackResult, type ExtractedClinicalData } from "./services/aiDiagnosis";
-import { getOrCreateSubscription, canCreateCase, incrementCaseCount, activatePremium, activatePlan, cancelSubscription, deductAiCredit, FREE_CASE_LIMIT, PREMIUM_PRICE_INR } from "./services/subscription";
+import { getOrCreateSubscription, canCreateCase, incrementCaseCount, activatePremium, activatePlan, cancelSubscription, FREE_CASE_LIMIT, PREMIUM_PRICE_INR } from "./services/subscription";
 import { createPaymentLink, verifyWebhookSignature } from "./services/razorpayService";
-import { PLAN_AMOUNTS_PAISE, CREDIT_PACKS } from "./config/pricing";
+import { PLAN_AMOUNTS_PAISE } from "./config/pricing";
 import { getEMReferenceResponse, EM_TOPICS, type EMReferenceMessage } from "./services/emReference";
 import { getDb, getPool, ensureAuthSessionsTable, ensureDepartmentTables, ensurePasswordResetTable } from "./db";
 import { emReferenceFeedback, userFeedback } from "@shared/schema";
@@ -2923,11 +2923,6 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       if (!abg_values) {
         return res.status(400).json({ error: "ABG values are required" });
       }
-      if (userId) {
-        const credit = await deductAiCredit(userId);
-        if (!credit.ok) return res.status(402).json({ error: "No AI credits remaining. Upgrade to Pro for unlimited access.", code: "CREDITS_EXHAUSTED" });
-      }
-
       const { interpretABG } = await import("./services/aiDiagnosis");
       const interpretation = await interpretABG(abg_values, patient_context);
       
@@ -2945,11 +2940,6 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       if (!imageBase64) {
         return res.status(400).json({ error: "Image data is required" });
       }
-      if (userId) {
-        const credit = await deductAiCredit(userId);
-        if (!credit.ok) return res.status(402).json({ error: "No AI credits remaining. Upgrade to Pro for unlimited access.", code: "CREDITS_EXHAUSTED" });
-      }
-
       const { extractABGFromImage } = await import("./services/aiDiagnosis");
       const abgValues = await extractABGFromImage(imageBase64);
       
@@ -2967,11 +2957,6 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       if (!imageBase64) {
         return res.status(400).json({ error: "Image data is required" });
       }
-      if (userId) {
-        const credit = await deductAiCredit(userId);
-        if (!credit.ok) return res.status(402).json({ error: "No AI credits remaining. Upgrade to Pro for unlimited access.", code: "CREDITS_EXHAUSTED" });
-      }
-
       const { extractClinicalDataFromImage } = await import("./services/aiDiagnosis");
       const extractedData = await extractClinicalDataFromImage(imageBase64, patientContext);
       
@@ -2989,11 +2974,6 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       if (!chiefComplaint) {
         return res.status(400).json({ error: "Chief complaint is required" });
       }
-      if (userId) {
-        const credit = await deductAiCredit(userId);
-        if (!credit.ok) return res.status(402).json({ error: "No AI credits remaining. Upgrade to Pro for unlimited access.", code: "CREDITS_EXHAUSTED" });
-      }
-
       let enhancedHistory = history || "";
       if (treatmentData) {
         const treatmentParts: string[] = [];
@@ -4481,10 +4461,6 @@ Always use the conversation history for context. Keep replies SHORT (1–2 sente
       }
 
       const scanUserId = req.body.userId as string | undefined;
-      if (scanUserId) {
-        const credit = await deductAiCredit(scanUserId);
-        if (!credit.ok) return res.status(402).json({ error: "No AI credits remaining. Upgrade to Pro for unlimited access.", code: "CREDITS_EXHAUSTED" });
-      }
 
       let patientContext;
       if (req.body.patientContext) {
@@ -4773,7 +4749,6 @@ Always use the conversation history for context. Keep replies SHORT (1–2 sente
         currentPeriodEnd: sub.currentPeriodEnd,
         priceInr: PREMIUM_PRICE_INR,
         freeCaseLimit: FREE_CASE_LIMIT,
-        credits_balance: sub.aiCredits ?? 0,
         isTrial,
         trialEnd: isTrial ? sub.currentPeriodEnd : null,
       });
@@ -4966,47 +4941,6 @@ Always use the conversation history for context. Keep replies SHORT (1–2 sente
     }
   });
 
-  app.post("/api/subscription/create-credit-order", async (req: Request, res: Response) => {
-    try {
-      const { packIndex } = req.body as { packIndex: number };
-      const pack = CREDIT_PACKS[packIndex];
-      if (!pack) return res.status(400).json({ error: "Invalid pack index" });
-
-      const authHeader = req.headers.authorization;
-      const token = authHeader?.replace("Bearer ", "") || "";
-      let userId = "";
-      let userEmail = "";
-      let userName = "";
-      try {
-        const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString());
-        userId = payload.sub || payload.id || "";
-        userEmail = payload.email || "";
-        userName = payload.name || payload.fullName || "";
-      } catch { /* non-fatal */ }
-
-      const domain = "ermate.in";
-      const callbackUrl = `https://${domain}/payment-callback?type=credits&pack=${pack.id}`;
-      const ts = Date.now().toString().slice(-10);
-      const uid = (userId || "anon").slice(-8);
-      const referenceId = `cr_${uid}_${pack.id}_${ts}`;
-
-      const { url } = await createPaymentLink({
-        amountPaise: pack.amountPaise,
-        description: `ErMate ${pack.label}`,
-        customerEmail: userEmail || undefined,
-        customerName: userName || undefined,
-        referenceId,
-        callbackUrl,
-        notes: { userId, type: "credits", pack: pack.id, credits: String(pack.credits), userEmail },
-      });
-
-      return res.json({ url });
-    } catch (error) {
-      console.error("[Razorpay] Credit order error:", error);
-      res.status(500).json({ error: "Failed to create credit order" });
-    }
-  });
-
   app.post("/api/webhooks/razorpay", async (req: Request, res: Response) => {
     try {
       const signature = req.headers["x-razorpay-signature"] as string || "";
@@ -5031,17 +4965,9 @@ Always use the conversation history for context. Keep replies SHORT (1–2 sente
         const userId = notes?.userId;
         const plan = notes?.plan as "base" | "pro" | undefined;
         const cycle = (notes?.cycle || "monthly") as "monthly" | "annual";
-        const type = notes?.type;
         const paymentLinkId = linkEntity?.id as string;
 
-        if (type === "credits") {
-          const packId = notes?.pack;
-          const credits = parseInt(notes?.credits || "0", 10);
-          if (userId && credits > 0) {
-            console.log(`[Razorpay] Credits purchased: userId=${userId} credits=${credits}`);
-            // Credits are managed on the external backend; log for manual processing if needed
-          }
-        } else if (userId && plan && ["base", "pro"].includes(plan)) {
+        if (userId && plan && ["base", "pro"].includes(plan)) {
           await activatePlan(userId, plan, cycle, paymentLinkId);
           console.log(`[Razorpay] Plan activated: userId=${userId} plan=${plan} cycle=${cycle}`);
         }
@@ -5176,11 +5102,6 @@ Always use the conversation history for context. Keep replies SHORT (1–2 sente
       if (!messages || !Array.isArray(messages) || messages.length === 0) {
         return res.status(400).json({ error: "messages array is required" });
       }
-      if (userId) {
-        const credit = await deductAiCredit(userId);
-        if (!credit.ok) return res.status(402).json({ error: "No AI credits remaining. Upgrade to Pro for unlimited access.", code: "CREDITS_EXHAUSTED" });
-      }
-
       const response = await getEMReferenceResponse(messages, topic);
       res.json({ response });
     } catch (error) {
@@ -5275,10 +5196,6 @@ Always use the conversation history for context. Keep replies SHORT (1–2 sente
       const { caseData, mode, userId } = req.body;
       if (!caseData || !mode) {
         return res.status(400).json({ error: "caseData and mode are required" });
-      }
-      if (userId) {
-        const credit = await deductAiCredit(userId);
-        if (!credit.ok) return res.status(402).json({ error: "No AI credits remaining. Upgrade to Pro for unlimited access.", code: "CREDITS_EXHAUSTED" });
       }
       const text = await generateRoundsDebrief(caseData, mode);
       res.json({ text });

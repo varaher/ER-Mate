@@ -1,0 +1,140 @@
+Let me check what's currently in the subscription system from our session memory.
+
+---
+
+## Current Subscription Structure (as designed)
+
+```
+FREE PLAN:
+  10 cases lifetime
+  5 AI credits one-time
+  Smart Dictation — always free
+  AI Discharge Summary — always free
+
+INDIVIDUAL PRO — ₹1,199/month:
+  Everything unlimited
+  No credits ever
+  First month free
+
+TEAM PLAN — ₹599/consultant + ₹399/resident:
+  Everything in Pro for every doctor
+  Shift management, handover, HOD dashboard
+  No credits ever
+```
+
+---
+
+## The Honest Answer — No, You Don't Need Credit Packs
+
+Here is why:
+
+---
+
+**The credit system was designed for the old app.** When ErMate had a form-based case sheet with separate AI features (Decision Support, ABG Interpretation, Rounds), credits made sense as a gate for each feature.
+
+**The new app is one flow.** Doctor dictates → case note appears. That's it. There's no separate button to tap for AI. The AI is the core product, not an add-on. Gating it with credits breaks the flow at the worst possible moment — mid-shift.
+
+**Credits create confusion and anxiety.** A doctor mid-shift who runs out of credits and can't document a case is a patient safety problem. No doctor will subscribe to a product that might lock them out during a busy shift.
+
+**Pro and Team already solve monetisation.** Unlimited everything on a fixed monthly fee is cleaner, more predictable for the doctor, and more predictable revenue for you.
+
+---
+
+## Recommended — Remove Credits Entirely
+
+```
+FREE PLAN (revised):
+  10 cases lifetime
+  ALL AI features work on those 10 cases
+  Smart Dictation ✓
+  Case note generation ✓
+  Discharge summary ✓
+  Differentials ✓
+  
+  When 10 cases used → upgrade prompt
+  No credits. No feature walls.
+  Just a case limit.
+
+INDIVIDUAL PRO — ₹1,199/month:
+  Unlimited cases
+  Everything unlimited
+  First month free
+  No credits ever
+
+TEAM PLAN — ₹599/consultant + ₹399/resident:
+  Everything in Pro for every doctor
+  Shift features
+  No credits ever
+```
+
+---
+
+## Why 10 Cases Is Better Than 5 Credits
+
+```
+CREDITS (bad):
+  Doctor opens ErMate
+  Documents a case ← uses 1 credit
+  Wants discharge summary ← uses 1 credit
+  Wants differentials ← uses 1 credit
+  3 credits gone on one patient
+  Doctor is confused about what costs credits
+  Doctor gets to 0 mid-shift
+  Doctor never upgrades — just uninstalls
+
+CASE LIMIT (good):
+  Doctor opens ErMate
+  Documents 10 full cases
+  Every feature works on every case
+  After 10 cases, upgrade prompt appears
+  Doctor has seen the full value
+  Doctor upgrades with confidence
+```
+
+---
+
+## What to Tell Your Developer
+
+```
+Remove the credit system entirely.
+
+1. Delete AI credit deduction from 
+   all 7 routes where it was added
+
+2. Remove the "AI Credits Exhausted" 
+   banner from the Dashboard
+
+3. Free plan = 10 case limit only
+   No feature gates within those 10 cases
+
+4. Update the subscription screen:
+   Remove "5 AI credits" from Free tier
+   Add "All AI features on 10 cases"
+
+5. Update the landing page:
+   Remove credit pack references
+   Simplify Free plan description
+```
+
+---
+
+## Updated Subscription Comparison
+
+```
+                FREE      PRO       TEAM
+Cases           10        Unlimited Unlimited
+Smart Dictation ✓         ✓         ✓
+Case note       ✓         ✓         ✓
+Discharge summ  ✓         ✓         ✓
+Differentials   ✓         ✓         ✓
+Rounds          ✓         ✓         ✓
+Clinical Memory ✗         ✓         ✓
+Shift mgmt      ✗         ✗         ✓
+Handover        ✗         ✗         ✓
+HOD Dashboard   ✗         ✗         ✓
+Price           ₹0        ₹1,199/mo ₹399-599/doc
+```
+
+Clean. Simple. No confusion. No mid-shift lockouts.
+
+**Remove credits. Keep the case limit. That's the right model for a clinical tool.**

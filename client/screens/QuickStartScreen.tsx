@@ -84,7 +84,7 @@ const STEPS: TutorialStep[] = [
     tips: [
       "Supports full history capture in one go",
       "Tap any field's mic icon to dictate just that field",
-      "Review the transcript before applying — uses 1 ErMate credit",
+      "Review the transcript before applying",
     ],
   },
   {
@@ -96,7 +96,7 @@ const STEPS: TutorialStep[] = [
     tips: [
       "Tap the camera icon inside the case sheet",
       "Works with printed text, handwriting, and forms",
-      "Uses 1 ErMate credit per scan",
+      "Instantly populates your case sheet",
     ],
   },
   {
@@ -108,7 +108,7 @@ const STEPS: TutorialStep[] = [
     tips: [
       "Found in the Treatment tab",
       "Labels: CONSISTENT / POSSIBLE / LESS LIKELY",
-      "Accept or exclude suggestions — uses 1 ErMate credit",
+      "Accept or exclude suggestions directly on your case",
     ],
   },
   {
@@ -118,8 +118,8 @@ const STEPS: TutorialStep[] = [
     title: "Export & Discharge",
     description: "Generate discharge summaries and export as PDF or DOCX — shareable instantly via WhatsApp or email.",
     tips: [
-      "ErMate discharge summaries use 1 credit",
-      "PDF and DOCX export is always free",
+      "AI-generated discharge summaries fully included",
+      "PDF and DOCX export always available",
       "Tap the share icon on any case from the Dashboard",
     ],
   },
@@ -155,20 +155,8 @@ const STEPS: TutorialStep[] = [
     description: "Use the Learn tab for clinical simulations, EM reference chat, and trivia quizzes to stay sharp.",
     tips: [
       "Simulations present real ER scenarios — free to use",
-      "EM Reference answers guideline questions with citations — uses 1 ErMate credit",
+      "EM Reference answers guideline questions with PubMed citations",
       "Build your weekly trivia streak for consistent practice",
-    ],
-  },
-  {
-    icon: "credit-card",
-    iconColor: "#3B82F6",
-    iconBg: "#DBEAFE",
-    title: "ErMate Credits",
-    description: "Your Base Plan includes 20 ErMate credits per month for Smart Dictation, CDS, document scanning, and more.",
-    tips: [
-      "Free plan: 10 cases total, no ErMate credits",
-      "Base Plan: Unlimited EMR + 20 credits/month",
-      "Credits roll over forever — they never expire",
     ],
   },
 ];

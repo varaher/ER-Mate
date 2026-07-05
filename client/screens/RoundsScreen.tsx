@@ -425,7 +425,7 @@ export default function RoundsScreen() {
         });
         if (res.status === 402) {
           const err = await res.json().catch(() => ({}));
-          throw new Error(err.error || "No ErMate credits remaining. Upgrade to Pro for unlimited access.");
+          throw new Error(err.error || "Service temporarily unavailable. Please try again.");
         }
         if (!res.ok) throw new Error("ErMate service unavailable");
         const data = await res.json();

@@ -35,12 +35,6 @@ export const TEAM_PRICING = {
   minDoctors: 4,
 } as const;
 
-export const CREDIT_PACKS = [
-  { id: "pack50",  credits: 50,  amountPaise: 49900,  label: "50 Credits",  priceDisplay: "₹499",    per: "₹10 / credit", popular: false },
-  { id: "pack100", credits: 100, amountPaise: 89900,  label: "100 Credits", priceDisplay: "₹899",    per: "₹9 / credit",  popular: true  },
-  { id: "pack300", credits: 300, amountPaise: 249900, label: "300 Credits", priceDisplay: "₹2,499",  per: "₹8.3 / credit",popular: false },
-] as const;
-
 export type PlanId = "base" | "pro";
 export type BillingCycle = "monthly" | "annual";
 
