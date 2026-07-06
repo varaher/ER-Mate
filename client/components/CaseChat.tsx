@@ -727,7 +727,6 @@ function FeedbackPrompt({
           placeholder="Describe the correction…"
           placeholderTextColor={C.faint}
           multiline
-          maxLength={400}
         />
         <Pressable
           style={[fb.correctionSubmit, { opacity: (correctionText || '').trim() ? 1 : 0.4 }]}
@@ -1857,7 +1856,6 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
               : 'Or type your case note…'}
             placeholderTextColor={C.faint}
             multiline
-            maxLength={1500}
             editable={!disabled && !busy}
           />
         )}
