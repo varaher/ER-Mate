@@ -10,7 +10,6 @@ import {
   Alert,
 } from "react-native";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
-import { useHeaderHeight } from "@react-navigation/elements";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -34,7 +33,6 @@ export default function LogsScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { theme, isDark } = useTheme();
   const insets = useSafeAreaInsets();
-  const headerHeight = useHeaderHeight();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -168,7 +166,7 @@ export default function LogsScreen() {
         renderItem={renderLog}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{
-          paddingTop: headerHeight + 12,
+          paddingTop: insets.top + Spacing.lg,
           paddingHorizontal: Spacing.lg,
           paddingBottom: insets.bottom + 100,
         }}
