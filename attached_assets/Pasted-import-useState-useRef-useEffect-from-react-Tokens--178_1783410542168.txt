@@ -1,0 +1,1157 @@
+import { useState, useRef, useEffect } from "react";
+
+// ── Tokens ────────────────────────────────────────────────────────────────────
+const C = {
+  // Emerald palette
+  em:        "#1DB870",
+  emDark:    "#15924F",
+  emDeep:    "#0D6B3A",
+  emLight:   "#E8F8EE",
+  emTint:    "#F2FAF6",
+  emBorder:  "#B8E8CB",
+  emSubtle:  "#D4F0E0",
+
+  // Layout
+  bg:        "#F2FAF6",   // chat background — warm green-white
+  white:     "#FFFFFF",
+  surface:   "#F9FEFC",
+  inputBg:   "#FFFFFF",
+
+  // Doctor bubble
+  drBubble:  "#E4F3EB",
+  drBorder:  "#B8E8CB",
+
+  // Text
+  ink:       "#0D2B1A",
+  ink2:      "#2D5A3D",
+  muted:     "#5A8A6E",
+  faint:     "#8FBEA0",
+
+  // Semantic
+  red:       "#DC2626",
+  redBg:     "#FEF2F2",
+  amber:     "#D97706",
+  amberBg:   "#FFFBEB",
+  blue:      "#1D6FA4",
+  blueBg:    "#EFF6FF",
+
+  // UI borders
+  border:    "#D4E8DC",
+  borderSt:  "#A8D4B8",
+};
+
+// ── Icons ─────────────────────────────────────────────────────────────────────
+const MicIcon = ({ active, recording }) => (
+  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+    <rect x="7" y="1" width="6" height="11" rx="3"
+      fill={recording ? C.red : active ? "white" : C.em}/>
+    <path d="M3 10c0 3.9 3.1 7 7 7s7-3.1 7-7"
+      stroke={recording ? C.red : active ? "white" : C.em}
+      strokeWidth="1.6" strokeLinecap="round"/>
+    <path d="M10 17v2"
+      stroke={recording ? C.red : active ? "white" : C.em}
+      strokeWidth="1.6" strokeLinecap="round"/>
+  </svg>
+);
+const SendIcon = ({ active }) => (
+  <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+    <path d="M9 15V3M3 9l6-6 6 6"
+      stroke={active ? "white" : C.faint}
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+const CopyIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+    <rect x="4" y="4" width="8" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
+    <path d="M9 4V2.5A1.5 1.5 0 007.5 1h-5A1.5 1.5 0 001 2.5v5A1.5 1.5 0 002.5 9H4"
+      stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+  </svg>
+);
+const ThumbUp = () => (
+  <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+    <path d="M4 14V7.5L7 1l1 .5v4h4.5l.5 1-1.5 7H4z"
+      stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
+    <path d="M4 7.5H2v6.5h2" stroke="currentColor" strokeWidth="1.2"/>
+  </svg>
+);
+const ThumbDown = () => (
+  <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+    <path d="M4 1v6.5L7 14l1-.5v-4h4.5l.5-1L11.5 1H4z"
+      stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
+    <path d="M4 7.5H2V1h2" stroke="currentColor" strokeWidth="1.2"/>
+  </svg>
+);
+const ErMateIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <path d="M8 1l2 4.5L14 8l-4 2L8 15l-2-5L2 8l4-2.5L8 1z"
+      fill="white" fillOpacity="0.95"/>
+  </svg>
+);
+const BackIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+    <path d="M13 4L7 10L13 16" stroke="white"
+      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+const EditIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+    <path d="M10 1.5l2.5 2.5-7 7H3V8.5l7-7z"
+      stroke="currentColor" strokeWidth="1.2"
+      strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+
+// ── Typing dots animation ─────────────────────────────────────────────────────
+function TypingDots() {
+  return (
+    <div style={{ display:"flex", gap:4, alignItems:"center", padding:"4px 0" }}>
+      {[0,1,2].map(i => (
+        <div key={i} style={{
+          width:7, height:7, borderRadius:"50%",
+          background: C.em, opacity: 0.6,
+          animation: `dot-bounce 1.2s ease-in-out infinite`,
+          animationDelay: `${i * 0.2}s`,
+        }}/>
+      ))}
+    </div>
+  );
+}
+
+// ── Suggestion chips ──────────────────────────────────────────────────────────
+function Chips({ items, onTap }) {
+  return (
+    <div style={{
+      display:"flex", gap:8, flexWrap:"wrap",
+      padding:"8px 0 4px",
+    }}>
+      {items.map(s => (
+        <button key={s} onClick={() => onTap(s)} style={{
+          background: C.white,
+          border: `1.5px solid ${C.emBorder}`,
+          borderRadius: 99,
+          padding: "7px 14px",
+          fontSize: 12.5, fontWeight: 600,
+          color: C.emDeep,
+          cursor: "pointer", fontFamily: "inherit",
+          transition: "all 0.15s",
+          whiteSpace: "nowrap",
+        }}>{s}</button>
+      ))}
+    </div>
+  );
+}
+
+// ── Doctor message bubble ─────────────────────────────────────────────────────
+function DrBubble({ text }) {
+  return (
+    <div style={{ display:"flex", justifyContent:"flex-end", margin:"4px 0" }}>
+      <div style={{
+        background: C.drBubble,
+        border: `1px solid ${C.drBorder}`,
+        borderRadius: "18px 18px 4px 18px",
+        padding: "10px 15px",
+        maxWidth: "78%",
+        fontSize: 14,
+        color: C.ink,
+        lineHeight: 1.55,
+      }}>{text}</div>
+    </div>
+  );
+}
+
+// ── System label ──────────────────────────────────────────────────────────────
+function SysLabel({ text }) {
+  return (
+    <div style={{ textAlign:"center", margin:"6px 0" }}>
+      <span style={{
+        fontSize: 11, color: C.faint,
+        fontWeight: 500, letterSpacing: 0.3,
+      }}>{text}</span>
+    </div>
+  );
+}
+
+// ── ErMate avatar ─────────────────────────────────────────────────────────────
+function ErMateHeader({ subtitle }) {
+  return (
+    <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10 }}>
+      <div style={{
+        width:28, height:28, borderRadius:8,
+        background: `linear-gradient(135deg,${C.em},${C.emDeep})`,
+        display:"flex", alignItems:"center", justifyContent:"center",
+        flexShrink:0,
+        boxShadow: `0 2px 8px ${C.em}40`,
+      }}><ErMateIcon/></div>
+      <div>
+        <div style={{ fontSize:13, fontWeight:700, color:C.emDeep }}>ErMate</div>
+        {subtitle && <div style={{ fontSize:10.5, color:C.muted }}>{subtitle}</div>}
+      </div>
+    </div>
+  );
+}
+
+// ── Case note — full hospital EMR format ──────────────────────────────────────
+function CaseNoteBlock({ data, onCopy, onEdit, onSave, copied }) {
+  const v = data.vitals || {};
+  const h = data.history || {};
+  const p = data.primary || {};
+  const e = data.examination || {};
+  const t = data.treatment || {};
+  const d = data.disposition || {};
+  const psych = h.psychological || {};
+
+  const val = (x, fb = "—") => x && x !== "" ? x : fb;
+  const isAbn = (val, field) => {
+    const n = parseFloat(val);
+    if (isNaN(n)) return false;
+    const r = { hr:[60,100], spo2:[95,100], rr:[12,20] };
+    const range = r[field];
+    if (!range) return false;
+    return n < range[0] || n > range[1];
+  };
+
+  const row = (label, value, abn = false) => (
+    <div style={{ marginBottom: 3 }}>
+      <span style={{ color: C.muted, fontSize: 12.5 }}>· {label} → </span>
+      <span style={{
+        fontSize: 13, color: abn ? C.red : C.ink,
+        fontWeight: abn ? 600 : 400,
+      }}>{value}{abn ? " ⚠" : ""}</span>
+    </div>
+  );
+
+  const section = (title, children) => (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{
+        fontSize: 10.5, fontWeight: 800, letterSpacing: 1.2,
+        textTransform: "uppercase", color: C.faint,
+        marginBottom: 6, paddingBottom: 4,
+        borderBottom: `1px solid ${C.border}`,
+      }}>{title}</div>
+      {children}
+    </div>
+  );
+
+  const line = (label, value) => (
+    <div style={{ marginBottom: 4, display:"flex", gap:8 }}>
+      <span style={{ fontSize:12.5, color:C.muted, width:130, flexShrink:0 }}>{label}</span>
+      <span style={{ fontSize:13, color:C.ink, lineHeight:1.5 }}>{val(value)}</span>
+    </div>
+  );
+
+  // General exam toggles → sentence
+  const genExam = () => {
+    const findings = [];
+    if (e.general?.pallor)           findings.push("pallor");
+    if (e.general?.icterus)          findings.push("icterus");
+    if (e.general?.cyanosis)         findings.push("cyanosis");
+    if (e.general?.clubbing)         findings.push("clubbing");
+    if (e.general?.lymphadenopathy)  findings.push("lymphadenopathy");
+    if (e.general?.edema)            findings.push("edema");
+    if (findings.length === 0) {
+      return "No pallor, icterus, cyanosis, clubbing, lymphadenopathy, or edema.";
+    }
+    return `${findings.join(", ")} present.`;
+  };
+
+  // Psychological assessment → sentence
+  const psychAssess = () => {
+    const findings = [];
+    if (psych.suicidalIdeation)    findings.push("suicidal ideation");
+    if (psych.selfHarmHistory)     findings.push("self-harm history");
+    if (psych.substanceAbuse)      findings.push("substance abuse");
+    if (psych.psychiatricHistory)  findings.push("psychiatric history");
+    if (findings.length === 0) {
+      return "No features of depression, anxiety, psychosis, agitation, suicidal ideation, or substance use.";
+    }
+    return `Features noted: ${findings.join(", ")}. ${val(psych.notes)}`;
+  };
+
+  // Differentials with reasoning
+  const diffs = d.differentialDiagnoses;
+
+  return (
+    <div style={{
+      background: C.white,
+      borderRadius: 14,
+      border: `1px solid ${C.border}`,
+      overflow: "hidden",
+      boxShadow: `0 2px 12px rgba(13,107,58,0.08)`,
+    }}>
+      {/* Document header — dark emerald */}
+      <div style={{
+        background: C.emDeep,
+        padding: "12px 16px",
+        display:"flex", alignItems:"center", gap:10,
+      }}>
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:11, fontWeight:800, color:"rgba(255,255,255,0.5)", letterSpacing:1, textTransform:"uppercase" }}>
+            Emergency Case Record
+          </div>
+          <div style={{ fontSize:13, fontWeight:700, color:"white", marginTop:2 }}>
+            Initial Assessment & ED Case Note
+          </div>
+        </div>
+        <div style={{
+          background: "rgba(29,184,112,0.25)",
+          borderRadius:6, padding:"3px 10px",
+          fontSize:9, fontWeight:800, color:C.em, letterSpacing:0.8,
+        }}>CASE NOTE</div>
+      </div>
+
+      {/* Document body */}
+      <div style={{ padding:"16px 18px", fontFamily:"Georgia, serif" }}>
+
+        {/* Patient header */}
+        <div style={{ marginBottom:14, paddingBottom:12, borderBottom:`1px solid ${C.border}` }}>
+          <div style={{ fontSize:15, fontWeight:700, color:C.ink, fontFamily:"inherit", marginBottom:4 }}>
+            {val(data.patientName, "Patient")} · {val(data.age, "—")}{data.gender ? data.gender[0] : ""}
+          </div>
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+            <span style={{
+              fontSize:10, fontWeight:800,
+              color: data.priority === "P1" ? C.red : data.priority === "P2" ? C.amber : C.emDeep,
+              background: data.priority === "P1" ? C.redBg : data.priority === "P2" ? C.amberBg : C.emLight,
+              borderRadius:5, padding:"3px 9px",
+            }}>{val(data.priority, "P4")}</span>
+            <span style={{ fontSize:11, color:C.muted }}>
+              CASE SEEN BY Dr. {val(data.doctorName, "—")}
+            </span>
+            <span style={{ fontSize:11, color:C.muted }}>
+              {val(data.date)} · {val(data.time)}
+            </span>
+          </div>
+        </div>
+
+        {section("Presenting Complaint",
+          <div style={{ fontSize:13.5, color:C.ink, lineHeight:1.6, fontStyle: val(data.chiefComplaint) === "—" ? "italic" : "normal", color: val(data.chiefComplaint) === "—" ? C.faint : C.ink }}>
+            {val(data.chiefComplaint, "Not documented")}
+          </div>
+        )}
+
+        {section("Primary Assessment (ABCDE)",
+          <>
+            {row("Airway", val(p.airway?.notes, "Patent, self-maintained"))}
+            {row("Breathing",
+              `RR: ${val(v.rr, "—")}/min · SpO₂: ${val(v.spo2, "—")}% ${p.breathing?.notes ? "· " + p.breathing.notes : "on room air"}`,
+              isAbn(v.spo2, "spo2")
+            )}
+            {row("Circulation",
+              `CRT ${val(e.crt, "<2s")} · HR: ${val(v.hr, "—")}/min · BP: ${val(v.bp, "—")} mmHg${p.circulation?.notes ? " · " + p.circulation.notes : ""}`,
+              isAbn(v.hr, "hr")
+            )}
+            {row("Disability",
+              `GCS: ${val(v.gcs, "—")} · ${val(p.disability?.notes, "Alert")}`
+            )}
+            {row("Exposure", `Temp: ${val(v.temp, "—")}`)}
+            {(p.adjuncts?.ecg?.performed || p.adjuncts?.abgVbg?.performed || p.adjuncts?.efast?.performed) && (
+              <div style={{ marginTop:6, fontSize:12, color:C.muted }}>
+                Adjuncts: {[
+                  p.adjuncts?.ecg?.performed && `ECG${p.adjuncts.ecg.findings ? " (" + p.adjuncts.ecg.findings + ")" : ""}`,
+                  p.adjuncts?.abgVbg?.performed && `VBG/ABG${p.adjuncts.abgVbg.lactate ? " · Lactate " + p.adjuncts.abgVbg.lactate : ""}`,
+                  p.adjuncts?.efast?.performed && "EFAST",
+                ].filter(Boolean).join(" · ")}
+              </div>
+            )}
+          </>
+        )}
+
+        {section("History of Present Illness",
+          <div style={{ fontSize:13, color:C.ink, lineHeight:1.7, fontStyle: val(h.events) === "—" ? "italic" : "normal" }}>
+            {val(h.events, "History to be documented.")}
+          </div>
+        )}
+
+        {section("Secondary Survey",
+          <>
+            {line("Signs & Symptoms", h.signsSymptoms)}
+            {line("Past Medical Hx", h.pastMedicalHistory)}
+            {line("Surgical Hx", h.pastSurgicalHistory)}
+            {line("Family / Gynae Hx", h.familyHistory)}
+            {data.gender === "Female" && line("LMP", h.lmp)}
+            {line("Allergies", h.allergies || "No known allergies")}
+          </>
+        )}
+
+        {section("General Examination",
+          <div style={{ fontSize:13, color:C.ink, lineHeight:1.6 }}>{genExam()}</div>
+        )}
+
+        {section("Systemic Examination",
+          <>
+            {line("CVS", e.cardiovascular)}
+            {line("Chest", e.respiratory)}
+            {line("Abdomen", e.abdomen)}
+            {line("CNS", e.cns)}
+            {line("Extremities", e.extremities)}
+          </>
+        )}
+
+        {section("Psychological Assessment",
+          <div style={{ fontSize:13, color:C.ink, lineHeight:1.6 }}>{psychAssess()}</div>
+        )}
+
+        {section("Investigations",
+          <>
+            {line("Labs ordered", t.investigations?.labsOrdered)}
+            {line("Imaging", t.investigations?.imaging)}
+            {t.investigations?.resultsSummary && line("Results", t.investigations.resultsSummary)}
+          </>
+        )}
+
+        {section("Treatment Plan",
+          <>
+            {Array.isArray(t.medications) && t.medications.length > 0 ? (
+              t.medications.map((m, i) => (
+                <div key={i} style={{ fontSize:13, color:C.ink, marginBottom:3 }}>
+                  · {m.drugName} {m.dose} {m.route} {m.frequency}
+                </div>
+              ))
+            ) : (
+              <div style={{ fontSize:13, color:C.faint, fontStyle:"italic" }}>
+                {val(t.medications)}
+              </div>
+            )}
+            {t.procedures && <div style={{ fontSize:13, color:C.ink, marginTop:4 }}>Procedures: {t.procedures}</div>}
+          </>
+        )}
+
+        {section("Disposition",
+          <div style={{ fontSize:13, color:C.ink }}>{val(d.dispositionType, "Pending")}</div>
+        )}
+
+        {/* DIAGNOSIS SECTION — from case sheet */}
+        {section("Provisional Diagnosis",
+          <>
+            <div style={{ marginBottom:10 }}>
+              <div style={{ fontSize:10, fontWeight:700, color:C.muted, letterSpacing:0.8, textTransform:"uppercase", marginBottom:4 }}>
+                Primary Diagnosis
+              </div>
+              <div style={{
+                fontSize:14, fontWeight:700,
+                color: t.provisionalDiagnosis?.primaryDiagnosis ? C.ink : C.faint,
+                fontStyle: t.provisionalDiagnosis?.primaryDiagnosis ? "normal" : "italic",
+              }}>
+                {val(t.provisionalDiagnosis?.primaryDiagnosis, "Pending — to be documented")}
+              </div>
+            </div>
+            {(diffs || t.provisionalDiagnosis?.differentialDiagnoses) && (
+              <div>
+                <div style={{ fontSize:10, fontWeight:700, color:C.muted, letterSpacing:0.8, textTransform:"uppercase", marginBottom:6 }}>
+                  Differential Diagnoses
+                </div>
+                {(Array.isArray(diffs) ? diffs : Array.isArray(t.provisionalDiagnosis?.differentialDiagnoses) ? t.provisionalDiagnosis.differentialDiagnoses : typeof t.provisionalDiagnosis?.differentialDiagnoses === "string" ? t.provisionalDiagnosis.differentialDiagnoses.split(",") : [])
+                  .filter(Boolean)
+                  .map((dd, i) => (
+                    <div key={i} style={{
+                      display:"flex", gap:8, alignItems:"flex-start",
+                      marginBottom:5,
+                    }}>
+                      <span style={{ color:C.em, fontWeight:700, fontSize:13 }}>•</span>
+                      <span style={{ fontSize:13, color:C.ink, lineHeight:1.5 }}>{dd.trim()}</span>
+                    </div>
+                  ))
+                }
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Signatures */}
+        <div style={{ marginTop:14, paddingTop:12, borderTop:`1px solid ${C.border}` }}>
+          <div style={{ display:"flex", justifyContent:"space-between", flexWrap:"wrap", gap:12 }}>
+            <div>
+              <div style={{ fontSize:10, color:C.faint, textTransform:"uppercase", letterSpacing:0.8 }}>EM Resident</div>
+              <div style={{ fontSize:13, fontWeight:600, color:C.ink, marginTop:2 }}>Dr. {val(data.residentName, "_______________")}</div>
+            </div>
+            <div>
+              <div style={{ fontSize:10, color:C.faint, textTransform:"uppercase", letterSpacing:0.8 }}>EM Consultant</div>
+              <div style={{ fontSize:13, fontWeight:600, color:C.ink, marginTop:2 }}>Dr. {val(data.consultantName, "_______________")}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Action bar */}
+      <div style={{
+        borderTop: `1px solid ${C.border}`,
+        background: C.emTint,
+        padding:"10px 16px",
+        display:"flex", gap:8, flexWrap:"wrap",
+      }}>
+        <button onClick={onCopy} style={{
+          display:"flex", alignItems:"center", gap:5,
+          background: copied ? C.emLight : C.emDeep,
+          border: "none", borderRadius:9,
+          padding:"8px 14px",
+          fontSize:12, fontWeight:700,
+          color: copied ? C.emDeep : "white",
+          cursor:"pointer", fontFamily:"inherit",
+          transition:"all 0.2s",
+        }}>
+          <CopyIcon/>
+          {copied ? "Copied ✓" : "Copy all"}
+        </button>
+        <button onClick={onEdit} style={{
+          display:"flex", alignItems:"center", gap:5,
+          background: C.white, border:`1px solid ${C.border}`,
+          borderRadius:9, padding:"8px 14px",
+          fontSize:12, fontWeight:700, color:C.muted,
+          cursor:"pointer", fontFamily:"inherit",
+        }}>
+          <EditIcon/>Edit fields
+        </button>
+        <button onClick={onSave} style={{
+          display:"flex", alignItems:"center", gap:5,
+          background: C.white, border:`1px solid ${C.emBorder}`,
+          borderRadius:9, padding:"8px 14px",
+          fontSize:12, fontWeight:700, color:C.emDark,
+          cursor:"pointer", fontFamily:"inherit",
+        }}>
+          💾 Save
+        </button>
+      </div>
+
+      {/* Feedback */}
+      <div style={{
+        borderTop:`1px solid ${C.border}`,
+        padding:"9px 16px",
+        display:"flex", alignItems:"center", gap:10,
+      }}>
+        <span style={{ fontSize:12, color:C.muted, flex:1 }}>Was this accurate?</span>
+        <button style={{
+          background:C.white, border:`1px solid ${C.border}`,
+          borderRadius:8, width:34, height:34,
+          display:"flex", alignItems:"center", justifyContent:"center",
+          cursor:"pointer", color:C.muted,
+        }}><ThumbUp/></button>
+        <button style={{
+          background:C.white, border:`1px solid ${C.border}`,
+          borderRadius:8, width:34, height:34,
+          display:"flex", alignItems:"center", justifyContent:"center",
+          cursor:"pointer", color:C.muted,
+        }}><ThumbDown/></button>
+      </div>
+    </div>
+  );
+}
+
+// ── Discharge summary block ───────────────────────────────────────────────────
+function DischargeSummaryBlock({ data, onCopy, copied }) {
+  const v = data.vitals || {};
+  const h = data.history || {};
+  const e = data.examination || {};
+  const p = data.primary || {};
+  const t = data.treatment || {};
+  const d = data.disposition || {};
+
+  const val = (x, fb = "—") => x && x !== "" ? x : fb;
+
+  const line = (label, value) => value && value !== "—" ? (
+    <div style={{ marginBottom:4 }}>
+      <span style={{ fontSize:12, color:C.muted }}>· {label}: </span>
+      <span style={{ fontSize:13, color:C.ink }}>{value}</span>
+    </div>
+  ) : null;
+
+  return (
+    <div style={{
+      background:C.white, borderRadius:14,
+      border:`1px solid ${C.border}`,
+      overflow:"hidden",
+      boxShadow:`0 2px 12px rgba(13,107,58,0.08)`,
+    }}>
+      <div style={{
+        background:"linear-gradient(135deg,#1E3A2E,#0D6B3A)",
+        padding:"12px 16px",
+        display:"flex", alignItems:"center", gap:10,
+      }}>
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:10.5, fontWeight:800, color:"rgba(255,255,255,0.45)", letterSpacing:1, textTransform:"uppercase" }}>
+            Emergency Department
+          </div>
+          <div style={{ fontSize:13, fontWeight:700, color:"white", marginTop:2 }}>
+            Discharge Summary
+          </div>
+        </div>
+        <div style={{
+          background:"rgba(29,184,112,0.25)",
+          borderRadius:6, padding:"3px 10px",
+          fontSize:9, fontWeight:800, color:C.em, letterSpacing:0.8,
+        }}>DISCHARGE</div>
+      </div>
+
+      <div style={{ padding:"16px 18px" }}>
+
+        <div style={{ marginBottom:14, paddingBottom:12, borderBottom:`1px solid ${C.border}` }}>
+          <div style={{ fontSize:15, fontWeight:700, color:C.ink, marginBottom:4 }}>
+            {val(data.patientName, "Patient")} · {val(data.age)}yr · {val(data.gender)}
+          </div>
+          <div style={{ fontSize:11, color:C.muted }}>
+            Date: {val(data.date)} · {val(data.department, "Emergency Department")} · Dr. {val(data.doctorName)}
+          </div>
+        </div>
+
+        {/* Section 1 */}
+        <div style={{ marginBottom:14 }}>
+          <div style={{ fontSize:10.5, fontWeight:800, letterSpacing:1.2, textTransform:"uppercase", color:C.faint, marginBottom:6, paddingBottom:4, borderBottom:`1px solid ${C.border}` }}>
+            Patient Information &amp; Arrival
+          </div>
+          {line("Allergies", h.allergies || "No known allergies")}
+          <div style={{ fontSize:12, color:C.muted, marginBottom:4 }}>· Vitals on Arrival: HR {val(v.hr)} · BP {val(v.bp)} · SpO₂ {val(v.spo2)}% · RR {val(v.rr)} · Temp {val(v.temp)}</div>
+          {line("Presenting Complaint", data.chiefComplaint)}
+          {line("HPI", h.signsSymptoms || h.events)}
+          {line("Past History", h.pastMedicalHistory)}
+          {data.gender === "Female" && line("LMP", h.lmp)}
+        </div>
+
+        {/* Section 2 */}
+        <div style={{ marginBottom:14 }}>
+          <div style={{ fontSize:10.5, fontWeight:800, letterSpacing:1.2, textTransform:"uppercase", color:C.faint, marginBottom:6, paddingBottom:4, borderBottom:`1px solid ${C.border}` }}>
+            Primary Assessment (ABCDE)
+          </div>
+          {line("Airway", p.airway?.notes || "Patent")}
+          {line("Breathing", p.breathing?.notes)}
+          {line("Circulation", p.circulation?.notes)}
+          {line("Disability", `GCS ${val(v.gcs)}`)}
+          {line("Exposure", `Temp ${val(v.temp)}`)}
+        </div>
+
+        {/* Section 3 */}
+        <div style={{ marginBottom:14 }}>
+          <div style={{ fontSize:10.5, fontWeight:800, letterSpacing:1.2, textTransform:"uppercase", color:C.faint, marginBottom:6, paddingBottom:4, borderBottom:`1px solid ${C.border}` }}>
+            Secondary Assessment
+          </div>
+          {line("CVS", e.cardiovascular)}
+          {line("Chest", e.respiratory)}
+          {line("Abdomen", e.abdomen)}
+          {line("CNS", e.cns)}
+          {line("Extremities", e.extremities)}
+        </div>
+
+        {/* Section 4 */}
+        <div style={{ marginBottom:14 }}>
+          <div style={{ fontSize:10.5, fontWeight:800, letterSpacing:1.2, textTransform:"uppercase", color:C.faint, marginBottom:6, paddingBottom:4, borderBottom:`1px solid ${C.border}` }}>
+            Hospital Course &amp; Treatment
+          </div>
+          <div style={{ fontSize:13, color:C.ink, lineHeight:1.7, marginBottom:8 }}>
+            {val(data.hospitalCourse, "AI narrative generated from case data.")}
+          </div>
+          {line("Investigations", t.investigations?.resultsSummary || t.investigations?.labsOrdered)}
+          {line("Diagnosis at Discharge", t.provisionalDiagnosis?.primaryDiagnosis)}
+        </div>
+
+        {/* Section 5 */}
+        <div style={{ marginBottom:14 }}>
+          <div style={{ fontSize:10.5, fontWeight:800, letterSpacing:1.2, textTransform:"uppercase", color:C.faint, marginBottom:6, paddingBottom:4, borderBottom:`1px solid ${C.border}` }}>
+            Discharge Information
+          </div>
+          {Array.isArray(t.medications) && t.medications.map((m,i) => (
+            <div key={i} style={{ fontSize:13, color:C.ink, marginBottom:3 }}>
+              · {m.drugName} {m.dose} {m.route} {m.frequency}
+            </div>
+          ))}
+          {line("Disposition", d.dispositionType)}
+          {line("Condition", d.conditionAtShift || "Stable")}
+          {line("Follow-up", d.observationNotes)}
+        </div>
+
+        {/* Signatures */}
+        <div style={{ paddingTop:12, borderTop:`1px solid ${C.border}` }}>
+          <div style={{ display:"flex", justifyContent:"space-between", flexWrap:"wrap", gap:12 }}>
+            <div>
+              <div style={{ fontSize:10, color:C.faint, textTransform:"uppercase", letterSpacing:0.8 }}>ED Resident</div>
+              <div style={{ fontSize:13, fontWeight:600, color:C.ink, marginTop:2 }}>Dr. {val(data.residentName, "_______________")}</div>
+              <div style={{ fontSize:10, color:C.faint, marginTop:2 }}>Date: {val(data.date)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize:10, color:C.faint, textTransform:"uppercase", letterSpacing:0.8 }}>ED Consultant</div>
+              <div style={{ fontSize:13, fontWeight:600, color:C.ink, marginTop:2 }}>Dr. {val(data.consultantName, "_______________")}</div>
+              <div style={{ fontSize:10, color:C.faint, marginTop:2 }}>Date: {val(data.date)}</div>
+            </div>
+          </div>
+          <div style={{ fontSize:10, color:C.faint, marginTop:12, lineHeight:1.6, fontStyle:"italic" }}>
+            This discharge summary provides clinical information to facilitate continuity of patient care. For statutory purposes, a treatment/discharge certificate shall be issued on request.
+          </div>
+        </div>
+      </div>
+
+      <div style={{
+        borderTop:`1px solid ${C.border}`,
+        background:C.emTint,
+        padding:"10px 16px",
+        display:"flex", gap:8,
+      }}>
+        <button onClick={onCopy} style={{
+          display:"flex", alignItems:"center", gap:5,
+          background: copied ? C.emLight : C.emDeep,
+          border:"none", borderRadius:9,
+          padding:"8px 14px",
+          fontSize:12, fontWeight:700,
+          color: copied ? C.emDeep : "white",
+          cursor:"pointer", fontFamily:"inherit",
+        }}>
+          <CopyIcon/>{copied ? "Copied ✓" : "Copy all"}
+        </button>
+        <button style={{
+          background:C.white, border:`1px solid ${C.border}`,
+          borderRadius:9, padding:"8px 14px",
+          fontSize:12, fontWeight:700, color:C.muted,
+          cursor:"pointer", fontFamily:"inherit",
+        }}>⬇ Export PDF</button>
+      </div>
+    </div>
+  );
+}
+
+// ── Update confirmation ───────────────────────────────────────────────────────
+function UpdateConfirm({ text }) {
+  return (
+    <div style={{
+      background:C.emLight, border:`1px solid ${C.emBorder}`,
+      borderRadius:12, padding:"10px 14px",
+      display:"flex", gap:10, alignItems:"flex-start",
+    }}>
+      <span style={{ fontSize:15 }}>✅</span>
+      <span style={{ fontSize:13.5, color:C.emDeep, lineHeight:1.5, fontWeight:500 }}>{text}</span>
+    </div>
+  );
+}
+
+// ── MOCK DATA ─────────────────────────────────────────────────────────────────
+const MOCK_CASE = {
+  patientName: "Siya Sibi",
+  age: 25, gender: "Female",
+  priority: "P2",
+  chiefComplaint: "Abdominal pain since yesterday evening 5:30 PM",
+  doctorName: "Cylphy", consultantName: "Nirmal",
+  residentName: "Cylphy",
+  date: "04-07-2026", time: "16:48",
+  department: "City Emergency",
+  hospitalCourse: "A 25-year-old female presented to the emergency department with abdominal pain since the previous evening at approximately 5:30 PM. The pain was initially located in the epigastric region and subsequently migrated to the right iliac fossa. Associated nausea and chills were noted. No history of vomiting, diarrhoea, or similar prior episodes.",
+  vitals: { hr:"130", bp:"100/70", spo2:"98", rr:"20", temp:"98.6°F", gcs:"E4 V5 M6", grbs:"100" },
+  history: {
+    signsSymptoms: "Abdominal pain, nausea, chills",
+    allergies: "No known allergies",
+    medications: "None",
+    pastMedicalHistory: "Nil",
+    pastSurgicalHistory: "Nil",
+    familyHistory: "Nil",
+    lmp: "14/06/2026",
+    events: "Pain started in epigastric region, migrated to right iliac fossa. Associated nausea and chills. No vomiting, no diarrhoea.",
+    psychological: { suicidalIdeation:false, selfHarmHistory:false, substanceAbuse:false, psychiatricHistory:false },
+  },
+  primary: {
+    airway: { status:"Normal", notes:"Patent, self-maintained" },
+    breathing: { status:"Normal", notes:"Bilateral air entry, clear" },
+    circulation: { status:"Abnormal", notes:"Tachycardia" },
+    disability: { status:"Normal", notes:"GCS E4 V5 M6, Alert, PERL" },
+    exposure: { status:"Normal", notes:"No external injuries" },
+    adjuncts: {
+      ecg: { performed:true, findings:"Sinus tachycardia" },
+      abgVbg: { performed:true, lactate:"1.2" },
+      efast: { performed:false },
+    },
+  },
+  examination: {
+    general: { pallor:false, icterus:false, cyanosis:false, clubbing:false, lymphadenopathy:false, edema:false },
+    cardiovascular: "S1 S2 heard, no murmurs",
+    respiratory: "Normal expansion, vesicular breath sounds, no added sounds",
+    abdomen: "Soft, non-distended, tenderness over epigastric region and RIF, rigidity+, bowel sounds present",
+    cns: "Conscious, oriented, no focal neurological deficit",
+    extremities: "No visible abnormalities",
+  },
+  treatment: {
+    medications: [
+      { drugName:"IV Buscopan", dose:"20mg", route:"IV", frequency:"stat" },
+      { drugName:"Paracetamol", dose:"1g", route:"IV", frequency:"TDS" },
+      { drugName:"Ondansetron", dose:"4mg", route:"IV", frequency:"stat" },
+    ],
+    investigations: {
+      labsOrdered: "CBC, CRP, USG abdomen",
+      imaging: "USG abdomen",
+      resultsSummary: "Pending",
+    },
+    provisionalDiagnosis: {
+      primaryDiagnosis: "Acute appendicitis",
+      differentialDiagnoses: [
+        "Acute appendicitis (most likely — pain migration to RIF, tachycardia, rigidity+)",
+        "Acute gastroenteritis (nausea, epigastric pain initially)",
+        "Mesenteric adenitis (young female, migratory pain)",
+        "Ureteric colic — right side (RIF pain, young female)",
+      ],
+    },
+  },
+  disposition: {
+    dispositionType: "ER Observation",
+    conditionAtShift: "Stable",
+    observationNotes: "Surgical review requested",
+  },
+};
+
+// ── MAIN SCREEN ───────────────────────────────────────────────────────────────
+export default function CaseChatScreen() {
+  const [step, setStep]           = useState(0);
+  const [recording, setRecording] = useState(false);
+  const [input, setInput]         = useState("");
+  const [toast, setToast]         = useState(null);
+  const [copiedNote, setCopiedNote] = useState(false);
+  const [copiedDischarge, setCopiedDischarge] = useState(false);
+  const [showDischarge, setShowDischarge] = useState(false);
+  const [showUpdate, setShowUpdate] = useState(false);
+  const scrollRef = useRef(null);
+
+  const showToast = (msg) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2500);
+  };
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [step, showDischarge, showUpdate]);
+
+  const handleMic = () => {
+    if (step > 0 || recording) return;
+    setRecording(true);
+    setStep(0.5);
+    setTimeout(() => { setRecording(false); setStep(1); }, 3000);
+  };
+
+  const handleSend = () => {
+    const t = input.trim().toLowerCase();
+    if (!t) return;
+    setInput("");
+    if (t.includes("discharge")) {
+      setTimeout(() => { setShowDischarge(true); }, 800);
+      setStep(prev => Math.max(prev, 2));
+    } else if (t.includes("allergy") || t.includes("add") || t.includes("diagnosis") || t.includes("complaint")) {
+      setTimeout(() => setShowUpdate(true), 600);
+      setStep(prev => Math.max(prev, 1));
+    }
+  };
+
+  const handleChip = (s) => {
+    const t = s.toLowerCase();
+    if (t.includes("discharge")) { setShowDischarge(true); setStep(prev => Math.max(prev, 2)); }
+    else { setShowUpdate(true); }
+  };
+
+  const chips1 = ["Prepare discharge summary","Add diagnosis","Referral letter to surgery","Show differentials","Export PDF"];
+  const chips2 = ["Edit diagnosis","Add procedure","Export all as PDF","Save & close"];
+
+  return (
+    <div style={{
+      fontFamily: "'Inter',-apple-system,sans-serif",
+      background: "#C8D5CC",
+      minHeight: "100vh",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      padding: "24px 16px 48px",
+      gap: 16,
+    }}>
+      <style>{`
+        @keyframes dot-bounce {
+          0%,80%,100% { transform:scale(0.6); opacity:0.4 }
+          40% { transform:scale(1); opacity:1 }
+        }
+        @keyframes fadeUp {
+          from { opacity:0; transform:translateY(10px) }
+          to   { opacity:1; transform:translateY(0) }
+        }
+        .msg { animation: fadeUp 0.3s ease forwards }
+        textarea:focus { outline:none }
+      `}</style>
+
+      {/* Phone frame */}
+      <div style={{
+        width: 390, background: "#111",
+        borderRadius: 48, padding: 12,
+        boxShadow: "0 40px 80px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.06)",
+        flexShrink: 0,
+      }}>
+        <div style={{
+          background: C.bg, borderRadius: 38,
+          overflow: "hidden", height: 820,
+          display: "flex", flexDirection: "column",
+          position: "relative",
+        }}>
+
+          {/* ── HEADER ── */}
+          <div style={{
+            background: C.emDeep,
+            paddingTop: 52, paddingBottom: 14,
+            paddingLeft: 16, paddingRight: 16,
+            display: "flex", alignItems: "center", gap: 10,
+            flexShrink: 0,
+            boxShadow: `0 3px 12px ${C.emDeep}40`,
+          }}>
+            <button style={{ background:"none", border:"none", cursor:"pointer", padding:0, display:"flex" }}>
+              <BackIcon/>
+            </button>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:15, fontWeight:800, color:"white" }}>
+                {step >= 1 ? "Siya Sibi · 25F" : "New Case"}
+              </div>
+              <div style={{ fontSize:11, color:"rgba(255,255,255,0.5)", marginTop:1 }}>
+                {step >= 1 ? "P2 · Abdominal pain · In Progress" : "Tap mic to begin dictation"}
+              </div>
+            </div>
+            {step >= 1 && (
+              <button style={{
+                background:"rgba(255,255,255,0.12)",
+                border:"1px solid rgba(255,255,255,0.18)",
+                borderRadius:9, padding:"6px 12px",
+                fontSize:11, fontWeight:600, color:"white",
+                cursor:"pointer", fontFamily:"inherit",
+              }}>Edit fields</button>
+            )}
+          </div>
+
+          {/* ── CHAT AREA ── */}
+          <div ref={scrollRef} style={{
+            flex:1, overflowY:"auto",
+            padding:"16px 14px 8px",
+            display:"flex", flexDirection:"column", gap:10,
+          }}>
+
+            {/* Empty state */}
+            {step === 0 && !recording && (
+              <div style={{
+                flex:1, display:"flex", flexDirection:"column",
+                alignItems:"center", justifyContent:"center",
+                gap:18, textAlign:"center", padding:"20px 20px 40px",
+              }}>
+                <div style={{
+                  width:64, height:64, borderRadius:20,
+                  background:`linear-gradient(135deg,${C.em},${C.emDeep})`,
+                  display:"flex", alignItems:"center", justifyContent:"center",
+                  boxShadow:`0 8px 24px ${C.em}40`,
+                }}>
+                  <ErMateIcon/>
+                </div>
+                <div>
+                  <div style={{ fontSize:18, fontWeight:800, color:C.ink, marginBottom:6 }}>
+                    Hi, I'm ErMate
+                  </div>
+                  <div style={{ fontSize:13.5, color:C.muted, lineHeight:1.7, maxWidth:260 }}>
+                    Speak your case in any Indian language. I'll fill the complete case sheet instantly.
+                  </div>
+                </div>
+                <div style={{ display:"flex", flexDirection:"column", gap:8, width:"100%" }}>
+                  {[
+                    { icon:"🎙️", text:'Say "25F, chest pain 2 hours, BP 94/60"' },
+                    { icon:"📋", text:"Get full hospital EMR format instantly" },
+                    { icon:"📄", text:'Type "discharge summary" — it appears' },
+                  ].map((h,i) => (
+                    <div key={i} style={{
+                      background:C.white, border:`1px solid ${C.border}`,
+                      borderRadius:11, padding:"10px 14px",
+                      display:"flex", gap:10, alignItems:"center", textAlign:"left",
+                    }}>
+                      <span style={{ fontSize:18 }}>{h.icon}</span>
+                      <span style={{ fontSize:12, color:C.ink2, lineHeight:1.5 }}>{h.text}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Recording */}
+            {step === 0.5 && (
+              <div className="msg" style={{
+                flex:1, display:"flex", flexDirection:"column",
+                alignItems:"center", justifyContent:"center",
+                gap:20, padding:"20px 0 40px",
+              }}>
+                <div style={{ fontSize:13, color:C.muted }}>Listening in Malayalam + English...</div>
+                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                  <div style={{
+                    width:10, height:10, borderRadius:"50%",
+                    background:C.red, animation:"dot-bounce 1s infinite",
+                  }}/>
+                  <div style={{ display:"flex", gap:3, alignItems:"center" }}>
+                    {[18,28,14,36,22,32,10,26].map((h,i) => (
+                      <div key={i} style={{
+                        width:3, height:h, borderRadius:2,
+                        background:C.em, opacity:0.8,
+                        animation:`dot-bounce ${0.8+i*0.1}s ease-in-out infinite alternate`,
+                        animationDelay:`${i*0.09}s`,
+                      }}/>
+                    ))}
+                  </div>
+                  <span style={{ fontSize:13, fontWeight:700, color:C.red }}>Recording...</span>
+                </div>
+                <div style={{
+                  fontSize:12.5, color:C.muted, fontStyle:"italic",
+                  textAlign:"center", maxWidth:270, lineHeight:1.7,
+                }}>
+                  "25 year old female presented with complaint of abdominal pain since yesterday evening..."
+                </div>
+              </div>
+            )}
+
+            {/* Step 1 — case note */}
+            {step >= 1 && (
+              <>
+                <div className="msg">
+                  <DrBubble text="🎙 Voice dictation · 42 seconds · Malayalam + English"/>
+                </div>
+                <SysLabel text="ErMate processed your dictation"/>
+                <div className="msg">
+                  <ErMateHeader subtitle="Initial assessment complete — all sections filled"/>
+                  <CaseNoteBlock
+                    data={MOCK_CASE}
+                    copied={copiedNote}
+                    onCopy={() => { setCopiedNote(true); showToast("Case note copied to clipboard"); setTimeout(()=>setCopiedNote(false),2500); }}
+                    onEdit={() => showToast("Opening field editor...")}
+                    onSave={() => showToast("Case saved to dashboard ✓")}
+                  />
+                  {step === 1 && !showDischarge && !showUpdate && (
+                    <div style={{ marginTop:8 }}>
+                      <Chips items={chips1} onTap={handleChip}/>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* Update confirmation */}
+            {showUpdate && (
+              <div className="msg">
+                <ErMateHeader subtitle="Case updated"/>
+                <UpdateConfirm text="Updated — diagnosis and differentials applied to case note and discharge summary."/>
+              </div>
+            )}
+
+            {/* Discharge summary */}
+            {showDischarge && (
+              <>
+                <div className="msg">
+                  <DrBubble text="Prepare discharge summary"/>
+                </div>
+                <div className="msg">
+                  <ErMateHeader subtitle="Generated from all 7 sections of your case"/>
+                  <DischargeSummaryBlock
+                    data={MOCK_CASE}
+                    copied={copiedDischarge}
+                    onCopy={() => { setCopiedDischarge(true); showToast("Discharge summary copied"); setTimeout(()=>setCopiedDischarge(false),2500); }}
+                  />
+                  <div style={{ marginTop:8 }}>
+                    <Chips items={chips2} onTap={() => {}}/>
+                  </div>
+                </div>
+              </>
+            )}
+
+          </div>
+
+          {/* ── INPUT BAR ── */}
+          <div style={{
+            background:C.white,
+            borderTop:`1px solid ${C.border}`,
+            padding:"10px 12px 20px",
+            flexShrink:0,
+            boxShadow:`0 -2px 12px rgba(13,43,26,0.06)`,
+          }}>
+            <div style={{ display:"flex", gap:9, alignItems:"flex-end" }}>
+
+              {/* Mic */}
+              <button onClick={handleMic} style={{
+                width:46, height:46, borderRadius:14, border:"none",
+                background: step === 0
+                  ? `linear-gradient(135deg,${C.em},${C.emDeep})`
+                  : recording ? C.red : C.emLight,
+                cursor:"pointer",
+                display:"flex", alignItems:"center", justifyContent:"center",
+                flexShrink:0,
+                boxShadow: step === 0
+                  ? `0 4px 14px ${C.em}50`
+                  : "none",
+                transition:"all 0.2s",
+              }}>
+                <MicIcon active={step === 0} recording={recording}/>
+              </button>
+
+              {/* Text input */}
+              <textarea
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }}}
+                placeholder={step === 0
+                  ? "Or type your case..."
+                  : "discharge summary · add allergy · referral letter · add diagnosis..."}
+                rows={1}
+                style={{
+                  flex:1, background:C.white,
+                  border:`1.5px solid ${input ? C.em : C.border}`,
+                  borderRadius:14, padding:"12px 14px",
+                  fontSize:13, color:C.ink, fontFamily:"inherit",
+                  resize:"none", lineHeight:1.4,
+                  maxHeight:100, minHeight:46,
+                  transition:"border-color 0.2s",
+                }}
+              />
+
+              {/* Send */}
+              <button onClick={handleSend} style={{
+                width:46, height:46, borderRadius:14, border:"none",
+                background: input
+                  ? `linear-gradient(135deg,${C.em},${C.emDeep})`
+                  : C.emLight,
+                cursor: input ? "pointer" : "default",
+                display:"flex", alignItems:"center", justifyContent:"center",
+                flexShrink:0,
+                boxShadow: input ? `0 4px 14px ${C.em}50` : "none",
+                transition:"all 0.2s",
+              }}>
+                <SendIcon active={!!input}/>
+              </button>
+            </div>
+          </div>
+
+          {/* Toast */}
+          {toast && (
+            <div style={{
+              position:"absolute", top:76, alignSelf:"center",
+              left:"50%", transform:"translateX(-50%)",
+              background:C.emDeep, color:"white",
+              fontSize:12.5, fontWeight:700,
+              padding:"9px 18px", borderRadius:99,
+              whiteSpace:"nowrap", zIndex:100,
+              boxShadow:`0 4px 16px ${C.emDeep}60`,
+              animation:"fadeUp 0.2s ease",
+            }}>✓ {toast}</div>
+          )}
+
+        </div>
+      </div>
+
+      {/* Guide card */}
+      <div style={{
+        background:"white", borderRadius:16,
+        padding:"16px 20px", maxWidth:390, width:"100%",
+        border:"1px solid #D4E8DC",
+      }}>
+        <div style={{ fontSize:11, fontWeight:800, color:"#9EC4AF", letterSpacing:1, textTransform:"uppercase", marginBottom:10 }}>
+          Try the flow
+        </div>
+        {[
+          "Tap 🎙 mic — dictation processes in 3s",
+          "Full case note with diagnosis section appears",
+          "Tap 'Prepare discharge summary'",
+          "Complete discharge summary with signatures",
+          "Type 'Add diagnosis' to update inline",
+          "Copy any document — paste into hospital EMR",
+        ].map((s,i) => (
+          <div key={i} style={{ display:"flex", gap:8, marginBottom: i<5?6:0 }}>
+            <span style={{ color:C.em, fontWeight:700, flexShrink:0 }}>{i+1}</span>
+            <span style={{ fontSize:12.5, color:"#5A8A6E", lineHeight:1.5 }}>{s}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

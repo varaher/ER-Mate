@@ -605,15 +605,33 @@ function RecordingWave() {
 
 // ── Empty state ──────────────────────────────────────────────────────────────
 function EmptyState() {
+  const hints = [
+    { icon: 'mic' as const, text: 'Say "25F, chest pain 2h, BP 94/60" in any language' },
+    { icon: 'clipboard' as const, text: 'Get a full hospital EMR format instantly' },
+    { icon: 'file-text' as const, text: 'Type "discharge summary" to generate it' },
+  ];
   return (
     <View style={s.emptyState}>
-      <View style={[s.emptyIcon, { backgroundColor: C.greenLight, borderColor: C.greenBd }]}>
-        <Feather name="mic" size={26} color={C.green} />
+      <View style={[s.emptyIcon, { backgroundColor: C.green, borderColor: 'transparent',
+        shadowColor: C.green, shadowOpacity: 0.4, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 6 }]}>
+        <Feather name="zap" size={28} color="white" />
       </View>
-      <Text style={s.emptyTitle}>Start by dictating</Text>
-      <Text style={s.emptySub}>
-        Tap the mic and speak the case.{'\n'}The formatted case note appears here.
-      </Text>
+      <View style={{ alignItems: 'center' }}>
+        <Text style={s.emptyTitle}>Hi, I'm ErMate</Text>
+        <Text style={s.emptySub}>
+          Speak your case in any language.{'\n'}I'll fill the complete case sheet instantly.
+        </Text>
+      </View>
+      <View style={{ width: '100%', gap: 8 }}>
+        {hints.map((h, i) => (
+          <View key={i} style={{ backgroundColor: C.white, borderWidth: 1, borderColor: C.border, borderRadius: 11, padding: 12, paddingHorizontal: 14, flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+            <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: C.greenLight, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Feather name={h.icon} size={15} color={C.green} />
+            </View>
+            <Text style={{ fontSize: 12.5, color: C.ink, lineHeight: 18, flex: 1 }}>{h.text}</Text>
+          </View>
+        ))}
+      </View>
     </View>
   );
 }
@@ -1075,59 +1093,280 @@ function LiveCaseNoteBody({ c }: { c: CaseData }) {
   );
 }
 
-// ── FlatCaseNote — renders the full gold-standard hospital EMR note text ───────
-// The displayed text is identical to what "Copy all" produces, so doctors see
-// exactly what will be shared or printed. No truncation.
-function FlatCaseNote({ c, onCopy, onSave }: { c: CaseData; onCopy: () => void; onSave?: () => void }) {
+// ── StructuredCaseCard — rich hospital EMR format card ────────────────────────
+function StructuredCaseCard({ c, onCopy, onSave }: { c: CaseData; onCopy: () => void; onSave?: () => void }) {
   const [copied, setCopied] = useState(false);
-  const [saved, setSaved]   = useState(false);
 
-  const noteText = generateCaseNote(c);
+  const val = (x: string | undefined, fb = '—') => (x && x !== '') ? x : fb;
+  const isAbnHr   = (v: string) => { const n = parseInt(v); return !isNaN(n) && (n > 100 || n < 60); };
+  const isAbnSpo2 = (v: string) => { const n = parseInt(v); return !isNaN(n) && n < 95; };
+
+  const genExamSentence = () => {
+    const findings: string[] = [];
+    if (c.examToggles.pallor)          findings.push('pallor');
+    if (c.examToggles.icterus)         findings.push('icterus');
+    if (c.examToggles.cyanosis)        findings.push('cyanosis');
+    if (c.examToggles.clubbing)        findings.push('clubbing');
+    if (c.examToggles.lymphadenopathy) findings.push('lymphadenopathy');
+    if (c.examToggles.edema)           findings.push('edema');
+    return findings.length === 0
+      ? 'No pallor, icterus, cyanosis, clubbing, lymphadenopathy, or edema.'
+      : `${findings.join(', ')} present.`;
+  };
+
+  const psychSentence = () => {
+    const findings: string[] = [];
+    if (c.psychological.depression)       findings.push('depression');
+    if (c.psychological.anxiety)          findings.push('anxiety');
+    if (c.psychological.psychosis)        findings.push('psychosis');
+    if (c.psychological.agitation)        findings.push('agitation');
+    if (c.psychological.suicidalIdeation) findings.push('suicidal ideation');
+    if (c.psychological.substanceUse)     findings.push('substance use');
+    return findings.length === 0
+      ? 'No features of depression, anxiety, psychosis, agitation, suicidal ideation, or substance use.'
+      : `Features of ${findings.join(', ')} noted.`;
+  };
+
+  const isFemale = c.sex?.toLowerCase().startsWith('f');
+  const priorityColor = c.priority === 'P1' ? '#DC2626' : c.priority === 'P2' ? '#D97706' : '#0D6B3A';
+  const priorityBg    = c.priority === 'P1' ? '#FEF2F2' : c.priority === 'P2' ? '#FFFBEB' : '#E8F8EE';
+
+  const differentialsList = c.disposition.differentials
+    ? c.disposition.differentials.split('\n').map(s => s.trim().replace(/^[•\-·*]\s*/, '').replace(/\s*[—–(].*$/, '').trim()).filter(Boolean)
+    : [];
 
   const handleCopy = () => { onCopy(); setCopied(true); setTimeout(() => setCopied(false), 2200); };
-  const handleSave = () => {
-    if (!saved && onSave) { onSave(); setSaved(true); }
+
+  const SectionHeader = ({ title }: { title: string }) => (
+    <View style={{ marginBottom: 6, paddingBottom: 4, borderBottomWidth: 1, borderBottomColor: '#D4E8DC' }}>
+      <Text style={{ fontSize: 9.5, fontWeight: '800', letterSpacing: 1.2, textTransform: 'uppercase', color: '#8FBEA0' }}>
+        {title}
+      </Text>
+    </View>
+  );
+
+  const Row = ({ label, value, abnormal }: { label: string; value: string; abnormal?: boolean }) => {
+    if (!value || value === '—') return null;
+    return (
+      <View style={{ marginBottom: 3 }}>
+        <Text style={{ fontSize: 12, color: '#5A8A6E' }}>
+          {'\u00b7'} {label} {'\u2192'}{' '}
+          <Text style={{ fontSize: 13, color: abnormal ? '#DC2626' : '#0D2B1A', fontWeight: abnormal ? '700' : '400' }}>
+            {value}{abnormal ? ' \u26a0' : ''}
+          </Text>
+        </Text>
+      </View>
+    );
+  };
+
+  const Line = ({ label, value }: { label: string; value: string }) => {
+    if (!value || value === '—') return null;
+    return (
+      <View style={{ flexDirection: 'row', marginBottom: 4, gap: 8 }}>
+        <Text style={{ fontSize: 12, color: '#5A8A6E', width: 130, flexShrink: 0 }}>{label}</Text>
+        <Text style={{ fontSize: 13, color: '#0D2B1A', flex: 1, lineHeight: 20 }}>{value}</Text>
+      </View>
+    );
   };
 
   return (
-    <View style={{ paddingHorizontal: 4, paddingVertical: 8 }}>
-      {/* Full hospital EMR note — same as Copy All output */}
-      <Text
-        selectable
-        style={{
-          fontSize: 12,
-          color: '#0D2B1A',
-          lineHeight: 20,
-          fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-          letterSpacing: 0.05,
-        }}
-      >
-        {noteText}
-      </Text>
+    <View style={{ backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: '#D4E8DC', overflow: 'hidden', marginBottom: 4, shadowColor: '#0D6B3A', shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: 2 }, elevation: 3 }}>
 
-      {/* Actions */}
-      <View style={{ flexDirection: 'row', gap: 10, marginTop: 16, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#D4E8DC' }}>
+      {/* Dark emerald header */}
+      <View style={{ backgroundColor: '#0D6B3A', padding: 12, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 10, fontWeight: '800', color: 'rgba(255,255,255,0.5)', letterSpacing: 1, textTransform: 'uppercase' }}>Emergency Case Record</Text>
+          <Text style={{ fontSize: 13, fontWeight: '700', color: 'white', marginTop: 2 }}>Initial Assessment & ED Case Note</Text>
+        </View>
+        <View style={{ backgroundColor: 'rgba(29,184,112,0.25)', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 3 }}>
+          <Text style={{ fontSize: 9, fontWeight: '800', color: '#1DB870', letterSpacing: 0.8 }}>CASE NOTE</Text>
+        </View>
+      </View>
+
+      {/* Scrollable body */}
+      <ScrollView style={{ maxHeight: 440 }} showsVerticalScrollIndicator={false} nestedScrollEnabled>
+        <View style={{ padding: 16 }}>
+
+          {/* Patient header */}
+          <View style={{ marginBottom: 14, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#D4E8DC' }}>
+            <Text style={{ fontSize: 15, fontWeight: '700', color: '#0D2B1A', marginBottom: 4 }}>
+              {val(c.name, 'Patient')} {'\u00b7'} {val(c.age, '\u2014')}{c.sex ? c.sex[0]?.toUpperCase() : ''}
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              {c.priority ? (
+                <View style={{ backgroundColor: priorityBg, borderRadius: 5, paddingHorizontal: 9, paddingVertical: 3 }}>
+                  <Text style={{ fontSize: 10, fontWeight: '800', color: priorityColor }}>{c.priority}</Text>
+                </View>
+              ) : null}
+              {c.doctorName ? <Text style={{ fontSize: 11, color: '#5A8A6E' }}>CASE SEEN BY Dr. {c.doctorName.toUpperCase()}</Text> : null}
+              {c.date ? <Text style={{ fontSize: 11, color: '#5A8A6E' }}>{c.date}{c.caseTime ? ' \u00b7 ' + c.caseTime : ''}</Text> : null}
+            </View>
+          </View>
+
+          {/* Presenting Complaint */}
+          <View style={{ marginBottom: 14 }}>
+            <SectionHeader title="Presenting Complaint" />
+            <Text style={{ fontSize: 13, color: c.history.symptoms ? '#0D2B1A' : '#8FBEA0', lineHeight: 22, fontStyle: c.history.symptoms ? 'normal' : 'italic' }}>
+              {val(c.history.symptoms, 'Not documented')}
+            </Text>
+          </View>
+
+          {/* Primary Assessment (ABCDE) */}
+          <View style={{ marginBottom: 14 }}>
+            <SectionHeader title="Primary Assessment (ABCDE)" />
+            <Row label="Airway" value={val(c.primary.airway, 'Patent, self-maintained')} />
+            <Row
+              label="Breathing"
+              value={`RR: ${val(c.vitals.rr, '\u2014')}/min \u00b7 SpO\u2082: ${val(c.vitals.spo2, '\u2014')}%${c.primary.breathing ? ' \u00b7 ' + c.primary.breathing : ' on room air'}`}
+              abnormal={isAbnSpo2(c.vitals.spo2)}
+            />
+            <Row
+              label="Circulation"
+              value={`HR: ${val(c.vitals.hr, '\u2014')}/min \u00b7 BP: ${val(c.vitals.bp, '\u2014')} mmHg${c.vitals.crt ? ' \u00b7 CRT ' + c.vitals.crt : ''}${c.primary.circulation ? ' \u00b7 ' + c.primary.circulation : ''}`}
+              abnormal={isAbnHr(c.vitals.hr)}
+            />
+            <Row label="Disability" value={`GCS: ${val(c.vitals.gcs, '\u2014')} \u00b7 ${val(c.primary.disability, 'Alert')}`} />
+            <Row label="Exposure" value={`Temp: ${val(c.vitals.tempDisplay || c.vitals.temp, '\u2014')}`} />
+            {(c.primary.ecg && c.primary.ecg !== 'Not done') || (c.primary.abg && c.primary.abg !== 'Not done') ? (
+              <Text style={{ marginTop: 4, fontSize: 12, color: '#5A8A6E' }}>
+                Adjuncts: {[c.primary.ecg && c.primary.ecg !== 'Not done' && `ECG (${c.primary.ecg})`, c.primary.abg && c.primary.abg !== 'Not done' && `ABG/VBG (${c.primary.abg})`].filter(Boolean).join(' \u00b7 ')}
+              </Text>
+            ) : null}
+          </View>
+
+          {/* HPI */}
+          <View style={{ marginBottom: 14 }}>
+            <SectionHeader title="History of Present Illness" />
+            <Text style={{ fontSize: 13, color: c.history.events ? '#0D2B1A' : '#8FBEA0', lineHeight: 22, fontStyle: c.history.events ? 'normal' : 'italic' }}>
+              {val(c.history.events, 'History to be documented.')}
+            </Text>
+          </View>
+
+          {/* Secondary Survey */}
+          <View style={{ marginBottom: 14 }}>
+            <SectionHeader title="Secondary Survey" />
+            <Line label="Signs & Symptoms" value={c.history.symptoms} />
+            <Line label="Past Medical Hx" value={c.history.pastHistory} />
+            <Line label="Surgical Hx" value={c.history.pastSurgical} />
+            <Line label="Family / Social Hx" value={c.history.other} />
+            {isFemale ? <Line label="LMP" value={c.history.lmp} /> : null}
+            <Line label="Allergies" value={c.history.allergies || 'No known allergies'} />
+          </View>
+
+          {/* General Examination */}
+          <View style={{ marginBottom: 14 }}>
+            <SectionHeader title="General Examination" />
+            <Text style={{ fontSize: 13, color: '#0D2B1A', lineHeight: 22 }}>{genExamSentence()}</Text>
+          </View>
+
+          {/* Systemic Examination */}
+          <View style={{ marginBottom: 14 }}>
+            <SectionHeader title="Systemic Examination" />
+            <Line label="CVS" value={c.exam.cvs} />
+            <Line label="Chest" value={c.exam.respiratory} />
+            <Line label="Abdomen" value={c.exam.abdomen} />
+            <Line label="CNS" value={c.exam.neuro} />
+            <Line label="Extremities" value={c.exam.extremities} />
+          </View>
+
+          {/* Psychological Assessment */}
+          <View style={{ marginBottom: 14 }}>
+            <SectionHeader title="Psychological Assessment" />
+            <Text style={{ fontSize: 13, color: '#0D2B1A', lineHeight: 22 }}>{psychSentence()}</Text>
+          </View>
+
+          {/* Investigations */}
+          {(c.treatment.labsOrdered || c.treatment.imaging || c.treatment.resultsSummary) ? (
+            <View style={{ marginBottom: 14 }}>
+              <SectionHeader title="Investigations" />
+              <Line label="Labs ordered" value={c.treatment.labsOrdered} />
+              <Line label="Imaging" value={c.treatment.imaging} />
+              {c.treatment.resultsSummary ? <Line label="Results" value={c.treatment.resultsSummary} /> : null}
+            </View>
+          ) : null}
+
+          {/* Treatment Plan */}
+          {(c.treatment.medications || c.treatment.infusions || c.treatment.ivFluids || c.treatment.procedures) ? (
+            <View style={{ marginBottom: 14 }}>
+              <SectionHeader title="Treatment Plan" />
+              {c.treatment.medications
+                ? c.treatment.medications.split('\n').map((m, i) =>
+                    m.trim() ? <Text key={i} style={{ fontSize: 13, color: '#0D2B1A', marginBottom: 3 }}>{'\u00b7'} {m.trim()}</Text> : null
+                  )
+                : null}
+              {c.treatment.infusions ? <Text style={{ fontSize: 13, color: '#0D2B1A', marginBottom: 3 }}>{'\u00b7'} {c.treatment.infusions}</Text> : null}
+              {c.treatment.ivFluids ? <Text style={{ fontSize: 13, color: '#0D2B1A', marginBottom: 3 }}>{'\u00b7'} {c.treatment.ivFluids}</Text> : null}
+              {c.treatment.procedures ? <Text style={{ fontSize: 13, color: '#0D2B1A', marginTop: 4 }}>Procedures: {c.treatment.procedures}</Text> : null}
+            </View>
+          ) : null}
+
+          {/* Disposition */}
+          <View style={{ marginBottom: 14 }}>
+            <SectionHeader title="Disposition" />
+            <Text style={{ fontSize: 13, color: '#0D2B1A' }}>
+              {val(c.disposition.decision, 'Pending')}{c.disposition.admitTo ? ` \u2014 ${c.disposition.admitTo}` : ''}{c.disposition.referTo ? ` | Referral: ${c.disposition.referTo}` : ''}
+            </Text>
+          </View>
+
+          {/* Provisional Diagnosis */}
+          <View style={{ marginBottom: 14 }}>
+            <SectionHeader title="Provisional Diagnosis" />
+            <View style={{ marginBottom: 10 }}>
+              <Text style={{ fontSize: 10, fontWeight: '700', color: '#5A8A6E', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 4 }}>
+                Primary Diagnosis
+              </Text>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: c.disposition.diagnosis ? '#0D2B1A' : '#8FBEA0', fontStyle: c.disposition.diagnosis ? 'normal' : 'italic' }}>
+                {val(c.disposition.diagnosis, 'Pending \u2014 to be documented')}
+              </Text>
+            </View>
+            {differentialsList.length > 0 ? (
+              <View>
+                <Text style={{ fontSize: 10, fontWeight: '700', color: '#5A8A6E', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 6 }}>
+                  Differential Diagnoses
+                </Text>
+                {differentialsList.map((dd, i) => (
+                  <View key={i} style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-start', marginBottom: 5 }}>
+                    <Text style={{ color: '#1DB870', fontWeight: '700', fontSize: 13 }}>{'\u2022'}</Text>
+                    <Text style={{ fontSize: 13, color: '#0D2B1A', lineHeight: 20, flex: 1 }}>{dd}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </View>
+
+          {/* Signatures */}
+          <View style={{ paddingTop: 12, borderTopWidth: 1, borderTopColor: '#D4E8DC' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+              <View>
+                <Text style={{ fontSize: 10, color: '#8FBEA0', textTransform: 'uppercase', letterSpacing: 0.8 }}>EM Resident</Text>
+                <Text style={{ fontSize: 13, fontWeight: '600', color: '#0D2B1A', marginTop: 2 }}>Dr. {c.doctorName || '_______________'}</Text>
+              </View>
+              <View>
+                <Text style={{ fontSize: 10, color: '#8FBEA0', textTransform: 'uppercase', letterSpacing: 0.8 }}>EM Consultant</Text>
+                <Text style={{ fontSize: 13, fontWeight: '600', color: '#0D2B1A', marginTop: 2 }}>Dr. _______________</Text>
+              </View>
+            </View>
+          </View>
+
+        </View>
+      </ScrollView>
+
+      {/* Action bar */}
+      <View style={{ borderTopWidth: 1, borderTopColor: '#D4E8DC', backgroundColor: '#F2FAF6', padding: 10, paddingHorizontal: 16, flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
         <Pressable
           onPress={handleCopy}
-          style={{ backgroundColor: copied ? '#0D8A46' : '#15924F', borderRadius: 9, paddingHorizontal: 16, paddingVertical: 9 }}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: copied ? '#E8F8EE' : '#0D6B3A', borderRadius: 9, paddingHorizontal: 14, paddingVertical: 8 }}
         >
-          <Text style={{ fontSize: 13, fontWeight: '700', color: '#fff' }}>{copied ? 'Copied!' : 'Copy all'}</Text>
+          <Feather name="copy" size={11} color={copied ? '#0D6B3A' : 'white'} />
+          <Text style={{ fontSize: 12, fontWeight: '700', color: copied ? '#0D6B3A' : 'white' }}>{copied ? 'Copied \u2713' : 'Copy all'}</Text>
         </Pressable>
         {onSave ? (
           <Pressable
-            onPress={handleSave}
-            style={{
-              backgroundColor: saved ? '#EFF8F2' : '#fff',
-              borderRadius: 9,
-              borderWidth: 1,
-              borderColor: saved ? '#0D8A46' : '#D4E8DC',
-              paddingHorizontal: 16,
-              paddingVertical: 9,
-            }}
+            onPress={onSave}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#B8E8CB', borderRadius: 9, paddingHorizontal: 14, paddingVertical: 8 }}
           >
-            <Text style={{ fontSize: 13, fontWeight: '600', color: saved ? '#0D8A46' : '#3D6B52' }}>
-              {saved ? 'Saved ✓' : 'Save'}
-            </Text>
+            <Feather name="save" size={11} color="#15924F" />
+            <Text style={{ fontSize: 12, fontWeight: '700', color: '#15924F' }}>Save</Text>
           </Pressable>
         ) : null}
       </View>
@@ -1571,9 +1810,15 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
         {!hasMessages && !isRecording ? <EmptyState /> : null}
         {isRecording ? (
           <View style={s.recordingFullState}>
-            <Text style={s.recordingListening}>Listening…</Text>
-            <RecordingWave />
-            <Text style={s.recordingHint}>Speak the case naturally in any language</Text>
+            <Text style={s.recordingListening}>Listening in any language…</Text>
+            <View style={s.wave}>
+              <View style={[s.waveDot, { backgroundColor: C.red }]} />
+              <View style={s.waveBars}>
+                {WAVE_HEIGHTS.map((_, i) => <WaveBar key={i} index={i} />)}
+              </View>
+              <Text style={[s.waveLabel, { color: C.red }]}>Recording…</Text>
+            </View>
+            <Text style={s.recordingHint}>Speak naturally — name, complaint, vitals, history</Text>
           </View>
         ) : null}
 
@@ -1612,7 +1857,7 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
                     : `Case note ready · ${fc} field${fc !== 1 ? 's' : ''} captured`}
                 >
                   {useLive ? (
-                    <FlatCaseNote
+                    <StructuredCaseCard
                       c={liveCase!}
                       onCopy={() => {
                         Clipboard.setStringAsync(generateCaseNote(liveCase!));
@@ -1842,13 +2087,33 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
 
       {/* Input bar */}
       <View style={s.inputBar}>
-        {/* Text input area */}
+        {/* Mic — always leftmost */}
+        <Pressable
+          onPress={handleMic}
+          disabled={disabled || (busy && !isRecording)}
+          style={[
+            s.micBtn,
+            isRecording
+              ? { backgroundColor: 'rgba(239,68,68,0.10)', borderColor: 'rgba(239,68,68,0.25)', borderWidth: 1 }
+              : !hasCaseNote
+              ? { backgroundColor: C.greenDark }
+              : { backgroundColor: C.greenLight, borderColor: C.greenBd, borderWidth: 1 },
+          ]}
+        >
+          <Feather
+            name={isRecording ? 'square' : 'mic'}
+            size={18}
+            color={isRecording ? C.red : !hasCaseNote ? '#fff' : C.green}
+          />
+        </Pressable>
+
+        {/* Text input area — center */}
         {isRecording || isTranscribing ? (
           <View style={s.inputRecordingState}>
             {isRecording ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <View style={[s.recDot, { backgroundColor: C.red }]} />
-                <Text style={[s.recLabel, { color: C.red }]}>Recording… {recSecs}s  —  tap to stop</Text>
+                <Text style={[s.recLabel, { color: C.red }]}>Recording… {recSecs}s — tap to stop</Text>
               </View>
             ) : (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -1871,34 +2136,14 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
           />
         )}
 
-        {/* Mic */}
-        <Pressable
-          onPress={handleMic}
-          disabled={disabled || busy && !isRecording}
-          style={[
-            s.micBtn,
-            isRecording
-              ? { backgroundColor: 'rgba(239,68,68,0.10)', borderColor: 'rgba(239,68,68,0.25)', borderWidth: 1 }
-              : !hasCaseNote
-              ? { backgroundColor: C.greenDark }
-              : { backgroundColor: C.greenLight, borderColor: C.greenBd, borderWidth: 1 },
-          ]}
-        >
-          <Feather
-            name={isRecording ? 'square' : 'mic'}
-            size={18}
-            color={isRecording ? C.red : !hasCaseNote ? '#fff' : C.green}
-          />
-        </Pressable>
-
-        {/* Send */}
+        {/* Send — rightmost, only when text typed */}
         {inputText.trim().length > 0 && !isRecording ? (
           <Pressable
             onPress={handleSend}
             disabled={busy}
-            style={[s.sendBtn, { backgroundColor: inputText.trim() ? C.greenDark : C.greenLight }]}
+            style={[s.sendBtn, { backgroundColor: C.greenDark }]}
           >
-            <Text style={{ color: inputText.trim() ? '#fff' : C.greenDark, fontSize: 18, lineHeight: 20 }}>↑</Text>
+            <Feather name="arrow-up" size={16} color="#fff" />
           </Pressable>
         ) : null}
       </View>
