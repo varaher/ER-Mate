@@ -10,6 +10,7 @@ import {
   Modal,
   Platform,
   Alert,
+  TextInput,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
@@ -86,6 +87,10 @@ export default function DashboardScreen() {
   const [localPlan, setLocalPlan] = useState<string | null>(null);
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialChecked, setTutorialChecked] = useState(false);
+  const [renameModalVisible, setRenameModalVisible] = useState(false);
+  const [renameCase, setRenameCase] = useState<CaseItem | null>(null);
+  const [renameText, setRenameText] = useState("");
+  const [renaming, setRenaming] = useState(false);
 
   useEffect(() => {
     const checkTutorial = async () => {
@@ -199,6 +204,41 @@ export default function DashboardScreen() {
   const openDownloadModal = (caseItem: CaseItem) => {
     setSelectedCase(caseItem);
     setDownloadModalVisible(true);
+  };
+
+  const openRenameModal = (caseItem: CaseItem) => {
+    setRenameCase(caseItem);
+    setRenameText(caseItem.patient?.name || "");
+    setRenameModalVisible(true);
+  };
+
+  const handleRename = async () => {
+    if (!renameCase || !renameText.trim()) return;
+    setRenaming(true);
+    try {
+      const token = await AsyncStorage.getItem("authToken");
+      const baseUrl = getApiUrl();
+      const url = new URL(`/api/cases/${renameCase.id}/rename`, baseUrl).href;
+      const res = await fetch(url, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ name: renameText.trim() }),
+      });
+      if (res.ok) {
+        setRenameModalVisible(false);
+        setRenameCase(null);
+        refetch();
+      } else {
+        Alert.alert("Error", "Could not rename patient. Please try again.");
+      }
+    } catch {
+      Alert.alert("Error", "Could not rename patient. Please try again.");
+    } finally {
+      setRenaming(false);
+    }
   };
 
   const getMimeType = (filename: string) => {
@@ -856,6 +896,13 @@ export default function DashboardScreen() {
                       <Feather name="edit" size={16} color="#d97706" />
                       <Text style={[styles.actionBtnLabel, { color: "#d97706" }]}>Notes</Text>
                     </Pressable>
+                    <Pressable
+                      style={[styles.actionBtn, { backgroundColor: "#f0fdf4" }]}
+                      onPress={() => openRenameModal(caseItem)}
+                    >
+                      <Feather name="user" size={16} color="#16a34a" />
+                      <Text style={[styles.actionBtnLabel, { color: "#16a34a" }]}>Rename</Text>
+                    </Pressable>
                     {canDownload(caseItem.status) ? (
                       <Pressable
                         style={[styles.actionBtn, { backgroundColor: "#f3e8ff" }]}
@@ -946,6 +993,46 @@ export default function DashboardScreen() {
               </View>
             )}
           </View>
+        </Pressable>
+      </Modal>
+
+      {/* Rename patient modal */}
+      <Modal
+        visible={renameModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setRenameModalVisible(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setRenameModalVisible(false)}>
+          <Pressable style={[styles.downloadModal, { backgroundColor: theme.card }]} onPress={() => {}}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>Rename Patient</Text>
+              <Pressable onPress={() => setRenameModalVisible(false)}>
+                <Feather name="x" size={24} color={theme.textSecondary} />
+              </Pressable>
+            </View>
+            <TextInput
+              style={[styles.renameInput, { color: theme.text, borderColor: theme.border || "#e5e7eb", backgroundColor: theme.background }]}
+              value={renameText}
+              onChangeText={setRenameText}
+              placeholder="Patient name"
+              placeholderTextColor={theme.textMuted}
+              autoFocus
+              returnKeyType="done"
+              onSubmitEditing={handleRename}
+            />
+            <Pressable
+              style={[styles.renameSaveBtn, { backgroundColor: theme.primary, opacity: renameText.trim() && !renaming ? 1 : 0.5 }]}
+              onPress={handleRename}
+              disabled={!renameText.trim() || renaming}
+            >
+              {renaming ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.renameSaveBtnText}>Save</Text>
+              )}
+            </Pressable>
+          </Pressable>
         </Pressable>
       </Modal>
 
@@ -1153,6 +1240,22 @@ const styles = StyleSheet.create({
   },
   downloadBtnText: { ...Typography.label },
   downloadNote: { ...Typography.small, textAlign: "center" as const },
+  renameInput: {
+    borderWidth: 1,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+    ...Typography.body,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.lg,
+  },
+  renameSaveBtn: {
+    borderRadius: BorderRadius.md,
+    paddingVertical: Spacing.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  renameSaveBtnText: { ...Typography.label, color: "#fff" },
   statsNavCard: {
     flexDirection: "row",
     alignItems: "center",

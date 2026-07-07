@@ -359,6 +359,30 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  // Rename patient: update just the patient name on the external backend
+  app.patch("/api/cases/:id/rename", async (req: Request, res: Response) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader) return res.status(401).json({ error: "No auth token" });
+      const { id } = req.params;
+      const { name } = req.body || {};
+      if (!name || typeof name !== "string" || !name.trim()) {
+        return res.status(400).json({ error: "name is required" });
+      }
+      const externalRes = await fetch(`${EXTERNAL_API}/cases/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: authHeader },
+        body: JSON.stringify({ patient: { name: name.trim() } }),
+      });
+      const responseText = await externalRes.text();
+      try { return res.status(externalRes.status).json(JSON.parse(responseText)); }
+      catch { return res.status(externalRes.status).send(responseText); }
+    } catch (err: any) {
+      console.error("[RENAME] error:", err);
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
   // Chat-update: save extracted clinical data from ErMate chat back to the case
   app.post("/api/proxy/cases/:id/chat-update", async (req: Request, res: Response) => {
     try {
