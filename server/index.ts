@@ -223,13 +223,13 @@ function configureExpoAndLanding(app: express.Application) {
   <meta property="og:type" content="website" />
   <meta property="og:url" content="${baseUrl}/" />
   <meta property="og:title" content="ErMate — Emergency Room EMR" />
-  <meta property="og:description" content="The smart EMR built for emergency medicine. Voice dictation, AI clinical support, triage, and team shift management — all in one app." />
+  <meta property="og:description" content="You became a doctor to save lives. Not to fill forms." />
   <meta property="og:image" content="${baseUrl}/assets/images/icon.png" />
   <meta property="og:image:width" content="512" />
   <meta property="og:image:height" content="512" />
   <meta name="twitter:card" content="summary" />
   <meta name="twitter:title" content="ErMate — Emergency Room EMR" />
-  <meta name="twitter:description" content="The smart EMR built for emergency medicine. Voice dictation, AI clinical support, triage, and team shift management — all in one app." />
+  <meta name="twitter:description" content="You became a doctor to save lives. Not to fill forms." />
   <meta name="twitter:image" content="${baseUrl}/assets/images/icon.png" />`;
         let html = fs.readFileSync(webIndexPath, "utf-8");
         html = html.replace("</head>", `${ogTags}\n</head>`);
