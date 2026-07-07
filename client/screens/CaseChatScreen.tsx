@@ -610,6 +610,10 @@ export default function CaseChatScreen({ route, navigation }: Props) {
     });
   }, [activeCaseId, shiftSession, activeShift, department, user]);
 
+  const goToDashboard = useCallback(() => {
+    (navigation as any).navigate('Main', { screen: 'DashboardTab' });
+  }, [navigation]);
+
   // ── Render ─────────────────────────────────────────────────────────────────
   const header = (
     <View style={styles.header}>
@@ -624,6 +628,14 @@ export default function CaseChatScreen({ route, navigation }: Props) {
         <Text style={styles.headerTitle}>ErMate</Text>
         <Text style={styles.headerSub} numberOfLines={1}>{effectiveName}</Text>
       </View>
+      <Pressable
+        onPress={goToDashboard}
+        style={({ pressed }) => [styles.headerDashBtn, { opacity: pressed ? 0.7 : 1 }]}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      >
+        <Feather name="home" size={16} color="#FFFFFF" />
+        <Text style={styles.headerDashBtnText}>Dashboard</Text>
+      </Pressable>
     </View>
   );
 
@@ -680,6 +692,7 @@ export default function CaseChatScreen({ route, navigation }: Props) {
           liveCase={liveCase}
           caseId={activeCaseId!}
           userId={user?.id}
+          onNavigateDashboard={goToDashboard}
         />
       </View>
     </View>
@@ -706,6 +719,16 @@ const styles = StyleSheet.create({
   headerTextGroup: { flex: 1 },
   headerTitle: { fontSize: 17, fontWeight: '700', color: '#FFFFFF', letterSpacing: 0.2 },
   headerSub:   { fontSize: 13, color: 'rgba(255,255,255,0.70)', marginTop: 2 },
+  headerDashBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+  },
+  headerDashBtnText: { fontSize: 13, fontWeight: '700', color: '#FFFFFF' },
   center:      { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
   loadingText: { fontSize: 14, color: '#6B9E80' },
   errorText:   { fontSize: 15, color: '#ef4444', textAlign: 'center', paddingHorizontal: 32 },

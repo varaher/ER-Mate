@@ -560,6 +560,8 @@ export interface CaseChatProps {
   disabled?: boolean;
   caseId?: string;
   userId?: string;
+  /** When provided, shows a "Go to Dashboard" button after the case note is ready */
+  onNavigateDashboard?: () => void;
 }
 
 // ── Wave bar (recording animation) ───────────────────────────────────────────
@@ -1251,7 +1253,7 @@ function countFields(extracted: SmartDictationExtracted): number {
 const AFTER_CASE_CHIPS = ['Prepare discharge summary', 'RSI note', 'Referral letter', 'Show complete case sheet'];
 const AFTER_DS_CHIPS   = ['Add allergy', 'Export PDF', 'Show differentials', 'Edit diagnosis'];
 
-export default function CaseChat({ onDataExtracted, patientContext, liveCase, initialExtracted, disabled = false, caseId, userId }: CaseChatProps) {
+export default function CaseChat({ onDataExtracted, patientContext, liveCase, initialExtracted, disabled = false, caseId, userId, onNavigateDashboard }: CaseChatProps) {
   const [messages, setMessages]         = useState<ChatMessage[]>([]);
   const [inputText, setInputText]       = useState('');
   const [isRecording, setIsRecording]   = useState(false);
@@ -1643,6 +1645,15 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
                       onTextChange={t => handleCorrectionChange(msg.id, t)}
                       onSubmit={() => handleCorrectionSubmit(msg.id, msg.correctionText || '')}
                     />
+                  ) : null}
+                  {onNavigateDashboard ? (
+                    <Pressable
+                      onPress={onNavigateDashboard}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, paddingVertical: 11, paddingHorizontal: 16, backgroundColor: C.green, borderRadius: 10, justifyContent: 'center' }}
+                    >
+                      <Feather name="home" size={15} color="#fff" />
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: '#fff' }}>Save & Go to Dashboard</Text>
+                    </Pressable>
                   ) : null}
                 </ErMateResponse>
               </React.Fragment>
