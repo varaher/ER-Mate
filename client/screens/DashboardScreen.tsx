@@ -216,7 +216,7 @@ export default function DashboardScreen() {
     if (!renameCase || !renameText.trim()) return;
     setRenaming(true);
     try {
-      const token = await AsyncStorage.getItem("authToken");
+      const token = await AsyncStorage.getItem("token");
       const baseUrl = getApiUrl();
       const url = new URL(`/api/cases/${renameCase.id}/rename`, baseUrl).href;
       const res = await fetch(url, {
