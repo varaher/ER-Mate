@@ -1945,6 +1945,27 @@ export default function CaseSheetScreen() {
     Alert.alert("Done", "All examination sections marked as normal with detailed findings");
   };
 
+  const markAllClinicalNormal = () => {
+    setABCDEStatus({ airway: "Normal", breathing: "Normal", circulation: "Normal", disability: "Normal", exposure: "Normal" });
+    setFormData((prev) => ({
+      ...prev,
+      airway: { ...prev.airway, status: "Patent", speech: "Normal", compromiseSigns: "", interventions: [], notes: "Airway patent. No stridor or obstruction." },
+      breathing: { ...prev.breathing, effort: "normal", chestExpansion: "Equal", airEntry: "bilateral", addedSounds: "None", interventions: [], notes: "Equal chest expansion. Vesicular breath sounds bilaterally. No added sounds." },
+      circulation: { ...prev.circulation, capillaryRefill: "Normal", pulseQuality: "Good volume", skinColor: "Normal", skinTemperature: "Warm", interventions: [], notes: "Warm peripheries. CRT < 2 seconds. Pulses palpable bilaterally." },
+      disability: { ...prev.disability, gcsE: "4", gcsV: "5", gcsM: "6", pupilSize: "Normal", pupilReaction: "Reactive", motorResponse: "Alert", notes: "GCS 15/15. Pupils equal and reactive to light. No focal neurological deficit." },
+      exposure: { ...prev.exposure, findings: [], notes: "No external injuries or significant findings." },
+    }));
+    setExamData({
+      general: { pallor: false, icterus: false, cyanosis: false, clubbing: false, lymphadenopathy: false, edema: false, notes: "Patient is conscious, alert, and oriented. No pallor, icterus, cyanosis, clubbing, lymphadenopathy, or edema noted." },
+      cvs: { status: "Normal", s1s2: "Normal", pulse: "Regular", pulseRate: "", apexBeat: "Normal", precordialHeave: false, addedSounds: "", murmurs: "", notes: "S1 S2 heard, normal intensity. No murmurs, gallops, or rubs. JVP not elevated. Peripheral pulses well felt bilaterally." },
+      respiratory: { status: "Normal", expansion: "Equal", percussion: "Resonant", breathSounds: "Vesicular", vocalResonance: "Normal", addedSounds: "", notes: "Bilateral equal air entry. Vesicular breath sounds. No wheeze, crackles, or rhonchi. Normal percussion notes." },
+      abdomen: { status: "Normal", umbilical: "Normal", organomegaly: "", percussion: "Tympanic", bowelSounds: "Present", externalGenitalia: "Normal", hernialOrifices: "Normal", perRectal: "", perVaginal: "", notes: "Soft, non-distended, non-tender. No guarding or rigidity. No organomegaly. Bowel sounds present and normal." },
+      cns: { status: "Normal", higherMentalFunctions: "Intact", cranialNerves: "Intact", sensorySystem: "Intact", motorSystem: "Normal", reflexes: "Normal", rombergSign: "Negative", cerebellarSigns: "Normal", notes: "Conscious, oriented to time, place, and person. GCS 15/15. Cranial nerves intact. Pupils BERL. Motor power 5/5 in all limbs. Reflexes normal." },
+      extremities: { status: "Normal", pulses: "Present", edema: false, deformity: false, notes: "No edema, cyanosis, or clubbing. Peripheral pulses well felt. Full range of motion. No deformity or swelling." },
+    });
+    Alert.alert("Done", "Primary survey and all examination sections marked as normal.\nSigns & symptoms, medications, and diagnoses are unchanged.");
+  };
+
   const handleVoiceExtraction = (data: ExtractedClinicalData) => {
     if (data.historyOfPresentIllness) {
       updateFormData("sample", "eventsHopi", (formData.sample.eventsHopi ? formData.sample.eventsHopi + " " : "") + data.historyOfPresentIllness);
@@ -2509,10 +2530,8 @@ export default function CaseSheetScreen() {
     if (currentIndex < tabs.length - 1) {
       setActiveTab(tabs[currentIndex + 1]);
     } else {
-      const success = await commitToBackend();
-      if (success) {
-        (navigation as any).navigate("Main", { screen: "DashboardTab" });
-      }
+      await commitToBackend();
+      (navigation as any).navigate("Main", { screen: "DashboardTab" });
     }
   };
 
@@ -2690,6 +2709,13 @@ export default function CaseSheetScreen() {
           <Feather name="chevron-right" size={14} color={theme.textMuted} />
         </View>
       </View>
+      {(activeTab === "primary" || activeTab === "exam") && (
+        <Pressable style={[styles.markAllNormalBanner, { backgroundColor: isDark ? '#1B2D1E' : '#E8F5E9', borderColor: TriageColors.green }]} onPress={markAllClinicalNormal}>
+          <Feather name="check-circle" size={18} color={TriageColors.green} />
+          <Text style={[styles.markAllNormalBannerText, { color: TriageColors.green }]}>Mark all clinical findings Normal</Text>
+          <Text style={[styles.markAllNormalBannerSub, { color: isDark ? '#86efac' : '#16a34a' }]}>(keeps symptoms, drugs & diagnosis)</Text>
+        </Pressable>
+      )}
       <KeyboardAwareScrollViewCompat contentContainerStyle={[styles.content, { paddingBottom: 100 }]} showsVerticalScrollIndicator={false}>
         {activeTab === "patient" && (
           <>
@@ -4020,15 +4046,13 @@ export default function CaseSheetScreen() {
               <TextInput style={[styles.inputField, { backgroundColor: theme.backgroundSecondary, color: theme.text }]} placeholder="Consultant name" placeholderTextColor={theme.textMuted} value={dispositionData.emConsultant} onChangeText={(v) => setDispositionData((prev) => ({ ...prev, emConsultant: v }))} />
             </View>
             <Pressable style={[styles.generateSummaryBtn, { backgroundColor: theme.primary }]} onPress={async () => {
-              const success = await commitToBackend();
-              if (success && caseId) {
-                navigation.navigate("DischargeSummary", { caseId });
-              }
+              await commitToBackend();
+              if (caseId) navigation.navigate("DischargeSummary", { caseId });
             }}>
               <Feather name="file-text" size={18} color="#FFFFFF" />
               <Text style={styles.generateSummaryBtnText}>Generate Discharge Summary</Text>
             </Pressable>
-            <Pressable style={[styles.saveDashboardBtn, { borderColor: theme.primary }]} onPress={async () => { const success = await commitToBackend(); if (success) (navigation as any).navigate("Main", { screen: "DashboardTab" }); }}>
+            <Pressable style={[styles.saveDashboardBtn, { borderColor: theme.primary }]} onPress={async () => { await commitToBackend(); (navigation as any).navigate("Main", { screen: "DashboardTab" }); }}>
               <Feather name="home" size={18} color={theme.primary} />
               <Text style={[styles.saveDashboardBtnText, { color: theme.primary }]}>Save & Go to Dashboard</Text>
             </Pressable>
@@ -4253,6 +4277,18 @@ const styles = StyleSheet.create({
   toggleGridLabel: { ...Typography.body, fontSize: 14 },
   segmentedControl: { flexDirection: "row", gap: Spacing.sm },
   segmentBtn: { flex: 1, paddingVertical: Spacing.sm, alignItems: "center", borderRadius: BorderRadius.md },
+  markAllNormalBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.xl,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+  },
+  markAllNormalBannerText: { ...Typography.bodyMedium, fontWeight: "700" },
+  markAllNormalBannerSub: { fontSize: 11 },
   markNormalBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: Spacing.md, borderRadius: BorderRadius.md, gap: Spacing.sm, marginBottom: Spacing.lg },
   markNormalBtnText: { ...Typography.bodyMedium, fontWeight: "600" },
   row: { flexDirection: "row", gap: Spacing.md },

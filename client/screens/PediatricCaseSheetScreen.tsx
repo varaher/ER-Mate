@@ -893,10 +893,8 @@ export default function PediatricCaseSheetScreen() {
     if (currentIndex < TABS.length - 1) {
       setActiveTab(TABS[currentIndex + 1].key);
     } else {
-      const success = await commitToBackend();
-      if (success) {
-        (navigation as any).navigate("Main", { screen: "DashboardTab" });
-      }
+      await commitToBackend();
+      (navigation as any).navigate("Main", { screen: "DashboardTab" });
     }
   };
 
@@ -2583,16 +2581,14 @@ export default function PediatricCaseSheetScreen() {
             <Pressable 
               style={[styles.generateSummaryBtn, { backgroundColor: theme.primary }]} 
               onPress={async () => {
-                const success = await commitToBackend();
-                if (success) {
-                  navigation.navigate("DischargeSummary", { caseId });
-                }
+                await commitToBackend();
+                navigation.navigate("DischargeSummary", { caseId });
               }}
             >
               <Feather name="file-text" size={18} color="#FFFFFF" />
               <Text style={styles.generateSummaryBtnText}>Generate Discharge Summary</Text>
             </Pressable>
-            <Pressable style={[styles.saveDashboardBtn, { borderColor: theme.primary }]} onPress={async () => { const success = await commitToBackend(); if (success) (navigation as any).navigate("Main", { screen: "DashboardTab" }); }}>
+            <Pressable style={[styles.saveDashboardBtn, { borderColor: theme.primary }]} onPress={async () => { await commitToBackend(); (navigation as any).navigate("Main", { screen: "DashboardTab" }); }}>
               <Feather name="home" size={18} color={theme.primary} />
               <Text style={[styles.saveDashboardBtnText, { color: theme.primary }]}>Save & Go to Dashboard</Text>
             </Pressable>
