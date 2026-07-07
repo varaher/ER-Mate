@@ -214,7 +214,28 @@ function configureExpoAndLanding(app: express.Application) {
     if (req.path === "/") {
       const webIndexPath = path.resolve(process.cwd(), "static-build/web/index.html");
       if (fs.existsSync(webIndexPath)) {
-        return res.sendFile(webIndexPath);
+        const forwardedProto = req.header("x-forwarded-proto");
+        const protocol = forwardedProto || req.protocol || "https";
+        const forwardedHost = req.header("x-forwarded-host");
+        const host = forwardedHost || req.get("host") || "er-mate.replit.app";
+        const baseUrl = `${protocol}://${host}`;
+        const ogTags = `
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="${baseUrl}/" />
+  <meta property="og:title" content="ErMate — Emergency Room EMR" />
+  <meta property="og:description" content="The smart EMR built for emergency medicine. Voice dictation, AI clinical support, triage, and team shift management — all in one app." />
+  <meta property="og:image" content="${baseUrl}/assets/images/icon.png" />
+  <meta property="og:image:width" content="512" />
+  <meta property="og:image:height" content="512" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="ErMate — Emergency Room EMR" />
+  <meta name="twitter:description" content="The smart EMR built for emergency medicine. Voice dictation, AI clinical support, triage, and team shift management — all in one app." />
+  <meta name="twitter:image" content="${baseUrl}/assets/images/icon.png" />`;
+        let html = fs.readFileSync(webIndexPath, "utf-8");
+        html = html.replace("</head>", `${ogTags}\n</head>`);
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        res.setHeader("Cache-Control", "no-cache");
+        return res.status(200).send(html);
       }
       return serveLandingPage({
         req,
