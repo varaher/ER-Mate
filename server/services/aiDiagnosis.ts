@@ -499,6 +499,8 @@ export interface DischargeSummaryInput {
   followUp?: string;
   // Clinical addenda — timestamped updates from long-stay cases
   addendaTimeline?: string;
+  // Total ER stay duration (arrival → last documented addendum)
+  erDuration?: string;
   // Legacy fields (fallback)
   patient?: { name?: string; age?: number | string; gender?: string; };
   chief_complaint?: string;
@@ -735,7 +737,8 @@ ${summaryData.addendaTimeline ? `
 CLINICAL TIMELINE — ADDENDA
 (Chronological updates after the initial case note — include ALL of these in the narrative)
 ═══════════════════════════════════════
-${summaryData.addendaTimeline}` : ""}
+${summaryData.addendaTimeline}
+${summaryData.erDuration ? `\nTotal ER Stay Duration: ${summaryData.erDuration}` : ""}` : ""}
 
 ═══════════════════════════════════════
 
@@ -748,7 +751,8 @@ Write the "Course in Hospital" as a comprehensive clinical narrative covering th
 4. CONSULTATIONS — each specialty consulted, by whom, findings and recommendations
 5. INTERVENTIONS — all procedures performed with timing
 6. CLINICAL COURSE — what happened chronologically (use the addenda timeline above)
-7. CONDITION AT DISCHARGE / TRANSFER — final status
+7. TOTAL ER STAY DURATION — ${summaryData.erDuration ? `state clearly that the patient was managed in the emergency department for ${summaryData.erDuration}` : "mention duration only if it can be determined from the timestamps above"}
+8. CONDITION AT DISCHARGE / TRANSFER — final status
 
 Write as a proper medical narrative — not bullet points. Include timestamps for key events. Include all consultant names and specialties. This must be comprehensive enough that any doctor picking up the patient from the discharge summary knows the full story.`
   : `Now write ONLY the "Course in Hospital" section — a flowing clinical narrative (3–5 sentences, 2 paragraphs max) covering:

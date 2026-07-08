@@ -16,6 +16,7 @@ import { registerDepartmentRoutes } from "./routes/department";
 import { registerShiftRoutes } from "./routes/shifts";
 import { registerEscalationRoutes } from "./routes/escalations";
 import { registerAddendaRoutes } from "./routes/addenda";
+import { extractUserId } from "./lib/auth";
 
 // ─── AES-256-GCM helpers for credential encryption ───────────────────────────
 const CIPHER_ALGO = "aes-256-gcm";
@@ -3270,6 +3271,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
       // ── Fetch addenda for long-stay cases ─────────────────────────────────
       let addendaTimeline: string | undefined;
+      let erDuration: string | undefined;
       const caseIdForAddenda = req.body?.caseId || req.body?.case_id;
       if (caseIdForAddenda) {
         try {
@@ -3295,6 +3297,16 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
                 const extra = r.handover_from_doctor ? `  From: ${r.handover_from_doctor} → To: ${r.handover_to_doctor || '?'}` : '';
                 return `[${label}] ${ts}${who ? ` · ${who}` : ''}${extra}\n${r.content}`;
               }).join('\n\n');
+
+              // ER stay duration — from arrival (or first addendum) to last addendum
+              const arrivalIso = fc.arrival_date && fc.arrival_time
+                ? new Date(`${fc.arrival_date}T${fc.arrival_time}`).getTime()
+                : (fc.created_at ? new Date(fc.created_at).getTime() : new Date(addendaRows.rows[0].created_at).getTime());
+              const lastAddendumMs = new Date(addendaRows.rows[addendaRows.rows.length - 1].created_at).getTime();
+              if (!isNaN(arrivalIso) && !isNaN(lastAddendumMs) && lastAddendumMs > arrivalIso) {
+                const mins = Math.round((lastAddendumMs - arrivalIso) / 60000);
+                erDuration = mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins} minutes`;
+              }
             }
           }
         } catch (addendaErr) {
@@ -3315,7 +3327,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         labsOrdered, imagingOrdered, ecg, efast, resultsSummary, vbgSection,
         medsText, dischargeMedsText, proceduresText, consultText, psychText,
         workingDx, differentials, dispPlan, conditionDx, pendingReps, followUp,
-        addendaTimeline,
+        addendaTimeline, erDuration,
         // Legacy fallback fields
         chief_complaint: complaint,
         diagnosis: workingDx,
