@@ -476,13 +476,48 @@ export function registerShiftRoutes(app: Express) {
         ? deduped.filter((o) => o.doctorUserId === userId || o.handedOverByUserId === userId)
         : deduped; // consultant / HOD sees all
 
-      // Attach session info (role for shift)
+      // Fetch addenda counts and last addendum for all case IDs in bulk
+      const allCaseIds = filtered.map((o) => o.caseId).filter(Boolean);
+      const addendaMap: Record<string, { addendaCount: number; lastAddendum: { type: string; content: string; createdAt: string; doctorName: string | null } | null }> = {};
+      if (allCaseIds.length > 0) {
+        const pool = getPool();
+        if (pool) {
+          try {
+            const addendaRows = await pool.query(
+              `SELECT case_id, type, content, doctor_name, created_at
+               FROM case_addenda
+               WHERE case_id = ANY($1::text[])
+               ORDER BY created_at ASC`,
+              [allCaseIds]
+            );
+            for (const row of addendaRows.rows) {
+              if (!addendaMap[row.case_id]) {
+                addendaMap[row.case_id] = { addendaCount: 0, lastAddendum: null };
+              }
+              addendaMap[row.case_id].addendaCount += 1;
+              addendaMap[row.case_id].lastAddendum = {
+                type: row.type,
+                content: row.content,
+                createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
+                doctorName: row.doctor_name ?? null,
+              };
+            }
+          } catch (addendaErr) {
+            console.warn("[ShiftCases] addenda fetch skipped:", addendaErr);
+          }
+        }
+      }
+
+      // Attach session info (role for shift) and addenda metadata
       const result = filtered.map((overlay) => {
         const sess = sessions.find((s) => s.id === overlay.shiftSessionId);
+        const addendaMeta = addendaMap[overlay.caseId] || { addendaCount: 0, lastAddendum: null };
         return {
           ...overlay,
           roleForShift: sess?.roleForShift || null,
           isOwn: overlay.doctorUserId === userId,
+          addendaCount: addendaMeta.addendaCount,
+          lastAddendum: addendaMeta.lastAddendum,
         };
       });
 
@@ -530,10 +565,38 @@ export function registerShiftRoutes(app: Express) {
         (o) => o.shiftSessionId == null || sessionIds.includes(o.shiftSessionId)
       );
 
+      // Fetch addenda counts in bulk for all overlay case IDs
+      const hodCaseIds = allOverlays.map((o) => o.caseId).filter(Boolean);
+      const hodAddendaMap: Record<string, number> = {};
+      if (hodCaseIds.length > 0) {
+        const pool = getPool();
+        if (pool) {
+          try {
+            const addendaCounts = await pool.query(
+              `SELECT case_id, COUNT(*)::int AS cnt
+               FROM case_addenda WHERE case_id = ANY($1::text[])
+               GROUP BY case_id`,
+              [hodCaseIds]
+            );
+            for (const row of addendaCounts.rows) {
+              hodAddendaMap[row.case_id] = row.cnt;
+            }
+          } catch (addendaErr) {
+            console.warn("[HODCases] addenda count fetch skipped:", addendaErr);
+          }
+        }
+      }
+
       const result = allOverlays.map((o) => {
         const sess = activeSessions.find((s) => s.id === o.shiftSessionId);
         const shift = deptShifts.find((sh) => sh.id === sess?.shiftId);
-        return { ...o, shiftName: shift?.name || null, roleForShift: sess?.roleForShift || null, isOwn: o.doctorUserId === userId };
+        return {
+          ...o,
+          shiftName: shift?.name || null,
+          roleForShift: sess?.roleForShift || null,
+          isOwn: o.doctorUserId === userId,
+          addendaCount: hodAddendaMap[o.caseId] || 0,
+        };
       });
 
       res.json({ cases: result, shifts: deptShifts });

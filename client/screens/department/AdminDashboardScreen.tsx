@@ -13,6 +13,7 @@ import {
   Platform,
   UIManager,
 } from "react-native";
+import { ClinicalTimeline, type CaseAddendum } from "@/components/CaseChat";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { useHeaderHeight } from "@react-navigation/elements";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -88,6 +89,8 @@ export default function AdminDashboardScreen() {
   const [assignTarget, setAssignTarget] = useState<{ userId: string; name: string; role: string } | null>(null);
   const [assigningShiftId, setAssigningShiftId] = useState<number | null>(null);
   const [expandedSession, setExpandedSession] = useState<number | null>(null);
+  const [timelineModal, setTimelineModal] = useState<{ caseOverlay: any; addenda: CaseAddendum[] } | null>(null);
+  const [loadingTimeline, setLoadingTimeline] = useState(false);
 
   const isFocusedRef = useRef(false);
 
@@ -207,6 +210,23 @@ export default function AdminDashboardScreen() {
   const toggleSession = (id: number) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setExpandedSession((prev) => (prev === id ? null : id));
+  };
+
+  const handleOpenTimeline = async (caseOverlay: any) => {
+    setTimelineModal({ caseOverlay, addenda: [] });
+    setLoadingTimeline(true);
+    try {
+      const res = await fetch(`${getApiUrl()}/api/cases/${caseOverlay.caseId}/addenda`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setTimelineModal({ caseOverlay, addenda: data });
+        }
+      }
+    } catch {}
+    setLoadingTimeline(false);
   };
 
   if (!department) {
@@ -408,8 +428,16 @@ export default function AdminDashboardScreen() {
                           <Text style={[styles.expandedLabel, { color: theme.textMuted }]}>CASES TODAY</Text>
                           {doctorCases.map((c, ci) => {
                             const pColor = PRIORITY_COLORS[c.triagePriority] || "#9ca3af";
+                            const miniHasAddenda = c.addendaCount && c.addendaCount > 0;
                             return (
-                              <View key={c.id || ci} style={[styles.miniCaseRow, { borderBottomColor: theme.border, borderBottomWidth: ci < doctorCases.length - 1 ? 1 : 0 }]}>
+                              <Pressable
+                                key={c.id || ci}
+                                style={({ pressed }) => [
+                                  styles.miniCaseRow,
+                                  { borderBottomColor: theme.border, borderBottomWidth: ci < doctorCases.length - 1 ? 1 : 0, opacity: pressed ? 0.8 : 1 },
+                                ]}
+                                onPress={() => handleOpenTimeline(c)}
+                              >
                                 <View style={[styles.miniPBar, { backgroundColor: pColor }]} />
                                 <View style={{ flex: 1, paddingLeft: 8 }}>
                                   <Text style={[styles.miniCaseName, { color: theme.text }]} numberOfLines={1}>
@@ -420,12 +448,20 @@ export default function AdminDashboardScreen() {
                                     {c.createdAt ? `  ·  ${formatCaseTime(c.createdAt)}` : ""}
                                   </Text>
                                 </View>
-                                {c.triagePriority ? (
-                                  <View style={[styles.miniPBadge, { backgroundColor: pColor + "22" }]}>
-                                    <Text style={[styles.miniPText, { color: pColor }]}>P{c.triagePriority}</Text>
-                                  </View>
-                                ) : null}
-                              </View>
+                                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                                  {miniHasAddenda ? (
+                                    <View style={{ flexDirection: "row", alignItems: "center", gap: 2, backgroundColor: "#ede9fe", paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4 }}>
+                                      <Feather name="layers" size={8} color="#7c3aed" />
+                                      <Text style={{ fontSize: 9, fontWeight: "700", color: "#7c3aed" }}>{c.addendaCount}</Text>
+                                    </View>
+                                  ) : null}
+                                  {c.triagePriority ? (
+                                    <View style={[styles.miniPBadge, { backgroundColor: pColor + "22" }]}>
+                                      <Text style={[styles.miniPText, { color: pColor }]}>P{c.triagePriority}</Text>
+                                    </View>
+                                  ) : null}
+                                </View>
+                              </Pressable>
                             );
                           })}
                         </>
@@ -462,8 +498,16 @@ export default function AdminDashboardScreen() {
                 const color = PRIORITY_COLORS[c.triagePriority] || "#9ca3af";
                 const roleStyle = ROLE_COLORS[c.roleForShift] || ROLE_COLORS.resident;
                 const shiftColor = getShiftColor(c.shiftName, theme.primary);
+                const hasAddenda = c.addendaCount && c.addendaCount > 0;
                 return (
-                  <View key={c.id || idx} style={[styles.caseRow, { borderBottomColor: theme.border, borderBottomWidth: idx < allShiftCases.length - 1 ? 1 : 0 }]}>
+                  <Pressable
+                    key={c.id || idx}
+                    style={({ pressed }) => [
+                      styles.caseRow,
+                      { borderBottomColor: theme.border, borderBottomWidth: idx < allShiftCases.length - 1 ? 1 : 0, opacity: pressed ? 0.8 : 1 },
+                    ]}
+                    onPress={() => handleOpenTimeline(c)}
+                  >
                     <View style={[styles.casePriorityBar, { backgroundColor: color }]} />
                     <View style={{ flex: 1, paddingLeft: Spacing.sm }}>
                       <View style={{ flexDirection: "row", gap: 5, flexWrap: "wrap", marginBottom: 2 }}>
@@ -487,6 +531,12 @@ export default function AdminDashboardScreen() {
                             <Text style={[styles.pText, { color: "#065f46" }]}>Reviewed</Text>
                           </View>
                         ) : null}
+                        {hasAddenda ? (
+                          <View style={[styles.pBadge, { backgroundColor: "#ede9fe", flexDirection: "row", alignItems: "center", gap: 3 }]}>
+                            <Feather name="layers" size={8} color="#7c3aed" />
+                            <Text style={[styles.pText, { color: "#7c3aed" }]}>{c.addendaCount} update{c.addendaCount > 1 ? "s" : ""}</Text>
+                          </View>
+                        ) : null}
                       </View>
                       <Text style={[styles.caseName, { color: theme.text }]} numberOfLines={1}>
                         {c.patientName || "Unknown patient"}{c.bedNumber ? `  ·  Bed ${c.bedNumber}` : ""}
@@ -497,7 +547,8 @@ export default function AdminDashboardScreen() {
                         {c.createdAt ? `  ·  ${formatCaseTime(c.createdAt)}` : ""}
                       </Text>
                     </View>
-                  </View>
+                    <Feather name="chevron-right" size={14} color={theme.textMuted} />
+                  </Pressable>
                 );
               })}
             </View>
@@ -539,6 +590,55 @@ export default function AdminDashboardScreen() {
         </View>
 
       </ScrollView>
+
+      {/* ── Clinical Timeline modal ── */}
+      <Modal visible={!!timelineModal} transparent animationType="slide" onRequestClose={() => setTimelineModal(null)}>
+        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }} onPress={() => setTimelineModal(null)}>
+          <Pressable style={[styles.modalSheet, { backgroundColor: theme.card, padding: 0, maxHeight: "85%" }]} onPress={() => {}}>
+            {timelineModal ? (
+              <>
+                <View style={[styles.timelineModalHeader, { borderBottomColor: theme.border }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.timelineModalPatient, { color: theme.text }]} numberOfLines={1}>
+                      {timelineModal.caseOverlay.patientName || "Unknown patient"}
+                      {timelineModal.caseOverlay.bedNumber ? `  ·  Bed ${timelineModal.caseOverlay.bedNumber}` : ""}
+                    </Text>
+                    <Text style={[styles.timelineModalMeta, { color: theme.textSecondary }]} numberOfLines={1}>
+                      {timelineModal.caseOverlay.chiefComplaint || "—"}
+                      {timelineModal.caseOverlay.doctorName ? `  ·  ${timelineModal.caseOverlay.doctorName}` : ""}
+                    </Text>
+                  </View>
+                  <Pressable onPress={() => setTimelineModal(null)}>
+                    <Feather name="x" size={18} color={theme.textMuted} />
+                  </Pressable>
+                </View>
+                <ScrollView
+                  style={{ flex: 1 }}
+                  contentContainerStyle={{ padding: Spacing.md, paddingBottom: 32 }}
+                  showsVerticalScrollIndicator={false}
+                >
+                  {loadingTimeline ? (
+                    <View style={{ alignItems: "center", paddingVertical: Spacing.xl }}>
+                      <ActivityIndicator size="large" color={theme.primary} />
+                      <Text style={{ color: theme.textSecondary, marginTop: Spacing.sm, fontSize: 13 }}>Loading clinical timeline...</Text>
+                    </View>
+                  ) : timelineModal.addenda.length > 0 ? (
+                    <ClinicalTimeline addenda={timelineModal.addenda} />
+                  ) : (
+                    <View style={{ alignItems: "center", paddingVertical: Spacing.xl }}>
+                      <Feather name="clock" size={28} color={theme.textMuted} />
+                      <Text style={{ color: theme.textSecondary, marginTop: Spacing.sm, fontSize: 14 }}>No clinical updates yet</Text>
+                      <Text style={{ color: theme.textMuted, marginTop: 4, fontSize: 12, textAlign: "center" }}>
+                        Updates added by doctors will appear here as the case progresses.
+                      </Text>
+                    </View>
+                  )}
+                </ScrollView>
+              </>
+            ) : null}
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* ── Assign to shift modal ── */}
       <Modal visible={!!assignTarget} transparent animationType="fade" onRequestClose={() => setAssignTarget(null)}>
@@ -670,6 +770,9 @@ const styles = StyleSheet.create({
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", paddingHorizontal: Spacing.lg },
   modalSheet: { width: "100%", borderRadius: BorderRadius.lg, padding: Spacing.lg, gap: Spacing.sm },
   modalTitle: { fontSize: 18, fontWeight: "800", marginBottom: 2 },
+  timelineModalHeader: { flexDirection: "row", alignItems: "center", gap: Spacing.md, padding: Spacing.md, borderBottomWidth: 1 },
+  timelineModalPatient: { fontSize: 15, fontWeight: "700" },
+  timelineModalMeta: { fontSize: 12, marginTop: 2 },
   modalSub: { fontSize: 13, marginBottom: Spacing.sm },
   modalPickLabel: { fontSize: 11, fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 4 },
   shiftPickRow: { flexDirection: "row", alignItems: "center", padding: Spacing.md, borderRadius: BorderRadius.md, borderLeftWidth: 4 },

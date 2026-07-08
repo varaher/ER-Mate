@@ -966,7 +966,7 @@ const PRIORITY_COLORS: Record<string, string> = {
   P1: '#DC2626', P2: '#F97316', P3: '#EAB308', P4: '#22C55E', P5: '#6B7280',
 };
 
-function ClinicalTimeline({
+export function ClinicalTimeline({
   addenda,
   liveCase,
   erArrivalTime,

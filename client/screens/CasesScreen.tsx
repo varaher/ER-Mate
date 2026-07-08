@@ -30,6 +30,7 @@ import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/the
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { getAllDrafts, type DraftCase } from "@/lib/draftManager";
 import { draftOverallCompletion, calcTabCompletion } from "@/lib/tabCompletion";
+import { ClinicalTimeline, type CaseAddendum } from "@/components/CaseChat";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -66,6 +67,8 @@ interface ShiftCaseItem {
   consultantNote: string | null;
   handoverStatus: string | null;
   isOwn: boolean;
+  addendaCount?: number;
+  lastAddendum?: { type: string; content: string; createdAt: string; doctorName: string | null } | null;
 }
 
 const getPriorityColor = (level: number | null) => {
@@ -111,6 +114,8 @@ export default function CasesScreen() {
   const [isReviewRecording, setIsReviewRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const reviewRecordingRef = useRef<Audio.Recording | null>(null);
+  const [reviewAddenda, setReviewAddenda] = useState<CaseAddendum[]>([]);
+  const [loadingAddenda, setLoadingAddenda] = useState(false);
 
   const startReviewRecording = async () => {
     try {
@@ -287,12 +292,24 @@ export default function CasesScreen() {
     navigation.navigate("CaseChat", { caseId: item.id, patientName: item.patient?.name });
   };
 
-  const handleShiftCaseTap = (sc: ShiftCaseItem) => {
+  const handleShiftCaseTap = async (sc: ShiftCaseItem) => {
     if (sc.isOwn) {
       navigation.navigate("CaseChat", { caseId: sc.caseId, patientName: sc.patientName || undefined });
     } else if (isConsultantOrHOD) {
       setReviewNote(sc.consultantNote || "");
+      setReviewAddenda([]);
       setReviewModal(sc);
+      setLoadingAddenda(true);
+      try {
+        const res = await fetch(`${getApiUrl()}/api/cases/${sc.caseId}/addenda`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data)) setReviewAddenda(data);
+        }
+      } catch {}
+      setLoadingAddenda(false);
     }
   };
 
@@ -374,6 +391,12 @@ export default function CasesScreen() {
             {isHandedOver ? (
               <View style={[styles.handoverBadge, { backgroundColor: "#fef3c7" }]}>
                 <Text style={styles.handoverText}>Handed over</Text>
+              </View>
+            ) : null}
+            {sc.addendaCount && sc.addendaCount > 0 ? (
+              <View style={[styles.addendaBadge, { backgroundColor: "#ede9fe" }]}>
+                <Feather name="layers" size={9} color="#7c3aed" />
+                <Text style={[styles.addendaBadgeText, { color: "#7c3aed" }]}>{sc.addendaCount} update{sc.addendaCount > 1 ? "s" : ""}</Text>
               </View>
             ) : null}
           </View>
@@ -663,10 +686,16 @@ export default function CasesScreen() {
       <Modal visible={!!reviewModal} transparent animationType="slide" onRequestClose={() => setReviewModal(null)}>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
           <Pressable style={styles.modalOverlay} onPress={() => setReviewModal(null)}>
-            <Pressable style={[styles.reviewSheet, { backgroundColor: theme.card, paddingBottom: insets.bottom + Spacing.lg }]} onPress={() => {}}>
+            <Pressable style={[styles.reviewSheet, { backgroundColor: theme.card }]} onPress={() => {}}>
               {reviewModal ? (
                 <>
                   <View style={styles.reviewHandle} />
+                  <ScrollView
+                    style={{ maxHeight: "70%" }}
+                    contentContainerStyle={{ paddingBottom: Spacing.md }}
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}
+                  >
                   <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginBottom: Spacing.md }}>
                     <View style={[styles.shiftPriorityBig, { backgroundColor: getPriorityColor(reviewModal.triagePriority) }]} />
                     <View style={{ flex: 1 }}>
@@ -700,14 +729,24 @@ export default function CasesScreen() {
                     ) : null}
                   </View>
 
+                  {loadingAddenda ? (
+                    <View style={{ alignItems: "center", paddingVertical: Spacing.md }}>
+                      <ActivityIndicator size="small" color={theme.primary} />
+                      <Text style={{ color: theme.textMuted, fontSize: 12, marginTop: 4 }}>Loading clinical timeline...</Text>
+                    </View>
+                  ) : reviewAddenda.length > 0 ? (
+                    <ClinicalTimeline addenda={reviewAddenda} />
+                  ) : null}
+
                   {reviewModal.consultantNote ? (
                     <View style={[styles.existingNote, { backgroundColor: "#d1fae5" }]}>
                       <Text style={styles.existingNoteLabel}>Previous review note:</Text>
                       <Text style={styles.existingNoteText}>{reviewModal.consultantNote}</Text>
                     </View>
                   ) : null}
+                  </ScrollView>
 
-                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: Spacing.xs }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: Spacing.xs, paddingHorizontal: 0 }}>
                     <Text style={[styles.reviewLabel, { color: theme.text, marginBottom: 0 }]}>Consultant Review Note</Text>
                     <Pressable
                       onPressIn={startReviewRecording}
@@ -895,6 +934,8 @@ const styles = StyleSheet.create({
   reviewedText: { fontSize: 10, fontWeight: "700", color: "#065f46" },
   handoverBadge: { paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4 },
   handoverText: { fontSize: 10, fontWeight: "700", color: "#92400e" },
+  addendaBadge: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4 },
+  addendaBadgeText: { fontSize: 10, fontWeight: "700" },
 
   list: { padding: Spacing.lg, paddingBottom: 120, paddingTop: 0 },
   listEditMode: { paddingBottom: 140 },
@@ -922,7 +963,7 @@ const styles = StyleSheet.create({
   deleteSelectedText: { fontSize: 15, fontWeight: "600" },
 
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
-  reviewSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: Spacing.lg, paddingTop: Spacing.md, gap: Spacing.md },
+  reviewSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: Spacing.lg, paddingTop: Spacing.md, gap: Spacing.sm, paddingBottom: 32 },
   reviewHandle: { width: 36, height: 4, backgroundColor: "#d1d5db", borderRadius: 2, alignSelf: "center", marginBottom: Spacing.sm },
   reviewPatient: { fontSize: 17, fontWeight: "700" },
   reviewComplaint: { fontSize: 13, marginTop: 2 },
