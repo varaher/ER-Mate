@@ -4,7 +4,7 @@ import PDFDocument from "pdfkit";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, BorderStyle } from "docx";
 import multer from "multer";
 import crypto from "crypto";
-import { generateDiagnosisSuggestions, recordFeedback, getFeedbackStats, getLearningInsights, generateCourseInHospital, extractClinicalDataFromVoice, transcribeAndExtractVoice, generateRoundsDebrief, classifyAddendum, type AIFeedback, type FeedbackResult, type ExtractedClinicalData } from "./services/aiDiagnosis";
+import { generateDiagnosisSuggestions, recordFeedback, getFeedbackStats, getLearningInsights, generateCourseInHospital, extractClinicalDataFromVoice, transcribeAndExtractVoice, generateRoundsDebrief, classifyAddendum, buildAddendaTimeline, addendaNarrativeSections, type AIFeedback, type FeedbackResult, type ExtractedClinicalData } from "./services/aiDiagnosis";
 import { getOrCreateSubscription, canCreateCase, incrementCaseCount, activatePremium, activatePlan, cancelSubscription, FREE_CASE_LIMIT, PREMIUM_PRICE_INR } from "./services/subscription";
 import { createPaymentLink, verifyWebhookSignature } from "./services/razorpayService";
 import { PLAN_AMOUNTS_PAISE } from "./config/pricing";
@@ -3347,44 +3347,20 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       }
 
       // ── Fetch addenda for long-stay cases ─────────────────────────────────
+      // Shared with POST /api/ai/discharge-from-timeline via buildAddendaTimeline
+      // so the two discharge entry points never drift on timeline/duration formatting.
       let addendaTimeline: string | undefined;
       let erDuration: string | undefined;
       const caseIdForAddenda = req.body?.caseId || req.body?.case_id;
       if (caseIdForAddenda) {
         try {
-          const pool = getPool();
-          if (pool) {
-            const addendaRows = await pool.query(
-              `SELECT type, content, doctor_name, doctor_role, specialty,
-                      handover_from_doctor, handover_to_doctor, created_at
-               FROM case_addenda WHERE case_id = $1 ORDER BY created_at ASC`,
-              [caseIdForAddenda]
-            );
-            if (addendaRows.rows.length > 0) {
-              const TYPE_LABEL: Record<string, string> = {
-                clinical_update: 'CLINICAL UPDATE', investigation_result: 'INVESTIGATION RESULT',
-                consultant_review: 'CONSULTANT REVIEW', cross_consultation: 'CROSS-CONSULTATION',
-                medication_change: 'MEDICATION CHANGE', procedure_note: 'PROCEDURE NOTE',
-                shift_handover: 'SHIFT HANDOVER', correction: 'CORRECTION',
-              };
-              addendaTimeline = addendaRows.rows.map((r: any) => {
-                const ts = r.created_at ? new Date(r.created_at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' }) : '';
-                const label = TYPE_LABEL[r.type] || r.type.toUpperCase();
-                const who = [r.doctor_name, r.doctor_role, r.specialty].filter(Boolean).join(' · ');
-                const extra = r.handover_from_doctor ? `  From: ${r.handover_from_doctor} → To: ${r.handover_to_doctor || '?'}` : '';
-                return `[${label}] ${ts}${who ? ` · ${who}` : ''}${extra}\n${r.content}`;
-              }).join('\n\n');
-
-              // ER stay duration — from arrival (or first addendum) to last addendum
-              const arrivalIso = fc.arrival_date && fc.arrival_time
-                ? new Date(`${fc.arrival_date}T${fc.arrival_time}`).getTime()
-                : (fc.created_at ? new Date(fc.created_at).getTime() : new Date(addendaRows.rows[0].created_at).getTime());
-              const lastAddendumMs = new Date(addendaRows.rows[addendaRows.rows.length - 1].created_at).getTime();
-              if (!isNaN(arrivalIso) && !isNaN(lastAddendumMs) && lastAddendumMs > arrivalIso) {
-                const mins = Math.round((lastAddendumMs - arrivalIso) / 60000);
-                erDuration = mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins} minutes`;
-              }
-            }
+          const arrivalMs = fc.arrival_date && fc.arrival_time
+            ? new Date(`${fc.arrival_date}T${fc.arrival_time}`).getTime()
+            : (fc.created_at ? new Date(fc.created_at).getTime() : undefined);
+          const addendaResult = await buildAddendaTimeline(caseIdForAddenda, arrivalMs);
+          if (addendaResult) {
+            addendaTimeline = addendaResult.timeline;
+            erDuration = addendaResult.erDuration;
           }
         } catch (addendaErr) {
           console.warn('[DISCHARGE] Could not fetch addenda:', addendaErr);
@@ -5481,11 +5457,8 @@ Always use the conversation history for context. Keep replies SHORT (1–2 sente
     const { caseId, patientName, chiefComplaint, workingDiagnosis, disposition } = req.body || {};
     if (!caseId) return res.status(400).json({ error: "caseId is required" });
     try {
-      let timeline = "";
-      let erArrivalIso = "";
-      let erDepartureIso = "";
+      // Ownership guard — same logic as POST addenda
       if (pool) {
-        // Ownership guard — same logic as POST addenda
         const access = await pool.query(
           `SELECT 1 FROM case_addenda WHERE case_id=$1 AND doctor_id=$2
            UNION ALL SELECT 1 FROM case_overlays WHERE case_id=$1 AND doctor_user_id=$2 LIMIT 1`,
@@ -5498,33 +5471,16 @@ Always use the conversation history for context. Keep replies SHORT (1–2 sente
         if ((access.rowCount ?? 0) === 0 && (anyAddenda.rowCount ?? 0) > 0) {
           return res.status(403).json({ error: "Not authorized for this case" });
         }
-
-        const rows = await pool.query(
-          `SELECT type, content, doctor_name, created_at FROM case_addenda
-           WHERE case_id = $1 ORDER BY created_at ASC`,
-          [caseId]
-        );
-        if (rows.rowCount && rows.rowCount > 0) {
-          erArrivalIso = rows.rows[0].created_at;
-          erDepartureIso = rows.rows[rows.rows.length - 1].created_at;
-          timeline = rows.rows
-            .map((r: any) => {
-              const ts = new Date(r.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
-              return `[${ts}] ${r.type.replace(/_/g, " ").toUpperCase()}${r.doctor_name ? " by " + r.doctor_name : ""}: ${r.content}`;
-            })
-            .join("\n");
-        }
       }
-      if (!timeline) {
+
+      // Shared with POST /api/ai/discharge-summary via buildAddendaTimeline so
+      // the two discharge entry points never drift on timeline/duration formatting.
+      const addendaResult = await buildAddendaTimeline(caseId);
+      if (!addendaResult) {
         return res.json({ summary: "" });
       }
-
-      // Compute ER duration
-      let erDuration = "Not recorded";
-      if (erArrivalIso && erDepartureIso) {
-        const mins = Math.round((new Date(erDepartureIso).getTime() - new Date(erArrivalIso).getTime()) / 60000);
-        if (mins > 0) erDuration = mins >= 60 ? `${Math.floor(mins/60)}h ${mins%60}m` : `${mins} minutes`;
-      }
+      const { timeline, erDuration: erDurationValue } = addendaResult;
+      const erDuration = erDurationValue || "Not recorded";
 
       const { canUseAiCredit, deductAiCredit } = await import("./services/subscription");
       const credit = await canUseAiCredit(userId, "");
@@ -5552,13 +5508,7 @@ Always use the conversation history for context. Keep replies SHORT (1–2 sente
         timeline,
         ``,
         `Write a formal "Course in Emergency Department" narrative with these MANDATORY sections in order:`,
-        `1. PRESENTATION — how the patient presented, initial status`,
-        `2. INVESTIGATIONS — key results from the timeline`,
-        `3. MANAGEMENT — treatments, medications, and procedures performed`,
-        `4. CONSULTANT REVIEWS — any specialist reviews noted (skip section if none)`,
-        `5. CLINICAL PROGRESS — response to treatment, interval reassessments`,
-        `6. TOTAL ER DURATION — state: "The patient was managed in the emergency department for ${erDuration}."`,
-        `7. DISPOSITION — final disposition and pending follow-up`,
+        addendaNarrativeSections(erDurationValue),
         ``,
         `Requirements: 250–450 words total. Formal medical language suitable for a medico-legal record.`,
         `Do NOT use bullet points — use flowing prose paragraphs. Integrate timestamps naturally.`,

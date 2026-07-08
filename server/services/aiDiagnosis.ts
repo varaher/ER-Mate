@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import { randomUUID } from "crypto";
-import { getDb } from "../db";
+import { getDb, getPool } from "../db";
 import { aiFeedback } from "@shared/schema";
 import { count, eq, sql } from "drizzle-orm";
 import { searchMedicalLiterature, type MedicalSearchResult } from "./medicalSearch";
@@ -573,6 +573,106 @@ Return JSON ONLY:
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// Shared discharge-narrative helpers
+// Used by BOTH `generateCourseInHospital` (POST /api/ai/discharge-summary,
+// used by DischargeSummaryScreen) AND POST /api/ai/discharge-from-timeline
+// (used by the CaseChat "discharge summary" chip) so the two entry points
+// never drift apart on how the addenda timeline / ER duration / narrative
+// section structure are built.
+// ─────────────────────────────────────────────────────────────────────────
+
+const ADDENDUM_TYPE_LABELS: Record<string, string> = {
+  clinical_update: "CLINICAL UPDATE",
+  investigation_result: "INVESTIGATION RESULT",
+  consultant_review: "CONSULTANT REVIEW",
+  cross_consultation: "CROSS-CONSULTATION",
+  medication_change: "MEDICATION CHANGE",
+  procedure_note: "PROCEDURE NOTE",
+  shift_handover: "SHIFT HANDOVER",
+  correction: "CORRECTION",
+};
+
+export interface AddendaTimelineResult {
+  timeline: string;
+  erDuration?: string;
+  addendaCount: number;
+}
+
+function formatDurationMinutes(mins: number): string {
+  return mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins} minutes`;
+}
+
+// Fetches case_addenda for a case, formats it into a single chronological
+// timeline string, and computes the ER stay duration. `arrivalMs` (if known,
+// e.g. from full_case.arrival_date/arrival_time) is used as the start of the
+// stay; otherwise the first addendum's timestamp is used as a fallback start.
+export async function buildAddendaTimeline(
+  caseId: string | undefined | null,
+  arrivalMs?: number
+): Promise<AddendaTimelineResult | null> {
+  if (!caseId) return null;
+  const pool = getPool();
+  if (!pool) return null;
+
+  const rows = await pool.query(
+    `SELECT type, content, doctor_name, doctor_role, specialty,
+            handover_from_doctor, handover_to_doctor, created_at
+     FROM case_addenda WHERE case_id = $1 ORDER BY created_at ASC`,
+    [caseId]
+  );
+  if (!rows.rows || rows.rows.length === 0) return null;
+
+  const timeline = rows.rows
+    .map((r: any) => {
+      const ts = r.created_at
+        ? new Date(r.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })
+        : "";
+      const label = ADDENDUM_TYPE_LABELS[r.type] || String(r.type || "").toUpperCase();
+      const who = [r.doctor_name, r.doctor_role, r.specialty].filter(Boolean).join(" · ");
+      const extra = r.handover_from_doctor ? `  From: ${r.handover_from_doctor} → To: ${r.handover_to_doctor || "?"}` : "";
+      return `[${label}] ${ts}${who ? ` · ${who}` : ""}${extra}\n${r.content}`;
+    })
+    .join("\n\n");
+
+  const firstMs = new Date(rows.rows[0].created_at).getTime();
+  const lastMs = new Date(rows.rows[rows.rows.length - 1].created_at).getTime();
+  const startMs = arrivalMs && !isNaN(arrivalMs) ? arrivalMs : firstMs;
+
+  let erDuration: string | undefined;
+  if (!isNaN(startMs) && !isNaN(lastMs) && lastMs > startMs) {
+    erDuration = formatDurationMinutes(Math.round((lastMs - startMs) / 60000));
+  }
+
+  return { timeline, erDuration, addendaCount: rows.rows.length };
+}
+
+// Consistent wording for the "Total ER Stay Duration" sentence — must read
+// identically regardless of which entry point generated the narrative.
+export function erDurationStatement(erDuration: string): string {
+  return `The patient was managed in the emergency department for ${erDuration}.`;
+}
+
+// Canonical section structure for the addenda-driven, long-stay / timeline
+// narrative. Both discharge entry points must present the same section
+// ordering so the output is consistent regardless of which screen the
+// doctor generated it from.
+export function addendaNarrativeSections(erDuration?: string): string {
+  const durationLine = erDuration
+    ? erDurationStatement(erDuration)
+    : "Mention duration only if it can be determined from the timeline above.";
+  return [
+    `1. PRESENTATION — brief paragraph: name, age, chief complaint, arrival details, initial status`,
+    `2. INITIAL ASSESSMENT — vitals, primary survey, key exam findings`,
+    `3. INVESTIGATIONS — all results with values and timestamps from the timeline`,
+    `4. CONSULTATIONS — each specialty consulted, by whom, findings and recommendations (skip if none)`,
+    `5. MANAGEMENT / INTERVENTIONS — treatments, medications, and procedures performed, with timing`,
+    `6. CLINICAL COURSE — what happened chronologically (use the addenda timeline above)`,
+    `7. TOTAL ER STAY DURATION — ${durationLine}`,
+    `8. DISPOSITION / CONDITION AT DISCHARGE — final status, disposition plan, and pending follow-up`,
+  ].join("\n");
+}
+
 export async function generateCourseInHospital(summaryData: DischargeSummaryInput): Promise<{ course_in_hospital: string; diagnosis?: string }> {
   const openai = getOpenAIClient();
 
@@ -744,15 +844,8 @@ ${summaryData.erDuration ? `\nTotal ER Stay Duration: ${summaryData.erDuration}`
 
 ${summaryData.addendaTimeline
   ? `This is a LONG-STAY / COMPLEX CASE with multiple documented addenda.
-Write the "Course in Hospital" as a comprehensive clinical narrative covering the FULL ER stay:
-1. Brief presentation paragraph (name, age, chief complaint, arrival details)
-2. INITIAL ASSESSMENT — vitals, primary survey, key exam findings
-3. INVESTIGATIONS — all results with values and timestamps from the addenda
-4. CONSULTATIONS — each specialty consulted, by whom, findings and recommendations
-5. INTERVENTIONS — all procedures performed with timing
-6. CLINICAL COURSE — what happened chronologically (use the addenda timeline above)
-7. TOTAL ER STAY DURATION — ${summaryData.erDuration ? `state clearly that the patient was managed in the emergency department for ${summaryData.erDuration}` : "mention duration only if it can be determined from the timestamps above"}
-8. CONDITION AT DISCHARGE / TRANSFER — final status
+Write the "Course in Hospital" as a comprehensive clinical narrative covering the FULL ER stay, following these MANDATORY sections in order:
+${addendaNarrativeSections(summaryData.erDuration)}
 
 Write as a proper medical narrative — not bullet points. Include timestamps for key events. Include all consultant names and specialties. This must be comprehensive enough that any doctor picking up the patient from the discharge summary knows the full story.`
   : `Now write ONLY the "Course in Hospital" section — a flowing clinical narrative (3–5 sentences, 2 paragraphs max) covering:
