@@ -2455,7 +2455,8 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
           }
 
           if (msg.type === 'discharge_summary' && msg.specialContent) {
-            const dsText = liveCase ? generateDischargeSummary(liveCase) : msg.specialContent;
+            // Prefer the AI timeline narrative stored in specialContent over the local generator
+            const dsText = msg.specialContent || (liveCase ? generateDischargeSummary(liveCase) : '');
             return (
               <React.Fragment key={msg.id}>
                 <ErMateResponse subtitle="Discharge summary generated from your case data.">

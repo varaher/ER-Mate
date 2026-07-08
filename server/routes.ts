@@ -4255,23 +4255,38 @@ Always use the conversation history for context. Keep replies SHORT (1–2 sente
         try {
           const pool = getPool();
           if (pool) {
-            const classified = await classifyAddendum(currentMessage);
-            addendumType = classified.type;
-            const insertResult = await pool.query(
-              `INSERT INTO case_addenda
-                 (case_id, type, content, doctor_id, doctor_name, doctor_role, specialty)
-               VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-              [
-                chatCaseId,
-                classified.type,
-                classified.content || (parsed.specialContent ?? currentMessage),
-                chatUserId,
-                chatDoctorName ?? null,
-                chatDoctorRole ?? null,
-                classified.specialty ?? null,
-              ]
+            // Case-level ownership guard: same check as POST /api/cases/:id/addenda
+            const access = await pool.query(
+              `SELECT 1 FROM case_addenda WHERE case_id=$1 AND doctor_id=$2
+               UNION ALL SELECT 1 FROM case_overlays WHERE case_id=$1 AND doctor_user_id=$2 LIMIT 1`,
+              [chatCaseId, chatUserId]
             );
-            savedAddendumId = insertResult.rows[0]?.id;
+            const anyAddenda = await pool.query(
+              `SELECT 1 FROM case_addenda WHERE case_id=$1 LIMIT 1`,
+              [chatCaseId]
+            );
+            const hasAccess = (access.rowCount ?? 0) > 0 || (anyAddenda.rowCount ?? 0) === 0;
+            if (hasAccess) {
+              const classified = await classifyAddendum(currentMessage);
+              addendumType = classified.type;
+              const insertResult = await pool.query(
+                `INSERT INTO case_addenda
+                   (case_id, type, content, doctor_id, doctor_name, doctor_role, specialty)
+                 VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+                [
+                  chatCaseId,
+                  classified.type,
+                  classified.content || (parsed.specialContent ?? currentMessage),
+                  chatUserId,
+                  chatDoctorName ?? null,
+                  chatDoctorRole ?? null,
+                  classified.specialty ?? null,
+                ]
+              );
+              savedAddendumId = insertResult.rows[0]?.id;
+            } else {
+              console.warn("[CaseChat] addendum write denied — no case access for user", chatUserId, "case", chatCaseId);
+            }
           }
         } catch (addendumErr) {
           console.warn("[CaseChat] addendum auto-save skipped:", addendumErr);
@@ -5355,7 +5370,8 @@ Always use the conversation history for context. Keep replies SHORT (1–2 sente
       const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
       const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
       if (!apiKey) return res.status(503).json({ error: "AI unavailable" });
-      const openai = new OpenAI({ apiKey, baseURL });
+      const OpenAITimeline = (await import("openai")).default;
+      const openai = new OpenAITimeline({ apiKey, baseURL });
 
       const prompt = [
         `You are an expert emergency physician writing the "Course in Emergency Department" section of a formal discharge summary for a medico-legal record.`,
