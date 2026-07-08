@@ -365,22 +365,56 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
-  // Rename patient: update just the patient name on the external backend
+  // Rename patient: update just the patient name on the external backend.
+  // NOTE: the external backend's PUT /cases/:id validates the full `patient`
+  // object (age/sex are required), so a PATCH-style { patient: { name } }
+  // payload gets rejected with 422. We fetch the current case first and
+  // resend its existing age/sex/phone alongside the new name.
   app.patch("/api/cases/:id/rename", async (req: Request, res: Response) => {
     try {
       const authHeader = req.headers.authorization;
       if (!authHeader) return res.status(401).json({ error: "No auth token" });
       const { id } = req.params;
-      const { name } = req.body || {};
+      const { name, age: bodyAge, sex: bodySex, phone: bodyPhone } = req.body || {};
       if (!name || typeof name !== "string" || !name.trim()) {
         return res.status(400).json({ error: "name is required" });
       }
+
+      let age = bodyAge;
+      let sex = bodySex;
+      let phone = bodyPhone;
+
+      if (age === undefined || sex === undefined) {
+        try {
+          const currentRes = await fetch(`${EXTERNAL_API}/cases/${id}`, {
+            headers: { Authorization: authHeader, "Content-Type": "application/json" },
+          });
+          if (currentRes.ok) {
+            const current = await currentRes.json();
+            const currentPatient = current?.patient || current?.data?.patient || {};
+            if (age === undefined) age = currentPatient.age;
+            if (sex === undefined) sex = currentPatient.sex ?? currentPatient.gender;
+            if (phone === undefined) phone = currentPatient.phone;
+          }
+        } catch (fetchErr) {
+          console.error("[RENAME] failed to fetch current case for age/sex fallback:", fetchErr);
+        }
+      }
+
+      const patientPayload: Record<string, any> = { name: name.trim() };
+      if (age !== undefined && age !== null) patientPayload.age = age;
+      if (sex !== undefined && sex !== null) patientPayload.sex = sex;
+      if (phone !== undefined && phone !== null) patientPayload.phone = phone;
+
       const externalRes = await fetch(`${EXTERNAL_API}/cases/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: authHeader },
-        body: JSON.stringify({ patient: { name: name.trim() } }),
+        body: JSON.stringify({ patient: patientPayload }),
       });
       const responseText = await externalRes.text();
+      if (!externalRes.ok) {
+        console.error(`[RENAME] external backend ${externalRes.status} for case ${id}:`, responseText);
+      }
       try { return res.status(externalRes.status).json(JSON.parse(responseText)); }
       catch { return res.status(externalRes.status).send(responseText); }
     } catch (err: any) {

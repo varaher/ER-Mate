@@ -225,17 +225,29 @@ export default function DashboardScreen() {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ name: renameText.trim() }),
+        body: JSON.stringify({
+          name: renameText.trim(),
+          age: renameCase.patient?.age,
+          sex: renameCase.patient?.sex,
+        }),
       });
       if (res.ok) {
         setRenameModalVisible(false);
         setRenameCase(null);
         refetch();
       } else {
-        Alert.alert("Error", "Could not rename patient. Please try again.");
+        let message = "Could not rename patient. Please try again.";
+        try {
+          const data = await res.json();
+          if (data?.error) message = typeof data.error === "string" ? data.error : JSON.stringify(data.error);
+          else if (data?.message) message = data.message;
+        } catch {
+          // ignore parse errors, keep default message
+        }
+        Alert.alert("Error", message);
       }
     } catch {
-      Alert.alert("Error", "Could not rename patient. Please try again.");
+      Alert.alert("Error", "Could not rename patient. Please check your connection and try again.");
     } finally {
       setRenaming(false);
     }
@@ -1036,7 +1048,7 @@ export default function DashboardScreen() {
               </Pressable>
             </View>
             <TextInput
-              style={[styles.renameInput, { color: theme.text, borderColor: theme.border || "#e5e7eb", backgroundColor: theme.background }]}
+              style={[styles.renameInput, { color: theme.text, borderColor: theme.border || "#e5e7eb", backgroundColor: theme.backgroundSecondary }]}
               value={renameText}
               onChangeText={setRenameText}
               placeholder="Patient name"
