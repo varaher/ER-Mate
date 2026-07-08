@@ -48,6 +48,7 @@ import HandoverDetailScreen from "@/screens/HandoverDetailScreen";
 import EscalationScreen from "@/screens/EscalationScreen";
 import TourScreen from "@/screens/TourScreen";
 import CaseChatScreen from "@/screens/CaseChatScreen";
+import PublicHandoverScreen from "@/screens/PublicHandoverScreen";
 
 export type RootStackParamList = {
   Login: undefined;
@@ -107,6 +108,7 @@ export type RootStackParamList = {
   HandoverDetail: undefined;
   Escalation: { caseId?: string } | undefined;
   CaseChat: { caseId?: string; patientName?: string };
+  PublicHandover: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -137,6 +139,11 @@ export default function RootStackNavigator() {
             name="Register"
             component={RegisterScreen}
             options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="PublicHandover"
+            component={PublicHandoverScreen}
+            options={{ headerTitle: "Quick Handover" }}
           />
         </>
       ) : (
@@ -436,6 +443,11 @@ export default function RootStackNavigator() {
             options={{
               headerShown: false,
             }}
+          />
+          <Stack.Screen
+            name="PublicHandover"
+            component={PublicHandoverScreen}
+            options={{ headerTitle: "Quick Handover" }}
           />
         </>
       )}

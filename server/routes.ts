@@ -17,6 +17,7 @@ import { registerShiftRoutes } from "./routes/shifts";
 import { registerEscalationRoutes } from "./routes/escalations";
 import { registerAddendaRoutes } from "./routes/addenda";
 import { registerHandoverPdfRoutes } from "./routes/handoverPdf";
+import { registerHandoverPublicRoutes } from "./routes/handoverPublic";
 import { extractUserId } from "./lib/auth";
 
 // ─── AES-256-GCM helpers for credential encryption ───────────────────────────
@@ -5534,6 +5535,7 @@ Always use the conversation history for context. Keep replies SHORT (1–2 sente
   registerEscalationRoutes(app);
   registerAddendaRoutes(app);
   registerHandoverPdfRoutes(app);
+  registerHandoverPublicRoutes(app);
 
   const httpServer = existingServer ?? createServer(app);
 

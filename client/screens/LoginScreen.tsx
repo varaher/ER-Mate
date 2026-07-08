@@ -554,6 +554,16 @@ export default function LoginScreen() {
           </Text>
         </Pressable>
 
+        <Pressable
+          style={({ pressed }) => [styles.secondaryButton, { opacity: pressed ? 0.7 : 1 }]}
+          onPress={() => navigation.navigate("PublicHandover")}
+        >
+          <Text style={[styles.secondaryButtonText, { color: theme.textSecondary }]}>
+            Just need a quick handover?{" "}
+            <Text style={{ color: theme.primary, fontWeight: "600" }}>Try it free — no account needed</Text>
+          </Text>
+        </Pressable>
+
         {/* QR option — mobile web only (desktop shows it in the right panel) */}
         {Platform.OS === "web" && !isDesktop ? (
           <View style={styles.qrSection}>
