@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { getPool } from "../db";
 import { extractUserId } from "../lib/auth";
+import { sendPushToMany } from "../services/pushService";
 
 export const ADDENDUM_TYPES = [
   "clinical_update",
@@ -14,6 +15,66 @@ export const ADDENDUM_TYPES = [
 ] as const;
 
 export type AddendumType = (typeof ADDENDUM_TYPES)[number];
+
+const ADDENDUM_TYPE_LABELS: Record<AddendumType, string> = {
+  clinical_update: "Clinical Update",
+  investigation_result: "Investigation Result",
+  consultant_review: "Consultant Review",
+  cross_consultation: "Cross Consultation",
+  medication_change: "Medication Change",
+  procedure_note: "Procedure Note",
+  shift_handover: "Shift Handover",
+  correction: "Correction",
+};
+
+// Notify consultants (currently on the same active shift as the case) and the
+// department's HOD(s) when a new addendum is added to a shift-registered case.
+// Best-effort only — failures here must never affect the addendum write itself.
+async function notifyShiftAddendum(
+  pool: any,
+  opts: { caseId: string; authorUserId: string; type: AddendumType }
+): Promise<void> {
+  try {
+    const overlayRes = await pool.query(
+      `SELECT patient_name, chief_complaint FROM case_overlays WHERE case_id = $1 LIMIT 1`,
+      [opts.caseId]
+    );
+    if (overlayRes.rowCount === 0) return; // not a shift-registered case — nothing to notify
+
+    const overlay = overlayRes.rows[0];
+
+    // Recipients: HODs of the case's department (always), plus consultants who are
+    // currently checked in to the same active shift the case is registered under.
+    const tokenRes = await pool.query(
+      `SELECT DISTINCT pt.token
+       FROM case_overlays co
+       JOIN department_members dm ON dm.department_id = co.department_id AND dm.status = 'active'
+       LEFT JOIN shift_sessions case_ss ON case_ss.id = co.shift_session_id
+       LEFT JOIN shift_sessions live_ss ON live_ss.shift_id = case_ss.shift_id
+         AND live_ss.user_id = dm.user_id AND live_ss.status = 'active'
+       JOIN push_tokens pt ON pt.user_id = dm.user_id
+       WHERE co.case_id = $1
+         AND dm.user_id != $2
+         AND (dm.role = 'hod' OR (dm.role = 'consultant' AND live_ss.id IS NOT NULL))`,
+      [opts.caseId, opts.authorUserId]
+    );
+    const tokens = tokenRes.rows.map((r: any) => r.token).filter(Boolean);
+    if (!tokens.length) return;
+
+    const label = ADDENDUM_TYPE_LABELS[opts.type] || "Clinical Update";
+    const patientName = overlay.patient_name || "Patient";
+    const complaintSuffix = overlay.chief_complaint ? ` — ${overlay.chief_complaint}` : "";
+
+    await sendPushToMany(
+      tokens,
+      `New update: ${patientName}`,
+      `${label}${complaintSuffix}`,
+      { type: "shift_addendum", caseId: opts.caseId }
+    );
+  } catch (err) {
+    console.warn("[Addenda] Failed to send shift addendum push:", err);
+  }
+}
 
 export interface CaseAddendum {
   id: number;
@@ -170,6 +231,9 @@ export function registerAddendaRoutes(app: Express): void {
           shiftId ?? null,
         ]
       );
+      // Fire-and-forget: notify consultants/HODs on the same active shift.
+      // Never let a push failure delay or fail the addendum response.
+      notifyShiftAddendum(pool, { caseId: id, authorUserId: effectiveDoctorId, type });
       return res.status(201).json(rowToAddendum(result.rows[0]));
     } catch (err: any) {
       console.error("[ADDENDA] POST error:", err);
