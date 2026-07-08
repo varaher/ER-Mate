@@ -63,7 +63,7 @@ export type RootStackParamList = {
   Disposition: { caseId: string };
   DischargeSummary: { caseId: string };
   Upgrade: { lockReason?: string; lockMessage?: string };
-  ViewCase: { caseId: string };
+  ViewCase: { caseId: string; readOnly?: boolean };
   LinkDevices: undefined;
   AddendumNotes: { caseId: string };
   ViewDischargeSummary: { caseId: string };

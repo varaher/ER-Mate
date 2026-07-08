@@ -634,6 +634,19 @@ export default function AdminDashboardScreen() {
                     </View>
                   )}
                 </ScrollView>
+                <View style={{ padding: Spacing.md, paddingTop: 0 }}>
+                  <Pressable
+                    style={[styles.viewFullCaseBtn, { backgroundColor: theme.backgroundSecondary, borderColor: theme.border }]}
+                    onPress={() => {
+                      const caseId = timelineModal.caseOverlay.caseId;
+                      setTimelineModal(null);
+                      navigation.navigate("ViewCase", { caseId, readOnly: true });
+                    }}
+                  >
+                    <Feather name="file-text" size={16} color={theme.primary} />
+                    <Text style={[styles.viewFullCaseText, { color: theme.primary }]}>View Full Case</Text>
+                  </Pressable>
+                </View>
               </>
             ) : null}
           </Pressable>
@@ -770,6 +783,16 @@ const styles = StyleSheet.create({
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", paddingHorizontal: Spacing.lg },
   modalSheet: { width: "100%", borderRadius: BorderRadius.lg, padding: Spacing.lg, gap: Spacing.sm },
   modalTitle: { fontSize: 18, fontWeight: "800", marginBottom: 2 },
+  viewFullCaseBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 10,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+  },
+  viewFullCaseText: { fontSize: 14, fontWeight: "600" },
   timelineModalHeader: { flexDirection: "row", alignItems: "center", gap: Spacing.md, padding: Spacing.md, borderBottomWidth: 1 },
   timelineModalPatient: { fontSize: 15, fontWeight: "700" },
   timelineModalMeta: { fontSize: 12, marginTop: 2 },

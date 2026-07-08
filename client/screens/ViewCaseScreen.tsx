@@ -62,7 +62,7 @@ export default function ViewCaseScreen() {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
-  const { caseId } = route.params;
+  const { caseId, readOnly } = route.params;
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -293,7 +293,15 @@ export default function ViewCaseScreen() {
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundDefault }]}>
       <ScrollView contentContainerStyle={[styles.content, { paddingTop: headerHeight + 12, paddingBottom: insets.bottom + Spacing["4xl"] }]} showsVerticalScrollIndicator={false}>
-        
+        {readOnly ? (
+          <View style={[styles.readOnlyBanner, { backgroundColor: theme.backgroundSecondary, borderColor: theme.border }]}>
+            <Feather name="eye" size={14} color={theme.textSecondary} />
+            <Text style={[styles.readOnlyBannerText, { color: theme.textSecondary }]}>
+              Read-only — reviewing another doctor's case
+            </Text>
+          </View>
+        ) : null}
+
         <Section title="Patient Information">
           <InfoRow label="Name" value={patient.name} />
           <InfoRow label="Age/Sex" value={`${patient.age || "N/A"} / ${patient.sex || "N/A"}`} />
@@ -894,13 +902,15 @@ export default function ViewCaseScreen() {
               )) : (
                 <Text style={[styles.text, { color: theme.textSecondary }]}>No addendum notes</Text>
               )}
-              <Pressable
-                style={[styles.addNoteBtn, { backgroundColor: theme.primary }]}
-                onPress={() => navigation.navigate("AddendumNotes", { caseId })}
-              >
-                <Feather name="plus" size={16} color="#FFFFFF" />
-                <Text style={styles.addNoteBtnText}>Add Note</Text>
-              </Pressable>
+              {readOnly ? null : (
+                <Pressable
+                  style={[styles.addNoteBtn, { backgroundColor: theme.primary }]}
+                  onPress={() => navigation.navigate("AddendumNotes", { caseId })}
+                >
+                  <Feather name="plus" size={16} color="#FFFFFF" />
+                  <Text style={styles.addNoteBtnText}>Add Note</Text>
+                </Pressable>
+              )}
             </Section>
           );
         })()}
@@ -913,40 +923,47 @@ export default function ViewCaseScreen() {
           <InfoRow label="Last Updated" value={caseData.updated_at ? new Date(caseData.updated_at).toLocaleString("en-IN") : "N/A"} />
         </Section>
 
-        <View style={styles.editSection}>
-          <Pressable style={[styles.editToggleBtn, editMode && { backgroundColor: theme.success }]} onPress={() => setEditMode(!editMode)}>
-            <Text style={[styles.editToggleBtnText, { color: editMode ? "#FFFFFF" : theme.primary }]}>{editMode ? "Done Editing" : "Edit Case Sheet"}</Text>
-          </Pressable>
-          {editMode && <Text style={[styles.editHint, { color: theme.textMuted }]}>Yellow fields are editable. Tap "Done Editing" when finished.</Text>}
-        </View>
+        {readOnly ? null : (
+          <>
+            <View style={styles.editSection}>
+              <Pressable style={[styles.editToggleBtn, editMode && { backgroundColor: theme.success }]} onPress={() => setEditMode(!editMode)}>
+                <Text style={[styles.editToggleBtnText, { color: editMode ? "#FFFFFF" : theme.primary }]}>{editMode ? "Done Editing" : "Edit Case Sheet"}</Text>
+              </Pressable>
+              {editMode && <Text style={[styles.editHint, { color: theme.textMuted }]}>Yellow fields are editable. Tap "Done Editing" when finished.</Text>}
+            </View>
 
-        {editMode && (
-          <View style={[styles.buttonRow, { marginBottom: Spacing.md }]}>
-            <Pressable style={[styles.saveBtn, { backgroundColor: theme.primary }]} onPress={handleSave} disabled={saving}>
-              <Feather name="save" size={16} color="#FFFFFF" />
-              <Text style={styles.saveBtnText}>{saving ? "Saving..." : "Save Changes"}</Text>
-            </Pressable>
-          </View>
+            {editMode && (
+              <View style={[styles.buttonRow, { marginBottom: Spacing.md }]}>
+                <Pressable style={[styles.saveBtn, { backgroundColor: theme.primary }]} onPress={handleSave} disabled={saving}>
+                  <Feather name="save" size={16} color="#FFFFFF" />
+                  <Text style={styles.saveBtnText}>{saving ? "Saving..." : "Save Changes"}</Text>
+                </Pressable>
+              </View>
+            )}
+          </>
         )}
 
         <View style={styles.buttonRow}>
-          <Pressable style={[styles.editBtn, { backgroundColor: theme.primary }]} onPress={() => {
-            const patientAge = parseFloat(caseData?.patient?.age) || 0;
-            const screenName = isPediatric(patientAge) ? "PediatricCaseSheet" : "CaseSheet";
-            navigation.navigate(screenName, { caseId });
-          }}>
-            <Feather name="edit-2" size={16} color="#FFFFFF" />
-            <Text style={styles.editBtnText}>Full Edit</Text>
-          </Pressable>
+          {readOnly ? null : (
+            <Pressable style={[styles.editBtn, { backgroundColor: theme.primary }]} onPress={() => {
+              const patientAge = parseFloat(caseData?.patient?.age) || 0;
+              const screenName = isPediatric(patientAge) ? "PediatricCaseSheet" : "CaseSheet";
+              navigation.navigate(screenName, { caseId });
+            }}>
+              <Feather name="edit-2" size={16} color="#FFFFFF" />
+              <Text style={styles.editBtnText}>Full Edit</Text>
+            </Pressable>
+          )}
           <Pressable
             style={[styles.dischargeBtn, { backgroundColor: theme.primary }]}
-            onPress={() => navigation.navigate("Main" as any)}
+            onPress={() => (readOnly ? navigation.goBack() : navigation.navigate("Main" as any))}
           >
-            <Feather name="home" size={16} color="#FFFFFF" />
-            <Text style={styles.editBtnText}>Dashboard</Text>
+            <Feather name={readOnly ? "arrow-left" : "home"} size={16} color="#FFFFFF" />
+            <Text style={styles.editBtnText}>{readOnly ? "Back" : "Dashboard"}</Text>
           </Pressable>
         </View>
 
+        {readOnly ? null : (
         <View style={[styles.dischargeCard, { backgroundColor: `${theme.success}12`, borderColor: `${theme.success}40` }]}>
           <View style={styles.dischargeCardHeader}>
             <View style={[styles.dischargeCardIcon, { backgroundColor: theme.success }]}>
@@ -976,6 +993,7 @@ export default function ViewCaseScreen() {
             </Pressable>
           </View>
         </View>
+        )}
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -1017,6 +1035,17 @@ const styles = StyleSheet.create({
   medicationDetails: { ...Typography.body, marginLeft: Spacing.md, fontSize: 13 },
   editableTextArea: { borderWidth: 1, borderColor: "#D1D5DB", borderRadius: BorderRadius.sm, padding: Spacing.md, minHeight: 80, textAlignVertical: "top", ...Typography.body },
   editableInput: { borderWidth: 1, borderColor: "#D1D5DB", borderRadius: BorderRadius.sm, padding: Spacing.md, ...Typography.body },
+  readOnlyBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    marginBottom: Spacing.md,
+  },
+  readOnlyBannerText: { fontSize: 12, fontWeight: "600" },
   editSection: { marginVertical: Spacing.lg, alignItems: "center" },
   editToggleBtn: { paddingHorizontal: Spacing.xl, paddingVertical: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1, borderColor: "#2563EB" },
   editToggleBtnText: { ...Typography.bodyMedium },

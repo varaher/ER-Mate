@@ -744,6 +744,18 @@ export default function CasesScreen() {
                       <Text style={styles.existingNoteText}>{reviewModal.consultantNote}</Text>
                     </View>
                   ) : null}
+
+                  <Pressable
+                    style={[styles.viewFullCaseBtn, { backgroundColor: theme.backgroundSecondary, borderColor: theme.border }]}
+                    onPress={() => {
+                      const caseId = reviewModal.caseId;
+                      setReviewModal(null);
+                      navigation.navigate("ViewCase", { caseId, readOnly: true });
+                    }}
+                  >
+                    <Feather name="file-text" size={16} color={theme.primary} />
+                    <Text style={[styles.viewFullCaseText, { color: theme.primary }]}>View Full Case</Text>
+                  </Pressable>
                   </ScrollView>
 
                   <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: Spacing.xs, paddingHorizontal: 0 }}>
@@ -972,6 +984,17 @@ const styles = StyleSheet.create({
   existingNote: { borderRadius: BorderRadius.md, padding: Spacing.md },
   existingNoteLabel: { fontSize: 11, fontWeight: "700", color: "#065f46", marginBottom: 4 },
   existingNoteText: { fontSize: 13, color: "#065f46" },
+  viewFullCaseBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 10,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    marginTop: Spacing.md,
+  },
+  viewFullCaseText: { fontSize: 14, fontWeight: "600" },
   reviewLabel: { fontSize: 14, fontWeight: "600" },
   reviewInput: { borderWidth: 1, borderRadius: BorderRadius.md, padding: Spacing.md, fontSize: 14, minHeight: 100 },
   reviewSubmit: { borderRadius: BorderRadius.md, paddingVertical: Spacing.md, alignItems: "center" },
