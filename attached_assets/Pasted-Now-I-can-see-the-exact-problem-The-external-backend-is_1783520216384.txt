@@ -1,0 +1,187 @@
+Now I can see the exact problem. The external backend is very strict.
+
+---
+
+## What the Error Says
+
+```
+422 Unprocessable Entity
+
+To rename a case, ErMate is sending:
+{
+  name: "Neer",
+  age: "",
+  sex: "Unknown"
+}
+
+But the external backend REQUIRES
+all of these fields every time:
+  patient.phone
+  patient.address
+  patient.arrival_datetime
+  patient.mode_of_arrival
+  patient.brought_by
+  patient.informant_name
+  patient.informant_reliability
+  patient.identification_mark
+```
+
+---
+
+## The Problem
+
+```
+The external backend's PUT /api/cases/:id
+is not a partial update endpoint.
+
+It requires the COMPLETE patient object
+every time — even for a simple rename.
+
+This is a strict Pydantic validation
+on the external backend (FastAPI/Python).
+ErMate can't change that backend.
+```
+
+---
+
+## The Fix — Tell Your Developer
+
+```
+When doing a rename, first FETCH
+the existing case data, then merge
+the new name into it, then PUT
+the complete object back.
+
+Two API calls instead of one:
+
+STEP 1 — GET current case data
+GET /api/proxy/cases/:caseId
+→ returns the full case object
+
+STEP 2 — Merge name change
+const updated = {
+  ...existingCase,
+  patient: {
+    ...existingCase.patient,
+    name: newName,
+  }
+}
+
+STEP 3 — PUT the complete object
+PUT /api/proxy/cases/:caseId
+body: updated
+```
+
+---
+
+## Exact Code Fix
+
+```typescript
+const handleRenameSave = async () => {
+  if (!newName.trim()) return;
+  setLoading(true);
+
+  try {
+    const token = await AsyncStorage
+      .getItem('token');
+
+    // STEP 1: fetch existing case
+    const getRes = await fetch(
+      `https://er-emr-backend.onrender.com
+       /api/cases/${caseId}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      }
+    );
+    const existing = await getRes.json();
+
+    // STEP 2: merge name into full object
+    const updated = {
+      ...existing,
+      patient: {
+        ...existing.patient,
+        name: newName.trim(),
+      },
+    };
+
+    // STEP 3: PUT complete object back
+    const putRes = await fetch(
+      `https://er-emr-backend.onrender.com
+       /api/cases/${caseId}`,
+      {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updated),
+      }
+    );
+
+    if (putRes.ok) {
+      setShowRenameModal(false);
+      await refetchCases();
+    } else {
+      const err = await putRes.json();
+      console.log('[Rename] PUT error:', err);
+      Alert.alert('Error', 
+        'Could not rename. Try again.');
+    }
+  } catch (e) {
+    console.log('[Rename] exception:', e);
+  } finally {
+    setLoading(false);
+  }
+};
+```
+
+---
+
+## Important Note for All Future Updates
+
+```
+The external backend requires the
+COMPLETE object on every PUT.
+
+This affects not just rename but:
+  Any field update from the case sheet
+  Any update from the chat screen
+  Any addendum saving data back
+
+All of them must:
+  1. GET the existing case first
+  2. Merge the change
+  3. PUT the complete object
+
+OR — create a helper function:
+
+async function updateCase(caseId, changes) {
+  const token = await getToken();
+  
+  // Always fetch first
+  const existing = await fetchCase(
+    caseId, token);
+  
+  // Deep merge changes
+  const updated = deepMerge(
+    existing, changes);
+  
+  // PUT complete object
+  return await putCase(
+    caseId, updated, token);
+}
+
+// Then rename becomes:
+await updateCase(caseId, {
+  patient: { name: newName }
+});
+
+// And any other update:
+await updateCase(caseId, {
+  vitals: { hr: "108" }
+});
+```
+
+This helper function should be built once and used everywhere. It prevents this 422 error from appearing again on any future update.
