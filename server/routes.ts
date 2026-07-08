@@ -5514,13 +5514,35 @@ Always use the conversation history for context. Keep replies SHORT (1–2 sente
         `Do NOT use bullet points — use flowing prose paragraphs. Integrate timestamps naturally.`,
       ].filter(Boolean).join("\n");
 
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [{ role: "user", content: prompt }],
-        max_tokens: 700,
-        temperature: 0.3,
-      });
-      const summary = completion.choices[0]?.message?.content?.trim() || "";
+      // 250-450 words needs ~500-650 output tokens; give headroom for long, addenda-heavy
+      // timelines. If the model still runs out of room (finish_reason === "length"), ask it
+      // to continue from where it left off rather than silently shipping a cut-off narrative
+      // for a medico-legal record.
+      const messages: { role: "user" | "assistant"; content: string }[] = [{ role: "user", content: prompt }];
+      let summary = "";
+      let finishReason: string | undefined;
+      const MAX_CONTINUATIONS = 2;
+      for (let attempt = 0; attempt <= MAX_CONTINUATIONS; attempt++) {
+        const completion = await openai.chat.completions.create({
+          model: "gpt-4o",
+          messages,
+          max_tokens: 1200,
+          temperature: 0.3,
+        });
+        const chunk = completion.choices[0]?.message?.content?.trim() || "";
+        finishReason = completion.choices[0]?.finish_reason;
+        summary = summary ? `${summary} ${chunk}` : chunk;
+        if (finishReason !== "length") break;
+        if (attempt === MAX_CONTINUATIONS) {
+          console.error(`[discharge-from-timeline] Narrative still truncated after ${MAX_CONTINUATIONS} continuations for case ${caseId}`);
+          break;
+        }
+        messages.push({ role: "assistant", content: chunk });
+        messages.push({ role: "user", content: "Continue the narrative exactly from where it was cut off. Do not repeat any earlier text, add a preamble, or restart the section headings." });
+      }
+      if (finishReason === "length") {
+        return res.status(500).json({ error: "The discharge narrative was too long to generate completely (this case has an unusually large number of clinical updates). Please try again." });
+      }
       const { aiCredits } = await deductAiCredit(userId, "");
       return res.json({ summary, aiCredits });
     } catch (err: any) {

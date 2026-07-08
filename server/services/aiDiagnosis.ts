@@ -863,6 +863,11 @@ Respond in JSON:
 }`;
 
   try {
+    // Long-stay / addenda-heavy cases (10-20+ chronological updates) can produce a
+    // narrative that approaches the token budget. GPT-4o supports up to 4096 output
+    // tokens, so we use nearly the full budget for the addenda path and explicitly
+    // detect truncation via finish_reason rather than silently returning a cut-off
+    // narrative (see aiDiagnosis "long-stay narrative truncation" safeguard).
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
@@ -870,13 +875,23 @@ Respond in JSON:
         { role: "user", content: prompt },
       ],
       temperature: 0.3,
-      max_tokens: summaryData.addendaTimeline ? 2500 : 1000,
+      max_tokens: summaryData.addendaTimeline ? 4000 : 1000,
       response_format: { type: "json_object" },
     });
 
     const content = response.choices[0]?.message?.content;
     if (!content) {
       throw new Error("Empty response from AI");
+    }
+
+    if (response.choices[0]?.finish_reason === "length") {
+      console.error(
+        `[generateCourseInHospital] Response truncated (finish_reason=length) — addendaTimeline present: ${!!summaryData.addendaTimeline}. ` +
+        `Refusing to return a cut-off narrative.`
+      );
+      throw new Error(
+        "The discharge narrative was too long to generate in one pass (this case has an unusually large number of clinical updates). Please try again."
+      );
     }
 
     const result = JSON.parse(content);
@@ -886,6 +901,9 @@ Respond in JSON:
     };
   } catch (error) {
     console.error("Failed to generate course in hospital:", error);
+    if (error instanceof Error && error.message.includes("too long to generate")) {
+      throw error;
+    }
     throw new Error("Failed to generate discharge summary content");
   }
 }
