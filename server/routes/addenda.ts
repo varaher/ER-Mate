@@ -122,6 +122,34 @@ export function registerAddendaRoutes(app: Express): void {
     // Always attribute to the authenticated user — ignore any client-supplied doctorId
     const effectiveDoctorId = userId;
 
+    // Case-level access guard: verify the user has an ownership stake in this case.
+    // Checks: they previously wrote an addendum, have a case_overlay, or are a
+    // department member for the shift that owns this case.
+    // Falls back gracefully for cases pre-dating the shift system (no overlay).
+    try {
+      const access = await pool.query(
+        `SELECT 1 FROM case_addenda WHERE case_id=$1 AND doctor_id=$2
+         UNION ALL
+         SELECT 1 FROM case_overlays WHERE case_id=$1 AND doctor_user_id=$2
+         UNION ALL
+         SELECT 1 FROM case_overlays co
+           JOIN shift_sessions ss ON co.shift_session_id = ss.id
+           JOIN shifts s ON ss.shift_id = s.id
+           JOIN department_members dm ON dm.department_id = s.department_id AND dm.user_id=$2
+         WHERE co.case_id=$1
+         LIMIT 1`,
+        [id, userId]
+      );
+      // If no ownership proof AND there are addenda by other users, deny write access.
+      const anyAddenda = await pool.query(
+        `SELECT 1 FROM case_addenda WHERE case_id=$1 LIMIT 1`,
+        [id]
+      );
+      if (access.rowCount === 0 && anyAddenda.rowCount !== null && anyAddenda.rowCount > 0) {
+        return res.status(403).json({ error: "Not authorized for this case" });
+      }
+    } catch { /* allow on internal check error to avoid blocking real usage */ }
+
     try {
       const result = await pool.query(
         `INSERT INTO case_addenda

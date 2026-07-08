@@ -4,7 +4,7 @@ import PDFDocument from "pdfkit";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, BorderStyle } from "docx";
 import multer from "multer";
 import crypto from "crypto";
-import { generateDiagnosisSuggestions, recordFeedback, getFeedbackStats, getLearningInsights, generateCourseInHospital, extractClinicalDataFromVoice, transcribeAndExtractVoice, generateRoundsDebrief, type AIFeedback, type FeedbackResult, type ExtractedClinicalData } from "./services/aiDiagnosis";
+import { generateDiagnosisSuggestions, recordFeedback, getFeedbackStats, getLearningInsights, generateCourseInHospital, extractClinicalDataFromVoice, transcribeAndExtractVoice, generateRoundsDebrief, classifyAddendum, type AIFeedback, type FeedbackResult, type ExtractedClinicalData } from "./services/aiDiagnosis";
 import { getOrCreateSubscription, canCreateCase, incrementCaseCount, activatePremium, activatePlan, cancelSubscription, FREE_CASE_LIMIT, PREMIUM_PRICE_INR } from "./services/subscription";
 import { createPaymentLink, verifyWebhookSignature } from "./services/razorpayService";
 import { PLAN_AMOUNTS_PAISE } from "./config/pricing";
@@ -3967,7 +3967,8 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
   app.post("/api/voice/chat", async (req: Request, res: Response) => {
     try {
-      const { messages, currentMessage, patientContext, hasCaseNote } = req.body;
+      const { messages, currentMessage, patientContext, hasCaseNote, caseId: chatCaseId, doctorName: chatDoctorName, doctorRole: chatDoctorRole } = req.body;
+      const chatUserId = extractUserId(req);
       if (!currentMessage || typeof currentMessage !== "string" || !currentMessage.trim()) {
         return res.status(400).json({ error: "No message provided" });
       }
@@ -4246,11 +4247,43 @@ Always use the conversation history for context. Keep replies SHORT (1–2 sente
         parsed = { reply: "I processed your input but couldn't format the response. Please try again.", type: "general", extracted: null, specialContent: null };
       }
 
+      // When the AI classifies this as an addendum and the case is committed,
+      // auto-classify the addendum type and persist it to the timeline.
+      let savedAddendumId: number | undefined;
+      let addendumType: string | undefined;
+      if (parsed.type === "addendum" && chatCaseId && chatUserId) {
+        try {
+          const pool = getPool();
+          if (pool) {
+            const classified = await classifyAddendum(currentMessage);
+            addendumType = classified.type;
+            const insertResult = await pool.query(
+              `INSERT INTO case_addenda
+                 (case_id, type, content, doctor_id, doctor_name, doctor_role, specialty)
+               VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+              [
+                chatCaseId,
+                classified.type,
+                classified.content || (parsed.specialContent ?? currentMessage),
+                chatUserId,
+                chatDoctorName ?? null,
+                chatDoctorRole ?? null,
+                classified.specialty ?? null,
+              ]
+            );
+            savedAddendumId = insertResult.rows[0]?.id;
+          }
+        } catch (addendumErr) {
+          console.warn("[CaseChat] addendum auto-save skipped:", addendumErr);
+        }
+      }
+
       res.json({
         reply: parsed.reply || "Understood.",
         type: parsed.type || "general",
         extracted: parsed.extracted || null,
         specialContent: parsed.specialContent || null,
+        ...(addendumType ? { addendumType, addendumId: savedAddendumId } : {}),
       });
     } catch (error) {
       console.error("[CaseChat] error:", error);
@@ -5271,17 +5304,35 @@ Always use the conversation history for context. Keep replies SHORT (1–2 sente
     const userId = extractUserId(req);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
     const pool = getPool();
-    const { caseId, patientName, chiefComplaint, workingDiagnosis } = req.body || {};
+    const { caseId, patientName, chiefComplaint, workingDiagnosis, disposition } = req.body || {};
     if (!caseId) return res.status(400).json({ error: "caseId is required" });
     try {
       let timeline = "";
+      let erArrivalIso = "";
+      let erDepartureIso = "";
       if (pool) {
+        // Ownership guard — same logic as POST addenda
+        const access = await pool.query(
+          `SELECT 1 FROM case_addenda WHERE case_id=$1 AND doctor_id=$2
+           UNION ALL SELECT 1 FROM case_overlays WHERE case_id=$1 AND doctor_user_id=$2 LIMIT 1`,
+          [caseId, userId]
+        );
+        // Deny only if other users' addenda exist but this user has no proof of access
+        const anyAddenda = await pool.query(
+          `SELECT 1 FROM case_addenda WHERE case_id=$1 LIMIT 1`, [caseId]
+        );
+        if ((access.rowCount ?? 0) === 0 && (anyAddenda.rowCount ?? 0) > 0) {
+          return res.status(403).json({ error: "Not authorized for this case" });
+        }
+
         const rows = await pool.query(
           `SELECT type, content, doctor_name, created_at FROM case_addenda
            WHERE case_id = $1 ORDER BY created_at ASC`,
           [caseId]
         );
         if (rows.rowCount && rows.rowCount > 0) {
+          erArrivalIso = rows.rows[0].created_at;
+          erDepartureIso = rows.rows[rows.rows.length - 1].created_at;
           timeline = rows.rows
             .map((r: any) => {
               const ts = new Date(r.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
@@ -5293,28 +5344,49 @@ Always use the conversation history for context. Keep replies SHORT (1–2 sente
       if (!timeline) {
         return res.json({ summary: "" });
       }
+
+      // Compute ER duration
+      let erDuration = "Not recorded";
+      if (erArrivalIso && erDepartureIso) {
+        const mins = Math.round((new Date(erDepartureIso).getTime() - new Date(erArrivalIso).getTime()) / 60000);
+        if (mins > 0) erDuration = mins >= 60 ? `${Math.floor(mins/60)}h ${mins%60}m` : `${mins} minutes`;
+      }
+
       const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
       const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
       if (!apiKey) return res.status(503).json({ error: "AI unavailable" });
       const openai = new OpenAI({ apiKey, baseURL });
+
       const prompt = [
-        `You are an expert emergency physician writing a formal discharge summary for a medico-legal record.`,
-        `Patient: ${patientName || "Unknown"} | Chief Complaint: ${chiefComplaint || "Not recorded"} | Working Dx: ${workingDiagnosis || "Not recorded"}`,
+        `You are an expert emergency physician writing the "Course in Emergency Department" section of a formal discharge summary for a medico-legal record.`,
+        ``,
+        `PATIENT DETAILS:`,
+        `Name: ${patientName || "Unknown"}`,
+        `Chief Complaint: ${chiefComplaint || "Not recorded"}`,
+        `Working Diagnosis: ${workingDiagnosis || "Not recorded"}`,
+        `Total ER Duration: ${erDuration}`,
+        disposition ? `Disposition: ${typeof disposition === "object" ? JSON.stringify(disposition) : disposition}` : "",
         ``,
         `CLINICAL TIMELINE (chronological addenda):`,
         timeline,
         ``,
-        `Write a concise, professional "Course in Emergency Department" narrative (250–400 words) that:`,
-        `- Summarises the patient's clinical course in chronological order`,
-        `- Highlights key investigation results, consultant reviews, medication changes, and procedures`,
-        `- Concludes with the disposition and any pending follow-up`,
-        `- Uses formal medical language suitable for a medico-legal discharge document`,
-        `- Does NOT repeat dates verbatim — integrate them naturally into the prose`,
-      ].join("\n");
+        `Write a formal "Course in Emergency Department" narrative with these MANDATORY sections in order:`,
+        `1. PRESENTATION — how the patient presented, initial status`,
+        `2. INVESTIGATIONS — key results from the timeline`,
+        `3. MANAGEMENT — treatments, medications, and procedures performed`,
+        `4. CONSULTANT REVIEWS — any specialist reviews noted (skip section if none)`,
+        `5. CLINICAL PROGRESS — response to treatment, interval reassessments`,
+        `6. TOTAL ER DURATION — state: "The patient was managed in the emergency department for ${erDuration}."`,
+        `7. DISPOSITION — final disposition and pending follow-up`,
+        ``,
+        `Requirements: 250–450 words total. Formal medical language suitable for a medico-legal record.`,
+        `Do NOT use bullet points — use flowing prose paragraphs. Integrate timestamps naturally.`,
+      ].filter(Boolean).join("\n");
+
       const completion = await openai.chat.completions.create({
         model: "gpt-4o",
         messages: [{ role: "user", content: prompt }],
-        max_tokens: 600,
+        max_tokens: 700,
         temperature: 0.3,
       });
       const summary = completion.choices[0]?.message?.content?.trim() || "";

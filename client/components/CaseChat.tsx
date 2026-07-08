@@ -2037,6 +2037,11 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
           currentMessage: text,
           patientContext,
           hasCaseNote,
+          // Pass caseId + doctor info so the server can auto-save addenda
+          // on the timeline when the AI classifies the response as type=addendum
+          caseId: canAddAddendum ? caseId : undefined,
+          doctorName: liveCase?.doctorName ?? liveCase?.userName ?? undefined,
+          doctorRole: liveCase?.role ?? undefined,
         }),
       });
 
