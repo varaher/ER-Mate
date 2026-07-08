@@ -59,11 +59,33 @@ export function registerAddendaRoutes(app: Express): void {
     if (!pool) return res.status(503).json({ error: "Database unavailable" });
     const { id } = req.params;
     try {
+      // Ownership check: allow if the user has ever written an addendum for this case,
+      // has a case_overlay (shift-based access), or is a department member who can see
+      // shift cases. Falls back gracefully for cases pre-dating the shift system.
+      const accessCheck = await pool.query(
+        `SELECT 1 FROM case_addenda WHERE case_id=$1 AND doctor_id=$2
+         UNION ALL
+         SELECT 1 FROM case_overlays WHERE case_id=$1 AND doctor_user_id=$2
+         UNION ALL
+         SELECT 1 FROM case_overlays co
+           JOIN shift_sessions ss ON co.shift_session_id = ss.id
+           JOIN shifts s ON ss.shift_id = s.id
+           JOIN department_members dm ON dm.department_id = s.department_id AND dm.user_id=$2
+         WHERE co.case_id=$1
+         LIMIT 1`,
+        [id, userId]
+      );
+      // If no ownership proof found, still allow — the user is authenticated and case IDs
+      // are UUIDs, so enumeration attacks are impractical. Pre-shift cases have no overlay.
       const result = await pool.query(
         `SELECT * FROM case_addenda WHERE case_id = $1 ORDER BY created_at ASC`,
         [id]
       );
-      return res.json(result.rows.map(rowToAddendum));
+      // Narrow result to user's own addenda if no shared ownership proof exists
+      const rows = accessCheck.rowCount === 0
+        ? result.rows.filter((r: any) => r.doctor_id === userId)
+        : result.rows;
+      return res.json(rows.map(rowToAddendum));
     } catch (err: any) {
       console.error("[ADDENDA] GET error:", err);
       return res.status(500).json({ error: err.message });

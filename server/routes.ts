@@ -5263,6 +5263,68 @@ Always use the conversation history for context. Keep replies SHORT (1–2 sente
     }
   });
 
+  // POST /api/ai/discharge-from-timeline
+  // Lightweight endpoint used by CaseChat when addenda exist.
+  // Fetches the clinical timeline from local DB and asks GPT-4o to synthesise
+  // a "Course in Hospital" narrative using the chronological addenda.
+  app.post("/api/ai/discharge-from-timeline", async (req: Request, res: Response) => {
+    const userId = extractUserId(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    const pool = getPool();
+    const { caseId, patientName, chiefComplaint, workingDiagnosis } = req.body || {};
+    if (!caseId) return res.status(400).json({ error: "caseId is required" });
+    try {
+      let timeline = "";
+      if (pool) {
+        const rows = await pool.query(
+          `SELECT type, content, doctor_name, created_at FROM case_addenda
+           WHERE case_id = $1 ORDER BY created_at ASC`,
+          [caseId]
+        );
+        if (rows.rowCount && rows.rowCount > 0) {
+          timeline = rows.rows
+            .map((r: any) => {
+              const ts = new Date(r.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+              return `[${ts}] ${r.type.replace(/_/g, " ").toUpperCase()}${r.doctor_name ? " by " + r.doctor_name : ""}: ${r.content}`;
+            })
+            .join("\n");
+        }
+      }
+      if (!timeline) {
+        return res.json({ summary: "" });
+      }
+      const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
+      const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
+      if (!apiKey) return res.status(503).json({ error: "AI unavailable" });
+      const openai = new OpenAI({ apiKey, baseURL });
+      const prompt = [
+        `You are an expert emergency physician writing a formal discharge summary for a medico-legal record.`,
+        `Patient: ${patientName || "Unknown"} | Chief Complaint: ${chiefComplaint || "Not recorded"} | Working Dx: ${workingDiagnosis || "Not recorded"}`,
+        ``,
+        `CLINICAL TIMELINE (chronological addenda):`,
+        timeline,
+        ``,
+        `Write a concise, professional "Course in Emergency Department" narrative (250–400 words) that:`,
+        `- Summarises the patient's clinical course in chronological order`,
+        `- Highlights key investigation results, consultant reviews, medication changes, and procedures`,
+        `- Concludes with the disposition and any pending follow-up`,
+        `- Uses formal medical language suitable for a medico-legal discharge document`,
+        `- Does NOT repeat dates verbatim — integrate them naturally into the prose`,
+      ].join("\n");
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 600,
+        temperature: 0.3,
+      });
+      const summary = completion.choices[0]?.message?.content?.trim() || "";
+      return res.json({ summary });
+    } catch (err: any) {
+      console.error("[discharge-from-timeline]", err);
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
   registerDepartmentRoutes(app);
   registerShiftRoutes(app);
   registerEscalationRoutes(app);

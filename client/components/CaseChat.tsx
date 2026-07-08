@@ -58,14 +58,14 @@ const ADDENDUM_LABELS: Record<AddendumType, string> = {
 };
 
 const ADDENDUM_COLORS: Record<AddendumType, string> = {
-  clinical_update:      '#2563EB',  // blue   (spec: Blue = clinical update)
-  investigation_result: '#059669',  // green  (spec: Green = investigation result)
-  consultant_review:    '#7C3AED',  // purple (spec: Purple = consultant review)
-  cross_consultation:   '#4F46E5',  // indigo
-  medication_change:    '#D97706',  // amber
-  procedure_note:       '#0D9488',  // teal
-  shift_handover:       '#F97316',  // orange (spec: Orange = handover)
-  correction:           '#DC2626',  // red
+  clinical_update:      '#10B981',  // emerald  — routine clinical progress note
+  investigation_result: '#3B82F6',  // blue     — lab / imaging result
+  consultant_review:    '#7C3AED',  // purple   — specialist review
+  cross_consultation:   '#4F46E5',  // indigo   — cross-team consult
+  medication_change:    '#D97706',  // amber    — drug order / change
+  procedure_note:       '#0D9488',  // teal     — procedure performed
+  shift_handover:       '#64748B',  // slate    — handover entry
+  correction:           '#F97316',  // orange   — factual correction
 };
 
 const ADDENDUM_ICONS: Record<AddendumType, string> = {
@@ -634,6 +634,12 @@ export interface CaseChatProps {
   }) => Promise<CaseAddendum>;
   /** ISO timestamp of when the patient arrived in ER — drives the stay-duration timer */
   erArrivalTime?: string;
+  /**
+   * True when viewing a previously committed/existing case.
+   * Controls addendum mode gating — false for brand-new empty cases
+   * so first-dictation still creates the initial case note.
+   */
+  isCaseCommitted?: boolean;
 }
 
 // ── Wave bar (recording animation) ───────────────────────────────────────────
@@ -1883,7 +1889,7 @@ function countFields(extracted: SmartDictationExtracted): number {
 const AFTER_CASE_CHIPS = ['Prepare discharge summary', 'RSI note', 'Referral letter', 'Show complete case sheet'];
 const AFTER_DS_CHIPS   = ['Add allergy', 'Export PDF', 'Show differentials', 'Edit diagnosis'];
 
-export default function CaseChat({ onDataExtracted, patientContext, liveCase, initialExtracted, disabled = false, caseId, userId, onNavigateDashboard, addenda = [], onAddAddendum, erArrivalTime }: CaseChatProps) {
+export default function CaseChat({ onDataExtracted, patientContext, liveCase, initialExtracted, disabled = false, caseId, userId, onNavigateDashboard, addenda = [], onAddAddendum, erArrivalTime, isCaseCommitted }: CaseChatProps) {
   const [messages, setMessages]         = useState<ChatMessage[]>([]);
   const [inputText, setInputText]       = useState('');
   const [isRecording, setIsRecording]   = useState(false);
@@ -1895,7 +1901,11 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
   const [hasDs, setHasDs]               = useState(false);
   const [showAddendumModal, setShowAddendumModal] = useState(false);
 
-  const canAddAddendum = !!onAddAddendum && (hasCaseNote || addenda.length > 0 || !!liveCase);
+  // Addendum mode is only active once the initial case note has been committed
+  // (either during this session via hasCaseNote, or when loading a pre-existing
+  // committed case via isCaseCommitted). A freshly-created empty case must NOT
+  // enter addendum mode — first dictation must still create the initial note.
+  const canAddAddendum = !!onAddAddendum && (hasCaseNote || addenda.length > 0 || !!isCaseCommitted);
 
   const scrollRef           = useRef<ScrollView>(null);
   const nativeRecRef        = useRef<Audio.Recording | null>(null);
@@ -2094,13 +2104,44 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
     sendToAI(`Correction: ${correctionText}`, undefined, true);
   };
 
-  const handleChip = (chip: string) => {
+  const handleChip = async (chip: string) => {
     setInputText('');
     const lower = chip.toLowerCase();
     if ((lower.includes('discharge summary') || lower.includes('discharge')) && liveCase) {
-      const dsText = generateDischargeSummary(liveCase);
       push({ role: 'user', content: chip, type: 'text' });
-      push({ role: 'assistant', content: 'Discharge summary generated from your case data.', type: 'discharge_summary', specialContent: dsText });
+      // When addenda exist, route through the AI backend so the timeline is
+      // included in the "Course in Hospital" narrative. Otherwise fall back
+      // to the local generator (no AI credits consumed).
+      if (canAddAddendum && caseId) {
+        setIsThinking(true);
+        try {
+          const token = await AsyncStorage.getItem('token');
+          const resp = await fetch(
+            `${getApiUrl()}/api/ai/discharge-from-timeline`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+              body: JSON.stringify({
+                caseId,
+                patientName: liveCase.name,
+                chiefComplaint: liveCase.chiefComplaint,
+                workingDiagnosis: liveCase.workingDiagnosis,
+                disposition: liveCase.disposition,
+              }),
+            }
+          );
+          const json = await resp.json();
+          const dsText = json?.summary || generateDischargeSummary(liveCase);
+          push({ role: 'assistant', content: 'AI-enhanced discharge summary assembled from the clinical timeline.', type: 'discharge_summary', specialContent: dsText });
+        } catch {
+          push({ role: 'assistant', content: 'Discharge summary generated from your case data.', type: 'discharge_summary', specialContent: generateDischargeSummary(liveCase) });
+        } finally {
+          setIsThinking(false);
+        }
+      } else {
+        const dsText = generateDischargeSummary(liveCase);
+        push({ role: 'assistant', content: 'Discharge summary generated from your case data.', type: 'discharge_summary', specialContent: dsText });
+      }
       setHasDs(true);
       return;
     }

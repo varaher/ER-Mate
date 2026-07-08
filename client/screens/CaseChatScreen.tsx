@@ -739,6 +739,7 @@ export default function CaseChatScreen({ route, navigation }: Props) {
           addenda={addenda}
           onAddAddendum={handleAddAddendum}
           erArrivalTime={caseData?.created_at || caseData?.createdAt || undefined}
+          isCaseCommitted={!!paramCaseId}
         />
       </View>
     </View>
