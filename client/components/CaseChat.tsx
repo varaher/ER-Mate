@@ -58,14 +58,14 @@ const ADDENDUM_LABELS: Record<AddendumType, string> = {
 };
 
 const ADDENDUM_COLORS: Record<AddendumType, string> = {
-  clinical_update:      '#2563EB',  // blue
-  investigation_result: '#059669',  // emerald-green
-  consultant_review:    '#7C3AED',  // purple
-  cross_consultation:   '#0891B2',  // cyan
+  clinical_update:      '#2563EB',  // blue   (spec: Blue = clinical update)
+  investigation_result: '#059669',  // green  (spec: Green = investigation result)
+  consultant_review:    '#7C3AED',  // purple (spec: Purple = consultant review)
+  cross_consultation:   '#4F46E5',  // indigo
   medication_change:    '#D97706',  // amber
   procedure_note:       '#0D9488',  // teal
-  shift_handover:       '#F97316',  // orange
-  correction:           '#6B7280',  // gray
+  shift_handover:       '#F97316',  // orange (spec: Orange = handover)
+  correction:           '#DC2626',  // red
 };
 
 const ADDENDUM_ICONS: Record<AddendumType, string> = {
@@ -956,6 +956,10 @@ function useErStayTimer(arrivalIso: string | undefined): { label: string; color:
   return { label, color };
 }
 
+const PRIORITY_COLORS: Record<string, string> = {
+  P1: '#DC2626', P2: '#F97316', P3: '#EAB308', P4: '#22C55E', P5: '#6B7280',
+};
+
 function ClinicalTimeline({
   addenda,
   liveCase,
@@ -969,11 +973,24 @@ function ClinicalTimeline({
   const { label: stayLabel, color: stayColor } = useErStayTimer(erArrivalTime);
   if (addenda.length === 0 && !liveCase) return null;
 
+  const patientName  = liveCase?.name;
+  const priority     = liveCase?.priority;
+  const priorityColor = priority ? (PRIORITY_COLORS[priority] ?? C.faint) : undefined;
+
   return (
     <View style={tl.container}>
+      {/* Header: [icon] CLINICAL TIMELINE  [P2]  Patient Name  ----  [clock] In ER · 4h 12m */}
       <View style={tl.header}>
         <Feather name="list" size={12} color={C.greenDark} />
         <Text style={tl.headerText}>CLINICAL TIMELINE</Text>
+        {priority && priorityColor ? (
+          <View style={[tl.stayBadge, { borderColor: priorityColor + '70', backgroundColor: priorityColor + '18', marginRight: 2 }]}>
+            <Text style={[tl.stayBadgeText, { color: priorityColor }]}>{priority}</Text>
+          </View>
+        ) : null}
+        {patientName ? (
+          <Text style={tl.patientName} numberOfLines={1}>{patientName}</Text>
+        ) : null}
         <View style={tl.headerLine} />
         {stayLabel ? (
           <View style={[tl.stayBadge, { borderColor: stayColor + '60', backgroundColor: stayColor + '12' }]}>
@@ -1975,10 +1992,20 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
   const sendToAI = async (text: string, durSecs?: number, isCorrection = false) => {
     if (!text.trim() || isThinking) return;
 
-    // When an existing case is active, all non-command updates go to the clinical timeline
+    // When an existing case is active, route non-command updates to the clinical timeline
     if (canAddAddendum && !isCorrection && onAddAddendum && caseId) {
-      await sendAsAddendum(text, durSecs);
-      return;
+      const lower = text.toLowerCase();
+      const isCommand =
+        lower.includes('discharge summary') || lower.includes('discharge') ||
+        lower.includes('referral') || lower.includes('refer') ||
+        lower.includes('case sheet') || lower.includes('case note') ||
+        lower.includes('complete case') || lower.includes('full case') ||
+        lower.includes('show case') || lower.includes('show note') ||
+        lower.includes('complete note') || lower.includes('full note');
+      if (!isCommand) {
+        await sendAsAddendum(text, durSecs);
+        return;
+      }
     }
 
     if (!isCorrection) {
@@ -2918,6 +2945,7 @@ const tl = StyleSheet.create({
   entryTime: { fontSize: 10, color: C.faint, flex: 1, textAlign: 'right' },
   entryMeta: { fontSize: 10.5, color: C.muted, fontWeight: '600' },
   entryBody: { fontSize: 12, color: C.ink, lineHeight: 18 },
+  patientName: { fontSize: 11, color: C.muted, fontWeight: '600', flexShrink: 1, marginHorizontal: 4 },
   entryCollapsed: { fontSize: 11.5, color: C.faint, fontStyle: 'italic' },
   stayBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 4,

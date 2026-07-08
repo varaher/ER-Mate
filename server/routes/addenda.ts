@@ -97,8 +97,8 @@ export function registerAddendaRoutes(app: Express): void {
       return res.status(400).json({ error: "content is required" });
     }
 
-    // Enforce ownership: doctorId must match the authenticated user
-    const effectiveDoctorId = doctorId || userId;
+    // Always attribute to the authenticated user — ignore any client-supplied doctorId
+    const effectiveDoctorId = userId;
 
     try {
       const result = await pool.query(
