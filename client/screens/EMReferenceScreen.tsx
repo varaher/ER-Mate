@@ -19,6 +19,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, TriageColors } from "@/constants/theme";
 import { getApiUrl } from "@/lib/query-client";
 import { useAuth } from "@/context/AuthContext";
+import { renderMarkdown as renderMarkdownShared } from "@/components/MarkdownText";
 
 interface Message {
   id: string;
@@ -218,91 +219,14 @@ export default function EMReferenceScreen() {
     setFeedbackGiven({});
   };
 
-  const renderMarkdown = (text: string) => {
-    const lines = text.split("\n");
-    const elements: React.ReactNode[] = [];
-
-    lines.forEach((line, idx) => {
-      const trimmed = line.trim();
-
-      if (trimmed.startsWith("### ")) {
-        elements.push(
-          <Text
-            key={idx}
-            style={[styles.mdH3, { color: theme.text }]}
-          >
-            {formatInline(trimmed.slice(4), theme)}
-          </Text>
-        );
-      } else if (trimmed.startsWith("## ")) {
-        elements.push(
-          <Text
-            key={idx}
-            style={[styles.mdH2, { color: theme.text }]}
-          >
-            {formatInline(trimmed.slice(3), theme)}
-          </Text>
-        );
-      } else if (trimmed.startsWith("# ")) {
-        elements.push(
-          <Text
-            key={idx}
-            style={[styles.mdH1, { color: theme.text }]}
-          >
-            {formatInline(trimmed.slice(2), theme)}
-          </Text>
-        );
-      } else if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
-        elements.push(
-          <View key={idx} style={styles.mdBullet}>
-            <Text style={[styles.mdBulletDot, { color: theme.primary }]}>
-              {"\u2022"}
-            </Text>
-            <Text style={[styles.mdText, { color: theme.textSecondary }]}>
-              {formatInline(trimmed.slice(2), theme)}
-            </Text>
-          </View>
-        );
-      } else if (/^\d+\.\s/.test(trimmed)) {
-        const match = trimmed.match(/^(\d+)\.\s(.*)/);
-        if (match) {
-          elements.push(
-            <View key={idx} style={styles.mdBullet}>
-              <Text style={[styles.mdNumDot, { color: theme.primary }]}>
-                {match[1]}.
-              </Text>
-              <Text style={[styles.mdText, { color: theme.textSecondary }]}>
-                {formatInline(match[2], theme)}
-              </Text>
-            </View>
-          );
-        }
-      } else if (trimmed.startsWith("**References") || trimmed.startsWith("References:")) {
-        elements.push(
-          <View key={idx} style={[styles.referencesHeader, { borderTopColor: theme.borderLight }]}>
-            <Feather name="book-open" size={14} color={theme.primary} />
-            <Text style={[styles.mdH3, { color: theme.primary, marginBottom: 0 }]}>
-              References
-            </Text>
-          </View>
-        );
-      } else if (trimmed === "---" || trimmed === "***") {
-        elements.push(
-          <View key={idx} style={[styles.mdDivider, { backgroundColor: theme.borderLight }]} />
-        );
-      } else if (trimmed.length > 0) {
-        elements.push(
-          <Text key={idx} style={[styles.mdText, { color: theme.textSecondary }]}>
-            {formatInline(trimmed, theme)}
-          </Text>
-        );
-      } else {
-        elements.push(<View key={idx} style={{ height: 6 }} />);
-      }
+  const renderMarkdown = (text: string) =>
+    renderMarkdownShared(text, {
+      text: theme.text,
+      textSecondary: theme.textSecondary,
+      primary: theme.primary,
+      cardElevated: theme.cardElevated,
+      borderLight: theme.borderLight,
     });
-
-    return elements;
-  };
 
   if (view === "topics") {
     return (
@@ -579,48 +503,6 @@ export default function EMReferenceScreen() {
       </View>
     </KeyboardAvoidingView>
   );
-}
-
-function formatInline(text: string, theme: any): React.ReactNode {
-  const parts: React.ReactNode[] = [];
-  const regex = /\*\*(.+?)\*\*|`(.+?)`/g;
-  let lastIndex = 0;
-  let match;
-  let keyIdx = 0;
-
-  while ((match = regex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push(text.slice(lastIndex, match.index));
-    }
-    if (match[1]) {
-      parts.push(
-        <Text key={keyIdx++} style={{ fontWeight: "700", color: theme.text }}>
-          {match[1]}
-        </Text>
-      );
-    } else if (match[2]) {
-      parts.push(
-        <Text
-          key={keyIdx++}
-          style={{
-            fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-            fontSize: 13,
-            backgroundColor: theme.cardElevated,
-            color: theme.primary,
-          }}
-        >
-          {match[2]}
-        </Text>
-      );
-    }
-    lastIndex = match.index + match[0].length;
-  }
-
-  if (lastIndex < text.length) {
-    parts.push(text.slice(lastIndex));
-  }
-
-  return parts.length > 0 ? parts : text;
 }
 
 const styles = StyleSheet.create({

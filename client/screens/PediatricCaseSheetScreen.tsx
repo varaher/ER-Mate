@@ -1090,10 +1090,17 @@ export default function PediatricCaseSheetScreen() {
       setHistoryData((prev) => ({ ...prev, immunizationStatus: (prev.immunizationStatus ? prev.immunizationStatus + ". " : "") + data.immunizationHistory }));
     }
     if (data.birthHistory || data.feedingHistory || data.developmentalHistory) {
-      const parts = [data.birthHistory, data.feedingHistory, data.developmentalHistory].filter(Boolean);
+      const parts = [
+        data.birthHistory ? `Birth History: ${data.birthHistory}` : null,
+        data.feedingHistory ? `Feeding History: ${data.feedingHistory}` : null,
+        data.developmentalHistory ? `Developmental History: ${data.developmentalHistory}` : null,
+      ].filter(Boolean);
       if (parts.length > 0) {
         setHistoryData((prev) => ({ ...prev, underlyingConditions: (prev.underlyingConditions ? prev.underlyingConditions + ". " : "") + parts.join(". ") }));
       }
+    }
+    if (data.patientWeight) {
+      setPatient((prev: any) => (prev ? { ...prev, weight: prev.weight || data.patientWeight } : prev));
     }
     if (data.familyHistory || data.socialHistory) {
       const parts = [data.familyHistory ? `Family: ${data.familyHistory}` : null, data.socialHistory ? `Social: ${data.socialHistory}` : null].filter(Boolean);
@@ -1373,7 +1380,7 @@ export default function PediatricCaseSheetScreen() {
         if (pupilChip) setDisabilityData((prev) => ({ ...prev, pupils: prev.pupils || pupilChip }));
       }
     }
-    const completion = calculateDictationCompletion(data);
+    const completion = calculateDictationCompletion(data, "pediatric");
     setDictationCompletion(completion);
     setShowDictationResult(true);
     handleSave(true);

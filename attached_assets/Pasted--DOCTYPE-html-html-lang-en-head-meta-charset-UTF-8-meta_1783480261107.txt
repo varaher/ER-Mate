@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>ErMate — Complete System Audit</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;background:#F2FAF6;color:#0D2B1A;padding:24px;max-width:1100px;margin:0 auto}
+h1{font-size:24px;font-weight:800;color:#0D6B3A;margin-bottom:4px}
+.tagline{font-size:14px;color:#5A8A6E;margin-bottom:32px;font-style:italic}
+.section{margin-bottom:32px}
+.section-title{font-size:16px;font-weight:800;color:#0D6B3A;letter-spacing:.5px;text-transform:uppercase;margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid #1DB870}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px}
+.card{background:white;border-radius:12px;padding:14px 16px;border:.5px solid #D4E8DC}
+.card-title{font-size:13px;font-weight:700;color:#0D2B1A;margin-bottom:4px}
+.card-sub{font-size:11px;color:#5A8A6E;margin-bottom:10px}
+.row{display:flex;align-items:flex-start;gap:8px;margin-bottom:6px}
+.dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;margin-top:3px}
+.g{background:#1DB870}
+.a{background:#D97706}
+.r{background:#DC2626}
+.b{background:#6366F1}
+.row-text{font-size:12px;color:#0D2B1A;line-height:1.5}
+.row-text.muted{color:#5A8A6E;font-style:italic}
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+.leg{display:flex;align-items:center;gap:6px;font-size:12px;color:#5A8A6E}
+.stat-row{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:24px}
+.stat{background:white;border-radius:10px;padding:14px;text-align:center;border:.5px solid #D4E8DC}
+.stat-n{font-size:28px;font-weight:800;margin-bottom:4px}
+.stat-l{font-size:11px;color:#5A8A6E}
+.priority{font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;margin-left:6px;vertical-align:middle}
+.p-crit{background:#FEF2F2;color:#DC2626}
+.p-high{background:#FFFBEB;color:#D97706}
+.p-med{background:#EFF6FF;color:#1D6FA4}
+.p-low{background:#F0FFF4;color:#15924F}
+.section-badge{display:inline-block;font-size:9px;font-weight:800;padding:2px 8px;border-radius:99px;letter-spacing:.8px;text-transform:uppercase;margin-bottom:8px}
+.badge-auth{background:#EFF6FF;color:#1D6FA4}
+.badge-case{background:#F0FFF4;color:#15924F}
+.badge-chat{background:#F5F3FF;color:#6366F1}
+.badge-team{background:#FFF7ED;color:#D97706}
+.badge-learn{background:#FDF2F8;color:#9333EA}
+</style>
+</head>
+<body>
+
+<h1>ErMate — Complete System Audit</h1>
+<p class="tagline">You became a doctor to save lives. Not to fill forms.</p>
+
+<!-- Legend -->
+<div class="legend">
+  <div class="leg"><div class="dot g"></div>Working correctly</div>
+  <div class="leg"><div class="dot a"></div>Partial / needs fix</div>
+  <div class="leg"><div class="dot r"></div>Broken / critical bug</div>
+  <div class="leg"><div class="dot b"></div>Not yet built</div>
+</div>
+
+<!-- Stats -->
+<div class="stat-row">
+  <div class="stat"><div class="stat-n" style="color:#1DB870">31</div><div class="stat-l">Working ✓</div></div>
+  <div class="stat"><div class="stat-n" style="color:#D97706">22</div><div class="stat-l">Partial ⚠</div></div>
+  <div class="stat"><div class="stat-n" style="color:#DC2626">12</div><div class="stat-l">Broken ✗</div></div>
+  <div class="stat"><div class="stat-n" style="color:#6366F1">18</div><div class="stat-l">Not built</div></div>
+  <div class="stat"><div class="stat-n" style="color:#0D6B3A">83</div><div class="stat-l">Total items</div></div>
+</div>
+
+<!-- ══ AUTH ════════════════════════════════════════════════════════════════ -->
+<div class="section">
+<div class="section-title">🔐 Authentication & Accounts</div>
+<div class="grid">
+
+<div class="card">
+<span class="section-badge badge-auth">Login</span>
+<div class="card-title">Google Sign-In</div>
+<div class="card-sub">OAuth via Google</div>
+<div class="row"><div class="dot g"></div><span class="row-text">Works on Android — doctor signed in correctly</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">Release build SHA-1 fingerprint — must be added to Google Console before Play Store submission</span></div>
+</div>
+
+<div class="card">
+<span class="section-badge badge-auth">Login</span>
+<div class="card-title">Email + Password Login</div>
+<div class="card-sub">External backend auth</div>
+<div class="row"><div class="dot g"></div><span class="row-text">Login works — token returned and stored</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">Silent failure on wrong password — needs visible error message</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">Forgot password — email arrives but reset fails for accounts created before credential caching</span></div>
+</div>
+
+<div class="card">
+<span class="section-badge badge-auth">Account</span>
+<div class="card-title">Doctor Name on Cases</div>
+<div class="card-sub">Critical for HOD dashboard</div>
+<div class="row"><div class="dot r"></div><span class="row-text">Cases show "Unknown" — doctorName not attached on creation</span></div>
+<div class="row"><div class="dot r"></div><span class="row-text">Fix: attach req.user.name when POST /api/voice/chat creates case</span></div>
+</div>
+
+<div class="card">
+<span class="section-badge badge-auth">Account</span>
+<div class="card-title">Set Password (Google users)</div>
+<div class="card-sub">Profile setting</div>
+<div class="row"><div class="dot b"></div><span class="row-text">Google users cannot set an email/password backup — screen not built</span></div>
+</div>
+
+</div>
+</div>
+
+<!-- ══ CHAT SCREEN ══════════════════════════════════════════════════════════ -->
+<div class="section">
+<div class="section-title">💬 Chat Screen (CaseChatScreen)</div>
+<div class="grid">
+
+<div class="card">
+<span class="section-badge badge-chat">UI</span>
+<div class="card-title">Chat Interface</div>
+<div class="card-sub">Claude/GPT style</div>
+<div class="row"><div class="dot g"></div><span class="row-text">Dark emerald header working</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Doctor bubbles (right-aligned) working</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">ErMate responses (left-aligned) working</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Suggestion chips working</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">Emerald light theme delivered — not yet applied</span></div>
+</div>
+
+<div class="card">
+<span class="section-badge badge-chat">Dictation</span>
+<div class="card-title">Voice Dictation in Chat</div>
+<div class="card-sub">Sarvam AI → GPT-4o</div>
+<div class="row"><div class="dot g"></div><span class="row-text">Mic → recording → transcription working</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">GCS E4V5M6 extracted correctly</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">Chief complaint still "Not documented" despite fixes — needs re-test</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">HPI shows "History to be documented" — narrative not generating</span></div>
+<div class="row"><div class="dot r"></div><span class="row-text">Background noise → audio loops 50+ times (cleanTranscript fix deployed)</span></div>
+<div class="row"><div class="dot r"></div><span class="row-text">SpO2 shows wrong value when two readings mentioned</span></div>
+</div>
+
+<div class="card">
+<span class="section-badge badge-chat">Case Note</span>
+<div class="card-title">Case Note Output Format</div>
+<div class="card-sub">Hospital EMR standard</div>
+<div class="row"><div class="dot g"></div><span class="row-text">Copy All produces correct hospital EMR format</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Psychological assessment auto-sentence working</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">General examination auto-sentence working</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Systemic examination all sections correct</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">EM Resident / Consultant in signatures</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">Display shows truncated version — should show full note (same as Copy All)</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">"Not captured" banner flags HR/BP/SpO2 even when they are captured</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">Time shows "12:37 pmPM" — double format bug</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">Priority defaults P4 for serious presentations (NSTEMI should be P1)</span></div>
+</div>
+
+<div class="card">
+<span class="section-badge badge-chat">Commands</span>
+<div class="card-title">Typed Corrections & Commands</div>
+<div class="card-sub">Chat command parsing</div>
+<div class="row"><div class="dot g"></div><span class="row-text">TYPE RULES bug fixed — corrections now case_update not "general"</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Differentials apply independently from primary diagnosis</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">Need re-test — was "Noted — thank you" without applying change before fix</span></div>
+</div>
+
+<div class="card">
+<span class="section-badge badge-chat">Save</span>
+<div class="card-title">Save Button</div>
+<div class="card-sub">Case persistence</div>
+<div class="row"><div class="dot r"></div><span class="row-text">Save button not working — tap does nothing</span></div>
+<div class="row"><div class="dot r"></div><span class="row-text">Fix: wire to PUT /api/proxy/cases/:caseId</span></div>
+<div class="row"><div class="dot r"></div><span class="row-text">New cases: POST first, then PUT</span></div>
+</div>
+
+<div class="card">
+<span class="section-badge badge-chat">Addendum</span>
+<div class="card-title">Clinical Timeline / Addenda</div>
+<div class="card-sub">Long-stay patients</div>
+<div class="row"><div class="dot g"></div><span class="row-text">case_addenda table created in DB</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Addendum routes built (/api/addenda)</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Second dictation creates timestamped addendum (not new case note)</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Addendum types: clinical_update, investigation_result, consultant_review, cross_consultation, shift_handover, procedure_note, correction</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">Timeline UI built but visual audit needed — colour coding per type</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">canAddAddendum gating — may enable too early for empty cases</span></div>
+<div class="row"><div class="dot b"></div><span class="row-text">Handover addendum auto-written on shift change — spec written, partial build</span></div>
+</div>
+
+<div class="card">
+<span class="section-badge badge-chat">Discharge</span>
+<div class="card-title">Discharge Summary in Chat</div>
+<div class="card-sub">All 6 sections</div>
+<div class="row"><div class="dot g"></div><span class="row-text">Discharge summary triggered by "discharge summary" command</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Copy all + Export PDF buttons present</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Legal disclaimer included</span></div>
+<div class="row"><div class="dot r"></div><span class="row-text">Shows only DISCHARGE INFORMATION + SIGNATURES — missing sections 1–4</span></div>
+<div class="row"><div class="dot r"></div><span class="row-text">Presenting Complaint shows "Not documented" — data not flowing from case</span></div>
+<div class="row"><div class="dot r"></div><span class="row-text">Course in Hospital shows generic placeholder — not reading from addenda</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">ED Resident shows HOD name — should show documenting doctor</span></div>
+</div>
+
+<div class="card">
+<span class="section-badge badge-chat">Feedback</span>
+<div class="card-title">👍 👎 Feedback & Learning</div>
+<div class="card-sub">AI improvement loop</div>
+<div class="row"><div class="dot g"></div><span class="row-text">👍 👎 appears after every document</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">👎 → inline text box for correction</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">user_feedback stored in local PostgreSQL</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">Correction applied to case — needs re-test after TYPE RULES fix</span></div>
+</div>
+
+</div>
+</div>
+
+<!-- ══ ADULT CASE SHEET ════════════════════════════════════════════════════ -->
+<div class="section">
+<div class="section-title">🏥 Adult Case Sheet — 7 Tabs</div>
+<div class="grid">
+
+<div class="card">
+<span class="section-badge badge-case">Tab 1</span>
+<div class="card-title">Patient Tab</div>
+<div class="card-sub">Demographics + Vitals</div>
+<div class="row"><div class="dot g"></div><span class="row-text">Name, age, sex, priority from dictation</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Vitals: HR, BP, SpO2, RR, Temp, GCS, GRBS, Pain score</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">MLC toggle + details</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">Priority not inferred from clinical context (NSTEMI → P1, not P4)</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">GCS components E+V+M — extraction improved, needs re-test</span></div>
+</div>
+
+<div class="card">
+<span class="section-badge badge-case">Tab 2</span>
+<div class="card-title">History Tab (SAMPLE)</div>
+<div class="card-sub">Full history framework</div>
+<div class="row"><div class="dot g"></div><span class="row-text">Signs & Symptoms, Allergies (default NKDA)</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Medications — Indian brand names mapped (Ecosprin, Brilinta, OHG)</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Past medical + surgical history</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Last meal, Events/HOPI</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Family + social history</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">LMP for female patients</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Psychological: Suicidal ideation, self-harm, substance abuse, psychiatric history toggles</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">Chief complaint: "presented with complaint of X" pattern fix deployed — needs re-test</span></div>
+</div>
+
+<div class="card">
+<span class="section-badge badge-case">Tab 3</span>
+<div class="card-title">Primary Survey (ABCDE)</div>
+<div class="card-sub">ATLS framework + adjuncts</div>
+<div class="row"><div class="dot g"></div><span class="row-text">A: Airway — Normal/Abnormal toggle + chips (Position, Patency, Cause)</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">B: Breathing — RR, SpO2, Effort chip, O2 Device chip</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">C: Circulation — HR, BP, CRT chip, Rhythm chip, IV Access chip</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">D: Disability — GCS E/V/M, GRBS, Pupil chip</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">E: Exposure — Temp, Pain score, Findings chip</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">ECG: interpretation chip (STEMI, NSTEMI, AF, NSR etc)</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">ABG/VBG: pH, pCO2, pO2, HCO3, BE, Lactate, SaO2, FiO2, Na, K, Cl, AG, Glucose, Hb, A-a</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">EFAST + Bedside Echo</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">Normal/Abnormal toggle auto-set from dictation — deployed, needs test</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">Chip auto-selection (effort, O2 device, rhythm) — deployed, needs test</span></div>
+</div>
+
+<div class="card">
+<span class="section-badge badge-case">Tab 4</span>
+<div class="card-title">Examination Tab</div>
+<div class="card-sub">System-by-system</div>
+<div class="row"><div class="dot g"></div><span class="row-text">General: Pallor, Icterus, Cyanosis, Clubbing, Lymphadenopathy, Edema toggles</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Mark All Examination Normal button</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">CVS, Respiratory, Abdomen, CNS, Extremities structured fields</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">Structured toggles from dictation — pallor/icterus/cyanosis auto-set deployed, needs test</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">CVS sub-fields: S1S2, murmurs, pulse — partial extraction</span></div>
+</div>
+
+<div class="card">
+<span class="section-badge badge-case">Tab 5</span>
+<div class="card-title">Treatment Tab</div>
+<div class="card-sub">All ER interventions</div>
+<div class="row"><div class="dot g"></div><span class="row-text">Medications: Drug, Dose, Route, Frequency array</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Infusions/IV Fluids: Drug, Dose, Dilution, Rate</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Labs ordered + Imaging</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Primary Diagnosis + Differentials</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">ErMate Decision Support (PubMed citations)</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">Results Summary — partial extraction</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">Procedures checkboxes — CPR, ETT, LMA, Central Line etc — auto-check from dictation deployed, needs test</span></div>
+</div>
+
+<div class="card">
+<span class="section-badge badge-case">Tab 6</span>
+<div class="card-title">Notes Tab</div>
+<div class="card-sub">Clinical notes + addenda</div>
+<div class="row"><div class="dot g"></div><span class="row-text">Free text clinical notes</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Addendum Notes — timestamped</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">Addendum from dictation going to wrong field — fix deployed, needs test</span></div>
+</div>
+
+<div class="card">
+<span class="section-badge badge-case">Tab 7</span>
+<div class="card-title">Disposition Tab</div>
+<div class="card-sub">Diagnosis + outcome</div>
+<div class="row"><div class="dot g"></div><span class="row-text">Disposition type chips: Discharge/Admit/Refer/LAMA/Absconded/Death</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">ER Observation Notes, Duration in ER</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">EM Resident + EM Consultant (auto-filled)</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Generate Discharge Summary button</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">Disposition type auto-set from dictation — deployed, needs test</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">Admit To field — partial extraction</span></div>
+</div>
+
+</div>
+</div>
+
+<!-- ══ PAEDIATRIC CASE SHEET ═══════════════════════════════════════════════ -->
+<div class="section">
+<div class="section-title">👶 Paediatric Case Sheet (PALS)</div>
+<div class="grid">
+
+<div class="card">
+<span class="section-badge badge-case">Paeds</span>
+<div class="card-title">Patient Tab (Paediatric)</div>
+<div class="card-sub">Additional: Weight field</div>
+<div class="row"><div class="dot g"></div><span class="row-text">All adult fields present</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Weight (kg) field — required for drug calculator</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">Age-appropriate vital ranges (HR varies by age group) — flagging may use adult ranges</span></div>
+</div>
+
+<div class="card">
+<span class="section-badge badge-case">Paeds</span>
+<div class="card-title">History (Paediatric-specific)</div>
+<div class="card-sub">Additional fields</div>
+<div class="row"><div class="dot g"></div><span class="row-text">Immunisation history</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Birth history, feeding history</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Developmental history</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">Extraction from dictation — paediatric history fields partially mapped</span></div>
+</div>
+
+<div class="card">
+<span class="section-badge badge-case">Paeds</span>
+<div class="card-title">Primary Survey (Paediatric)</div>
+<div class="card-sub">PAT + PALS ABCDE</div>
+<div class="row"><div class="dot g"></div><span class="row-text">PAT: Tone, Interactivity, Consolability, Look/Gaze, Speech/Cry</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">PAT: Work of Breathing, Circulation to Skin</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">A: Cry, Status, Intervention</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">B: WOB chips, Positioning, Air Entry, Subcutaneous Emphysema</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">C: CRT, Skin Color, Distended Neck Veins</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">D: AVPU/GCS, Pupils, GRBS</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">E: Signs chips (Rashes, Petechiae, Burns etc)</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">EFAST: Heart, Abdomen, Lungs</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">ABG: Full panel + Electrolytes (Na, K, Cl, AG, Glucose, Hb, A-a)</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Interpret ABG button — AI interpretation</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">PAT chip auto-selection from dictation — deployed, needs test</span></div>
+</div>
+
+<div class="card">
+<span class="section-badge badge-case">Paeds</span>
+<div class="card-title">Examination (Paediatric)</div>
+<div class="card-sub">Focused Physical Exam</div>
+<div class="row"><div class="dot g"></div><span class="row-text">HEENT (Head Eyes Ears Nose Throat)</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Respiratory, Cardiovascular, Abdomen</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Back section (extra vs adult)</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Extremities</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">HEENT extraction from dictation — partial</span></div>
+</div>
+
+<div class="card">
+<span class="section-badge badge-case">Paeds</span>
+<div class="card-title">Treatment (Paediatric)</div>
+<div class="card-sub">Weight-based formulary</div>
+<div class="row"><div class="dot g"></div><span class="row-text">Pediatric Formulary — Add Drug button</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Drug Calculator — weight-based dosing</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Infusions/IV Fluids</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Primary Diagnosis + Differentials</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">Weight-based drug extraction — calculatedDose not auto-populated</span></div>
+</div>
+
+<div class="card">
+<span class="section-badge badge-case">Paeds</span>
+<div class="card-title">Disposition (Paediatric)</div>
+<div class="card-sub">Extra: Condition at shift</div>
+<div class="row"><div class="dot g"></div><span class="row-text">Same disposition types as adult</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Condition at Time of Shift: Stable / Unstable (extra vs adult)</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">EM Resident + EM Consultant</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">Condition at shift auto-set from dictation — needs test</span></div>
+</div>
+
+</div>
+</div>
+
+<!-- ══ DISCHARGE SUMMARY ════════════════════════════════════════════════════ -->
+<div class="section">
+<div class="section-title">📄 Discharge Summary</div>
+<div class="grid">
+
+<div class="card">
+<span class="section-badge badge-case">Section 1</span>
+<div class="card-title">Patient Information & Arrival</div>
+<div class="card-sub">Pre-fills from case sheet</div>
+<div class="row"><div class="dot g"></div><span class="row-text">Patient name, age, sex, MLC status</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Allergies auto-filled</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Vitals at time of arrival auto-filled</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">Presenting Complaints still "Not documented" — GPT-4o fix deployed</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">HPI "Detailed history..." placeholder — not populating</span></div>
+</div>
+
+<div class="card">
+<span class="section-badge badge-case">Section 2</span>
+<div class="card-title">Primary Assessment (ABCDE)</div>
+<div class="card-sub">Pre-fills from Tab 3</div>
+<div class="row"><div class="dot g"></div><span class="row-text">Airway: "Patent, self-maintained, no obstruction" ✓</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Breathing: "Effortless, bilateral air entry" ✓</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Circulation: "Regular pulse, CRT &lt;2s, warm" ✓</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Disability: "GCS 15/15, Alert, PERL" ✓</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Exposure: "No external injuries" ✓</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">EFAST field present</span></div>
+</div>
+
+<div class="card">
+<span class="section-badge badge-case">Section 3</span>
+<div class="card-title">Secondary Assessment</div>
+<div class="card-sub">Pre-fills from Tab 4</div>
+<div class="row"><div class="dot g"></div><span class="row-text">General exam toggles (Pallor, Icterus etc) pre-filled</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">CHEST, CVS, P/A, CNS, EXTREMITIES all pre-filled from exam tab</span></div>
+</div>
+
+<div class="card">
+<span class="section-badge badge-case">Section 4</span>
+<div class="card-title">Hospital Course & Treatment</div>
+<div class="card-sub">AI narrative — critical section</div>
+<div class="row"><div class="dot g"></div><span class="row-text">AI reads full case sheet and generates narrative</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Regenerate Course button working</span></div>
+<div class="row"><div class="dot r"></div><span class="row-text">Shows "unspecified complaint" — chiefComplaint not passed to prompt</span></div>
+<div class="row"><div class="dot r"></div><span class="row-text">Does NOT read from addenda — long-stay patients missing 48h of clinical events</span></div>
+<div class="row"><div class="dot r"></div><span class="row-text">Diagnosis shows "Primary diagnosis" placeholder — not auto-filled</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">discharge-from-timeline endpoint built — partially wired</span></div>
+</div>
+
+<div class="card">
+<span class="section-badge badge-case">Section 5</span>
+<div class="card-title">Discharge Information</div>
+<div class="card-sub">Outcome + medications</div>
+<div class="row"><div class="dot g"></div><span class="row-text">Normal Discharge / Discharge at Request / DAMA / Referred chips</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Condition at discharge: STABLE / UNSTABLE</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Vitals at time of discharge fields</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Follow-up advice field</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">Discharge medications — not auto-populated from treatment tab</span></div>
+</div>
+
+<div class="card">
+<span class="section-badge badge-case">Section 6</span>
+<div class="card-title">Signatures & Documentation</div>
+<div class="card-sub">Legal + sign-off</div>
+<div class="row"><div class="dot g"></div><span class="row-text">Date auto-filled</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Legal disclaimer present</span></div>
+<div class="row"><div class="dot r"></div><span class="row-text">ED Resident shows HOD name (Neeraj) — should show documenting doctor</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">ED Consultant blank — should auto-fill from shift consultant</span></div>
+</div>
+
+<div class="card">
+<span class="section-badge badge-case">Smart Dictation</span>
+<div class="card-title">Dictation on Discharge Summary</div>
+<div class="card-sub">Vibe Dictation button</div>
+<div class="row"><div class="dot g"></div><span class="row-text">Vibe Dictation button at top of discharge summary screen</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">All sections map from dictation to discharge fields</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Course in Hospital auto-triggered if field &lt;100 chars</span></div>
+</div>
+
+</div>
+</div>
+
+<!-- ══ TEAM FEATURES ════════════════════════════════════════════════════════ -->
+<div class="section">
+<div class="section-title">👥 Team & Shift Features</div>
+<div class="grid">
+
+<div class="card">
+<span class="section-badge badge-team">Department</span>
+<div class="card-title">Department Setup (HOD)</div>
+<div class="card-sub">Create + invite</div>
+<div class="row"><div class="dot g"></div><span class="row-text">HOD creates department — name, hospital, shifts</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Invite link generated</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Doctor joins → role select → HOD approves</span></div>
+<div class="row"><div class="dot r"></div><span class="row-text">Invite link shows er-mate.replit.app — needs APP_URL=ermate.in in Secrets</span></div>
+</div>
+
+<div class="card">
+<span class="section-badge badge-team">Shift</span>
+<div class="card-title">Shift Check-In</div>
+<div class="card-sub">Shift session management</div>
+<div class="row"><div class="dot g"></div><span class="row-text">Shift selection modal appears at shift window</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Doctor checks in → appears in HOD dashboard</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Shift banner on dashboard</span></div>
+<div class="row"><div class="dot r"></div><span class="row-text">End Shift button not working — route not responding</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">Slot count shows 0/6 total — should show 0/2 consultants · 0/4 residents</span></div>
+</div>
+
+<div class="card">
+<span class="section-badge badge-team">Visibility</span>
+<div class="card-title">Case Visibility by Role</div>
+<div class="card-sub">Role-based filtering</div>
+<div class="row"><div class="dot g"></div><span class="row-text">Resident → own cases only ✓</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Consultant → all shift cases (endpoint built)</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">HOD → all cases all shifts (endpoint built)</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">Cases tab not showing consultant shift cases — frontend not wired to role endpoint</span></div>
+<div class="row"><div class="dot r"></div><span class="row-text">All cases show "Unknown" — doctorName not attached on creation</span></div>
+</div>
+
+<div class="card">
+<span class="section-badge badge-team">HOD</span>
+<div class="card-title">HOD Dashboard</div>
+<div class="card-sub">Shift overview</div>
+<div class="row"><div class="dot g"></div><span class="row-text">Live check-ins showing all on-shift doctors</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Shift overview: consultant + resident counts</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Active members list with On Shift / Assign status</span></div>
+<div class="row"><div class="dot b"></div><span class="row-text">Cases grouped by doctor — all-shift-cases endpoint built but not wired to HOD dashboard screen</span></div>
+<div class="row"><div class="dot b"></div><span class="row-text">Date filter (prev/next day) — not built</span></div>
+<div class="row"><div class="dot b"></div><span class="row-text">Tap HOD case → open full case — not built</span></div>
+</div>
+
+<div class="card">
+<span class="section-badge badge-team">Rota</span>
+<div class="card-title">Rota System</div>
+<div class="card-sub">Monthly scheduling</div>
+<div class="row"><div class="dot g"></div><span class="row-text">Design built (RotaSystem.jsx) — HOD week grid + doctor self-claim</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">rota_assignments table schema defined</span></div>
+<div class="row"><div class="dot b"></div><span class="row-text">Not integrated into app — design only</span></div>
+<div class="row"><div class="dot b"></div><span class="row-text">Monthly view not built</span></div>
+<div class="row"><div class="dot b"></div><span class="row-text">Auto-check-in from rota not built</span></div>
+</div>
+
+<div class="card">
+<span class="section-badge badge-team">Handover</span>
+<div class="card-title">Handover Sheet</div>
+<div class="card-sub">Shift-change documentation</div>
+<div class="row"><div class="dot g"></div><span class="row-text">Handover sheet screen exists</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Select cases + add pending notes</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Export PDF — landscape A4</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">Handover addendum auto-created on shift change — partial build</span></div>
+<div class="row"><div class="dot b"></div><span class="row-text">Full timeline view in printout — clinical events, investigations, consultations per patient</span></div>
+</div>
+
+<div class="card">
+<span class="section-badge badge-team">Auto</span>
+<div class="card-title">Auto-Logout After Shift</div>
+<div class="card-sub">30-min grace period</div>
+<div class="row"><div class="dot b"></div><span class="row-text">Not built — spec written (client-side polling every 60s)</span></div>
+<div class="row"><div class="dot b"></div><span class="row-text">5-min warning banner — not built</span></div>
+</div>
+
+<div class="card">
+<span class="section-badge badge-team">Force</span>
+<div class="card-title">Force Logout by Consultant</div>
+<div class="card-sub">Shift management</div>
+<div class="row"><div class="dot b"></div><span class="row-text">HOD can force-end — button present but route not confirmed</span></div>
+<div class="row"><div class="dot b"></div><span class="row-text">Consultant force-logout of residents — not built</span></div>
+</div>
+
+</div>
+</div>
+
+<!-- ══ LONG-STAY PATIENTS ════════════════════════════════════════════════════ -->
+<div class="section">
+<div class="section-title">⏳ Long-Stay Patient Clinical Timeline</div>
+<div class="grid">
+
+<div class="card">
+<span class="section-badge badge-chat">Timeline</span>
+<div class="card-title">Initial Case Note — Locked</div>
+<div class="card-sub">Medico-legal requirement</div>
+<div class="row"><div class="dot g"></div><span class="row-text">First note created on dictation</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">Locking mechanism — initial note should be immutable after creation</span></div>
+</div>
+
+<div class="card">
+<span class="section-badge badge-chat">Timeline</span>
+<div class="card-title">Addendum Types</div>
+<div class="card-sub">Typed, timestamped entries</div>
+<div class="row"><div class="dot g"></div><span class="row-text">clinical_update — doctor adds findings</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">investigation_result — lab/imaging result</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">consultant_review — senior reviews case</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">cross_consultation — another specialty</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">medication_change — drug added/changed</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">procedure_note — procedure performed</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">shift_handover — shift change entry</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">correction — corrects earlier entry</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">Colour coding per type — visual audit needed</span></div>
+</div>
+
+<div class="card">
+<span class="section-badge badge-chat">Timeline</span>
+<div class="card-title">Course in Hospital (Discharge)</div>
+<div class="card-sub">Reads full 48h timeline</div>
+<div class="row"><div class="dot g"></div><span class="row-text">discharge-from-timeline endpoint built</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">Reads initial note + all addenda — partial wiring</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text">Includes consultations, investigations, procedures in narrative</span></div>
+<div class="row"><div class="dot r"></div><span class="row-text">Does not include total ER duration in narrative</span></div>
+<div class="row"><div class="dot r"></div><span class="row-text">Handover entries not included in Course narrative</span></div>
+</div>
+
+</div>
+</div>
+
+<!-- ══ LEARN SECTION ════════════════════════════════════════════════════════ -->
+<div class="section">
+<div class="section-title">🎓 Learn Section</div>
+<div class="grid">
+
+<div class="card">
+<span class="section-badge badge-learn">Learn</span>
+<div class="card-title">Rounds — 7 Lenses</div>
+<div class="row"><div class="dot g"></div><span class="row-text">First Principles, Devil's Advocate, Pathophysiology, Rare but Real, Guidelines, Disease Snapshot, Full Debrief</span></div>
+<div class="row"><div class="dot g"></div><span class="row-text">Works on Free plan</span></div>
+</div>
+<div class="card">
+<span class="section-badge badge-learn">Learn</span>
+<div class="card-title">EM Reference Library</div>
+<div class="row"><div class="dot g"></div><span class="row-text">GPT-4o + PubMed citations</span></div>
+</div>
+<div class="card">
+<span class="section-badge badge-learn">Learn</span>
+<div class="card-title">Simulation + Trivia</div>
+<div class="row"><div class="dot g"></div><span class="row-text">Both built and working</span></div>
+</div>
+<div class="card">
+<span class="section-badge badge-learn">Learn</span>
+<div class="card-title">Clinical Memory</div>
+<div class="row"><div class="dot g"></div><span class="row-text">Private per doctor — HOD cannot see</span></div>
+</div>
+</div>
+</div>
+
+<!-- ══ PRIORITY FIXES ════════════════════════════════════════════════════════ -->
+<div class="section">
+<div class="section-title">🚨 Priority Fix List</div>
+<div class="grid">
+
+<div class="card" style="border-color:#DC2626;border-width:1.5px">
+<div class="card-title" style="color:#DC2626">🔴 Critical — Fix Today</div>
+<div class="card-sub">Blocking doctors from using the app</div>
+<div class="row"><div class="dot r"></div><span class="row-text"><b>1.</b> doctorName attached to case on creation — all cases show "Unknown"</span></div>
+<div class="row"><div class="dot r"></div><span class="row-text"><b>2.</b> Save button not working in CaseChatScreen</span></div>
+<div class="row"><div class="dot r"></div><span class="row-text"><b>3.</b> ED Resident shows HOD name in discharge summary — should show documenting doctor</span></div>
+<div class="row"><div class="dot r"></div><span class="row-text"><b>4.</b> Discharge summary sections 1–4 missing in chat output</span></div>
+<div class="row"><div class="dot r"></div><span class="row-text"><b>5.</b> End Shift button not responding</span></div>
+<div class="row"><div class="dot r"></div><span class="row-text"><b>6.</b> Invite link shows replit.app URL — set APP_URL=https://ermate.in</span></div>
+</div>
+
+<div class="card" style="border-color:#D97706;border-width:1.5px">
+<div class="card-title" style="color:#D97706">🟡 This Week</div>
+<div class="card-sub">Important for clinical quality</div>
+<div class="row"><div class="dot a"></div><span class="row-text"><b>7.</b> Chief complaint extraction — re-test after pattern fix</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text"><b>8.</b> HPI as clinical narrative paragraph (not placeholder)</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text"><b>9.</b> Priority auto-inferred (NSTEMI → P1 not P4)</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text"><b>10.</b> Display shows full case note (same as Copy All)</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text"><b>11.</b> "Not captured" banner — only truly missing fields</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text"><b>12.</b> Time format "12:37 pmPM" → "12:37 PM"</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text"><b>13.</b> Consultant cases tab — role-based filtering wired to frontend</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text"><b>14.</b> Course in Hospital reads from addenda (long-stay)</span></div>
+<div class="row"><div class="dot a"></div><span class="row-text"><b>15.</b> Slot count: 0/6 → 0/2 consultants · 0/4 residents</span></div>
+</div>
+
+<div class="card" style="border-color:#6366F1;border-width:1.5px">
+<div class="card-title" style="color:#6366F1">🔵 Next Sprint</div>
+<div class="card-sub">Features to build</div>
+<div class="row"><div class="dot b"></div><span class="row-text"><b>16.</b> Rota system — integrate design into app</span></div>
+<div class="row"><div class="dot b"></div><span class="row-text"><b>17.</b> HOD cases grouped by doctor with date filter</span></div>
+<div class="row"><div class="dot b"></div><span class="row-text"><b>18.</b> Auto-logout after shift + 30 min grace</span></div>
+<div class="row"><div class="dot b"></div><span class="row-text"><b>19.</b> Force logout by consultant (residents only)</span></div>
+<div class="row"><div class="dot b"></div><span class="row-text"><b>20.</b> Set Password in Profile (Google users)</span></div>
+<div class="row"><div class="dot b"></div><span class="row-text"><b>21.</b> Handover PDF — full clinical timeline per patient</span></div>
+<div class="row"><div class="dot b"></div><span class="row-text"><b>22.</b> Play Store submission (after SHA-1 fix)</span></div>
+</div>
+
+</div>
+</div>
+
+<!-- Footer -->
+<div style="text-align:center;padding:24px 0;font-size:12px;color:#8FBEA0;border-top:1px solid #D4E8DC;margin-top:32px">
+  ErMate · Varah Group · ermate.in · support@ermate.app<br>
+  <em>You became a doctor to save lives. Not to fill forms.</em>
+</div>
+
+</body>
+</html>

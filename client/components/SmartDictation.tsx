@@ -16,6 +16,7 @@ import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/useTheme';
+import { useAuth } from '@/context/AuthContext';
 import { getApiUrl } from '@/lib/query-client';
 import { Spacing, BorderRadius, TriageColors } from '@/constants/theme';
 
@@ -93,7 +94,6 @@ export interface SmartDictationExtracted {
   };
   investigationsOrdered?: string;
   imagingOrdered?: string;
-  abgSummary?: string;
   primarySurveyText?: string;
   rawTranscription?: string;
   fieldsPopulated?: string[];
@@ -396,6 +396,7 @@ export default function SmartDictation({
   mode = 'casesheet',
 }: SmartDictationProps) {
   const { theme } = useTheme();
+  const { user } = useAuth();
   const [step, setStep] = useState<FlowStep>('idle');
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [recordingUri, setRecordingUri] = useState<string | null>(null);
@@ -672,11 +673,18 @@ export default function SmartDictation({
         body: JSON.stringify({
           transcript: englishText,
           patientContext,
+          userId: user?.id,
+          userEmail: user?.email,
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        if (response.status === 402) {
+          Alert.alert('Out of AI credits', errorData.error || "You're out of AI credits. Buy a credit pack or upgrade your plan to keep using Smart Dictation.");
+          setStep('transcript_ready');
+          return;
+        }
         throw new Error(errorData.error || 'Extraction failed');
       }
 

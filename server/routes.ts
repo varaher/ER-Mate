@@ -2963,15 +2963,24 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
   app.post("/api/ai/scan-abg", async (req: Request, res: Response) => {
     try {
-      const { imageBase64, userId } = req.body;
-      
+      const { imageBase64, userId, userEmail } = req.body;
+
       if (!imageBase64) {
         return res.status(400).json({ error: "Image data is required" });
       }
+      if (!userId) return res.status(401).json({ error: "userId is required" });
+
+      const { canUseAiCredit, deductAiCredit } = await import("./services/subscription");
+      const credit = await canUseAiCredit(userId, userEmail || "");
+      if (!credit.allowed) {
+        return res.status(402).json({ error: "You're out of AI credits. Buy a credit pack or upgrade your plan to keep scanning documents.", aiCredits: credit.aiCredits });
+      }
+
       const { extractABGFromImage } = await import("./services/aiDiagnosis");
       const abgValues = await extractABGFromImage(imageBase64);
-      
-      res.json({ abgValues });
+
+      const { aiCredits } = await deductAiCredit(userId, userEmail || "");
+      res.json({ abgValues, aiCredits });
     } catch (error) {
       console.error("ABG scan error:", error);
       res.status(500).json({ error: "Failed to extract ABG values from image" });
@@ -2980,15 +2989,24 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
   app.post("/api/ai/extract-from-image", async (req: Request, res: Response) => {
     try {
-      const { imageBase64, patientContext, userId } = req.body;
-      
+      const { imageBase64, patientContext, userId, userEmail } = req.body;
+
       if (!imageBase64) {
         return res.status(400).json({ error: "Image data is required" });
       }
+      if (!userId) return res.status(401).json({ error: "userId is required" });
+
+      const { canUseAiCredit, deductAiCredit } = await import("./services/subscription");
+      const credit = await canUseAiCredit(userId, userEmail || "");
+      if (!credit.allowed) {
+        return res.status(402).json({ error: "You're out of AI credits. Buy a credit pack or upgrade your plan to keep scanning documents.", aiCredits: credit.aiCredits });
+      }
+
       const { extractClinicalDataFromImage } = await import("./services/aiDiagnosis");
       const extractedData = await extractClinicalDataFromImage(imageBase64, patientContext);
-      
-      res.json({ extractedData });
+
+      const { aiCredits } = await deductAiCredit(userId, userEmail || "");
+      res.json({ extractedData, aiCredits });
     } catch (error) {
       console.error("Image extraction error:", error);
       res.status(500).json({ error: "Failed to extract data from image" });
@@ -2997,10 +3015,17 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
   app.post("/api/ai/diagnose", async (req: Request, res: Response) => {
     try {
-      const { chiefComplaint, vitals, history, examination, age, gender, abgData, treatmentData, userId } = req.body;
-      
+      const { chiefComplaint, vitals, history, examination, age, gender, abgData, treatmentData, userId, userEmail } = req.body;
+
       if (!chiefComplaint) {
         return res.status(400).json({ error: "Chief complaint is required" });
+      }
+      if (!userId) return res.status(401).json({ error: "userId is required" });
+
+      const { canUseAiCredit, deductAiCredit } = await import("./services/subscription");
+      const credit = await canUseAiCredit(userId, userEmail || "");
+      if (!credit.allowed) {
+        return res.status(402).json({ error: "You're out of AI credits. Buy a credit pack or upgrade your plan to keep using Clinical Decision Support.", aiCredits: credit.aiCredits });
       }
       let enhancedHistory = history || "";
       if (treatmentData) {
@@ -3028,7 +3053,8 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         abgData: abgData || undefined,
       });
 
-      res.json(result);
+      const { aiCredits } = await deductAiCredit(userId, userEmail || "");
+      res.json({ ...result, aiCredits });
     } catch (error) {
       console.error("AI diagnosis error:", error);
       res.status(500).json({ error: "Failed to generate diagnosis suggestions" });
@@ -3467,6 +3493,19 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
   app.post("/api/voice/smart-dictation", upload.single('audio'), async (req: Request, res: Response) => {
     try {
+      const authHeader = req.headers.authorization;
+      const token = authHeader?.split(" ")[1];
+      const jwtPayload = token ? decodeJwt(token) : null;
+      const userId = jwtPayload?.sub || jwtPayload?.id || jwtPayload?.user_id || jwtPayload?.email;
+      const userEmail = jwtPayload?.email || "";
+      if (!userId) return res.status(401).json({ error: "No auth token" });
+
+      const { canUseAiCredit, deductAiCredit } = await import("./services/subscription");
+      const credit = await canUseAiCredit(userId, userEmail);
+      if (!credit.allowed) {
+        return res.status(402).json({ error: "You're out of AI credits. Buy a credit pack or upgrade your plan to keep using Smart Dictation.", aiCredits: credit.aiCredits });
+      }
+
       const file = req.file;
       console.log("[Smart Dictation] Request received, file:", file ? `${file.originalname} (${file.size} bytes, ${file.mimetype})` : "NO FILE", "body keys:", Object.keys(req.body));
       if (!file) {
@@ -3555,7 +3594,8 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       console.log("[SmartDictation] Extracting clinical data from transcript...");
       const extracted = await extractSmartDictation(transcript, patientContext);
 
-      res.json({ transcript, extracted });
+      const { aiCredits } = await deductAiCredit(userId, userEmail);
+      res.json({ transcript, extracted, aiCredits });
     } catch (error) {
       console.error("Smart dictation error:", error);
       res.status(500).json({ error: (error as Error).message || "Failed to process dictation" });
@@ -3953,9 +3993,16 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
   app.post("/api/voice/extract-clinical", async (req: Request, res: Response) => {
     try {
-      const { transcript, patientContext } = req.body;
+      const { transcript, patientContext, userId, userEmail } = req.body;
       if (!transcript || typeof transcript !== 'string' || !transcript.trim()) {
         return res.status(400).json({ error: "No transcript text provided" });
+      }
+      if (!userId) return res.status(401).json({ error: "userId is required" });
+
+      const { canUseAiCredit, deductAiCredit } = await import("./services/subscription");
+      const credit = await canUseAiCredit(userId, userEmail || "");
+      if (!credit.allowed) {
+        return res.status(402).json({ error: "You're out of AI credits. Buy a credit pack or upgrade your plan to keep using Smart Dictation.", aiCredits: credit.aiCredits });
       }
 
       console.log("[ExtractClinical] Processing transcript, length:", transcript.length);
@@ -3971,7 +4018,8 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         timeout,
       ]);
 
-      res.json({ success: true, extracted });
+      const { aiCredits } = await deductAiCredit(userId, userEmail || "");
+      res.json({ success: true, extracted, aiCredits });
     } catch (error) {
       console.error("Clinical extraction error:", error);
       res.status(500).json({ error: (error as Error).message || "Failed to extract clinical data" });
@@ -4583,6 +4631,13 @@ Always use the conversation history for context. Keep replies SHORT (1–2 sente
       }
 
       const scanUserId = req.body.userId as string | undefined;
+      if (!scanUserId) return res.status(401).json({ error: "userId is required" });
+
+      const { canUseAiCredit, deductAiCredit } = await import("./services/subscription");
+      const scanCredit = await canUseAiCredit(scanUserId, "");
+      if (!scanCredit.allowed) {
+        return res.status(402).json({ error: "You're out of AI credits. Buy a credit pack or upgrade your plan to keep scanning documents.", aiCredits: scanCredit.aiCredits });
+      }
 
       let patientContext;
       if (req.body.patientContext) {
@@ -4677,10 +4732,12 @@ Always use the conversation history for context. Keep replies SHORT (1–2 sente
         }
       }
 
+      const { aiCredits: scanAiCredits } = await deductAiCredit(scanUserId, "");
       res.json({
         success: true,
         text: parsedText,
         structured,
+        aiCredits: scanAiCredits,
       });
     } catch (error) {
       console.error("Document scan error:", error);
@@ -5221,8 +5278,17 @@ Always use the conversation history for context. Keep replies SHORT (1–2 sente
       if (!messages || !Array.isArray(messages) || messages.length === 0) {
         return res.status(400).json({ error: "messages array is required" });
       }
+      if (!userId) return res.status(401).json({ error: "userId is required" });
+
+      const { canUseAiCredit, deductAiCredit } = await import("./services/subscription");
+      const credit = await canUseAiCredit(userId, "");
+      if (!credit.allowed) {
+        return res.status(402).json({ error: "You're out of AI credits. Buy a credit pack or upgrade your plan to keep using the EM Reference chat.", aiCredits: credit.aiCredits });
+      }
+
       const response = await getEMReferenceResponse(messages, topic);
-      res.json({ response });
+      const { aiCredits } = await deductAiCredit(userId, "");
+      res.json({ response, aiCredits });
     } catch (error) {
       console.error("[EMReference] Chat error:", error);
       res.status(500).json({ error: "Failed to generate response" });
@@ -5380,6 +5446,12 @@ Always use the conversation history for context. Keep replies SHORT (1–2 sente
         if (mins > 0) erDuration = mins >= 60 ? `${Math.floor(mins/60)}h ${mins%60}m` : `${mins} minutes`;
       }
 
+      const { canUseAiCredit, deductAiCredit } = await import("./services/subscription");
+      const credit = await canUseAiCredit(userId, "");
+      if (!credit.allowed) {
+        return res.status(402).json({ error: "You're out of AI credits. Buy a credit pack or upgrade your plan to keep generating AI discharge summaries.", aiCredits: credit.aiCredits });
+      }
+
       const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
       const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
       if (!apiKey) return res.status(503).json({ error: "AI unavailable" });
@@ -5419,7 +5491,8 @@ Always use the conversation history for context. Keep replies SHORT (1–2 sente
         temperature: 0.3,
       });
       const summary = completion.choices[0]?.message?.content?.trim() || "";
-      return res.json({ summary });
+      const { aiCredits } = await deductAiCredit(userId, "");
+      return res.json({ summary, aiCredits });
     } catch (err: any) {
       console.error("[discharge-from-timeline]", err);
       return res.status(500).json({ error: err.message });

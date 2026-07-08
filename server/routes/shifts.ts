@@ -48,6 +48,14 @@ export function registerShiftRoutes(app: Express) {
     if (!db) return res.status(503).json({ error: "DB unavailable" });
     try {
       const departmentId = parseInt(req.params.departmentId);
+      const myMem = await db
+        .select()
+        .from(departmentMembers)
+        .where(and(eq(departmentMembers.userId, userId), eq(departmentMembers.departmentId, departmentId), eq(departmentMembers.status, "active")))
+        .limit(1);
+      if (!myMem.length) {
+        return res.status(403).json({ error: "Not a member of this department" });
+      }
       const deptShifts = await db.select().from(shifts).where(eq(shifts.departmentId, departmentId));
       const activeSessions = await db
         .select()
@@ -110,6 +118,14 @@ export function registerShiftRoutes(app: Express) {
       const shift = await db.select().from(shifts).where(eq(shifts.id, shiftId)).limit(1);
       if (!shift.length) return res.status(404).json({ error: "Shift not found" });
       const s = shift[0];
+      const myMem = await db
+        .select()
+        .from(departmentMembers)
+        .where(and(eq(departmentMembers.userId, userId), eq(departmentMembers.departmentId, s.departmentId), eq(departmentMembers.status, "active")))
+        .limit(1);
+      if (!myMem.length) {
+        return res.status(403).json({ error: "Not a member of this department" });
+      }
       const activeSessions = await db
         .select()
         .from(shiftSessions)

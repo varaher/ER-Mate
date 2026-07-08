@@ -17,6 +17,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Feather } from '@expo/vector-icons';
 import { getApiUrl } from '@/lib/query-client';
 import { SmartDictationExtracted } from './SmartDictation';
+import { renderMarkdown as renderMarkdownShared } from './MarkdownText';
 
 // ── Addendum types ─────────────────────────────────────────────────────────────
 export const ADDENDUM_TYPES = [
@@ -336,7 +337,16 @@ export function generateCaseNote(c: CaseData): string {
 const SEP = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
 function tog(val: boolean) { return val ? 'Present' : 'Absent'; }
 
-export function generateDischargeSummary(c: CaseData): string {
+export function computeErDurationLabel(erArrivalTime?: string): string {
+  if (!erArrivalTime) return 'Not recorded';
+  const arrivalMs = new Date(erArrivalTime).getTime();
+  if (Number.isNaN(arrivalMs)) return 'Not recorded';
+  const mins = Math.round((Date.now() - arrivalMs) / 60_000);
+  if (mins <= 0) return 'Not recorded';
+  return mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins} minutes`;
+}
+
+export function generateDischargeSummary(c: CaseData, erDurationLabel?: string): string {
   const L: string[] = [];
   const today = c.date || new Date().toLocaleDateString('en-IN');
 
@@ -505,6 +515,7 @@ export function generateDischargeSummary(c: CaseData): string {
   }
   // Condition at discharge — always shown (defaults to Stable if not documented)
   L.push(`Condition at Discharge: ${c.conditionAtDischarge ? c.conditionAtDischarge.toUpperCase() : 'STABLE'}`);
+  L.push(`Total ER Duration: ${erDurationLabel || 'Not recorded'}`);
   L.push('');
   // Advice / follow-up
   if (d.followUp || c.notes) {
@@ -2161,15 +2172,15 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
             }
           );
           const json = await resp.json();
-          const dsText = json?.summary || generateDischargeSummary(liveCase);
+          const dsText = json?.summary || generateDischargeSummary(liveCase, computeErDurationLabel(erArrivalTime));
           push({ role: 'assistant', content: 'AI-enhanced discharge summary assembled from the clinical timeline.', type: 'discharge_summary', specialContent: dsText });
         } catch {
-          push({ role: 'assistant', content: 'Discharge summary generated from your case data.', type: 'discharge_summary', specialContent: generateDischargeSummary(liveCase) });
+          push({ role: 'assistant', content: 'Discharge summary generated from your case data.', type: 'discharge_summary', specialContent: generateDischargeSummary(liveCase, computeErDurationLabel(erArrivalTime)) });
         } finally {
           setIsThinking(false);
         }
       } else {
-        const dsText = generateDischargeSummary(liveCase);
+        const dsText = generateDischargeSummary(liveCase, computeErDurationLabel(erArrivalTime));
         push({ role: 'assistant', content: 'Discharge summary generated from your case data.', type: 'discharge_summary', specialContent: dsText });
       }
       setHasDs(true);
@@ -2487,7 +2498,7 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
 
           if (msg.type === 'discharge_summary' && msg.specialContent) {
             // Prefer the AI timeline narrative stored in specialContent over the local generator
-            const dsText = msg.specialContent || (liveCase ? generateDischargeSummary(liveCase) : '');
+            const dsText = msg.specialContent || (liveCase ? generateDischargeSummary(liveCase, computeErDurationLabel(erArrivalTime)) : '');
             return (
               <React.Fragment key={msg.id}>
                 <ErMateResponse subtitle="Discharge summary generated from your case data.">
@@ -2609,7 +2620,15 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
           if (msg.content) {
             return (
               <ErMateResponse key={msg.id}>
-                <Text style={s.erTextMsg}>{msg.content}</Text>
+                <View>
+                  {renderMarkdownShared(msg.content, {
+                    text: C.ink,
+                    textSecondary: C.ink,
+                    primary: C.green,
+                    cardElevated: C.greenLight,
+                    borderLight: C.border,
+                  })}
+                </View>
               </ErMateResponse>
             );
           }

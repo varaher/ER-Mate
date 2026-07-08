@@ -1864,6 +1864,10 @@ export default function CaseSheetScreen() {
       });
 
       if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        if (response.status === 402) {
+          throw new Error(errData.error || "You're out of AI credits. Buy a credit pack or upgrade your plan to keep scanning ABG reports.");
+        }
         throw new Error("Failed to scan ABG");
       }
 
@@ -1890,7 +1894,7 @@ export default function CaseSheetScreen() {
       }
     } catch (error) {
       console.error("ABG scan error:", error);
-      Alert.alert("Error", "Failed to extract ABG values from image. Please try again or enter manually.");
+      Alert.alert("Error", (error as Error).message || "Failed to extract ABG values from image. Please try again or enter manually.");
     } finally {
       setAbgScanning(false);
     }
@@ -2373,6 +2377,49 @@ export default function CaseSheetScreen() {
         ...(mlc.informantBroughtBy ? { informantBroughtBy: mlc.informantBroughtBy } : {}),
       }));
     }
+    if (data.procedures) {
+      const p = data.procedures;
+      const toAdd: Record<keyof ProceduresData, string[]> = {
+        resuscitation: [], airway: [], vascular: [], chest: [], neuro: [], gu: [], gi: [], wound: [], ortho: [], generalNotes: [] as any,
+      };
+      if (p.resuscitation?.cpr) toAdd.resuscitation.push("CPR");
+      if (p.airway?.endotrachealIntubation) toAdd.airway.push("Endotracheal Intubation");
+      if (p.airway?.lmaInsertion) toAdd.airway.push("LMA Insertion");
+      if (p.airway?.cricothyrotomy) toAdd.airway.push("Cricothyrotomy");
+      if (p.airway?.bvmVentilation) toAdd.airway.push("Bag-Valve-Mask Ventilation");
+      if (p.airway?.niv) toAdd.airway.push("NIV (BiPAP/CPAP)");
+      if (p.vascular?.centralLine) toAdd.vascular.push("Central Line Insertion");
+      if (p.vascular?.peripheralIV) toAdd.vascular.push("Peripheral IV Access");
+      if (p.vascular?.intraosseousAccess) toAdd.vascular.push("Intraosseous Access");
+      if (p.vascular?.arterialLine) toAdd.vascular.push("Arterial Line");
+      if (p.chest?.chestTube) toAdd.chest.push("Chest Tube Insertion");
+      if (p.chest?.needleDecompression) toAdd.chest.push("Needle Decompression");
+      if (p.chest?.pericardiocentesis) toAdd.chest.push("Pericardiocentesis");
+      if (p.chest?.thoracentesis) toAdd.chest.push("Thoracentesis");
+      if (p.neuro?.lumbarPuncture) toAdd.neuro.push("Lumbar Puncture");
+      if (p.gu?.foleyCatheter) toAdd.gu.push("Foley's Catheter");
+      if (p.gi?.ngTube) toAdd.gi.push("NG Tube Insertion");
+      if (p.gi?.gastricLavage) toAdd.gi.push("Gastric Lavage");
+      if (p.wound?.woundClosure) toAdd.wound.push("Wound Closure/Suturing");
+      if (p.wound?.woundIrrigation) toAdd.wound.push("Wound Irrigation");
+      if (p.ortho?.fractureSplinting) toAdd.ortho.push("Fracture Splinting");
+      if (p.ortho?.jointReduction) toAdd.ortho.push("Joint Reduction");
+      const hasAny = (Object.keys(toAdd) as Array<keyof ProceduresData>).some((k) => k !== "generalNotes" && (toAdd[k] as string[]).length > 0);
+      if (hasAny) {
+        setProceduresData((prev) => {
+          const updated = { ...prev };
+          (Object.keys(toAdd) as Array<keyof ProceduresData>).forEach((k) => {
+            if (k === "generalNotes") return;
+            const additions = toAdd[k] as string[];
+            if (additions.length > 0) {
+              updated[k] = [...new Set([...(prev[k] as string[]), ...additions])];
+            }
+          });
+          if (updated.generalNotes === "Nil") updated.generalNotes = "";
+          return updated;
+        });
+      }
+    }
     if (data.dispositionSuggested) {
       const ds = data.dispositionSuggested;
       setDispositionData((prev) => ({
@@ -2433,7 +2480,7 @@ export default function CaseSheetScreen() {
         notes: psa.notes ? (prev.notes ? prev.notes + " " + psa.notes : psa.notes) : prev.notes,
       }));
     }
-    const completion = calculateDictationCompletion(data);
+    const completion = calculateDictationCompletion(data, "adult");
     setDictationCompletion(completion);
     setPendingExtracted(data);
     handleSave(true);

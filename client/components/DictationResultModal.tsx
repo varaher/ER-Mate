@@ -50,78 +50,160 @@ function isFilled(value: any): boolean {
   return Boolean(value);
 }
 
+export type CaseType = "adult" | "pediatric";
+
 export function calculateDictationCompletion(
-  data: SmartDictationExtracted
+  data: SmartDictationExtracted,
+  caseType: CaseType = "adult"
 ): DictationCompletion {
   const f = isFilled;
 
-  const patient: TabCompletion = {
-    filled: (
-      [
-        f(data.patientName),
-        f(data.patientAge),
-        f(data.patientSex),
-        f(data.chiefComplaint) || (data.symptoms && data.symptoms.length > 0),
-        f(data.vitalsSuggested?.hr),
-        f(data.vitalsSuggested?.bp),
-        f(data.vitalsSuggested?.spo2),
-        f(data.vitalsSuggested?.rr),
-        f(data.vitalsSuggested?.temperature),
-        f(data.vitalsSuggested?.grbs),
-      ] as boolean[]
-    ).filter(Boolean).length,
-    total: 10,
-  };
+  const patient: TabCompletion =
+    caseType === "pediatric"
+      ? {
+          filled: (
+            [
+              f(data.patientName),
+              f(data.patientAge),
+              f(data.patientSex),
+              f(data.patientWeight),
+              f(data.chiefComplaint) || (data.symptoms && data.symptoms.length > 0),
+              f(data.vitalsSuggested?.hr),
+              f(data.vitalsSuggested?.bp),
+              f(data.vitalsSuggested?.spo2),
+              f(data.vitalsSuggested?.rr),
+              f(data.vitalsSuggested?.temperature),
+            ] as boolean[]
+          ).filter(Boolean).length,
+          total: 10,
+        }
+      : {
+          filled: (
+            [
+              f(data.patientName),
+              f(data.patientAge),
+              f(data.patientSex),
+              f(data.chiefComplaint) || (data.symptoms && data.symptoms.length > 0),
+              f(data.vitalsSuggested?.hr),
+              f(data.vitalsSuggested?.bp),
+              f(data.vitalsSuggested?.spo2),
+              f(data.vitalsSuggested?.rr),
+              f(data.vitalsSuggested?.temperature),
+              f(data.vitalsSuggested?.grbs),
+            ] as boolean[]
+          ).filter(Boolean).length,
+          total: 10,
+        };
 
-  const history: TabCompletion = {
-    filled: (
-      [
-        f(data.chiefComplaint) || (data.symptoms && data.symptoms.length > 0),
-        f(data.allergies),
-        f(data.currentMedications),
-        f(data.pastMedicalHistory) || f(data.pastSurgicalHistory),
-        f(data.historyOfPresentIllness) || (!!data.painDetails && f(data.painDetails)),
-        f(data.familyHistory),
-        f(data.socialHistory),
-      ] as boolean[]
-    ).filter(Boolean).length,
-    total: 7,
-  };
+  const history: TabCompletion =
+    caseType === "pediatric"
+      ? {
+          filled: (
+            [
+              f(data.chiefComplaint) || (data.symptoms && data.symptoms.length > 0),
+              f(data.allergies),
+              f(data.currentMedications),
+              f(data.pastMedicalHistory),
+              f(data.historyOfPresentIllness) || (!!data.painDetails && f(data.painDetails)),
+              f(data.familyHistory) || f(data.socialHistory),
+              f(data.immunizationHistory),
+              f(data.birthHistory),
+              f(data.feedingHistory),
+              f(data.developmentalHistory),
+            ] as boolean[]
+          ).filter(Boolean).length,
+          total: 10,
+        }
+      : {
+          filled: (
+            [
+              f(data.chiefComplaint) || (data.symptoms && data.symptoms.length > 0),
+              f(data.allergies),
+              f(data.currentMedications),
+              f(data.pastMedicalHistory) || f(data.pastSurgicalHistory),
+              f(data.historyOfPresentIllness) || (!!data.painDetails && f(data.painDetails)),
+              f(data.familyHistory),
+              f(data.socialHistory),
+            ] as boolean[]
+          ).filter(Boolean).length,
+          total: 7,
+        };
 
-  const primary: TabCompletion = {
-    filled: (
-      [
-        f(data.vitalsSuggested?.rr) || f(data.vitalsSuggested?.spo2),
-        f(data.vitalsSuggested?.hr) || f(data.vitalsSuggested?.bp),
-        f(data.vitalsSuggested?.grbs),
-        f(data.vitalsSuggested?.temperature),
-        f(data.vbgResults?.ph),
-        f(data.abcdeFindings?.airway?.status) || f(data.abcdeFindings?.airway?.interventions),
-        f(data.abcdeFindings?.breathing?.status) || f(data.abcdeFindings?.breathing?.addedSounds),
-        f(data.abcdeFindings?.circulation?.status) || f(data.abcdeFindings?.circulation?.rhythm),
-        f(data.abcdeFindings?.disability?.status) || f(data.abcdeFindings?.disability?.pupilSize),
-        f(data.ecgInterpretation),
-      ] as boolean[]
-    ).filter(Boolean).length,
-    total: 10,
-  };
+  const primary: TabCompletion =
+    caseType === "pediatric"
+      ? {
+          filled: (
+            [
+              f(data.vitalsSuggested?.rr) || f(data.pediatricPrimary?.breathing?.airEntry),
+              f(data.vitalsSuggested?.hr) || f(data.pediatricPrimary?.circulation?.crt),
+              f(data.vitalsSuggested?.grbs) || f(data.pediatricPrimary?.disability?.avpuGcs),
+              f(data.pediatricPrimary?.pat?.appearance) ||
+                f(data.pediatricPrimary?.pat?.workOfBreathing) ||
+                f(data.pediatricPrimary?.pat?.circulationToSkin),
+              f(data.pediatricPrimary?.airway?.status) || f(data.pediatricPrimary?.airway?.cry),
+              f(data.pediatricPrimary?.breathing?.wob) || f(data.pediatricPrimary?.breathing?.positioning),
+              f(data.pediatricPrimary?.circulation?.skinColorTemp) ||
+                f(data.pediatricPrimary?.circulation?.distendedNeckVeins),
+              f(data.pediatricPrimary?.disability?.pupils) || f(data.pediatricPrimary?.disability?.abnormalResponses),
+              f(data.pediatricPrimary?.exposure?.signsOfTraumaIllness) ||
+                f(data.pediatricPrimary?.exposure?.trauma) ||
+                f(data.pediatricPrimary?.exposure?.evidenceOfInfection),
+              f(data.vbgResults?.ph),
+            ] as boolean[]
+          ).filter(Boolean).length,
+          total: 10,
+        }
+      : {
+          filled: (
+            [
+              f(data.vitalsSuggested?.rr) || f(data.vitalsSuggested?.spo2),
+              f(data.vitalsSuggested?.hr) || f(data.vitalsSuggested?.bp),
+              f(data.vitalsSuggested?.grbs),
+              f(data.vitalsSuggested?.temperature),
+              f(data.vbgResults?.ph),
+              f(data.abcdeFindings?.airway?.status) || f(data.abcdeFindings?.airway?.interventions),
+              f(data.abcdeFindings?.breathing?.status) || f(data.abcdeFindings?.breathing?.addedSounds),
+              f(data.abcdeFindings?.circulation?.status) || f(data.abcdeFindings?.circulation?.rhythm),
+              f(data.abcdeFindings?.disability?.status) || f(data.abcdeFindings?.disability?.pupilSize),
+              f(data.abcdeFindings?.exposure?.status) || f(data.abcdeFindings?.exposure?.findings),
+              f(data.ecgInterpretation),
+            ] as boolean[]
+          ).filter(Boolean).length,
+          total: 11,
+        };
 
-  const exam: TabCompletion = {
-    filled: (
-      [
-        f(data.examFindings?.general) || f(data.examStructured?.general) || !!data.restAllNormal,
-        f(data.examFindings?.heent),
-        f(data.examFindings?.respiratory) || f(data.examStructured?.respiratory) || !!data.restAllNormal,
-        f(data.examFindings?.cvs) || f(data.examStructured?.cvs) || !!data.restAllNormal,
-        f(data.examFindings?.abdomen) || f(data.examStructured?.abdomen) || !!data.restAllNormal,
-        f(data.examFindings?.cns) || f(data.examStructured?.cns) || !!data.restAllNormal,
-        !!data.restAllNormal,
-        f(data.examFindings?.skin),
-        f(data.examFindings?.musculoskeletal) || f(data.examStructured?.extremities) || !!data.restAllNormal,
-      ] as boolean[]
-    ).filter(Boolean).length,
-    total: 9,
-  };
+  const exam: TabCompletion =
+    caseType === "pediatric"
+      ? {
+          filled: (
+            [
+              f(data.examFindings?.general) || f(data.examFindings?.heent) || !!data.restAllNormal,
+              f(data.examFindings?.respiratory) || f(data.examStructured?.respiratory) || !!data.restAllNormal,
+              f(data.examFindings?.cvs) || f(data.examStructured?.cvs) || !!data.restAllNormal,
+              f(data.examFindings?.abdomen) || f(data.examStructured?.abdomen) || !!data.restAllNormal,
+              f(data.examFindings?.cns) || !!data.restAllNormal,
+              f(data.examFindings?.musculoskeletal) || !!data.restAllNormal,
+              f(data.examFindings?.skin) || !!data.restAllNormal,
+            ] as boolean[]
+          ).filter(Boolean).length,
+          total: 7,
+        }
+      : {
+          filled: (
+            [
+              f(data.examFindings?.general) || f(data.examStructured?.general) || !!data.restAllNormal,
+              f(data.examFindings?.heent),
+              f(data.examFindings?.respiratory) || f(data.examStructured?.respiratory) || !!data.restAllNormal,
+              f(data.examFindings?.cvs) || f(data.examStructured?.cvs) || !!data.restAllNormal,
+              f(data.examFindings?.abdomen) || f(data.examStructured?.abdomen) || !!data.restAllNormal,
+              f(data.examFindings?.cns) || f(data.examStructured?.cns) || !!data.restAllNormal,
+              !!data.restAllNormal,
+              f(data.examFindings?.skin),
+              f(data.examFindings?.musculoskeletal) || f(data.examStructured?.extremities) || !!data.restAllNormal,
+            ] as boolean[]
+          ).filter(Boolean).length,
+          total: 9,
+        };
 
   const treatment: TabCompletion = {
     filled: (
@@ -132,9 +214,10 @@ export function calculateDictationCompletion(
         f(data.investigationsOrdered),
         f(data.imagingOrdered),
         f(data.resultsSummary),
+        !!(data.procedures && f(data.procedures)),
       ] as boolean[]
     ).filter(Boolean).length,
-    total: 6,
+    total: 7,
   };
 
   const notes: TabCompletion = {
@@ -149,9 +232,10 @@ export function calculateDictationCompletion(
         !!(data.differentialDiagnosis && data.differentialDiagnosis.length > 0),
         f(data.dispositionSuggested?.type),
         f(data.dispositionSuggested?.admitTo) || f(data.dispositionSuggested?.referTo),
+        f(data.dispositionSuggested?.durationInER),
       ] as boolean[]
     ).filter(Boolean).length,
-    total: 4,
+    total: 5,
   };
 
   const totalFilled =

@@ -77,6 +77,45 @@ export async function incrementCaseCount(userId: string, userEmail: string) {
   return { casesUsed: sub.casesUsed + 1, casesLimit: sub.casesLimit };
 }
 
+/**
+ * Check whether a user is allowed to consume one AI credit for a
+ * credit-metered feature (Smart Dictation, CDS, OCR, EM Reference, AI
+ * discharge summary). Active trials get unlimited AI usage; everyone else
+ * draws down their `aiCredits` balance (Base/Pro plans are topped up by
+ * `activatePlan`, and credit packs add directly to the balance).
+ */
+export async function canUseAiCredit(userId: string, userEmail: string): Promise<{ allowed: boolean; aiCredits: number; plan: string; unlimited: boolean }> {
+  const sub = await getOrCreateSubscription(userId, userEmail);
+
+  if (isTrialActive(sub as any)) {
+    return { allowed: true, aiCredits: sub.aiCredits, plan: sub.plan, unlimited: true };
+  }
+
+  return { allowed: sub.aiCredits > 0, aiCredits: sub.aiCredits, plan: sub.plan, unlimited: false };
+}
+
+/**
+ * Deduct one AI credit after a successful AI action. No-op during an active
+ * trial (unlimited usage). Never lets the balance go negative.
+ */
+export async function deductAiCredit(userId: string, userEmail: string): Promise<{ aiCredits: number }> {
+  const db = getDb()!;
+  const sub = await getOrCreateSubscription(userId, userEmail);
+
+  if (isTrialActive(sub as any)) {
+    return { aiCredits: sub.aiCredits };
+  }
+
+  const nextCredits = Math.max(0, sub.aiCredits - 1);
+  await db.update(subscriptions)
+    .set({ aiCredits: nextCredits, updatedAt: new Date() })
+    .where(eq(subscriptions.id, sub.id));
+
+  return { aiCredits: nextCredits };
+}
+
+const AI_CREDITS_PER_MONTH = 20;
+
 /** Legacy – kept for backward compatibility */
 export async function activatePremium(userId: string, stripeCustomerId?: string, stripeSubscriptionId?: string) {
   return activatePlan(userId, "base", "monthly", undefined, stripeCustomerId, stripeSubscriptionId);
@@ -113,6 +152,9 @@ export async function activatePlan(
       currentPeriodEnd: periodEnd,
       stripeCustomerId: stripeCustomerId || sub.stripeCustomerId,
       stripeSubscriptionId: stripeSubscriptionId || sub.stripeSubscriptionId,
+      // AI credits roll over indefinitely — top up on every successful
+      // activation/renewal rather than resetting the balance.
+      aiCredits: sub.aiCredits + AI_CREDITS_PER_MONTH,
       updatedAt: now,
     })
     .where(eq(subscriptions.id, sub.id));

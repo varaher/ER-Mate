@@ -12,3 +12,4 @@
 - [Post-merge script location](post-merge-script.md) — post-merge hook wasn't configured; script must live outside scripts/ (forbidden dir) — placed at tools/post-merge.sh, runs npm install + clears static-build so merged client changes rebuild.
 - [Unimported helper crashes whole server](unimported-helper-crash-server.md) — a route referencing a helper (e.g. extractUserId) without importing it doesn't fail at build time under tsx; it throws an uncaught ReferenceError at request time that kills the entire Node process, not just that request.
 - [PDFKit unicode glyphs](pdfkit-unicode-glyphs.md) — default Helvetica font renders non-ASCII chars like → as garbled glyphs; use ASCII substitutes (e.g. "->") in PDFKit .text() calls.
+- [Shift/department endpoints need membership check, not just auth](shift-endpoint-authz.md) — extractUserId() only proves login, not department membership; every shift/department route must also verify active departmentMembers row.
