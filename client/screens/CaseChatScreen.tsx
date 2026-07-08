@@ -1,11 +1,14 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, StyleSheet, ActivityIndicator,
-  Platform, StatusBar, Pressable,
+  Platform, StatusBar, Pressable, Alert,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
+import * as IntentLauncher from 'expo-intent-launcher';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RootStackParamList } from '@/navigation/RootStackNavigator';
@@ -35,6 +38,7 @@ export default function CaseChatScreen({ route, navigation }: Props) {
   );
   const [errorMsg, setErrorMsg]         = useState<string | null>(null);
   const [addenda, setAddenda]           = useState<CaseAddendum[]>([]);
+  const [isPrintingHandoverPdf, setIsPrintingHandoverPdf] = useState(false);
 
   // Tracks whether we already kicked off the silent create (so StrictMode doesn't double-fire)
   const creatingRef = useRef(false);
@@ -145,6 +149,89 @@ export default function CaseChatScreen({ route, navigation }: Props) {
     setAddenda(prev => [...prev, created]);
     return created;
   }, [activeCaseId, user, shiftSession]);
+
+  // ── Generate & open the printable shift handover PDF ──────────────────────
+  const handlePrintHandoverPdf = useCallback(async () => {
+    if (!activeCaseId || isPrintingHandoverPdf) return;
+    setIsPrintingHandoverPdf(true);
+    try {
+      const token = await AsyncStorage.getItem('token');
+      const p = caseData?.patient || {};
+      const treat = caseData?.treatment || {};
+      const meds = Array.isArray(treat.medications)
+        ? treat.medications.map((m: any) => [m.name, m.dose, m.route].filter(Boolean).join(' ')).filter(Boolean).join(', ')
+        : (caseData?.drugs_administered || []).map((m: any) => m.name || m).join(', ');
+      const lastHandover = [...addenda].reverse().find(a => a.type === 'shift_handover');
+
+      const url = new URL(`/api/cases/${activeCaseId}/handover-pdf`, getApiUrl()).href;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          patientName: p.name || paramPatientName || '',
+          patientAge: p.age || '',
+          patientSex: p.sex || '',
+          arrivalTime: caseData?.created_at || caseData?.createdAt || undefined,
+          chiefComplaint: caseData?.presenting_complaint?.text || caseData?.history?.signs_and_symptoms || '',
+          medications: meds,
+          handingDoctor: lastHandover?.handoverFromDoctor || user?.name || '',
+          receivingDoctor: lastHandover?.handoverToDoctor || '',
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Server error: ${res.status}`);
+      }
+
+      const filename = `handover_${activeCaseId}.pdf`;
+      if (Platform.OS === 'web') {
+        const blob = await res.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = objectUrl;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(objectUrl);
+      } else {
+        const bytes = await res.arrayBuffer();
+        const fileUri = (FileSystem.documentDirectory || '') + filename;
+        const base64 = Buffer.from(bytes).toString('base64');
+        await FileSystem.writeAsStringAsync(fileUri, base64, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+
+        if (Platform.OS === 'android') {
+          try {
+            const contentUri = await FileSystem.getContentUriAsync(fileUri);
+            await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
+              data: contentUri,
+              flags: 1,
+              type: 'application/pdf',
+            });
+            return;
+          } catch {}
+        }
+
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(fileUri, {
+            mimeType: 'application/pdf',
+            dialogTitle: 'Save Handover PDF',
+            UTI: 'com.adobe.pdf',
+          });
+        } else {
+          Alert.alert('Saved', `Handover PDF saved as "${filename}".`);
+        }
+      }
+    } catch (e: any) {
+      Alert.alert('Export failed', e?.message || 'Please try again.');
+    } finally {
+      setIsPrintingHandoverPdf(false);
+    }
+  }, [activeCaseId, isPrintingHandoverPdf, caseData, addenda, user, paramPatientName]);
 
   // ── Kick off on mount ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -740,6 +827,8 @@ export default function CaseChatScreen({ route, navigation }: Props) {
           onAddAddendum={handleAddAddendum}
           erArrivalTime={caseData?.created_at || caseData?.createdAt || undefined}
           isCaseCommitted={!!paramCaseId}
+          onPrintHandoverPdf={handlePrintHandoverPdf}
+          isPrintingHandoverPdf={isPrintingHandoverPdf}
         />
       </View>
     </View>

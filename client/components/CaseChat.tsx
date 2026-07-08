@@ -640,6 +640,10 @@ export interface CaseChatProps {
    * so first-dictation still creates the initial case note.
    */
   isCaseCommitted?: boolean;
+  /** Called when the user taps "Print Handover PDF" in the timeline (shown only when a shift_handover addendum exists) */
+  onPrintHandoverPdf?: () => void;
+  /** True while the handover PDF is being generated/exported */
+  isPrintingHandoverPdf?: boolean;
 }
 
 // ── Wave bar (recording animation) ───────────────────────────────────────────
@@ -970,10 +974,14 @@ export function ClinicalTimeline({
   addenda,
   liveCase,
   erArrivalTime,
+  onPrintHandoverPdf,
+  isPrintingHandoverPdf,
 }: {
   addenda: CaseAddendum[];
   liveCase?: CaseData;
   erArrivalTime?: string;
+  onPrintHandoverPdf?: () => void;
+  isPrintingHandoverPdf?: boolean;
 }) {
   const nowMs = Date.now();
   const { label: stayLabel, color: stayColor } = useErStayTimer(erArrivalTime);
@@ -982,6 +990,7 @@ export function ClinicalTimeline({
   const patientName  = liveCase?.name;
   const priority     = liveCase?.priority;
   const priorityColor = priority ? (PRIORITY_COLORS[priority] ?? C.faint) : undefined;
+  const hasShiftHandover = addenda.some(a => a.type === 'shift_handover');
 
   return (
     <View style={tl.container}>
@@ -1007,6 +1016,22 @@ export function ClinicalTimeline({
       </View>
       <InitialNoteEntry liveCase={liveCase} />
       {addenda.map(a => <TimelineEntry key={a.id} addendum={a} nowMs={nowMs} />)}
+      {hasShiftHandover && onPrintHandoverPdf ? (
+        <Pressable
+          style={[tl.printHandoverBtn, isPrintingHandoverPdf ? { opacity: 0.6 } : null]}
+          onPress={onPrintHandoverPdf}
+          disabled={!!isPrintingHandoverPdf}
+        >
+          {isPrintingHandoverPdf ? (
+            <ActivityIndicator size="small" color="#64748B" />
+          ) : (
+            <Feather name="printer" size={14} color="#64748B" />
+          )}
+          <Text style={tl.printHandoverBtnText}>
+            {isPrintingHandoverPdf ? 'Generating PDF…' : 'Print Handover PDF'}
+          </Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -1889,7 +1914,7 @@ function countFields(extracted: SmartDictationExtracted): number {
 const AFTER_CASE_CHIPS = ['Prepare discharge summary', 'RSI note', 'Referral letter', 'Show complete case sheet'];
 const AFTER_DS_CHIPS   = ['Add allergy', 'Export PDF', 'Show differentials', 'Edit diagnosis'];
 
-export default function CaseChat({ onDataExtracted, patientContext, liveCase, initialExtracted, disabled = false, caseId, userId, onNavigateDashboard, addenda = [], onAddAddendum, erArrivalTime, isCaseCommitted }: CaseChatProps) {
+export default function CaseChat({ onDataExtracted, patientContext, liveCase, initialExtracted, disabled = false, caseId, userId, onNavigateDashboard, addenda = [], onAddAddendum, erArrivalTime, isCaseCommitted, onPrintHandoverPdf, isPrintingHandoverPdf }: CaseChatProps) {
   const [messages, setMessages]         = useState<ChatMessage[]>([]);
   const [inputText, setInputText]       = useState('');
   const [isRecording, setIsRecording]   = useState(false);
@@ -2309,7 +2334,13 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
       >
         {/* Clinical Timeline — always shown when addenda exist or case is loaded */}
         {(addenda.length > 0 || liveCase) ? (
-          <ClinicalTimeline addenda={addenda} liveCase={liveCase} erArrivalTime={erArrivalTime} />
+          <ClinicalTimeline
+            addenda={addenda}
+            liveCase={liveCase}
+            erArrivalTime={erArrivalTime}
+            onPrintHandoverPdf={onPrintHandoverPdf}
+            isPrintingHandoverPdf={isPrintingHandoverPdf}
+          />
         ) : null}
 
         {/* Empty / recording states */}
@@ -2975,6 +3006,21 @@ const tl = StyleSheet.create({
     color: C.greenDark,
   },
   headerLine: { flex: 1, height: 1, backgroundColor: '#D4E8DC' },
+  printHandoverBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    paddingVertical: 11,
+    borderTopWidth: 1,
+    borderTopColor: '#EBF7EF',
+    backgroundColor: '#F1F5F9',
+  },
+  printHandoverBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#475569',
+  },
   entry: {
     flexDirection: 'row',
     borderTopWidth: 1,
