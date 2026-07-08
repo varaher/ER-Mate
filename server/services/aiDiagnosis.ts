@@ -519,6 +519,58 @@ export interface DischargeSummaryInput {
   condition_at_discharge?: string;
 }
 
+export async function classifyAddendum(text: string): Promise<{
+  type: string;
+  content: string;
+  specialty?: string;
+}> {
+  const openai = getOpenAIClient();
+  if (!openai) throw new Error("AI service not available");
+
+  const res = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [
+      {
+        role: "system",
+        content: `You are an ER clinical assistant. Classify this clinical update as one addendum type and write a clean structured version.
+
+TYPES (pick the single best match):
+- clinical_update: general clinical findings, patient condition or status change
+- investigation_result: lab results, imaging, ECG, echo, cultures, urine output
+- consultant_review: review/opinion from a consultant or senior doctor
+- cross_consultation: review by a different specialty (cardiology, nephrology, surgery, etc.)
+- medication_change: drug added, changed, dose adjusted, or stopped
+- procedure_note: any invasive or non-invasive procedure performed
+- shift_handover: shift change, pending tasks, handing over to another doctor
+- correction: corrects or amends an earlier entry
+
+Return JSON ONLY:
+{
+  "type": "<type>",
+  "content": "<clinically structured update — full sentences, no shortcuts>",
+  "specialty": "<optional — only for cross_consultation or consultant_review>"
+}`,
+      },
+      { role: "user", content: text.trim() },
+    ],
+    temperature: 0.1,
+    max_tokens: 400,
+    response_format: { type: "json_object" },
+  });
+
+  try {
+    const raw = JSON.parse(res.choices[0]?.message?.content || "{}");
+    const validTypes = ["clinical_update","investigation_result","consultant_review","cross_consultation","medication_change","procedure_note","shift_handover","correction"];
+    return {
+      type: validTypes.includes(raw.type) ? raw.type : "clinical_update",
+      content: typeof raw.content === "string" && raw.content.trim() ? raw.content.trim() : text.trim(),
+      specialty: typeof raw.specialty === "string" && raw.specialty.trim() ? raw.specialty.trim() : undefined,
+    };
+  } catch {
+    return { type: "clinical_update", content: text.trim() };
+  }
+}
+
 export async function generateCourseInHospital(summaryData: DischargeSummaryInput): Promise<{ course_in_hospital: string; diagnosis?: string }> {
   const openai = getOpenAIClient();
 

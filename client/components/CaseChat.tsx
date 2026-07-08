@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Audio } from 'expo-av';
 import * as Clipboard from 'expo-clipboard';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Feather } from '@expo/vector-icons';
 import { getApiUrl } from '@/lib/query-client';
 import { SmartDictationExtracted } from './SmartDictation';
@@ -63,7 +64,7 @@ const ADDENDUM_COLORS: Record<AddendumType, string> = {
   cross_consultation:   '#0891B2',  // cyan
   medication_change:    '#D97706',  // amber
   procedure_note:       '#0D9488',  // teal
-  shift_handover:       '#64748B',  // slate
+  shift_handover:       '#F97316',  // orange
   correction:           '#6B7280',  // gray
 };
 
@@ -1926,8 +1927,59 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
     setMessages(p => p.map(m => m.id === id ? { ...m, ...update } : m));
   };
 
+  // ── sendAsAddendum — routes voice/text to the clinical timeline when in addendum mode ──
+  const sendAsAddendum = async (text: string, durSecs?: number) => {
+    if (!text.trim() || !onAddAddendum || !caseId) return;
+
+    push({ role: 'user', content: text, type: 'text', durationSecs: durSecs });
+    const lid = push({ role: 'assistant', content: '', type: 'text', isLoading: true });
+    setIsThinking(true);
+
+    try {
+      const apiUrl = getApiUrl();
+      const token = await AsyncStorage.getItem('token');
+
+      // Step 1: GPT-4o classifies the text into a structured addendum
+      const classRes = await fetch(
+        new URL(`/api/cases/${caseId}/addenda/classify`, apiUrl).toString(), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ text: text.trim() }),
+        }
+      );
+      if (!classRes.ok) throw new Error(`Classify failed (${classRes.status})`);
+      const { type, content, specialty } = await classRes.json();
+
+      // Step 2: save classified addendum via parent callback
+      await onAddAddendum({ type, content, specialty });
+
+      // Step 3: show success in message feed
+      const label = ADDENDUM_LABELS[type as AddendumType] || type;
+      const time  = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+      replace(lid, {
+        content: `Timeline updated · **${label}** added at ${time}`,
+        type: 'addendum',
+        isLoading: false,
+      });
+      showToast(`${label} saved to timeline`);
+    } catch (err: any) {
+      replace(lid, { content: 'Could not save to timeline. Please try again.', type: 'error', isLoading: false });
+    } finally {
+      setIsThinking(false);
+    }
+  };
+
   const sendToAI = async (text: string, durSecs?: number, isCorrection = false) => {
     if (!text.trim() || isThinking) return;
+
+    // When an existing case is active, all non-command updates go to the clinical timeline
+    if (canAddAddendum && !isCorrection && onAddAddendum && caseId) {
+      await sendAsAddendum(text, durSecs);
+      return;
+    }
 
     if (!isCorrection) {
       push({ role: 'user', content: text, type: 'text', durationSecs: durSecs });
@@ -2517,9 +2569,11 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
             style={s.input}
             value={inputText}
             onChangeText={setInputText}
-            placeholder={hasCaseNote
-              ? 'Try: discharge summary, add allergy…'
-              : 'Or type your case note…'}
+            placeholder={canAddAddendum
+              ? 'Dictate or type a clinical update…'
+              : hasCaseNote
+                ? 'Try: discharge summary, add allergy…'
+                : 'Or type your case note…'}
             placeholderTextColor={C.faint}
             multiline
             editable={!disabled && !busy}

@@ -127,6 +127,27 @@ export function registerAddendaRoutes(app: Express): void {
     }
   });
 
+  // POST /api/cases/:id/addenda/classify — GPT-4o classifies text, returns type+content (no DB write)
+  app.post("/api/cases/:id/addenda/classify", async (req: Request, res: Response) => {
+    const userId = extractUserId(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+    const { text } = req.body || {};
+    if (!text || typeof text !== "string" || !text.trim()) {
+      return res.status(400).json({ error: "text is required" });
+    }
+
+    try {
+      const { classifyAddendum } = await import("../services/aiDiagnosis");
+      const result = await classifyAddendum(text.trim());
+      return res.json(result);
+    } catch (err: any) {
+      console.error("[ADDENDA] classify error:", err);
+      // Fallback: return clinical_update with original text rather than failing
+      return res.json({ type: "clinical_update", content: text.trim() });
+    }
+  });
+
   // NOTE: No DELETE endpoint — addenda are append-only (medico-legal requirement).
   // Corrections must be submitted as a new addendum of type "correction".
 }

@@ -1,6 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { eq, and, isNull, desc } from "drizzle-orm";
-import { getDb } from "../db";
+import { getDb, getPool } from "../db";
 import { extractUserId } from "../lib/auth";
 import { sendPushToMany } from "../services/pushService";
 import {
@@ -10,6 +10,34 @@ import {
   caseOverlays,
   pushTokens,
 } from "@shared/schema";
+
+// ── Helper: write shift_handover addendum to clinical timeline ────────────────
+async function writeHandoverAddendum(opts: {
+  caseId: string;
+  userId: string;
+  fromDoctorName?: string;
+  toDoctorName?: string;
+  pendingNotes?: string;
+}): Promise<void> {
+  const pool = getPool();
+  if (!pool) return;
+  try {
+    const { caseId, userId, fromDoctorName, toDoctorName, pendingNotes } = opts;
+    const content = [
+      pendingNotes ? `Pending tasks / notes: ${pendingNotes}` : "Shift handover completed.",
+      toDoctorName ? `Handing over to: ${toDoctorName}` : null,
+    ].filter(Boolean).join("\n");
+
+    await pool.query(
+      `INSERT INTO case_addenda
+         (case_id, type, content, doctor_id, handover_from_doctor, handover_to_doctor)
+       VALUES ($1, 'shift_handover', $2, $3, $4, $5)`,
+      [caseId, content, userId, fromDoctorName || null, toDoctorName || null]
+    );
+  } catch (err) {
+    console.warn("[Handover] Failed to write shift_handover addendum:", err);
+  }
+}
 
 export function registerShiftRoutes(app: Express) {
   // ── GET /api/shifts/department/:departmentId/counts ──────────
@@ -220,7 +248,8 @@ export function registerShiftRoutes(app: Express) {
     const db = getDb();
     if (!db) return res.status(503).json({ error: "DB unavailable" });
     try {
-      const { caseId, toShiftId, bedNumber, pendingNotes, departmentId, shiftSessionId } = req.body;
+      const { caseId, toShiftId, bedNumber, pendingNotes, departmentId, shiftSessionId,
+              fromDoctorName, toDoctorName } = req.body;
       if (!caseId || !departmentId) return res.status(400).json({ error: "caseId and departmentId required" });
       const existing = await db
         .select()
@@ -240,6 +269,10 @@ export function registerShiftRoutes(app: Express) {
           })
           .where(eq(caseOverlays.id, existing[0].id))
           .returning();
+
+        // Write shift_handover addendum to clinical timeline
+        await writeHandoverAddendum({ caseId, userId, fromDoctorName, toDoctorName, pendingNotes });
+
         return res.json({ success: true, overlay: updated });
       }
       const [overlay] = await db
@@ -256,6 +289,10 @@ export function registerShiftRoutes(app: Express) {
           pendingNotes: pendingNotes || null,
         })
         .returning();
+
+      // Write shift_handover addendum to clinical timeline
+      await writeHandoverAddendum({ caseId, userId, fromDoctorName, toDoctorName, pendingNotes });
+
       res.json({ success: true, overlay });
     } catch (e) {
       console.error("[Handover] Create error:", e);
