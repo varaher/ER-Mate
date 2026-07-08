@@ -768,6 +768,30 @@ export default function DashboardScreen() {
             styles.statsNavCard,
             {
               backgroundColor: theme.card,
+              borderColor: "#10B98130",
+              opacity: pressed ? 0.85 : 1,
+              marginTop: Spacing.sm,
+            },
+          ]}
+          onPress={() => navigation.navigate("HandoverChat")}
+        >
+          <View style={[styles.statsNavIcon, { backgroundColor: "#10B98115" }]}>
+            <Feather name="message-circle" size={20} color={theme.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.statsNavTitle, { color: theme.text }]}>New Handover</Text>
+            <Text style={[styles.statsNavSub, { color: theme.textSecondary }]}>
+              Speak or type your patients — ErMate structures it
+            </Text>
+          </View>
+          <Feather name="chevron-right" size={20} color={theme.primary} />
+        </Pressable>
+
+        <Pressable
+          style={({ pressed }) => [
+            styles.statsNavCard,
+            {
+              backgroundColor: theme.card,
               borderColor: "#818CF830",
               opacity: pressed ? 0.85 : 1,
               marginTop: Spacing.sm,
@@ -779,7 +803,7 @@ export default function DashboardScreen() {
             <Feather name="clipboard" size={20} color="#818CF8" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.statsNavTitle, { color: theme.text }]}>Handover Sheet</Text>
+            <Text style={[styles.statsNavTitle, { color: theme.text }]}>Handover Sheet (manual)</Text>
             <Text style={[styles.statsNavSub, { color: theme.textSecondary }]}>
               Select cases, add pending notes, export PDF
             </Text>

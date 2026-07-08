@@ -49,6 +49,7 @@ import EscalationScreen from "@/screens/EscalationScreen";
 import TourScreen from "@/screens/TourScreen";
 import CaseChatScreen from "@/screens/CaseChatScreen";
 import PublicHandoverScreen from "@/screens/PublicHandoverScreen";
+import HandoverChatScreen from "@/screens/HandoverChatScreen";
 
 export type RootStackParamList = {
   Login: undefined;
@@ -102,6 +103,7 @@ export type RootStackParamList = {
   MySubscriptions: undefined;
   Rounds: { caseId?: string; lensId?: string } | undefined;
   Handover: undefined;
+  HandoverChat: undefined;
   SetupDepartment: undefined;
   ManageRoster: undefined;
   AdminDashboard: undefined;
@@ -398,6 +400,13 @@ export default function RootStackNavigator() {
             component={HandoverScreen}
             options={{
               headerTitle: "Handover Sheet",
+            }}
+          />
+          <Stack.Screen
+            name="HandoverChat"
+            component={HandoverChatScreen}
+            options={{
+              headerTitle: "Handover",
             }}
           />
           <Stack.Screen

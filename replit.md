@@ -39,6 +39,12 @@ Supports email/password, Google Sign-In, and Apple Sign-In. A `warmUpBackend()` 
 - **Psychological Assessment**: PHQ-2, GAD-2, and PTSD flags integrated in the Examination tab.
 - **Quick Case Sheet**: Bypass triage for fast-track or pre-triaged patients — start a case with just name and complaint.
 
+#### Handover Chat (conversational, in-app)
+- **New Handover** entry point on the Dashboard (above the manual "Handover Sheet" card) opens `HandoverChatScreen` — a ChatGPT-style conversational flow where the doctor speaks or types about all their patients in any order.
+- Backend: `POST /api/handover/chat` (`server/routes/handoverChat.ts`) — GPT-4o maintains a running structured patient list across turns (bed, name, age/sex, diagnosis, status, vitals, active issues, medications, pending tasks, critical alerts, awaiting results), asks a small set of follow-up questions once (allergies, receiving doctor, discharge-readiness), then signals `readyToFinalize`.
+- Frontend renders patient cards (colour-coded by status: critical/unstable/stable/for_discharge) inline in the chat, and once finalized shows a Handover Sheet card with WhatsApp share, PDF export (via `/api/export/text-pdf`), and Copy actions, plus a "Start a new handover" reset. Mic dictation reuses `/api/voice/transcribe`.
+- This is distinct from the manual `HandoverScreen` (select existing cases from the case list) and the public unauthenticated `PublicHandoverScreen` (`server/routes/handoverPublic.ts`, no-login "paste your handover" viral tool with WhatsApp/copy actions, linked from the login screen).
+
 #### Team & Shift Management (local PostgreSQL, new)
 - **Department Setup**: HOD creates the department with name, hospital, and shift schedules (Morning / Evening / Night with max consultant and resident slot counts). Invite link shareable via WhatsApp.
 - **Shift Check-In**: Shift Selection modal appears when the app is opened during a shift window. Doctors pick their shift, see real-time slot counts, and tap Start. A shift banner appears on the Dashboard.
@@ -73,11 +79,10 @@ All clinical exports (`/api/export/casesheet-pdf`, `/api/export/discharge-pdf`, 
 Every clinical field across all 7 case-sheet tabs (Patient, History, Primary Assessment/ABCDE, Examination, Treatment, Notes, Disposition) and the Discharge Summary now always prints a value — missing/undocumented fields fall back to a normal/negative clinical default (e.g. "Patent" for airway, "NKDA" for allergies, "STABLE" for condition at discharge) via `pdfAlways`/`nv` (casesheet) or `dsAlways`/`docxAlways` (discharge) helpers, so no field is ever left blank on the printed document. Free-text "Notes" fields remain blank-if-empty by design.
 
 ### Dictation Completion Map Architecture
-`client/components/DictationResultModal.tsx` exports:
-- `calculateDictationCompletion(data: SmartDictationExtracted): DictationCompletion` — scores each of 7 tabs (patient 10 fields, history 7, primary 5, exam 9, treatment 5, notes 1, disposition 3) from the extracted dictation data. Only fields that Smart Dictation can populate are scored; manual-only fields (e.g. dispositionType button) are excluded.
-- `getTabStatus(tc: TabCompletion): "full" | "partial" | "empty"` — full ≥75%, partial >0%, empty = 0.
-- `DictationResultModal` — bottom sheet with overall bar, per-tab progress rows, and "Review gaps" / "Done" actions.
-In `CaseSheetScreen`: after `handleSmartDictation` completes, `calculateDictationCompletion(data)` is called and stored in `dictationCompletion` state. `TabButton` reads this state to render a coloured dot (green/amber/red) per tab.
+The primary "New Patient" flow (`CaseChatScreen` / `CaseChat.tsx`) shows dictation output as a copyable structured card (`StructuredCaseCard`, "Copy all" as the primary action) rather than a completion-map bottom sheet — this is the ChatGPT-style copy-paste-first pattern. The legacy 7-tab `CaseSheetScreen` still tracks per-tab field completion for the coloured tab dots (green/amber/red), via `calculateDictationCompletion`/`getTabStatus` from `client/components/DictationResultModal.tsx`, but the modal bottom-sheet UI itself is no longer shown (dead code removed) — only the lightweight dot indicators remain as a secondary, non-blocking cue.
+
+### Chat Document Export (PDF)
+Discharge summaries, referral letters, and procedure notes generated inside `CaseChat.tsx` have working "Export PDF" actions backed by a generic `POST /api/export/text-pdf` endpoint (title + plain-text content → formatted PDF via PDFKit, downloads on web / shares via `expo-sharing` on native, using `expo-file-system/legacy`). This exports exactly the same text shown in the copyable card, keeping the copy and export outputs consistent. The richer structured discharge/case-sheet PDF endpoints (`/api/export/discharge-pdf`, `/api/export/casesheet-pdf`) remain used by the legacy manual screens (`DischargeSummaryScreen`, `DashboardScreen`).
 
 ### Team System Architecture
 Departments, shifts, and shift sessions live entirely in local PostgreSQL. Cases remain on the external backend. Data is merged on `caseId` (text) client-side.

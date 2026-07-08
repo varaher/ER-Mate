@@ -18,6 +18,7 @@ import { registerEscalationRoutes } from "./routes/escalations";
 import { registerAddendaRoutes } from "./routes/addenda";
 import { registerHandoverPdfRoutes } from "./routes/handoverPdf";
 import { registerHandoverPublicRoutes } from "./routes/handoverPublic";
+import { registerHandoverChatRoutes } from "./routes/handoverChat";
 import { extractUserId } from "./lib/auth";
 
 // ─── AES-256-GCM helpers for credential encryption ───────────────────────────
@@ -1681,6 +1682,62 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     } catch (error) {
       console.error("[HANDOVER] PDF error:", error);
       res.status(500).json({ error: "Failed to generate handover PDF" });
+    }
+  });
+
+  // Generic plain-text PDF export — used by the chat flow for discharge summaries,
+  // referral letters, and procedure notes shown as copyable text blocks. Renders the
+  // exact same text the user can copy, formatted as a simple document.
+  app.post("/api/export/text-pdf", async (req: Request, res: Response) => {
+    try {
+      const { title, content, filename } = req.body as { title?: string; content?: string; filename?: string };
+
+      if (!content) {
+        return res.status(400).json({ error: "Missing content" });
+      }
+
+      const doc = new PDFDocument({
+        size: "A4",
+        margins: { top: 50, bottom: 50, left: 50, right: 50 },
+      });
+
+      const chunks: Buffer[] = [];
+      doc.on("data", (chunk: Buffer) => chunks.push(chunk));
+      doc.on("end", () => {
+        const pdfBuffer = Buffer.concat(chunks);
+        const safeName = (filename || title || "document").replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_\-]/g, "");
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", `attachment; filename="${safeName}.pdf"`);
+        res.send(pdfBuffer);
+      });
+
+      if (title) {
+        doc.fontSize(16).font("Helvetica-Bold").fillColor("#0F172A").text(title.toUpperCase(), { align: "center" });
+        doc.moveDown(0.3);
+        doc.moveTo(50, doc.y).lineTo(545, doc.y).lineWidth(1).stroke();
+        doc.moveDown(0.6);
+      }
+
+      doc.fontSize(10.5).font("Helvetica").fillColor("#000000");
+      const lines = String(content).split("\n");
+      for (const line of lines) {
+        const trimmed = line.trim();
+        const isHeading = trimmed.length > 0 && trimmed === trimmed.toUpperCase() && /[A-Z]/.test(trimmed) && trimmed.length < 60 && !trimmed.startsWith("-");
+        if (trimmed.length === 0) {
+          doc.moveDown(0.4);
+        } else if (isHeading) {
+          doc.moveDown(0.2);
+          doc.font("Helvetica-Bold").fontSize(11).fillColor("#0F172A").text(trimmed);
+          doc.font("Helvetica").fontSize(10.5).fillColor("#000000");
+        } else {
+          doc.text(line);
+        }
+      }
+
+      doc.end();
+    } catch (err) {
+      console.error("Text PDF generation error:", err);
+      res.status(500).json({ error: "Failed to generate PDF" });
     }
   });
 
@@ -5493,6 +5550,7 @@ Always use the conversation history for context. Keep replies SHORT (1–2 sente
   registerAddendaRoutes(app);
   registerHandoverPdfRoutes(app);
   registerHandoverPublicRoutes(app);
+  registerHandoverChatRoutes(app);
 
   const httpServer = existingServer ?? createServer(app);
 

@@ -10,9 +10,12 @@ import {
   Platform,
   ActivityIndicator,
   Modal,
+  Alert,
 } from 'react-native';
 import { Audio } from 'expo-av';
 import * as Clipboard from 'expo-clipboard';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Feather } from '@expo/vector-icons';
 import { getApiUrl } from '@/lib/query-client';
@@ -1412,6 +1415,55 @@ function computeMissingFields(ex: SmartDictationExtracted): string[] {
   return missing;
 }
 
+// ── Generic text → PDF export (discharge summary / referral / procedure note) ──
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve((reader.result as string).split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function exportTextPdf(title: string, filenamePrefix: string, content: string): Promise<boolean> {
+  try {
+    const exportUrl = new URL('/api/export/text-pdf', getApiUrl());
+    const response = await fetch(exportUrl.toString(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, content, filename: filenamePrefix }),
+    });
+    if (!response.ok) throw new Error('Failed to generate PDF');
+    const blob = await response.blob();
+    const fileName = `${filenamePrefix}.pdf`;
+
+    if (Platform.OS === 'web') {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } else {
+      const fileUri = FileSystem.documentDirectory + fileName;
+      const base64 = await blobToBase64(blob);
+      await FileSystem.writeAsStringAsync(fileUri, base64, { encoding: FileSystem.EncodingType.Base64 });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(fileUri, { mimeType: 'application/pdf', dialogTitle: title });
+      } else {
+        Alert.alert('Saved', `PDF saved to: ${fileUri}`);
+      }
+    }
+    return true;
+  } catch (err) {
+    console.error('[CaseChat] exportTextPdf:', err);
+    Alert.alert('Export failed', 'Could not export PDF. Please try again.');
+    return false;
+  }
+}
+
 // ── DocCard action button ─────────────────────────────────────────────────────
 function DocAction({
   icon, label, onPress, primary, done,
@@ -2699,7 +2751,11 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
                       Clipboard.setStringAsync(dsText);
                       showToast('Discharge summary copied');
                     }}
-                    onExport={() => showToast('Exporting PDF…')}
+                    onExport={async () => {
+                      showToast('Exporting PDF…');
+                      const ok = await exportTextPdf('Discharge Summary', `discharge_summary_${(liveCase?.name || 'patient').replace(/\s+/g, '_')}`, dsText);
+                      if (ok) showToast('Discharge summary exported');
+                    }}
                   >
                     <View style={s.docFreeText}>
                       <Text style={s.docFreeTextContent}>{dsText}</Text>
@@ -2733,7 +2789,11 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
                       Clipboard.setStringAsync(refText);
                       showToast('Referral letter copied');
                     }}
-                    onExport={() => showToast('Exporting PDF…')}
+                    onExport={async () => {
+                      showToast('Exporting PDF…');
+                      const ok = await exportTextPdf('Referral Letter', `referral_letter_${(liveCase?.name || 'patient').replace(/\s+/g, '_')}`, refText);
+                      if (ok) showToast('Referral letter exported');
+                    }}
                   >
                     <View style={s.docFreeText}>
                       <Text style={s.docFreeTextContent}>{refText}</Text>
@@ -2766,7 +2826,11 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
                       Clipboard.setStringAsync(msg.specialContent!);
                       showToast('Procedure note copied');
                     }}
-                    onExport={() => showToast('Exporting PDF…')}
+                    onExport={async () => {
+                      showToast('Exporting PDF…');
+                      const ok = await exportTextPdf('Procedure Note', `procedure_note_${(liveCase?.name || 'patient').replace(/\s+/g, '_')}`, msg.specialContent!);
+                      if (ok) showToast('Procedure note exported');
+                    }}
                   >
                     <View style={s.docFreeText}>
                       <Text style={s.docFreeTextContent}>{msg.specialContent}</Text>

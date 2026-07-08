@@ -15,3 +15,4 @@
 - [Shift/department endpoints need membership check, not just auth](shift-endpoint-authz.md) — extractUserId() only proves login, not department membership; every shift/department route must also verify active departmentMembers row.
 - [Doctor-name and AI-narrative default fallbacks](doctor-name-narrative-fallbacks.md) — never fall back to patient/informant fields for doctor identity; decode JWT for name. AI section narratives should extend document templates via an override param, not replace the whole doc.
 - [Public unauthenticated AI endpoint pattern](public-unauth-ai-endpoint.md) — free/public "try it" AI tools need their own route file, own screen, own per-IP rate limiter, and must not persist raw pasted text server-side.
+- [expo-file-system SDK 54 legacy API](expo-file-system-legacy-api.md) — import from `expo-file-system/legacy` (not bare package) for the old documentDirectory/writeAsStringAsync pattern used in export-then-share flows.

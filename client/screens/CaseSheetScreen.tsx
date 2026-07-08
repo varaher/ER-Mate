@@ -30,7 +30,7 @@ import { TextInputField } from "@/components/TextInputField";
 import { AIDiagnosisPanel } from "@/components/AIDiagnosisPanel";
 import CaseChat, { CaseData } from "@/components/CaseChat";
 import { SmartDictationExtracted } from "@/components/SmartDictation";
-import DictationResultModal, {
+import {
   calculateDictationCompletion,
   DictationCompletion,
   getTabStatus,
@@ -562,7 +562,6 @@ export default function CaseSheetScreen() {
   const localDraftIdRef = useRef<string | null>(null);
   const caseStartRef = useRef<number>(Date.now());
   const [dictationCompletion, setDictationCompletion] = useState<DictationCompletion | null>(null);
-  const [showDictationResult, setShowDictationResult] = useState(false);
   const [pendingExtracted, setPendingExtracted] = useState<SmartDictationExtracted | null>(null);
   const [showChatModal, setShowChatModal] = useState(false);
   const [showHoldModal, setShowHoldModal] = useState(false);
@@ -4163,15 +4162,6 @@ export default function CaseSheetScreen() {
           </View>
         </View>
       </Modal>
-      <DictationResultModal
-        visible={showDictationResult}
-        completion={dictationCompletion}
-        onClose={() => setShowDictationResult(false)}
-        onReviewGaps={(tab) => {
-          setShowDictationResult(false);
-          setActiveTab(tab);
-        }}
-      />
       <CaseTray
         currentCaseId={caseId}
         onSwitchCase={handleSwitchCase}
