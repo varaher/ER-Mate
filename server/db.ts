@@ -222,6 +222,33 @@ export async function ensurePasswordResetTable(): Promise<void> {
   }
 }
 
+export async function ensureAddendaTable(): Promise<void> {
+  const p = getPool();
+  if (!p) return;
+  try {
+    await p.query(`
+      CREATE TABLE IF NOT EXISTS case_addenda (
+        id SERIAL PRIMARY KEY,
+        case_id TEXT NOT NULL,
+        type TEXT NOT NULL,
+        content TEXT NOT NULL,
+        doctor_id TEXT,
+        doctor_name TEXT,
+        doctor_role TEXT,
+        specialty TEXT,
+        handover_from_doctor TEXT,
+        handover_to_doctor TEXT,
+        shift_id INTEGER,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS case_addenda_case_id_idx ON case_addenda(case_id);
+    `);
+    console.log("[DB] case_addenda table ready");
+  } catch (e) {
+    console.error("[DB] Failed to ensure case_addenda table:", e);
+  }
+}
+
 export async function ensureAuthSessionsTable(): Promise<void> {
   const p = getPool();
   if (!p) return;

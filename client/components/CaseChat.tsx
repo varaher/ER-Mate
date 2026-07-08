@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -9,12 +9,74 @@ import {
   Animated,
   Platform,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { Audio } from 'expo-av';
 import * as Clipboard from 'expo-clipboard';
 import { Feather } from '@expo/vector-icons';
 import { getApiUrl } from '@/lib/query-client';
 import { SmartDictationExtracted } from './SmartDictation';
+
+// ── Addendum types ─────────────────────────────────────────────────────────────
+export const ADDENDUM_TYPES = [
+  'clinical_update',
+  'investigation_result',
+  'consultant_review',
+  'cross_consultation',
+  'medication_change',
+  'procedure_note',
+  'shift_handover',
+  'correction',
+] as const;
+export type AddendumType = (typeof ADDENDUM_TYPES)[number];
+
+export interface CaseAddendum {
+  id: number;
+  caseId: string;
+  type: AddendumType;
+  content: string;
+  doctorId?: string | null;
+  doctorName?: string | null;
+  doctorRole?: string | null;
+  specialty?: string | null;
+  handoverFromDoctor?: string | null;
+  handoverToDoctor?: string | null;
+  shiftId?: number | null;
+  createdAt: string;
+}
+
+const ADDENDUM_LABELS: Record<AddendumType, string> = {
+  clinical_update:      'Clinical Update',
+  investigation_result: 'Investigation',
+  consultant_review:    'Consultant Review',
+  cross_consultation:   'Cross-Consultation',
+  medication_change:    'Medication Change',
+  procedure_note:       'Procedure Note',
+  shift_handover:       'Shift Handover',
+  correction:           'Correction',
+};
+
+const ADDENDUM_COLORS: Record<AddendumType, string> = {
+  clinical_update:      '#3B82F6',
+  investigation_result: '#10B981',
+  consultant_review:    '#8B5CF6',
+  cross_consultation:   '#6366F1',
+  medication_change:    '#F59E0B',
+  procedure_note:       '#EF4444',
+  shift_handover:       '#F97316',
+  correction:           '#6B7280',
+};
+
+const ADDENDUM_ICONS: Record<AddendumType, string> = {
+  clinical_update:      'activity',
+  investigation_result: 'file-text',
+  consultant_review:    'user-check',
+  cross_consultation:   'users',
+  medication_change:    'package',
+  procedure_note:       'tool',
+  shift_handover:       'refresh-cw',
+  correction:           'edit-2',
+};
 
 // ── CaseData — single source of truth for all documents ──────────────────────
 export interface CaseData {
@@ -562,6 +624,13 @@ export interface CaseChatProps {
   userId?: string;
   /** When provided, shows a "Go to Dashboard" button after the case note is ready */
   onNavigateDashboard?: () => void;
+  /** Persisted addenda for long-stay / complex cases */
+  addenda?: CaseAddendum[];
+  /** Called when the user creates a new addendum; must persist and return the saved entry */
+  onAddAddendum?: (payload: {
+    type: string; content: string; specialty?: string;
+    handoverFromDoctor?: string; handoverToDoctor?: string;
+  }) => Promise<CaseAddendum>;
 }
 
 // ── Wave bar (recording animation) ───────────────────────────────────────────
@@ -777,6 +846,266 @@ function AddendumBody({ content }: { content: string }) {
     <View style={{ padding: 2 }}>
       <Text style={{ fontSize: 12, color: C.ink, lineHeight: 20 }}>{content}</Text>
     </View>
+  );
+}
+
+// ── Clinical Timeline ─────────────────────────────────────────────────────────
+function fmtAddendumTime(iso: string): string {
+  try {
+    const d = new Date(iso);
+    const date = d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    const time = d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+    return `${date} · ${time}`;
+  } catch {
+    return iso;
+  }
+}
+
+function TimelineEntry({ addendum }: { addendum: CaseAddendum }) {
+  const color = ADDENDUM_COLORS[addendum.type] || '#6B7280';
+  const label = ADDENDUM_LABELS[addendum.type] || addendum.type;
+  const icon  = ADDENDUM_ICONS[addendum.type] || 'file-text';
+
+  const meta: string[] = [];
+  if (addendum.doctorName) meta.push(addendum.doctorName);
+  if (addendum.doctorRole) meta.push(addendum.doctorRole);
+  if (addendum.specialty)  meta.push(addendum.specialty);
+  if (addendum.type === 'shift_handover') {
+    if (addendum.handoverFromDoctor) meta.push(`From: ${addendum.handoverFromDoctor}`);
+    if (addendum.handoverToDoctor)   meta.push(`To: ${addendum.handoverToDoctor}`);
+  }
+
+  return (
+    <View style={tl.entry}>
+      <View style={[tl.entryBar, { backgroundColor: color }]} />
+      <View style={tl.entryContent}>
+        <View style={tl.entryHeader}>
+          <View style={[tl.entryBadge, { backgroundColor: color + '1A', borderColor: color + '40' }]}>
+            <Feather name={icon as any} size={9} color={color} />
+            <Text style={[tl.entryBadgeText, { color }]}>{label.toUpperCase()}</Text>
+          </View>
+          <Text style={tl.entryTime}>{fmtAddendumTime(addendum.createdAt)}</Text>
+        </View>
+        {meta.length > 0 ? (
+          <Text style={tl.entryMeta}>{meta.join(' · ')}</Text>
+        ) : null}
+        <Text style={tl.entryBody}>{addendum.content}</Text>
+      </View>
+    </View>
+  );
+}
+
+function InitialNoteEntry({ liveCase, caseDate }: { liveCase?: CaseData; caseDate?: string }) {
+  const doctorLine = liveCase?.doctorName ? `Dr. ${liveCase.doctorName}` : 'Attending Doctor';
+  const dateStr = caseDate || liveCase?.date || new Date().toLocaleDateString('en-IN');
+  const complaint = liveCase?.history?.symptoms || '';
+
+  return (
+    <View style={tl.entry}>
+      <View style={[tl.entryBar, { backgroundColor: C.greenDark }]} />
+      <View style={tl.entryContent}>
+        <View style={tl.entryHeader}>
+          <View style={[tl.entryBadge, { backgroundColor: C.greenDark + '1A', borderColor: C.greenDark + '40' }]}>
+            <Feather name="lock" size={9} color={C.greenDark} />
+            <Text style={[tl.entryBadgeText, { color: C.greenDark }]}>INITIAL CASE NOTE · LOCKED</Text>
+          </View>
+          <Text style={tl.entryTime}>{dateStr}{liveCase?.caseTime ? ` · ${liveCase.caseTime}` : ''}</Text>
+        </View>
+        <Text style={tl.entryMeta}>{doctorLine}</Text>
+        {complaint ? <Text style={tl.entryBody}>Presenting complaint: {complaint}</Text> : null}
+        <Text style={[tl.entryBody, { color: C.faint, fontStyle: 'italic' }]}>
+          Full case note locked — see Case Sheet tab for complete record.
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function ClinicalTimeline({
+  addenda,
+  liveCase,
+}: {
+  addenda: CaseAddendum[];
+  liveCase?: CaseData;
+}) {
+  if (addenda.length === 0 && !liveCase) return null;
+
+  return (
+    <View style={tl.container}>
+      <View style={tl.header}>
+        <Feather name="list" size={12} color={C.greenDark} />
+        <Text style={tl.headerText}>CLINICAL TIMELINE</Text>
+        <View style={tl.headerLine} />
+      </View>
+      <InitialNoteEntry liveCase={liveCase} />
+      {addenda.map(a => <TimelineEntry key={a.id} addendum={a} />)}
+    </View>
+  );
+}
+
+// ── Addendum Modal ────────────────────────────────────────────────────────────
+function AddendumModal({
+  visible,
+  onClose,
+  onSave,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onSave: (payload: {
+    type: string; content: string; specialty?: string;
+    handoverFromDoctor?: string; handoverToDoctor?: string;
+  }) => Promise<void>;
+}) {
+  const [selectedType, setSelectedType] = useState<AddendumType>('clinical_update');
+  const [content, setContent]           = useState('');
+  const [specialty, setSpecialty]       = useState('');
+  const [handoverFrom, setHandoverFrom] = useState('');
+  const [handoverTo, setHandoverTo]     = useState('');
+  const [saving, setSaving]             = useState(false);
+  const [error, setError]               = useState<string | null>(null);
+
+  const resetForm = () => {
+    setSelectedType('clinical_update');
+    setContent('');
+    setSpecialty('');
+    setHandoverFrom('');
+    setHandoverTo('');
+    setError(null);
+  };
+
+  const handleClose = () => {
+    resetForm();
+    onClose();
+  };
+
+  const handleSave = async () => {
+    if (!content.trim()) { setError('Please enter the addendum content'); return; }
+    setSaving(true);
+    setError(null);
+    try {
+      await onSave({
+        type: selectedType,
+        content: content.trim(),
+        specialty: specialty.trim() || undefined,
+        handoverFromDoctor: handoverFrom.trim() || undefined,
+        handoverToDoctor: handoverTo.trim() || undefined,
+      });
+      resetForm();
+      onClose();
+    } catch (e: any) {
+      setError(e?.message || 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const needsSpecialty = selectedType === 'cross_consultation' || selectedType === 'consultant_review';
+  const needsHandover  = selectedType === 'shift_handover';
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
+      <Pressable style={am.overlay} onPress={handleClose} />
+      <View style={am.sheet}>
+        <View style={am.handle} />
+        <View style={am.sheetHeader}>
+          <Text style={am.sheetTitle}>Add Clinical Update</Text>
+          <Pressable onPress={handleClose} style={am.closeBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Feather name="x" size={18} color={C.muted} />
+          </Pressable>
+        </View>
+
+        <Text style={am.sectionLabel}>TYPE</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={am.typeScroll} contentContainerStyle={am.typeRow}>
+          {ADDENDUM_TYPES.map(t => {
+            const sel = t === selectedType;
+            const color = ADDENDUM_COLORS[t];
+            return (
+              <Pressable
+                key={t}
+                onPress={() => setSelectedType(t)}
+                style={[am.typeChip, sel && { backgroundColor: color + '20', borderColor: color }]}
+              >
+                <Feather name={ADDENDUM_ICONS[t] as any} size={11} color={sel ? color : C.muted} />
+                <Text style={[am.typeChipText, sel && { color }]}>{ADDENDUM_LABELS[t]}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+
+        {needsSpecialty ? (
+          <>
+            <Text style={am.sectionLabel}>SPECIALTY / CONSULTANT</Text>
+            <TextInput
+              style={am.textInput}
+              value={specialty}
+              onChangeText={setSpecialty}
+              placeholder="e.g. Cardiology — Dr. Arun"
+              placeholderTextColor={C.faint}
+            />
+          </>
+        ) : null}
+
+        {needsHandover ? (
+          <>
+            <Text style={am.sectionLabel}>HANDING OVER DOCTOR</Text>
+            <TextInput
+              style={am.textInput}
+              value={handoverFrom}
+              onChangeText={setHandoverFrom}
+              placeholder="Doctor handing over"
+              placeholderTextColor={C.faint}
+            />
+            <Text style={am.sectionLabel}>RECEIVING DOCTOR</Text>
+            <TextInput
+              style={am.textInput}
+              value={handoverTo}
+              onChangeText={setHandoverTo}
+              placeholder="Doctor receiving the case"
+              placeholderTextColor={C.faint}
+            />
+          </>
+        ) : null}
+
+        <Text style={am.sectionLabel}>CONTENT</Text>
+        <TextInput
+          style={[am.textInput, am.contentInput]}
+          value={content}
+          onChangeText={setContent}
+          placeholder={
+            selectedType === 'investigation_result'
+              ? 'e.g. Troponin T: 0.8 ng/mL (raised). ECG: ST elevation V1-V4.'
+              : selectedType === 'shift_handover'
+              ? 'Patient status, active issues, pending tasks, medications…'
+              : selectedType === 'consultant_review'
+              ? 'Consultant findings, recommendations, and plan…'
+              : 'Enter clinical update…'
+          }
+          placeholderTextColor={C.faint}
+          multiline
+          numberOfLines={5}
+          textAlignVertical="top"
+        />
+
+        {error ? (
+          <Text style={am.errorText}>{error}</Text>
+        ) : null}
+
+        <Pressable
+          onPress={handleSave}
+          disabled={saving}
+          style={[am.saveBtn, saving && { opacity: 0.6 }]}
+        >
+          {saving ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <>
+              <Feather name="check" size={15} color="#fff" />
+              <Text style={am.saveBtnText}>Save Addendum</Text>
+            </>
+          )}
+        </Pressable>
+      </View>
+    </Modal>
   );
 }
 
@@ -1492,7 +1821,7 @@ function countFields(extracted: SmartDictationExtracted): number {
 const AFTER_CASE_CHIPS = ['Prepare discharge summary', 'RSI note', 'Referral letter', 'Show complete case sheet'];
 const AFTER_DS_CHIPS   = ['Add allergy', 'Export PDF', 'Show differentials', 'Edit diagnosis'];
 
-export default function CaseChat({ onDataExtracted, patientContext, liveCase, initialExtracted, disabled = false, caseId, userId, onNavigateDashboard }: CaseChatProps) {
+export default function CaseChat({ onDataExtracted, patientContext, liveCase, initialExtracted, disabled = false, caseId, userId, onNavigateDashboard, addenda = [], onAddAddendum }: CaseChatProps) {
   const [messages, setMessages]         = useState<ChatMessage[]>([]);
   const [inputText, setInputText]       = useState('');
   const [isRecording, setIsRecording]   = useState(false);
@@ -1502,6 +1831,9 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
   const [recSecs, setRecSecs]           = useState(0);
   const [hasCaseNote, setHasCaseNote]   = useState(false);
   const [hasDs, setHasDs]               = useState(false);
+  const [showAddendumModal, setShowAddendumModal] = useState(false);
+
+  const canAddAddendum = !!onAddAddendum && (hasCaseNote || addenda.length > 0 || !!liveCase);
 
   const scrollRef           = useRef<ScrollView>(null);
   const nativeRecRef        = useRef<Audio.Recording | null>(null);
@@ -1806,8 +2138,13 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
+        {/* Clinical Timeline — always shown when addenda exist or case is loaded */}
+        {(addenda.length > 0 || liveCase) ? (
+          <ClinicalTimeline addenda={addenda} liveCase={liveCase} />
+        ) : null}
+
         {/* Empty / recording states */}
-        {!hasMessages && !isRecording ? <EmptyState /> : null}
+        {!hasMessages && !isRecording && addenda.length === 0 && !liveCase ? <EmptyState /> : null}
         {isRecording ? (
           <View style={s.recordingFullState}>
             <Text style={s.recordingListening}>Listening in any language…</Text>
@@ -2085,6 +2422,15 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
         ) : null}
       </ScrollView>
 
+      {/* Addendum Modal */}
+      {onAddAddendum ? (
+        <AddendumModal
+          visible={showAddendumModal}
+          onClose={() => setShowAddendumModal(false)}
+          onSave={onAddAddendum}
+        />
+      ) : null}
+
       {/* Input bar */}
       <View style={s.inputBar}>
         {/* Mic — always leftmost */}
@@ -2135,6 +2481,18 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
             editable={!disabled && !busy}
           />
         )}
+
+        {/* Add Addendum button — shown after case note is ready */}
+        {canAddAddendum && !isRecording && inputText.trim().length === 0 ? (
+          <Pressable
+            onPress={() => setShowAddendumModal(true)}
+            style={s.addUpdateBtn}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <Feather name="plus" size={14} color={C.greenDark} />
+            <Text style={s.addUpdateBtnText}>Add Update</Text>
+          </Pressable>
+        ) : null}
 
         {/* Send — rightmost, only when text typed */}
         {inputText.trim().length > 0 && !isRecording ? (
@@ -2338,6 +2696,15 @@ const s = StyleSheet.create({
     shadowColor: C.greenDeep, shadowOpacity: 0.3, shadowRadius: 10, shadowOffset: { width: 0, height: 3 },
   },
   toastText: { fontSize: 12, fontWeight: '700', color: '#fff' },
+
+  // Add Addendum button
+  addUpdateBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 10, paddingVertical: 7,
+    backgroundColor: C.greenLight, borderWidth: 1, borderColor: C.greenBd,
+    borderRadius: 10,
+  },
+  addUpdateBtnText: { fontSize: 11.5, fontWeight: '700', color: C.greenDark },
 });
 
 // Feedback + missing fields styles
@@ -2407,4 +2774,126 @@ const s2 = StyleSheet.create({
     paddingVertical: 7,
   },
   chipText: { fontSize: 12, fontWeight: '600', color: C.greenDark },
+});
+
+// ── Clinical Timeline styles ──────────────────────────────────────────────────
+const tl = StyleSheet.create({
+  container: {
+    marginBottom: 10,
+    borderRadius: 14,
+    backgroundColor: '#F8FDF9',
+    borderWidth: 1,
+    borderColor: '#D4E8DC',
+    overflow: 'hidden',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: '#EBF7EF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#D4E8DC',
+  },
+  headerText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    letterSpacing: 1.4,
+    color: C.greenDark,
+  },
+  headerLine: { flex: 1, height: 1, backgroundColor: '#D4E8DC' },
+  entry: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: '#EBF7EF',
+  },
+  entryBar: { width: 3, flexShrink: 0 },
+  entryContent: { flex: 1, paddingHorizontal: 12, paddingVertical: 10, gap: 4 },
+  entryHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  entryBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 7, paddingVertical: 3,
+    borderRadius: 6, borderWidth: 1,
+  },
+  entryBadgeText: { fontSize: 8.5, fontWeight: '800', letterSpacing: 0.8 },
+  entryTime: { fontSize: 10, color: C.faint, flex: 1, textAlign: 'right' },
+  entryMeta: { fontSize: 10.5, color: C.muted, fontWeight: '600' },
+  entryBody: { fontSize: 12, color: C.ink, lineHeight: 18 },
+});
+
+// ── Addendum Modal styles ─────────────────────────────────────────────────────
+const am = StyleSheet.create({
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  sheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    paddingBottom: 36,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: -4 },
+    elevation: 20,
+    gap: 12,
+  },
+  handle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#D1D5DB',
+    marginBottom: 4,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sheetTitle: { fontSize: 16, fontWeight: '700', color: C.ink },
+  closeBtn: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  sectionLabel: {
+    fontSize: 9, fontWeight: '800', letterSpacing: 1.2,
+    color: C.faint, marginTop: 2,
+  },
+  typeScroll: { marginHorizontal: -4 },
+  typeRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 4, paddingVertical: 4 },
+  typeChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 11, paddingVertical: 7,
+    borderRadius: 99, borderWidth: 1.5,
+    borderColor: C.border, backgroundColor: C.white,
+  },
+  typeChipText: { fontSize: 11.5, fontWeight: '600', color: C.muted },
+  textInput: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    fontSize: 13,
+    color: C.ink,
+  },
+  contentInput: { minHeight: 100, textAlignVertical: 'top' },
+  errorText: { fontSize: 12, color: C.red, fontWeight: '500' },
+  saveBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: C.greenDark,
+    borderRadius: 14, paddingVertical: 14,
+    marginTop: 4,
+  },
+  saveBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
 });

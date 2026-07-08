@@ -13,7 +13,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useDepartment } from '@/context/DepartmentContext';
 import { getApiUrl } from '@/lib/query-client';
 import { invalidateCases } from '@/lib/api';
-import CaseChat, { CaseData } from '@/components/CaseChat';
+import CaseChat, { CaseData, CaseAddendum } from '@/components/CaseChat';
 import type { SmartDictationExtracted } from '@/components/SmartDictation';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CaseChat'>;
@@ -34,6 +34,7 @@ export default function CaseChatScreen({ route, navigation }: Props) {
     paramCaseId ? 'loading' : 'init'
   );
   const [errorMsg, setErrorMsg]         = useState<string | null>(null);
+  const [addenda, setAddenda]           = useState<CaseAddendum[]>([]);
 
   // Tracks whether we already kicked off the silent create (so StrictMode doesn't double-fire)
   const creatingRef = useRef(false);
@@ -104,10 +105,52 @@ export default function CaseChatScreen({ route, navigation }: Props) {
     }
   }, [user, fetchCase]);
 
+  // ── Fetch addenda for existing cases ──────────────────────────────────────
+  const fetchAddenda = useCallback(async (id: string) => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      const res = await fetch(`${getApiUrl()}/api/cases/${id}/addenda`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data)) setAddenda(data);
+    } catch {}
+  }, []);
+
+  const handleAddAddendum = useCallback(async (payload: {
+    type: string; content: string; specialty?: string;
+    handoverFromDoctor?: string; handoverToDoctor?: string;
+  }): Promise<CaseAddendum> => {
+    if (!activeCaseId) throw new Error('No case ID');
+    const token = await AsyncStorage.getItem('token');
+    const res = await fetch(`${getApiUrl()}/api/cases/${activeCaseId}/addenda`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        ...payload,
+        doctorId: user?.id,
+        doctorName: user?.name,
+        doctorRole: shiftSession?.roleForShift || '',
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to save addendum');
+    }
+    const created: CaseAddendum = await res.json();
+    setAddenda(prev => [...prev, created]);
+    return created;
+  }, [activeCaseId, user, shiftSession]);
+
   // ── Kick off on mount ──────────────────────────────────────────────────────
   useEffect(() => {
     if (paramCaseId) {
       fetchCase(paramCaseId);
+      fetchAddenda(paramCaseId);
     } else {
       createEmptyCase();
     }
@@ -693,6 +736,8 @@ export default function CaseChatScreen({ route, navigation }: Props) {
           caseId={activeCaseId!}
           userId={user?.id}
           onNavigateDashboard={goToDashboard}
+          addenda={addenda}
+          onAddAddendum={handleAddAddendum}
         />
       </View>
     </View>

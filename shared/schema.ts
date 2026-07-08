@@ -291,3 +291,31 @@ export const rotaAssignments = pgTable("rota_assignments", {
   notes: text("notes"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`),
 });
+
+// ═══════════════════════════════════════════════════════════════
+// CASE ADDENDA — Long-stay / complex case clinical timeline
+// Persisted locally; caseId references external backend
+// ═══════════════════════════════════════════════════════════════
+
+export const caseAddenda = pgTable("case_addenda", {
+  id: serial("id").primaryKey(),
+  caseId: text("case_id").notNull(),
+  type: text("type").notNull(),
+  content: text("content").notNull(),
+  doctorId: text("doctor_id"),
+  doctorName: text("doctor_name"),
+  doctorRole: text("doctor_role"),
+  specialty: text("specialty"),
+  handoverFromDoctor: text("handover_from_doctor"),
+  handoverToDoctor: text("handover_to_doctor"),
+  shiftId: integer("shift_id"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertCaseAddendumSchema = createInsertSchema(caseAddenda).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type CaseAddendumRecord = typeof caseAddenda.$inferSelect;
+export type InsertCaseAddendum = z.infer<typeof insertCaseAddendumSchema>;
