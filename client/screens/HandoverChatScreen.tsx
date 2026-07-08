@@ -37,14 +37,18 @@ interface HandoverPatient {
   patientName?: string;
   age?: string;
   sex?: string;
+  presentingComplaints?: string;
+  pastMedicalHistory?: string;
   diagnosis?: string;
   status?: "critical" | "unstable" | "stable" | "for_discharge";
   vitals?: HandoverVitals;
   activeIssues?: string[];
   medications?: string[];
+  managementDone?: string[];
   pendingTasks?: string[];
   criticalAlerts?: string[];
   awaitingResults?: string[];
+  bystanderUpdateTime?: string;
 }
 
 interface ChatMessage {
@@ -93,7 +97,9 @@ function buildHandoverText(
     lines.push(
       `${p.bedNumber || "Bed —"} · ${p.patientName || "Unknown"}${p.age ? ` · ${p.age}${p.sex || ""}` : ""}`
     );
-    if (p.diagnosis) lines.push(`Dx: ${p.diagnosis} — ${STATUS_LABEL[p.status || "stable"]}`);
+    if (p.presentingComplaints) lines.push(`Presenting complaints: ${p.presentingComplaints}`);
+    if (p.pastMedicalHistory) lines.push(`Past medical history: ${p.pastMedicalHistory}`);
+    if (p.diagnosis) lines.push(`Provisional diagnosis: ${p.diagnosis} — ${STATUS_LABEL[p.status || "stable"]}`);
     const v = p.vitals || {};
     const vitalsParts = [
       v.bp && `BP ${v.bp}`,
@@ -105,8 +111,10 @@ function buildHandoverText(
     if (vitalsParts.length) lines.push(vitalsParts.join(" · "));
     (p.criticalAlerts || []).forEach((a) => lines.push(`ALERT: ${a}`));
     (p.medications || []).forEach((m) => lines.push(`Running: ${m}`));
-    (p.pendingTasks || []).forEach((t) => lines.push(`Pending: ${t}`));
+    (p.managementDone || []).forEach((m) => lines.push(`Management plan (Done): ${m}`));
+    (p.pendingTasks || []).forEach((t) => lines.push(`Management plan (To be done): ${t}`));
     (p.awaitingResults || []).forEach((r) => lines.push(`Awaiting: ${r}`));
+    if (p.bystanderUpdateTime) lines.push(`Bystander update given: ${p.bystanderUpdateTime}`);
   });
 
   lines.push("");
@@ -133,12 +141,16 @@ function buildWhatsappText(
     const emoji =
       p.status === "critical" ? "\u{1F534}" : p.status === "unstable" ? "\u{1F7E0}" : p.status === "for_discharge" ? "\u{1F535}" : "\u{1F7E2}";
     lines.push(`${emoji} *${p.bedNumber || "Bed \u2014"} \u2014 ${p.patientName || "Unknown"}${p.age ? `, ${p.age}${p.sex || ""}` : ""}*`);
+    if (p.presentingComplaints) lines.push(`Presenting: ${p.presentingComplaints}`);
+    if (p.pastMedicalHistory) lines.push(`PMH: ${p.pastMedicalHistory}`);
     if (p.diagnosis) lines.push(`Dx: ${p.diagnosis}`);
     const v = p.vitals || {};
     const vitalsParts = [v.bp && `BP ${v.bp}`, v.hr && `HR ${v.hr}`, v.spo2 && `SpO2 ${v.spo2}%`].filter(Boolean);
     if (vitalsParts.length) lines.push(vitalsParts.join(" \u00b7 "));
     (p.criticalAlerts || []).forEach((a) => lines.push(`\u26A0 ${a}`));
+    (p.managementDone || []).forEach((m) => lines.push(`\u2705 ${m}`));
     (p.pendingTasks || []).forEach((t) => lines.push(`\u{1F4CB} ${t}`));
+    if (p.bystanderUpdateTime) lines.push(`Bystander updated: ${p.bystanderUpdateTime}`);
   });
   lines.push("");
   lines.push("\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500");
@@ -510,7 +522,24 @@ export default function HandoverChatScreen() {
                       <Text style={styles.statusChipText}>{STATUS_LABEL[p.status || "stable"]}</Text>
                     </View>
                   </View>
-                  {p.diagnosis ? <Text style={[styles.diagnosis, { color: theme.textSecondary }]}>{p.diagnosis}</Text> : null}
+                  {p.presentingComplaints ? (
+                    <View style={styles.sectionBlock}>
+                      <Text style={[styles.sectionLabel, { color: theme.textMuted }]}>Presenting complaints</Text>
+                      <Text style={[styles.itemLine, { color: theme.text }]}>{p.presentingComplaints}</Text>
+                    </View>
+                  ) : null}
+                  {p.pastMedicalHistory ? (
+                    <View style={styles.sectionBlock}>
+                      <Text style={[styles.sectionLabel, { color: theme.textMuted }]}>Past medical history</Text>
+                      <Text style={[styles.itemLine, { color: theme.text }]}>{p.pastMedicalHistory}</Text>
+                    </View>
+                  ) : null}
+                  {p.diagnosis ? (
+                    <View style={styles.sectionBlock}>
+                      <Text style={[styles.sectionLabel, { color: theme.textMuted }]}>Provisional diagnosis</Text>
+                      <Text style={[styles.diagnosis, { color: theme.textSecondary, marginBottom: 0 }]}>{p.diagnosis}</Text>
+                    </View>
+                  ) : null}
                   {p.vitals && Object.values(p.vitals).some(Boolean) ? (
                     <Text style={[styles.vitalsLine, { color: theme.textMuted }]}>
                       {[
@@ -543,9 +572,19 @@ export default function HandoverChatScreen() {
                       ))}
                     </View>
                   ) : null}
+                  {(p.managementDone || []).length > 0 ? (
+                    <View style={styles.sectionBlock}>
+                      <Text style={[styles.sectionLabel, { color: theme.textMuted }]}>Management plan — Done</Text>
+                      {p.managementDone!.map((m, i) => (
+                        <Text key={i} style={[styles.itemLine, { color: theme.text }]}>
+                          ✓ {m}
+                        </Text>
+                      ))}
+                    </View>
+                  ) : null}
                   {(p.pendingTasks || []).length > 0 ? (
                     <View style={styles.sectionBlock}>
-                      <Text style={[styles.sectionLabel, { color: theme.textMuted }]}>Pending</Text>
+                      <Text style={[styles.sectionLabel, { color: theme.textMuted }]}>Management plan — To be done</Text>
                       {p.pendingTasks!.map((t, i) => (
                         <Text key={i} style={[styles.itemLine, { color: theme.text }]}>
                           ☐ {t}
@@ -561,6 +600,12 @@ export default function HandoverChatScreen() {
                           • {r}
                         </Text>
                       ))}
+                    </View>
+                  ) : null}
+                  {p.bystanderUpdateTime ? (
+                    <View style={styles.sectionBlock}>
+                      <Text style={[styles.sectionLabel, { color: theme.textMuted }]}>Bystander update given</Text>
+                      <Text style={[styles.itemLine, { color: theme.text }]}>{p.bystanderUpdateTime}</Text>
                     </View>
                   ) : null}
                 </View>

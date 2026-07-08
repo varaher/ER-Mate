@@ -18,3 +18,4 @@
 - [expo-file-system SDK 54 legacy API](expo-file-system-legacy-api.md) — import from `expo-file-system/legacy` (not bare package) for the old documentDirectory/writeAsStringAsync pattern used in export-then-share flows.
 - [External backend PUT /cases/:id needs full patient object](rename-cta-patient-object.md) — partial patient updates (e.g. rename) get 422'd unless age/sex are also included; backfill from GET or client state.
 - [Handover Chat cross-device sync](handover-chat-cross-device-sync.md) — stateful chat features need server-side persistence keyed by user (not just device-link auth transfer) to appear on other devices.
+- [Handover Chat mirrors hospital paper forms](handover-emr-form-fields.md) — patient schema maps 1:1 to standard ER handover paper columns (presenting complaints, PMH, provisional dx, management done/to-be-done, bystander update time); extend schema + chat card UI + both text builders together.
