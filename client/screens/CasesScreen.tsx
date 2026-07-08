@@ -99,15 +99,6 @@ export default function CasesScreen() {
 
   const [inProgressDrafts, setInProgressDrafts] = useState<DraftCase[]>([]);
 
-  useFocusEffect(
-    useCallback(() => {
-      getAllDrafts().then((all) => {
-        setInProgressDrafts(all.filter((d) => d.status === "draft" && !!d.backendCaseId));
-      });
-      refetch();
-    }, [refetch]),
-  );
-
   const [reviewModal, setReviewModal] = useState<ShiftCaseItem | null>(null);
   const [reviewNote, setReviewNote] = useState("");
   const [submittingReview, setSubmittingReview] = useState(false);
@@ -191,6 +182,15 @@ export default function CasesScreen() {
   });
 
   const shiftCases = shiftCasesData?.cases || [];
+
+  useFocusEffect(
+    useCallback(() => {
+      getAllDrafts().then((all) => {
+        setInProgressDrafts(all.filter((d) => d.status === "draft" && !!d.backendCaseId));
+      });
+      refetch();
+    }, [refetch]),
+  );
 
   const enterEditMode = useCallback((preselectId?: string) => {
     setEditMode(true);
