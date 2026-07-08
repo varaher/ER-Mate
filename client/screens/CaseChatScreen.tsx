@@ -738,6 +738,7 @@ export default function CaseChatScreen({ route, navigation }: Props) {
           onNavigateDashboard={goToDashboard}
           addenda={addenda}
           onAddAddendum={handleAddAddendum}
+          erArrivalTime={caseData?.created_at || caseData?.createdAt || undefined}
         />
       </View>
     </View>

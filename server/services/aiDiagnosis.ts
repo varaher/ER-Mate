@@ -497,6 +497,8 @@ export interface DischargeSummaryInput {
   conditionDx?: string;
   pendingReps?: string;
   followUp?: string;
+  // Clinical addenda — timestamped updates from long-stay cases
+  addendaTimeline?: string;
   // Legacy fields (fallback)
   patient?: { name?: string; age?: number | string; gender?: string; };
   chief_complaint?: string;
@@ -676,16 +678,34 @@ Plan:            ${disp}
 Condition:       ${cond}
 Pending Reports: ${summaryData.pendingReps || "Nil"}
 Follow Up:       ${summaryData.followUp || "As clinically indicated"}
+${summaryData.addendaTimeline ? `
+═══════════════════════════════════════
+CLINICAL TIMELINE — ADDENDA
+(Chronological updates after the initial case note — include ALL of these in the narrative)
+═══════════════════════════════════════
+${summaryData.addendaTimeline}` : ""}
 
 ═══════════════════════════════════════
 
-Now write ONLY the "Course in Hospital" section — a flowing clinical narrative (3–5 sentences, 2 paragraphs max) covering:
+${summaryData.addendaTimeline
+  ? `This is a LONG-STAY / COMPLEX CASE with multiple documented addenda.
+Write the "Course in Hospital" as a comprehensive clinical narrative covering the FULL ER stay:
+1. Brief presentation paragraph (name, age, chief complaint, arrival details)
+2. INITIAL ASSESSMENT — vitals, primary survey, key exam findings
+3. INVESTIGATIONS — all results with values and timestamps from the addenda
+4. CONSULTATIONS — each specialty consulted, by whom, findings and recommendations
+5. INTERVENTIONS — all procedures performed with timing
+6. CLINICAL COURSE — what happened chronologically (use the addenda timeline above)
+7. CONDITION AT DISCHARGE / TRANSFER — final status
+
+Write as a proper medical narrative — not bullet points. Include timestamps for key events. Include all consultant names and specialties. This must be comprehensive enough that any doctor picking up the patient from the discharge summary knows the full story.`
+  : `Now write ONLY the "Course in Hospital" section — a flowing clinical narrative (3–5 sentences, 2 paragraphs max) covering:
 1. What the patient presented with and key history
 2. Examination findings (specific values, not "within normal limits")
 3. Investigations done and key results (mention VBG values only if documented above as "Not done" skip it)
 4. Treatment administered in the ER
 5. Consultations obtained (if any)
-6. Response to treatment and disposition
+6. Response to treatment and disposition`}
 
 Respond in JSON:
 {
@@ -701,7 +721,7 @@ Respond in JSON:
         { role: "user", content: prompt },
       ],
       temperature: 0.3,
-      max_tokens: 1000,
+      max_tokens: summaryData.addendaTimeline ? 2500 : 1000,
       response_format: { type: "json_object" },
     });
 

@@ -1,5 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { getPool } from "../db";
+import { extractUserId } from "../lib/auth";
 
 export const ADDENDUM_TYPES = [
   "clinical_update",
@@ -49,8 +50,11 @@ function rowToAddendum(row: any): CaseAddendum {
 }
 
 export function registerAddendaRoutes(app: Express): void {
-  // GET /api/cases/:id/addenda — fetch all addenda for a case
+  // GET /api/cases/:id/addenda — fetch all addenda for a case (auth required)
   app.get("/api/cases/:id/addenda", async (req: Request, res: Response) => {
+    const userId = extractUserId(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
     const pool = getPool();
     if (!pool) return res.status(503).json({ error: "Database unavailable" });
     const { id } = req.params;
@@ -66,8 +70,11 @@ export function registerAddendaRoutes(app: Express): void {
     }
   });
 
-  // POST /api/cases/:id/addenda — create a new addendum
+  // POST /api/cases/:id/addenda — create a new addendum (append-only, no delete)
   app.post("/api/cases/:id/addenda", async (req: Request, res: Response) => {
+    const userId = extractUserId(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
     const pool = getPool();
     if (!pool) return res.status(503).json({ error: "Database unavailable" });
     const { id } = req.params;
@@ -90,6 +97,9 @@ export function registerAddendaRoutes(app: Express): void {
       return res.status(400).json({ error: "content is required" });
     }
 
+    // Enforce ownership: doctorId must match the authenticated user
+    const effectiveDoctorId = doctorId || userId;
+
     try {
       const result = await pool.query(
         `INSERT INTO case_addenda
@@ -101,7 +111,7 @@ export function registerAddendaRoutes(app: Express): void {
           id,
           type,
           content.trim(),
-          doctorId ?? null,
+          effectiveDoctorId,
           doctorName ?? null,
           doctorRole ?? null,
           specialty ?? null,
@@ -117,20 +127,6 @@ export function registerAddendaRoutes(app: Express): void {
     }
   });
 
-  // DELETE /api/cases/:caseId/addenda/:addendumId
-  app.delete("/api/cases/:caseId/addenda/:addendumId", async (req: Request, res: Response) => {
-    const pool = getPool();
-    if (!pool) return res.status(503).json({ error: "Database unavailable" });
-    const { caseId, addendumId } = req.params;
-    try {
-      await pool.query(
-        `DELETE FROM case_addenda WHERE id = $1 AND case_id = $2`,
-        [addendumId, caseId]
-      );
-      return res.json({ success: true });
-    } catch (err: any) {
-      console.error("[ADDENDA] DELETE error:", err);
-      return res.status(500).json({ error: err.message });
-    }
-  });
+  // NOTE: No DELETE endpoint — addenda are append-only (medico-legal requirement).
+  // Corrections must be submitted as a new addendum of type "correction".
 }

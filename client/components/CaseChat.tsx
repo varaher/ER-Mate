@@ -57,14 +57,14 @@ const ADDENDUM_LABELS: Record<AddendumType, string> = {
 };
 
 const ADDENDUM_COLORS: Record<AddendumType, string> = {
-  clinical_update:      '#3B82F6',
-  investigation_result: '#10B981',
-  consultant_review:    '#8B5CF6',
-  cross_consultation:   '#6366F1',
-  medication_change:    '#F59E0B',
-  procedure_note:       '#EF4444',
-  shift_handover:       '#F97316',
-  correction:           '#6B7280',
+  clinical_update:      '#2563EB',  // blue
+  investigation_result: '#059669',  // emerald-green
+  consultant_review:    '#7C3AED',  // purple
+  cross_consultation:   '#0891B2',  // cyan
+  medication_change:    '#D97706',  // amber
+  procedure_note:       '#0D9488',  // teal
+  shift_handover:       '#64748B',  // slate
+  correction:           '#6B7280',  // gray
 };
 
 const ADDENDUM_ICONS: Record<AddendumType, string> = {
@@ -631,6 +631,8 @@ export interface CaseChatProps {
     type: string; content: string; specialty?: string;
     handoverFromDoctor?: string; handoverToDoctor?: string;
   }) => Promise<CaseAddendum>;
+  /** ISO timestamp of when the patient arrived in ER — drives the stay-duration timer */
+  erArrivalTime?: string;
 }
 
 // ── Wave bar (recording animation) ───────────────────────────────────────────
@@ -861,10 +863,15 @@ function fmtAddendumTime(iso: string): string {
   }
 }
 
-function TimelineEntry({ addendum }: { addendum: CaseAddendum }) {
+function TimelineEntry({ addendum, nowMs }: { addendum: CaseAddendum; nowMs: number }) {
   const color = ADDENDUM_COLORS[addendum.type] || '#6B7280';
   const label = ADDENDUM_LABELS[addendum.type] || addendum.type;
   const icon  = ADDENDUM_ICONS[addendum.type] || 'file-text';
+
+  // Entries older than 2 hours start collapsed
+  const ageMs = nowMs - new Date(addendum.createdAt).getTime();
+  const olderThan2h = ageMs > 2 * 60 * 60 * 1000;
+  const [expanded, setExpanded] = useState(!olderThan2h);
 
   const meta: string[] = [];
   if (addendum.doctorName) meta.push(addendum.doctorName);
@@ -876,7 +883,7 @@ function TimelineEntry({ addendum }: { addendum: CaseAddendum }) {
   }
 
   return (
-    <View style={tl.entry}>
+    <Pressable onPress={() => setExpanded(e => !e)} style={tl.entry}>
       <View style={[tl.entryBar, { backgroundColor: color }]} />
       <View style={tl.entryContent}>
         <View style={tl.entryHeader}>
@@ -885,13 +892,20 @@ function TimelineEntry({ addendum }: { addendum: CaseAddendum }) {
             <Text style={[tl.entryBadgeText, { color }]}>{label.toUpperCase()}</Text>
           </View>
           <Text style={tl.entryTime}>{fmtAddendumTime(addendum.createdAt)}</Text>
+          <Feather name={expanded ? 'chevron-up' : 'chevron-down'} size={12} color={C.faint} />
         </View>
-        {meta.length > 0 ? (
-          <Text style={tl.entryMeta}>{meta.join(' · ')}</Text>
-        ) : null}
-        <Text style={tl.entryBody}>{addendum.content}</Text>
+        {expanded ? (
+          <>
+            {meta.length > 0 ? (
+              <Text style={tl.entryMeta}>{meta.join(' · ')}</Text>
+            ) : null}
+            <Text style={tl.entryBody}>{addendum.content}</Text>
+          </>
+        ) : (
+          <Text style={tl.entryCollapsed} numberOfLines={1}>{addendum.content}</Text>
+        )}
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -921,13 +935,37 @@ function InitialNoteEntry({ liveCase, caseDate }: { liveCase?: CaseData; caseDat
   );
 }
 
+function useErStayTimer(arrivalIso: string | undefined): { label: string; color: string } {
+  const [nowMs, setNowMs] = useState(Date.now());
+  useEffect(() => {
+    const tid = setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => clearInterval(tid);
+  }, []);
+
+  if (!arrivalIso) return { label: '', color: C.faint };
+  const elapsedMs = nowMs - new Date(arrivalIso).getTime();
+  if (elapsedMs < 0) return { label: '', color: C.faint };
+  const totalMin = Math.floor(elapsedMs / 60_000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  const label = h > 0 ? `In ER · ${h}h ${m}m` : `In ER · ${m}m`;
+  const color = elapsedMs >= 8 * 3_600_000 ? '#DC2626'  // ≥8h → red
+              : elapsedMs >= 4 * 3_600_000 ? '#D97706'  // ≥4h → amber
+              : '#059669';                                // <4h → green
+  return { label, color };
+}
+
 function ClinicalTimeline({
   addenda,
   liveCase,
+  erArrivalTime,
 }: {
   addenda: CaseAddendum[];
   liveCase?: CaseData;
+  erArrivalTime?: string;
 }) {
+  const nowMs = Date.now();
+  const { label: stayLabel, color: stayColor } = useErStayTimer(erArrivalTime);
   if (addenda.length === 0 && !liveCase) return null;
 
   return (
@@ -936,9 +974,15 @@ function ClinicalTimeline({
         <Feather name="list" size={12} color={C.greenDark} />
         <Text style={tl.headerText}>CLINICAL TIMELINE</Text>
         <View style={tl.headerLine} />
+        {stayLabel ? (
+          <View style={[tl.stayBadge, { borderColor: stayColor + '60', backgroundColor: stayColor + '12' }]}>
+            <Feather name="clock" size={9} color={stayColor} />
+            <Text style={[tl.stayBadgeText, { color: stayColor }]}>{stayLabel}</Text>
+          </View>
+        ) : null}
       </View>
       <InitialNoteEntry liveCase={liveCase} />
-      {addenda.map(a => <TimelineEntry key={a.id} addendum={a} />)}
+      {addenda.map(a => <TimelineEntry key={a.id} addendum={a} nowMs={nowMs} />)}
     </View>
   );
 }
@@ -1821,7 +1865,7 @@ function countFields(extracted: SmartDictationExtracted): number {
 const AFTER_CASE_CHIPS = ['Prepare discharge summary', 'RSI note', 'Referral letter', 'Show complete case sheet'];
 const AFTER_DS_CHIPS   = ['Add allergy', 'Export PDF', 'Show differentials', 'Edit diagnosis'];
 
-export default function CaseChat({ onDataExtracted, patientContext, liveCase, initialExtracted, disabled = false, caseId, userId, onNavigateDashboard, addenda = [], onAddAddendum }: CaseChatProps) {
+export default function CaseChat({ onDataExtracted, patientContext, liveCase, initialExtracted, disabled = false, caseId, userId, onNavigateDashboard, addenda = [], onAddAddendum, erArrivalTime }: CaseChatProps) {
   const [messages, setMessages]         = useState<ChatMessage[]>([]);
   const [inputText, setInputText]       = useState('');
   const [isRecording, setIsRecording]   = useState(false);
@@ -2140,7 +2184,7 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
       >
         {/* Clinical Timeline — always shown when addenda exist or case is loaded */}
         {(addenda.length > 0 || liveCase) ? (
-          <ClinicalTimeline addenda={addenda} liveCase={liveCase} />
+          <ClinicalTimeline addenda={addenda} liveCase={liveCase} erArrivalTime={erArrivalTime} />
         ) : null}
 
         {/* Empty / recording states */}
@@ -2820,6 +2864,13 @@ const tl = StyleSheet.create({
   entryTime: { fontSize: 10, color: C.faint, flex: 1, textAlign: 'right' },
   entryMeta: { fontSize: 10.5, color: C.muted, fontWeight: '600' },
   entryBody: { fontSize: 12, color: C.ink, lineHeight: 18 },
+  entryCollapsed: { fontSize: 11.5, color: C.faint, fontStyle: 'italic' },
+  stayBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 7, paddingVertical: 3,
+    borderRadius: 99, borderWidth: 1,
+  },
+  stayBadgeText: { fontSize: 9, fontWeight: '700', letterSpacing: 0.5 },
 });
 
 // ── Addendum Modal styles ─────────────────────────────────────────────────────

@@ -3268,6 +3268,40 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         });
       }
 
+      // ── Fetch addenda for long-stay cases ─────────────────────────────────
+      let addendaTimeline: string | undefined;
+      const caseIdForAddenda = req.body?.caseId || req.body?.case_id;
+      if (caseIdForAddenda) {
+        try {
+          const pool = getPool();
+          if (pool) {
+            const addendaRows = await pool.query(
+              `SELECT type, content, doctor_name, doctor_role, specialty,
+                      handover_from_doctor, handover_to_doctor, created_at
+               FROM case_addenda WHERE case_id = $1 ORDER BY created_at ASC`,
+              [caseIdForAddenda]
+            );
+            if (addendaRows.rows.length > 0) {
+              const TYPE_LABEL: Record<string, string> = {
+                clinical_update: 'CLINICAL UPDATE', investigation_result: 'INVESTIGATION RESULT',
+                consultant_review: 'CONSULTANT REVIEW', cross_consultation: 'CROSS-CONSULTATION',
+                medication_change: 'MEDICATION CHANGE', procedure_note: 'PROCEDURE NOTE',
+                shift_handover: 'SHIFT HANDOVER', correction: 'CORRECTION',
+              };
+              addendaTimeline = addendaRows.rows.map((r: any) => {
+                const ts = r.created_at ? new Date(r.created_at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' }) : '';
+                const label = TYPE_LABEL[r.type] || r.type.toUpperCase();
+                const who = [r.doctor_name, r.doctor_role, r.specialty].filter(Boolean).join(' · ');
+                const extra = r.handover_from_doctor ? `  From: ${r.handover_from_doctor} → To: ${r.handover_to_doctor || '?'}` : '';
+                return `[${label}] ${ts}${who ? ` · ${who}` : ''}${extra}\n${r.content}`;
+              }).join('\n\n');
+            }
+          }
+        } catch (addendaErr) {
+          console.warn('[DISCHARGE] Could not fetch addenda:', addendaErr);
+        }
+      }
+
       const mappedData = {
         // Structured prompt fields
         patientName, patientAge, patientSex, uhid, mlcStatus, modeArrival,
@@ -3281,6 +3315,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         labsOrdered, imagingOrdered, ecg, efast, resultsSummary, vbgSection,
         medsText, dischargeMedsText, proceduresText, consultText, psychText,
         workingDx, differentials, dispPlan, conditionDx, pendingReps, followUp,
+        addendaTimeline,
         // Legacy fallback fields
         chief_complaint: complaint,
         diagnosis: workingDx,
