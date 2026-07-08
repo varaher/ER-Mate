@@ -1,5 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { extractUserId } from "../lib/auth";
+import { getPool } from "../db";
 
 const HANDOVER_CHAT_SYSTEM_PROMPT = `You are ErMate Handover — a conversational clinical AI assistant for emergency department shift handovers in Indian hospitals.
 
@@ -68,6 +69,7 @@ export function registerHandoverChatRoutes(app: Express): void {
       const openai = new OpenAI({ apiKey, baseURL });
 
       const history = Array.isArray(messages) ? messages.slice(-20) : [];
+      const fullHistory = Array.isArray(messages) ? messages : [];
       const stateNote = `\n\n[Conversation state: askedFollowUp=${askedFollowUp ? "true" : "false"}]`;
 
       const completion = await openai.chat.completions.create({
@@ -98,16 +100,92 @@ export function registerHandoverChatRoutes(app: Express): void {
 
       console.log(`[HandoverChat] userId=${userId || "anon"} chars=${currentMessage.length} patients=${Array.isArray(parsed.patients) ? parsed.patients.length : 0}`);
 
-      return res.json({
+      const responsePayload = {
         reply: parsed.reply || "I didn't quite catch that — could you tell me about your patients again?",
         patients: Array.isArray(parsed.patients) ? parsed.patients : [],
         receivingDoctor: parsed.receivingDoctor || "",
         askedFollowUp: !!parsed.askedFollowUp,
         readyToFinalize: !!parsed.readyToFinalize,
-      });
+      };
+
+      // Persist the session server-side so the same handover is visible across
+      // devices (phone/desktop) for the logged-in user, not just in local memory.
+      if (userId) {
+        const p = getPool();
+        if (p) {
+          const updatedMessages = [
+            ...fullHistory,
+            { role: "user", content: currentMessage },
+            { role: "assistant", content: responsePayload.reply },
+          ];
+          p.query(
+            `INSERT INTO handover_sessions (user_id, messages, patients, receiving_doctor, asked_follow_up, ready_to_finalize, status, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, 'active', CURRENT_TIMESTAMP)
+             ON CONFLICT (user_id) WHERE status = 'active'
+             DO UPDATE SET messages = $2, patients = $3, receiving_doctor = $4, asked_follow_up = $5, ready_to_finalize = $6, updated_at = CURRENT_TIMESTAMP`,
+            [
+              userId,
+              JSON.stringify(updatedMessages),
+              JSON.stringify(responsePayload.patients),
+              responsePayload.receivingDoctor,
+              responsePayload.askedFollowUp,
+              responsePayload.readyToFinalize,
+            ]
+          ).catch((e) => console.error("[HandoverChat] failed to persist session:", e));
+        }
+      }
+
+      return res.json(responsePayload);
     } catch (err) {
       console.error("[HandoverChat] error:", err);
       return res.status(500).json({ error: "Failed to process handover message. Please try again." });
+    }
+  });
+
+  // Fetch the doctor's active handover session, if any — used so the same
+  // conversation can be resumed on any device (phone, desktop web, etc).
+  app.get("/api/handover/session", async (req: Request, res: Response) => {
+    try {
+      const userId = extractUserId(req);
+      if (!userId) return res.status(401).json({ error: "No auth token" });
+      const p = getPool();
+      if (!p) return res.json({ session: null });
+      const result = await p.query(
+        `SELECT messages, patients, receiving_doctor, asked_follow_up, ready_to_finalize, updated_at
+         FROM handover_sessions WHERE user_id = $1 AND status = 'active' LIMIT 1`,
+        [userId]
+      );
+      if (result.rows.length === 0) return res.json({ session: null });
+      const row = result.rows[0];
+      return res.json({
+        session: {
+          messages: row.messages || [],
+          patients: row.patients || [],
+          receivingDoctor: row.receiving_doctor || "",
+          askedFollowUp: !!row.asked_follow_up,
+          readyToFinalize: !!row.ready_to_finalize,
+          updatedAt: row.updated_at,
+        },
+      });
+    } catch (err) {
+      console.error("[HandoverChat] session fetch error:", err);
+      return res.status(500).json({ error: "Failed to load handover session." });
+    }
+  });
+
+  // Clear the doctor's active handover session (e.g. "Start a new handover"
+  // or after finalizing) so a stale session doesn't reappear on other devices.
+  app.delete("/api/handover/session", async (req: Request, res: Response) => {
+    try {
+      const userId = extractUserId(req);
+      if (!userId) return res.status(401).json({ error: "No auth token" });
+      const p = getPool();
+      if (!p) return res.json({ ok: true });
+      await p.query(`DELETE FROM handover_sessions WHERE user_id = $1 AND status = 'active'`, [userId]);
+      return res.json({ ok: true });
+    } catch (err) {
+      console.error("[HandoverChat] session delete error:", err);
+      return res.status(500).json({ error: "Failed to reset handover session." });
     }
   });
 }

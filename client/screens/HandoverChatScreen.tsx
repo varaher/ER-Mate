@@ -1,4 +1,5 @@
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   View,
   Text,
@@ -173,6 +174,7 @@ export default function HandoverChatScreen() {
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [copied, setCopied] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [loadingSession, setLoadingSession] = useState(true);
 
   const nativeRecRef = useRef<Audio.Recording | null>(null);
   const webRecRef = useRef<{ mr: MediaRecorder | null; chunks: Blob[]; stream: MediaStream | null }>({
@@ -193,9 +195,13 @@ export default function HandoverChatScreen() {
       setSending(true);
 
       try {
+        const token = await AsyncStorage.getItem("token");
         const res = await fetch(new URL("/api/handover/chat", getApiUrl()).toString(), {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
           body: JSON.stringify({
             messages: messages.map((m) => ({ role: m.role, content: m.content })),
             currentMessage: trimmed,
@@ -399,7 +405,50 @@ export default function HandoverChatScreen() {
     setAskedFollowUp(false);
     setReadyToFinalize(false);
     setInputText("");
+    (async () => {
+      try {
+        const token = await AsyncStorage.getItem("token");
+        if (!token) return;
+        await fetch(new URL("/api/handover/session", getApiUrl()).toString(), {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      } catch {
+        // best-effort — local state is already reset
+      }
+    })();
   };
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = await AsyncStorage.getItem("token");
+        if (!token) {
+          setLoadingSession(false);
+          return;
+        }
+        const res = await fetch(new URL("/api/handover/session", getApiUrl()).toString(), {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const session = data?.session;
+          if (session && Array.isArray(session.messages) && session.messages.length > 0) {
+            setMessages(session.messages);
+            setPatients(Array.isArray(session.patients) ? session.patients : []);
+            setReceivingDoctor(session.receivingDoctor || "");
+            setAskedFollowUp(!!session.askedFollowUp);
+            setReadyToFinalize(!!session.readyToFinalize);
+          }
+        }
+      } catch {
+        // no persisted session available — start fresh, this is non-fatal
+      } finally {
+        setLoadingSession(false);
+        setTimeout(() => scrollRef.current?.scrollToEnd({ animated: false }), 150);
+      }
+    })();
+  }, []);
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.backgroundDefault }}>

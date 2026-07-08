@@ -249,6 +249,31 @@ export async function ensureAddendaTable(): Promise<void> {
   }
 }
 
+export async function ensureHandoverSessionTable(): Promise<void> {
+  const p = getPool();
+  if (!p) return;
+  try {
+    await p.query(`
+      CREATE TABLE IF NOT EXISTS handover_sessions (
+        id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        user_id TEXT NOT NULL,
+        messages JSONB NOT NULL DEFAULT '[]',
+        patients JSONB NOT NULL DEFAULT '[]',
+        receiving_doctor TEXT DEFAULT '',
+        asked_follow_up BOOLEAN DEFAULT false,
+        ready_to_finalize BOOLEAN DEFAULT false,
+        status TEXT DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS handover_sessions_user_active_idx ON handover_sessions(user_id) WHERE status = 'active';
+    `);
+    console.log("[DB] handover_sessions table ready");
+  } catch (e) {
+    console.error("[DB] Failed to ensure handover_sessions table:", e);
+  }
+}
+
 export async function ensureAuthSessionsTable(): Promise<void> {
   const p = getPool();
   if (!p) return;
