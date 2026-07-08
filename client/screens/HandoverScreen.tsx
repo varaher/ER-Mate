@@ -67,15 +67,23 @@ export default function HandoverScreen() {
   const [generating, setGenerating] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [receivingDoctor, setReceivingDoctor] = useState("");
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
+  const LIVE_REFRESH_MS = 30000;
 
   useFocusEffect(
     useCallback(() => {
       loadCases();
+      const interval = setInterval(() => {
+        loadCases({ silent: true });
+      }, LIVE_REFRESH_MS);
+      return () => clearInterval(interval);
     }, [showAll])
   );
 
-  const loadCases = async () => {
-    setLoading(true);
+  const loadCases = async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent ?? false;
+    if (!silent) setLoading(true);
     try {
       const all = await fetchCasesFromProxy<CaseSummary[]>();
       let filtered: CaseSummary[] = all;
@@ -96,18 +104,18 @@ export default function HandoverScreen() {
       });
 
       setCases(filtered);
-      setEntries(
-        filtered.map((c) => ({
-          caseId: c.id,
-          selected: false,
-          bed: "",
-          pendingPlan: "",
-        }))
-      );
+      setEntries((prevEntries) => {
+        const prevByCase = new Map(prevEntries.map((e) => [e.caseId, e]));
+        return filtered.map((c) => {
+          const existing = prevByCase.get(c.id);
+          return existing || { caseId: c.id, selected: false, bed: "", pendingPlan: "" };
+        });
+      });
+      setLastUpdated(new Date());
     } catch {
-      Alert.alert("Error", "Could not load cases. Please try again.");
+      if (!silent) Alert.alert("Error", "Could not load cases. Please try again.");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -257,6 +265,14 @@ export default function HandoverScreen() {
             <Feather name="info" size={14} color={theme.primary} />
             <Text style={[styles.infoText, { color: theme.textSecondary }]}>
               Select cases, add bed numbers and pending notes, then generate the PDF.
+            </Text>
+          </View>
+
+          <View style={styles.liveRow}>
+            <View style={styles.liveDot} />
+            <Text style={[styles.liveText, { color: theme.textMuted }]}>
+              Live · auto-refreshes every 30s
+              {lastUpdated ? ` · updated ${lastUpdated.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}` : ""}
             </Text>
           </View>
 
@@ -486,6 +502,9 @@ const styles = StyleSheet.create({
   },
   infoRow: { flexDirection: "row", alignItems: "flex-start", gap: 8, marginBottom: 12 },
   infoText: { fontSize: 13, lineHeight: 19, flex: 1 },
+  liveRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 12 },
+  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#22C55E" },
+  liveText: { fontSize: 11 },
   filterRow: { flexDirection: "row", gap: 8 },
   filterChip: {
     flexDirection: "row", alignItems: "center", gap: 5,

@@ -46,7 +46,7 @@ Supports email/password, Google Sign-In, and Apple Sign-In. A `warmUpBackend()` 
 - **Consultant Review**: Consultant taps a resident's shift case → review modal → writes clinical notes → case is marked Reviewed (green badge visible to all on the shift).
 - **HOD Dashboard**: Live view of shift slot counts, all doctors currently on shift with duration, all active cases across all shifts, and Force Out for individual sessions. Names resolved from department roster (not raw UUIDs).
 - **Manage Roster**: HOD adds/removes team members; invite link regeneration. Members list shows name, email, role, and on-shift status.
-- **Handover Sheet**: Select cases to hand over, add pending notes, export PDF. Incoming handovers visible in Profile.
+- **Handover Sheet**: Select cases to hand over, add pending notes, export PDF. Incoming handovers visible in Profile. Case list auto-refreshes every 30s while the screen is focused (live indicator + last-updated time shown), merging in new/updated cases without clearing in-progress bed/notes selections.
 
 #### Learn Section
 - **Simulation-Based Teaching**: Branching clinical scenarios with evolving vitals, investigation results, and management decision trees.
@@ -67,6 +67,10 @@ When loading cases saved by the external backend directly (not via the app's own
 - **Procedures**: Top-level `procedures_performed` array is read as fallback when `procedures.procedures_performed` is absent.
 - **Medications**: Top-level `drugs_administered` array is used as fallback when `treatment.medications` is empty.
 - **History**: `history.signs_and_symptoms` → `sample.signsSymptoms`; `history.family_history` and `history.social_history` are appended to `otherHistory`.
+
+### PDF/DOCX Export — Visual Hierarchy & Mandatory Defaults
+All clinical exports (`/api/export/casesheet-pdf`, `/api/export/discharge-pdf`, `/api/export/discharge-docx`) use a shared visual pattern: section headings render bold, dark (`#0F172A`), size 12, underlined; subheadings render smaller, bold-italic, slate gray (`#475569`) — giving clear hierarchy between the two levels on the printed page.
+Every clinical field across all 7 case-sheet tabs (Patient, History, Primary Assessment/ABCDE, Examination, Treatment, Notes, Disposition) and the Discharge Summary now always prints a value — missing/undocumented fields fall back to a normal/negative clinical default (e.g. "Patent" for airway, "NKDA" for allergies, "STABLE" for condition at discharge) via `pdfAlways`/`nv` (casesheet) or `dsAlways`/`docxAlways` (discharge) helpers, so no field is ever left blank on the printed document. Free-text "Notes" fields remain blank-if-empty by design.
 
 ### Dictation Completion Map Architecture
 `client/components/DictationResultModal.tsx` exports:

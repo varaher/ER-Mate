@@ -103,17 +103,40 @@ function NewPatientButton() {
 
           <Text style={[styles.sheetTitle, { color: theme.text }]}>New Patient</Text>
           <Text style={[styles.sheetSub, { color: theme.textSecondary }]}>
-            Choose how you want to document this case
+            Speak the case — get a copyable note in seconds
           </Text>
 
-          {/* ── STANDARD MODE ─────────────────────────────────────── */}
+          {/* ── VOICE MODE (primary) ──────────────────────────────── */}
+          <Pressable
+            style={({ pressed }) => [
+              styles.voiceCard,
+              {
+                backgroundColor: pressed ? `${ACCENT_VOICE}22` : `${ACCENT_VOICE}14`,
+                borderColor: `${ACCENT_VOICE}45`,
+              },
+            ]}
+            onPress={() => go("VoiceCaseSheet" as any)}
+          >
+            <View style={[styles.voiceCardLeft, { backgroundColor: ACCENT_VOICE }]}>
+              <Feather name="mic" size={20} color="#fff" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.voiceCardTitle, { color: theme.text }]}>Speak the Case</Text>
+              <Text style={[styles.voiceCardDesc, { color: theme.textSecondary }]}>
+                Dictate naturally — AI writes the note, ready to copy into any EMR. Correct it by chatting.
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={16} color={ACCENT_VOICE} />
+          </Pressable>
+
+          {/* ── STANDARD MODE (secondary) ─────────────────────────── */}
           <View style={[styles.modeSection, { borderColor: theme.border }]}>
             <View style={styles.modeSectionHeader}>
               <View style={[styles.modeIconBadge, { backgroundColor: `${theme.primary}18` }]}>
                 <Feather name="edit-3" size={14} color={theme.primary} />
               </View>
               <View>
-                <Text style={[styles.modeSectionTitle, { color: theme.text }]}>Standard Entry</Text>
+                <Text style={[styles.modeSectionTitle, { color: theme.text }]}>Prefer to type it in?</Text>
                 <Text style={[styles.modeSectionDesc, { color: theme.textSecondary }]}>
                   Manual form — all fields, AI diagnosis, ABG analysis
                 </Text>
@@ -139,34 +162,6 @@ function NewPatientButton() {
               </Pressable>
             ))}
           </View>
-
-          {/* ── VOICE MODE ────────────────────────────────────────── */}
-          <Pressable
-            style={({ pressed }) => [
-              styles.voiceCard,
-              {
-                backgroundColor: pressed ? `${ACCENT_VOICE}18` : `${ACCENT_VOICE}10`,
-                borderColor: `${ACCENT_VOICE}35`,
-              },
-            ]}
-            onPress={() => go("VoiceCaseSheet" as any)}
-          >
-            <View style={[styles.voiceCardLeft, { backgroundColor: ACCENT_VOICE }]}>
-              <Feather name="mic" size={20} color="#fff" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <View style={styles.voiceCardTitleRow}>
-                <Text style={[styles.voiceCardTitle, { color: theme.text }]}>Voice Case Entry</Text>
-                <View style={[styles.newBadge, { backgroundColor: ACCENT_VOICE }]}>
-                  <Text style={styles.newBadgeText}>NEW</Text>
-                </View>
-              </View>
-              <Text style={[styles.voiceCardDesc, { color: theme.textSecondary }]}>
-                Dictate the patient story — AI fills the case sheet. No AI diagnosis or ABG.
-              </Text>
-            </View>
-            <Feather name="chevron-right" size={16} color={ACCENT_VOICE} />
-          </Pressable>
         </Animated.View>
       </Modal>
     </>
