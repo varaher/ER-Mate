@@ -367,45 +367,49 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   });
 
   // Rename patient: update just the patient name on the external backend.
-  // NOTE: the external backend's PUT /cases/:id validates the full `patient`
-  // object (age/sex are required), so a PATCH-style { patient: { name } }
-  // payload gets rejected with 422. We fetch the current case first and
-  // resend its existing age/sex/phone alongside the new name.
+  // NOTE: the external backend's PUT /cases/:id validates the FULL `patient`
+  // object as a strict schema (age, sex, phone, address, arrival_datetime,
+  // mode_of_arrival, brought_by, informant_name, informant_reliability,
+  // identification_mark are all required) — a partial { patient: { name } }
+  // payload gets rejected with 422. We always fetch the current case first
+  // and merge the new name into the COMPLETE existing patient object before
+  // sending it back, rather than cherry-picking a handful of fields (which
+  // still 422s if the case has other required fields set).
   app.patch("/api/cases/:id/rename", async (req: Request, res: Response) => {
     try {
       const authHeader = req.headers.authorization;
       if (!authHeader) return res.status(401).json({ error: "No auth token" });
       const { id } = req.params;
-      const { name, age: bodyAge, sex: bodySex, phone: bodyPhone } = req.body || {};
+      const { name } = req.body || {};
       if (!name || typeof name !== "string" || !name.trim()) {
         return res.status(400).json({ error: "name is required" });
       }
 
-      let age = bodyAge;
-      let sex = bodySex;
-      let phone = bodyPhone;
-
-      if (age === undefined || sex === undefined) {
-        try {
-          const currentRes = await fetch(`${EXTERNAL_API}/cases/${id}`, {
-            headers: { Authorization: authHeader, "Content-Type": "application/json" },
-          });
-          if (currentRes.ok) {
-            const current = await currentRes.json();
-            const currentPatient = current?.patient || current?.data?.patient || {};
-            if (age === undefined) age = currentPatient.age;
-            if (sex === undefined) sex = currentPatient.sex ?? currentPatient.gender;
-            if (phone === undefined) phone = currentPatient.phone;
-          }
-        } catch (fetchErr) {
-          console.error("[RENAME] failed to fetch current case for age/sex fallback:", fetchErr);
+      let currentPatient: Record<string, any> = {};
+      try {
+        const currentRes = await fetch(`${EXTERNAL_API}/cases/${id}`, {
+          headers: { Authorization: authHeader, "Content-Type": "application/json" },
+        });
+        if (currentRes.ok) {
+          const current = await currentRes.json();
+          currentPatient = current?.patient || current?.data?.patient || {};
+        } else {
+          console.error(`[RENAME] failed to fetch current case ${id}: ${currentRes.status}`);
         }
+      } catch (fetchErr) {
+        console.error("[RENAME] failed to fetch current case for full patient merge:", fetchErr);
       }
 
-      const patientPayload: Record<string, any> = { name: name.trim() };
-      if (age !== undefined && age !== null) patientPayload.age = age;
-      if (sex !== undefined && sex !== null) patientPayload.sex = sex;
-      if (phone !== undefined && phone !== null) patientPayload.phone = phone;
+      // Any client-supplied overrides (e.g. age/sex if the caller already has
+      // fresher values) still win over the fetched snapshot.
+      const patientPayload: Record<string, any> = {
+        ...currentPatient,
+        ...req.body,
+        name: name.trim(),
+      };
+      // The name override loop above may have re-added an undefined `name`
+      // key from req.body spreading before ours; ensure trimmed name wins.
+      delete patientPayload.id;
 
       const externalRes = await fetch(`${EXTERNAL_API}/cases/${id}`, {
         method: "PUT",
