@@ -95,6 +95,7 @@ export default function CaseChatScreen({ route, navigation }: Props) {
           case_type: 'adult',
           userId: user?.id,
           userEmail: user?.email || '',
+          userName: user?.name || '',
         }),
       });
       const data = await res.json();

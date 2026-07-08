@@ -3651,8 +3651,16 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       const {
         transcript, patientContext,
         patient, case_type,
-        userId, userEmail,
+        userId, userEmail, userName: bodyUserName,
       } = req.body;
+
+      let jwtUserName = "";
+      try {
+        const tk = authHeader.split(" ")[1];
+        const payload = tk ? decodeJwt(tk) : null;
+        jwtUserName = payload?.name || payload?.fullName || "";
+      } catch { /* non-fatal */ }
+      const loggedInDoctorName = bodyUserName || jwtUserName || "";
 
       if (!transcript || !transcript.trim()) {
         return res.status(400).json({ error: "No transcript provided" });
@@ -3715,7 +3723,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         course: "",
       };
 
-      const em_resident = ex.emResident || patient?.informant_name || "";
+      const em_resident = ex.emResident || loggedInDoctorName || patient?.informant_name || "";
       const em_consultant = ex.emConsultant || "";
 
       // Step 3 — Create case on external backend
@@ -4386,9 +4394,17 @@ Always use the conversation history for context. Keep replies SHORT (1–2 sente
       const authHeader = req.headers.authorization;
       if (!authHeader) return res.status(401).json({ error: "No auth token" });
 
-      const { patient, extracted: extractedInput, transcript, case_type, userId, userEmail } = req.body;
+      const { patient, extracted: extractedInput, transcript, case_type, userId, userEmail, userName: bodyUserName } = req.body;
 
       if (!extractedInput) return res.status(400).json({ error: "No extracted data provided" });
+
+      let jwtUserNameSc = "";
+      try {
+        const tk = authHeader.split(" ")[1];
+        const payload = tk ? decodeJwt(tk) : null;
+        jwtUserNameSc = payload?.name || payload?.fullName || "";
+      } catch { /* non-fatal */ }
+      const loggedInDoctorNameSc = bodyUserName || jwtUserNameSc || "";
 
       const ex = extractedInput as any;
       const vs = ex.vitalsSuggested || {};
@@ -4434,7 +4450,7 @@ Always use the conversation history for context. Keep replies SHORT (1–2 sente
 
       const vitals_at_arrival = { hr, bp_systolic: bpSys, bp_diastolic: bpDia, rr, spo2, temperature, gcs_e: gcsE, gcs_v: gcsV, gcs_m: gcsM, grbs, pain_score: 0 };
       const presenting_complaint = { text: ex.chiefComplaint || "", onset_type: ex.onset || "Sudden", duration: ex.duration || "", course: "" };
-      const em_resident = ex.emResident || patient?.informant_name || "";
+      const em_resident = ex.emResident || loggedInDoctorNameSc || patient?.informant_name || "";
       const em_consultant = ex.emConsultant || "";
 
       // Create case

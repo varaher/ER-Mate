@@ -346,7 +346,7 @@ export function computeErDurationLabel(erArrivalTime?: string): string {
   return mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins} minutes`;
 }
 
-export function generateDischargeSummary(c: CaseData, erDurationLabel?: string): string {
+export function generateDischargeSummary(c: CaseData, erDurationLabel?: string, narrativeOverride?: string): string {
   const L: string[] = [];
   const today = c.date || new Date().toLocaleDateString('en-IN');
 
@@ -455,13 +455,17 @@ export function generateDischargeSummary(c: CaseData, erDurationLabel?: string):
   const sex   = c.sex ? c.sex.toLowerCase() : 'patient';
   const pType = c.patientType === 'Pediatric' ? 'paediatric' : '';
   const cx    = complaint !== 'Not documented' ? complaint : (c.disposition.diagnosis || 'unspecified complaint');
-  let narrative = `${age ? `A ${age} ${pType} ${sex}` : 'The patient'} named ${c.name || 'the patient'} presented to the emergency department with ${cx}.`;
-  if (c.history.events) narrative += ` ${c.history.events}`;
-  const pmh = c.history.pastHistory;
-  if (pmh && pmh.toLowerCase() !== 'no significant past medical history') {
-    narrative += ` Background includes: ${pmh}.`;
+  let narrative = narrativeOverride && narrativeOverride.trim()
+    ? narrativeOverride.trim()
+    : `${age ? `A ${age} ${pType} ${sex}` : 'The patient'} named ${c.name || 'the patient'} presented to the emergency department with ${cx}.`;
+  if (!narrativeOverride) {
+    if (c.history.events) narrative += ` ${c.history.events}`;
+    const pmh = c.history.pastHistory;
+    if (pmh && pmh.toLowerCase() !== 'no significant past medical history') {
+      narrative += ` Background includes: ${pmh}.`;
+    }
+    narrative += ` On examination, the patient was ${c.exam.general || 'conscious, alert, and oriented'}.`;
   }
-  narrative += ` On examination, the patient was ${c.exam.general || 'conscious, alert, and oriented'}.`;
   L.push(narrative);
 
   const t = c.treatment;
@@ -2357,7 +2361,7 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
             }
           );
           const json = await resp.json();
-          const dsText = json?.summary || generateDischargeSummary(liveCase, computeErDurationLabel(erArrivalTime));
+          const dsText = generateDischargeSummary(liveCase, computeErDurationLabel(erArrivalTime), json?.summary);
           push({ role: 'assistant', content: 'AI-enhanced discharge summary assembled from the clinical timeline.', type: 'discharge_summary', specialContent: dsText });
         } catch {
           push({ role: 'assistant', content: 'Discharge summary generated from your case data.', type: 'discharge_summary', specialContent: generateDischargeSummary(liveCase, computeErDurationLabel(erArrivalTime)) });

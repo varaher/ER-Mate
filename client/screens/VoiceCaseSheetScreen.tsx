@@ -266,7 +266,7 @@ export default function VoiceCaseSheetScreen() {
             arrival_datetime: new Date().toISOString(),
           },
           extracted, transcript, case_type: caseType,
-          userId: user?.id, userEmail: user?.email || "",
+          userId: user?.id, userEmail: user?.email || "", userName: user?.name || "",
         }),
       });
 
