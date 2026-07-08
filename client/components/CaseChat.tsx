@@ -1067,6 +1067,15 @@ function AddendumModal({
   const [handoverTo, setHandoverTo]     = useState('');
   const [saving, setSaving]             = useState(false);
   const [error, setError]               = useState<string | null>(null);
+  const [isRecording, setIsRecording]       = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [recordingSecs, setRecordingSecs]   = useState(0);
+
+  const webRecRef = useRef<{ mr: MediaRecorder | null; chunks: Blob[]; stream: MediaStream | null }>({
+    mr: null, chunks: [], stream: null,
+  });
+  const nativeRecRef = useRef<Audio.Recording | null>(null);
+  const recTimerRef  = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const resetForm = () => {
     setSelectedType('clinical_update');
@@ -1075,9 +1084,36 @@ function AddendumModal({
     setHandoverFrom('');
     setHandoverTo('');
     setError(null);
+    setIsRecording(false);
+    setIsTranscribing(false);
+    setRecordingSecs(0);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (recTimerRef.current) clearInterval(recTimerRef.current);
+      if (Platform.OS === 'web') {
+        webRecRef.current.stream?.getTracks().forEach(t => t.stop());
+      } else if (nativeRecRef.current) {
+        nativeRecRef.current.stopAndUnloadAsync().catch(() => {});
+      }
+    };
+  }, []);
+
+  const abortRecording = () => {
+    if (recTimerRef.current) { clearInterval(recTimerRef.current); recTimerRef.current = null; }
+    if (Platform.OS === 'web') {
+      const mr = webRecRef.current.mr;
+      if (mr && mr.state !== 'inactive') { mr.onstop = null as any; mr.stop(); }
+      webRecRef.current.stream?.getTracks().forEach(t => t.stop());
+    } else if (nativeRecRef.current) {
+      nativeRecRef.current.stopAndUnloadAsync().catch(() => {});
+      nativeRecRef.current = null;
+    }
   };
 
   const handleClose = () => {
+    if (isRecording) abortRecording();
     resetForm();
     onClose();
   };
@@ -1101,6 +1137,135 @@ function AddendumModal({
     } finally {
       setSaving(false);
     }
+  };
+
+  const startMicRecording = async () => {
+    setError(null);
+    try {
+      if (Platform.OS === 'web') {
+        if (!navigator.mediaDevices?.getUserMedia) {
+          setError('Voice recording is not supported in this browser');
+          return;
+        }
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        webRecRef.current.stream = stream;
+        webRecRef.current.chunks = [];
+        const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
+        const mr = new MediaRecorder(stream, { mimeType });
+        mr.ondataavailable = e => { if (e.data.size > 0) webRecRef.current.chunks.push(e.data); };
+        mr.onstop = () => {
+          const blob = new Blob(webRecRef.current.chunks, { type: mimeType });
+          webRecRef.current.stream?.getTracks().forEach(t => t.stop());
+          transcribeAddendumAudio(blob, null);
+        };
+        webRecRef.current.mr = mr;
+        mr.start(100);
+      } else {
+        const perm = await Audio.requestPermissionsAsync();
+        if (!perm.granted) {
+          setError('Microphone access is needed for voice dictation');
+          return;
+        }
+        await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+        const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+        nativeRecRef.current = recording;
+      }
+      setRecordingSecs(0);
+      recTimerRef.current = setInterval(() => setRecordingSecs(s => s + 1), 1000);
+      setIsRecording(true);
+    } catch (err) {
+      console.error('[AddendumModal] startMicRecording:', err);
+      setError('Failed to start recording. Please try again.');
+    }
+  };
+
+  const stopMicRecording = async () => {
+    if (recTimerRef.current) { clearInterval(recTimerRef.current); recTimerRef.current = null; }
+    setIsRecording(false);
+    try {
+      if (Platform.OS === 'web') {
+        const mr = webRecRef.current.mr;
+        if (mr && mr.state !== 'inactive') mr.stop();
+      } else {
+        const rec = nativeRecRef.current;
+        if (!rec) return;
+        await rec.stopAndUnloadAsync();
+        await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+        const uri = rec.getURI();
+        nativeRecRef.current = null;
+        if (uri) transcribeAddendumAudio(null, uri);
+      }
+    } catch (err) {
+      console.error('[AddendumModal] stopMicRecording:', err);
+    }
+  };
+
+  const transcribeAddendumAudio = async (blob: Blob | null, uri: string | null) => {
+    setIsTranscribing(true);
+    try {
+      const formData = new FormData();
+      if (Platform.OS === 'web' && blob) {
+        const ext = blob.type.includes('webm') ? 'webm' : 'm4a';
+        formData.append('audio', blob, `voice.${ext}`);
+      } else if (uri) {
+        const ext = uri.split('.').pop() || 'm4a';
+        formData.append('audio', {
+          uri, name: `voice.${ext}`,
+          type: `audio/${ext === 'caf' ? 'x-caf' : ext === 'm4a' ? 'mp4' : ext}`,
+        } as any);
+      } else {
+        return;
+      }
+      formData.append('mode', 'field');
+
+      const apiUrl = getApiUrl();
+      const res = await fetch(new URL('/api/voice/transcribe', apiUrl).toString(), {
+        method: 'POST', body: formData,
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Transcription failed');
+      }
+      const data = await res.json();
+      const text: string = (data.transcript || '').trim();
+      if (!text) {
+        setError('No speech detected. Please try again.');
+        return;
+      }
+
+      setContent(prev => (prev.trim() ? `${prev.trim()} ${text}` : text));
+
+      // Ask AI to suggest the best addendum type for the dictated text.
+      try {
+        const classifyRes = await fetch(new URL('/api/ai/classify-addendum', apiUrl).toString(), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text }),
+        });
+        if (classifyRes.ok) {
+          const classified = await classifyRes.json();
+          if (classified.type && (ADDENDUM_TYPES as readonly string[]).includes(classified.type)) {
+            setSelectedType(classified.type as AddendumType);
+          }
+          if (classified.specialty && !specialty.trim()) {
+            setSpecialty(classified.specialty);
+          }
+        }
+      } catch (classifyErr) {
+        console.warn('[AddendumModal] classify-addendum skipped:', classifyErr);
+      }
+    } catch (err: any) {
+      console.error('[AddendumModal] transcribe:', err);
+      setError(err?.message || 'Transcription failed. Please try again or type instead.');
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
+  const handleMicPress = () => {
+    if (saving) return;
+    if (isRecording) stopMicRecording();
+    else if (!isTranscribing) startMicRecording();
   };
 
   const needsSpecialty = selectedType === 'cross_consultation' || selectedType === 'consultant_review';
@@ -1170,7 +1335,27 @@ function AddendumModal({
           </>
         ) : null}
 
-        <Text style={am.sectionLabel}>CONTENT</Text>
+        <View style={am.contentLabelRow}>
+          <Text style={am.sectionLabel}>CONTENT</Text>
+          <Pressable
+            onPress={handleMicPress}
+            disabled={isTranscribing || saving}
+            style={[
+              am.micBtn,
+              isRecording ? am.micBtnActive : null,
+              (isTranscribing || saving) ? { opacity: 0.5 } : null,
+            ]}
+          >
+            {isTranscribing ? (
+              <ActivityIndicator size="small" color={C.muted} />
+            ) : (
+              <Feather name={isRecording ? 'square' : 'mic'} size={13} color={isRecording ? '#fff' : C.muted} />
+            )}
+            <Text style={[am.micBtnText, isRecording && { color: '#fff' }]}>
+              {isTranscribing ? 'Transcribing…' : isRecording ? `Recording ${recordingSecs}s` : 'Dictate'}
+            </Text>
+          </Pressable>
+        </View>
         <TextInput
           style={[am.textInput, am.contentInput]}
           value={content}
@@ -3133,6 +3318,19 @@ const am = StyleSheet.create({
     color: C.ink,
   },
   contentInput: { minHeight: 100, textAlignVertical: 'top' },
+  contentLabelRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+  },
+  micBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: 99, borderWidth: 1.5,
+    borderColor: C.border, backgroundColor: C.white,
+  },
+  micBtnActive: {
+    backgroundColor: C.red, borderColor: C.red,
+  },
+  micBtnText: { fontSize: 10.5, fontWeight: '700', color: C.muted },
   errorText: { fontSize: 12, color: C.red, fontWeight: '500' },
   saveBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,

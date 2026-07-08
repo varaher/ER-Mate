@@ -3409,6 +3409,20 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  app.post("/api/ai/classify-addendum", async (req: Request, res: Response) => {
+    try {
+      const { text } = req.body;
+      if (!text || typeof text !== 'string' || !text.trim()) {
+        return res.status(400).json({ error: "Text is required" });
+      }
+      const classified = await classifyAddendum(text);
+      res.json({ success: true, ...classified });
+    } catch (error) {
+      console.error("Addendum classification error:", error);
+      res.status(500).json({ error: (error as Error).message || "Failed to classify addendum" });
+    }
+  });
+
   app.post("/api/voice/transcribe", upload.single('audio'), async (req: Request, res: Response) => {
     try {
       const file = req.file;
