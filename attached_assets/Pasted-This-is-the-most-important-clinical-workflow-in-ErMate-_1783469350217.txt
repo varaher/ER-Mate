@@ -1,0 +1,438 @@
+This is the most important clinical workflow in ErMate. Let me map it completely.
+
+---
+
+## The Reality You're Describing
+
+```
+Patient arrives Friday 2pm
+Still in ER Sunday 2pm
+48 hours of:
+  Multiple doctors documenting
+  3-4 shift handovers
+  Lab reports coming in waves
+  ECG, Echo, CT results
+  Cardiology review
+  Nephrology cross-consultation
+  Multiple medication changes
+  Patient condition changing
+  Nurses adding observations
+  
+Currently: all of this is chaos
+           scattered across WhatsApp,
+           paper, different systems
+           
+ErMate should: organise it into one
+               coherent medical record
+```
+
+---
+
+## The Structure — One Patient, 48 Hours
+
+```
+MASTER CASE RECORD
+Patient: Abdulahad · 52M · P1
+ER Arrival: Friday 04-07-2026 · 14:32
+Current Status: In ER · 48h 14m
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 1: INITIAL CASE NOTE
+(Created by first doctor, never changes)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+INITIAL ASSESSMENT AND EMERGENCY
+DEPARTMENT CASE RECORD
+CASE SEEN BY Dr. Cylphy ON 04-07-2026
+AT 14:32
+
+Presenting Complaint: Chest pain × 2 hours
+Primary Assessment: ...full ABCDE...
+History: ...full SAMPLE...
+Initial Treatment: Aspirin, Morphine IV
+Impression: Probable NSTEMI
+Plan: Admit CCU, cardiology review
+
+EM Resident: Dr. Cylphy
+EM Consultant: Dr. Nirmal
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 2: CLINICAL TIMELINE
+(Chronological — auto-assembled)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ADDENDUM · 04-07-2026 · 16:45 · Dr. Cylphy
+  ECG result: ST elevation confirmed V1-V4
+  Troponin T: 0.8 ng/mL (raised)
+  Plan: Heparin infusion started
+
+ADDENDUM · 04-07-2026 · 17:30 · Dr. Nirmal (Consultant)
+  CONSULTANT REVIEW
+  Patient haemodynamically stable on treatment
+  Echo: LVEF 40%, anterior wall hypokinesia
+  Plan: Continue anticoagulation, 
+        await cath lab availability
+
+HANDOVER · 04-07-2026 · 22:00
+  SHIFT CHANGE: Evening → Night
+  Handing over: Dr. Cylphy (Evening)
+  Receiving: Dr. Sanjay (Night)
+  Status at handover: Stable on heparin
+  Pending: Repeat troponin at 22:30,
+           Cath lab decision tomorrow morning
+  Vitals at handover: BP 110/70, HR 88
+
+ADDENDUM · 05-07-2026 · 00:15 · Dr. Sanjay
+  Repeat troponin: 1.2 ng/mL (rising)
+  Patient complaint: Chest pain recurrence
+  Additional: GTN spray × 2 given
+  Plan: Urgent cath lab notification
+
+ADDENDUM · 05-07-2026 · 02:30 · Dr. Sanjay
+  Nephrology cross-consultation
+  Reason: AKI — creatinine 2.1 (baseline 1.0)
+  Nephrology review: Dr. Rajan
+  Plan: Restrict contrast, IV fluids 
+        with caution, monitor UO hourly
+
+CROSS-CONSULTATION · 05-07-2026 · 06:00
+  Specialty: Nephrology
+  Consultant: Dr. Rajan
+  Findings: AKI stage 1, likely
+            contrast-induced risk
+  Recommendations: 
+    IV NS 1L over 12h
+    Avoid nephrotoxic agents
+    Monitor UO, creatinine repeat at 12h
+
+HANDOVER · 05-07-2026 · 06:00
+  SHIFT CHANGE: Night → Morning
+  Handing over: Dr. Sanjay (Night)
+  Receiving: Dr. Priya (Morning)
+  Status at handover: AKI developing,
+                      rising troponin
+  Pending: Nephrology review ongoing,
+           cath lab at 10am
+  Critical notes: Contrast restriction
+                  IV fluids cautiously
+
+ADDENDUM · 05-07-2026 · 09:45 · Dr. Priya
+  Cardiology review: Dr. Arun
+  Cath lab decision: Proceed today 13:00
+  Patient consent: Obtained for PCI
+  Pre-procedure: NBM since 06:00
+  Bloods: CBC, coag sent
+
+ADDENDUM · 05-07-2026 · 10:30 · Dr. Priya
+  Investigation results:
+  CBC: Hb 11.2 (low), WBC 14.2
+  Coagulation: INR 1.1 (normal)
+  RFT: Creatinine 2.3 (rising)
+  LFT: Normal
+  Echo (repeat): LVEF 35%
+
+HANDOVER · 05-07-2026 · 14:00
+  SHIFT CHANGE: Morning → Evening
+  Handing over: Dr. Priya (Morning)
+  Receiving: Dr. Rahul (Evening)
+  Status: Post-cath lab, now back in ER
+           PCI to LAD performed
+           Femoral access site intact
+  Pending: Monitor groin site,
+           repeat ECG, Hb post-procedure
+  Medications: Dual antiplatelet continued
+
+ADDENDUM · 05-07-2026 · 16:00 · Dr. Rahul
+  Post-procedure status: Stable
+  ECG (post-PCI): ST resolution noted
+  Groin site: No haematoma
+  UO: 40ml/hr (adequate)
+  Plan: Transfer to CCU when bed available
+```
+
+---
+
+## The Three Things That Must Work
+
+---
+
+### Thing 1 — Addendum Logic
+
+```
+Every new dictation or typed update
+on an existing case creates a NEW
+TIMESTAMPED ADDENDUM — not a new
+case note.
+
+The original case note is LOCKED
+after creation. It never changes.
+(Medico-legal requirement)
+
+Corrections go into addenda:
+"Corrected — patient's age is 54 not 52"
+→ ADDENDUM 04-07-2026 · 15:00
+  CORRECTION: Patient age corrected
+  to 54 years.
+
+Results go into addenda:
+"Troponin 0.8 raised"
+→ ADDENDUM 04-07-2026 · 16:45
+  Investigation result received:
+  Troponin T: 0.8 ng/mL (elevated)
+
+Consultant reviews go into addenda:
+"Cardiology reviewed — Echo shows 40% EF"
+→ ADDENDUM tagged as CONSULTANT REVIEW
+  With consultant name and time
+
+Cross-consultations go into addenda:
+"Nephrology consulted — AKI stage 1"
+→ ADDENDUM tagged as CROSS-CONSULTATION
+  With specialty and consultant name
+```
+
+---
+
+### Thing 2 — Handover Structure
+
+```
+Each handover is a formal document section:
+
+HANDOVER ENTRY
+Date/Time: 05-07-2026 · 06:00
+Type: Shift Change (Night → Morning)
+Handing over: Dr. Sanjay (Night Resident)
+Receiving: Dr. Priya (Morning Resident)
+Consultant aware: Dr. Nirmal
+
+PATIENT STATUS AT HANDOVER
+Condition: Unstable — rising troponin,
+           developing AKI
+Vitals: BP 118/74, HR 92, SpO₂ 96%
+GCS: 15/15
+
+ACTIVE ISSUES
+1. NSTEMI — troponin rising (0.8 → 1.2)
+   Cath lab needed — discuss at morning round
+2. AKI Stage 1 — creatinine 2.1
+   Nephrology reviewed — fluid restriction
+3. GTN given × 2 for chest pain at 00:15
+
+PENDING TASKS
+□ Repeat troponin at 08:00
+□ Nephrology follow-up
+□ Cath lab decision
+□ Creatinine repeat at 12:00
+□ Monitor UO hourly
+
+MEDICATIONS ON HANDOVER
+Heparin infusion: 1000 IU/hr — continue
+Aspirin: 100mg OD — continue
+Clopidogrel: 75mg OD — continue
+NS: 1L over 12h (nephrology order)
+
+SIGNED: Dr. Sanjay · 05-07-2026 · 06:00
+RECEIVED: Dr. Priya · 05-07-2026 · 06:05
+```
+
+---
+
+### Thing 3 — Discharge Summary Course in Hospital
+
+```
+This is the most important section.
+Currently ErMate generates a generic paragraph.
+
+For a 48-hour ER stay, Course in Hospital
+must be a proper clinical narrative:
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+HOSPITAL COURSE & TREATMENT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Mr. Abdulahad, a 52-year-old male with
+known T2DM and hypertension, presented
+to the emergency department on 04-07-2026
+at 14:32 with acute onset crushing central
+chest pain of 2 hours duration.
+
+INITIAL ASSESSMENT (04-07-2026 · 14:32):
+Patient was haemodynamically compromised
+on arrival — BP 94/60, HR 108, SpO₂ 96%.
+ECG demonstrated ST elevation in leads
+V1-V4 consistent with anterior STEMI.
+Initial management included Aspirin 325mg,
+Morphine 5mg IV, and Heparin 5000 IU IV.
+
+INVESTIGATIONS:
+Serial troponin: 0.8 → 1.2 ng/mL (rising)
+Echo: LVEF 35-40%, anterior wall hypokinesia
+CBC: Hb 11.2, WBC 14.2
+RFT: Creatinine rising 1.0 → 2.1 → 2.3
+     (AKI Stage 1 — baseline 1.0)
+Coagulation: INR 1.1
+
+CONSULTATIONS:
+Cardiology (Dr. Arun · 05-07-2026 · 09:45):
+  PCI planned — cath lab 13:00 on 05-07-2026
+Nephrology (Dr. Rajan · 05-07-2026 · 02:30):
+  AKI Stage 1 — contrast risk, fluid restriction
+
+INTERVENTIONS:
+  PCI to LAD performed — 05-07-2026 · 13:00
+  Post-procedure: ST resolution confirmed
+  Femoral access: Intact, no haematoma
+
+CLINICAL COURSE:
+Patient had recurrence of chest pain at
+00:15 on 05-07-2026 — responded to GTN × 2.
+AKI developed — likely pre-renal + contrast
+risk. Nephrology managed conservatively
+with IV NS and fluid restriction. UO
+maintained at 40ml/hr post-procedure.
+
+CONDITION AT DISCHARGE FROM ER:
+Haemodynamically stable post-PCI.
+Creatinine trending — monitoring required.
+Transferred to CCU on 05-07-2026 at 18:00.
+
+TOTAL ER STAY: 27 hours 28 minutes
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+---
+
+## What to Build — Tell Your Developer
+
+**Database change — addendum types:**
+
+```typescript
+// Every addendum must have a type:
+type AddendumType =
+  | "clinical_update"      // doctor adds findings
+  | "investigation_result" // lab/imaging result
+  | "consultant_review"    // senior reviews case
+  | "cross_consultation"   // another specialty consulted
+  | "medication_change"    // drug added/changed/stopped
+  | "procedure_note"       // procedure performed
+  | "shift_handover"       // shift change entry
+  | "correction"           // corrects earlier entry
+
+// addenda table:
+{
+  id, caseId, type,
+  content, // structured JSON
+  doctorId, doctorName, doctorRole,
+  specialty, // for cross-consultations
+  timestamp,
+  shiftId,
+  handoverFromDoctor, // for handovers
+  handoverToDoctor,   // for handovers
+}
+```
+
+**GPT-4o prompt for Course in Hospital:**
+
+```
+Generate a comprehensive "Course in Hospital"
+narrative for the discharge summary.
+
+Use ALL of the following data:
+  Initial case note: ${initialNote}
+  All addenda in chronological order: ${addenda}
+  All investigation results: ${results}
+  All consultations: ${consultations}
+  All handovers: ${handovers}
+  All procedures: ${procedures}
+  Discharge vitals: ${dischargeVitals}
+  Total ER duration: ${duration}
+
+Structure the narrative as:
+  1. Brief presentation paragraph
+  2. INITIAL ASSESSMENT section
+  3. INVESTIGATIONS section (all results)
+  4. CONSULTATIONS section (each specialty)
+  5. INTERVENTIONS section (procedures done)
+  6. CLINICAL COURSE section (what happened over time)
+  7. CONDITION AT DISCHARGE section
+
+Write as a proper medical narrative —
+not bullet points, not "not documented".
+Include timestamps for key events.
+Include all consultant names and specialties.
+Include the total ER stay duration.
+
+This must be comprehensive enough that
+any doctor picking up the patient from
+the discharge summary knows the full story.
+```
+
+**Handover PDF — what to include:**
+
+```
+The handover PDF printout must contain:
+
+PAGE 1 — Patient Summary
+  Name, Age, Sex, ER number, Bed
+  Arrival date/time
+  Chief complaint
+  Current diagnosis
+  Current status (Stable/Unstable)
+  Current vitals
+
+PAGE 1 (continued) — Active Issues
+  Numbered list of all active problems
+  With current management for each
+
+PAGE 1 (continued) — Pending Tasks
+  Checkbox list of pending investigations,
+  reviews, decisions
+
+PAGE 2 — Full Clinical Timeline
+  Every addendum in chronological order
+  Colour-coded by type:
+    Blue = clinical update
+    Green = investigation result
+    Red = critical event
+    Purple = consultant review
+    Orange = handover
+  Each entry: time · doctor · content
+
+PAGE 2 (continued) — Current Medications
+  Full medication list with doses and times
+
+PAGE 2 (continued) — Signatures
+  Handing doctor + time
+  Receiving doctor + time
+```
+
+---
+
+## Summary — Three Rules
+
+```
+RULE 1: INITIAL CASE NOTE IS LOCKED
+  Created once by the first doctor
+  Never edited
+  All changes go into addenda
+
+RULE 2: EVERYTHING IS TIMESTAMPED
+  Every addendum: date + time + doctor
+  Every handover: who gave, who received
+  Every result: when it arrived
+  Every consultation: when done, by whom
+
+RULE 3: DISCHARGE SUMMARY READS EVERYTHING
+  Course in Hospital pulls from:
+    Initial note
+    All addenda
+    All results
+    All consultations
+    All handovers
+    All procedures
+  Assembled chronologically
+  Written as a clinical narrative
+  Complete enough to stand alone
+```
+
+This is the backbone of ErMate for complex ER stays. Build this correctly and ErMate becomes genuinely indispensable — not just for quick cases but for every patient who stays in the ER more than a few hours.
