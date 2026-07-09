@@ -1078,6 +1078,8 @@ function AddendumModal({
   const [isRecording, setIsRecording]       = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [recordingSecs, setRecordingSecs]   = useState(0);
+  const [needsReview, setNeedsReview]       = useState(false);
+  const [aiSuggestedType, setAiSuggestedType] = useState<AddendumType | null>(null);
 
   const webRecRef = useRef<{ mr: MediaRecorder | null; chunks: Blob[]; stream: MediaStream | null }>({
     mr: null, chunks: [], stream: null,
@@ -1095,6 +1097,8 @@ function AddendumModal({
     setIsRecording(false);
     setIsTranscribing(false);
     setRecordingSecs(0);
+    setNeedsReview(false);
+    setAiSuggestedType(null);
   };
 
   useEffect(() => {
@@ -1244,6 +1248,7 @@ function AddendumModal({
       setContent(prev => (prev.trim() ? `${prev.trim()} ${text}` : text));
 
       // Ask AI to suggest the best addendum type for the dictated text.
+      let aiClassifiedType: AddendumType | null = null;
       try {
         const classifyRes = await fetch(new URL('/api/ai/classify-addendum', apiUrl).toString(), {
           method: 'POST',
@@ -1253,7 +1258,8 @@ function AddendumModal({
         if (classifyRes.ok) {
           const classified = await classifyRes.json();
           if (classified.type && (ADDENDUM_TYPES as readonly string[]).includes(classified.type)) {
-            setSelectedType(classified.type as AddendumType);
+            aiClassifiedType = classified.type as AddendumType;
+            setSelectedType(aiClassifiedType);
           }
           if (classified.specialty && !specialty.trim()) {
             setSpecialty(classified.specialty);
@@ -1262,6 +1268,10 @@ function AddendumModal({
       } catch (classifyErr) {
         console.warn('[AddendumModal] classify-addendum skipped:', classifyErr);
       }
+
+      // Require the doctor to review AI-filled content before saving.
+      setAiSuggestedType(aiClassifiedType);
+      setNeedsReview(true);
     } catch (err: any) {
       console.error('[AddendumModal] transcribe:', err);
       setError(err?.message || 'Transcription failed. Please try again or type instead.');
@@ -1295,19 +1305,45 @@ function AddendumModal({
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={am.typeScroll} contentContainerStyle={am.typeRow}>
           {ADDENDUM_TYPES.map(t => {
             const sel = t === selectedType;
+            const isAiPicked = needsReview && t === aiSuggestedType;
             const color = ADDENDUM_COLORS[t];
             return (
               <Pressable
                 key={t}
-                onPress={() => setSelectedType(t)}
-                style={[am.typeChip, sel && { backgroundColor: color + '20', borderColor: color }]}
+                onPress={() => { setSelectedType(t); if (needsReview) setNeedsReview(false); }}
+                style={[
+                  am.typeChip,
+                  sel && { backgroundColor: color + '20', borderColor: color },
+                  isAiPicked && { borderColor: '#F59E0B', borderWidth: 1.5 },
+                ]}
               >
                 <Feather name={ADDENDUM_ICONS[t] as any} size={11} color={sel ? color : C.muted} />
                 <Text style={[am.typeChipText, sel && { color }]}>{ADDENDUM_LABELS[t]}</Text>
+                {isAiPicked ? (
+                  <View style={am.aiTypeBadge}>
+                    <Feather name="mic" size={8} color="#fff" />
+                  </View>
+                ) : null}
               </Pressable>
             );
           })}
         </ScrollView>
+
+        {needsReview ? (
+          <View style={am.reviewBanner}>
+            <View style={am.reviewBannerLeft}>
+              <Feather name="mic" size={13} color="#92400E" />
+              <View style={{ flex: 1 }}>
+                <Text style={am.reviewBannerTitle}>Voice dictation — please review before saving</Text>
+                <Text style={am.reviewBannerSub}>Check the type and content, especially drug names and numbers.</Text>
+              </View>
+            </View>
+            <Pressable onPress={() => setNeedsReview(false)} style={am.reviewConfirmBtn} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+              <Feather name="check" size={12} color="#fff" />
+              <Text style={am.reviewConfirmText}>Looks good</Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         {needsSpecialty ? (
           <>
@@ -1367,7 +1403,8 @@ function AddendumModal({
         <TextInput
           style={[am.textInput, am.contentInput]}
           value={content}
-          onChangeText={setContent}
+          onChangeText={t => { setContent(t); if (needsReview) setNeedsReview(false); }}
+          onFocus={() => { if (needsReview) setNeedsReview(false); }}
           placeholder={
             selectedType === 'investigation_result'
               ? 'e.g. Troponin T: 0.8 ng/mL (raised). ECG: ST elevation V1-V4.'
@@ -1388,12 +1425,21 @@ function AddendumModal({
         ) : null}
 
         <Pressable
-          onPress={handleSave}
+          onPress={needsReview ? () => setNeedsReview(false) : handleSave}
           disabled={saving}
-          style={[am.saveBtn, saving && { opacity: 0.6 }]}
+          style={[
+            am.saveBtn,
+            saving && { opacity: 0.6 },
+            needsReview && am.saveBtnReview,
+          ]}
         >
           {saving ? (
             <ActivityIndicator size="small" color="#fff" />
+          ) : needsReview ? (
+            <>
+              <Feather name="check-circle" size={15} color="#fff" />
+              <Text style={am.saveBtnText}>Confirm & Save</Text>
+            </>
           ) : (
             <>
               <Feather name="check" size={15} color="#fff" />
@@ -3440,5 +3486,63 @@ const am = StyleSheet.create({
     borderRadius: 14, paddingVertical: 14,
     marginTop: 4,
   },
+  saveBtnReview: {
+    backgroundColor: '#D97706',
+  },
   saveBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
+  reviewBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  reviewBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    flex: 1,
+  },
+  reviewBannerTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#92400E',
+    marginBottom: 2,
+  },
+  reviewBannerSub: {
+    fontSize: 11,
+    color: '#B45309',
+    lineHeight: 15,
+  },
+  reviewConfirmBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#D97706',
+    borderRadius: 99,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    flexShrink: 0,
+  },
+  reviewConfirmText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  aiTypeBadge: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#D97706',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });
