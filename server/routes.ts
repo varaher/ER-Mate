@@ -1380,12 +1380,14 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
   app.post("/api/export/handover-pdf", async (req: Request, res: Response) => {
     try {
-      const { cases, doctorName, receivingDoctor, shiftDate, shiftTime } = req.body as {
+      const { cases, doctorName, receivingDoctor, shiftDate, shiftTime, hospitalName, departmentName } = req.body as {
         cases: Array<{ caseData: any; bed: string; pendingPlan: string }>;
         doctorName: string;
         receivingDoctor?: string;
         shiftDate: string;
         shiftTime: string;
+        hospitalName?: string;
+        departmentName?: string;
       };
 
       if (!cases || !Array.isArray(cases) || cases.length === 0) {
@@ -1408,244 +1410,234 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         res.send(buf);
       });
 
-      const nv = (v: any, d = "—") => {
+      const nv = (v: any, d = "") => {
         if (v === undefined || v === null || v === "") return d;
         if (Array.isArray(v)) return v.filter(Boolean).join(", ") || d;
         return String(v);
       };
 
-      // ── Colour palette ───────────────────────────────────────────────────
-      const DARK = "#0D1117";
-      const GREEN = "#1DB870";
-      const GRAY = "#6B7280";
-      const BORDER = "#D1D5DB";
-      const P_COLORS: Record<number, string> = {
-        1: "#EF4444", 2: "#F97316", 3: "#EAB308", 4: "#22C55E", 5: "#3B82F6",
-      };
-      const P_LABELS: Record<number, string> = {
-        1: "P1 Red", 2: "P2 Orange", 3: "P3 Yellow", 4: "P4 Green", 5: "P5 Blue",
+      // ── Status colour mapping (Rajagiri format) ─────────────────────────
+      const STATUS_CRITICAL  = "#DC2626";
+      const STATUS_UNSTABLE  = "#D97706";
+      const STATUS_STABLE    = "#16A34A";
+      const STATUS_DISCHARGE = "#7C3AED";
+      const HOSP_GREEN       = "#1A5C3A";
+      const GRAY             = "#6B7280";
+      const BORDER           = "#B0C8B8";
+
+      const getStatusInfo = (cd: any): { label: string; color: string } => {
+        const s = (cd.status || "").toLowerCase();
+        if (s === "completed" || s === "discharged") return { label: "DISCHARGE", color: STATUS_DISCHARGE };
+        const p = Number(cd.triage_priority || 4);
+        if (p === 1) return { label: "CRITICAL", color: STATUS_CRITICAL };
+        if (p <= 3)  return { label: "UNSTABLE", color: STATUS_UNSTABLE };
+        return { label: "STABLE", color: STATUS_STABLE };
       };
 
-      // ── Layout constants ────────────────────────────────────────────────
+      const statusInfos = cases.map((e) => getStatusInfo(e.caseData || {}));
+      const counts = { CRITICAL: 0, UNSTABLE: 0, STABLE: 0, DISCHARGE: 0 };
+      statusInfos.forEach((s) => { (counts as any)[s.label]++; });
+
+      // ── Layout ──────────────────────────────────────────────────────────
       const PW = 841.89;
       const PH = 595.28;
       const ML = 14;
       const MR = 14;
-      const tableW = PW - ML - MR;   // 813.89
+      const tableW = PW - ML - MR;  // 813.89
 
-      // 8 columns: Bed | Patient | Complaint | Diagnosis | Vitals | Ix | Treatment | Pending
+      const HDR_H   = 65;
+      const BADGE_H = 22;
+      const COL_HDR = 21;
+      const SIG_H   = 52;
+      const PAD     = 5;
+      const FONT_H  = 6.5;
+      const FONT_C  = 7.5;
+
+      const availForRows = PH - HDR_H - BADGE_H - COL_HDR - SIG_H;
+      const ROW_H = Math.min(72, Math.floor(availForRows / Math.max(cases.length, 1)));
+
+      // 7 columns — Rajagiri format
       const COLS = [
-        { label: "Bed",                     w: 60  },
-        { label: "Patient",                 w: 88  },
-        { label: "Complaint / Summary",     w: 100 },
-        { label: "Provisional Diagnosis",   w: 108 },
-        { label: "Initial Vitals + VBG/ECG",w: 95  },
-        { label: "Key Investigations",      w: 102 },
-        { label: "Treatment / Consults",    w: 110 },
-        { label: "Pending / Plan",          w: 150.89 },
+        { label: "Patient Label",               w: 118 },
+        { label: "Presenting Complaints",        w: 110 },
+        { label: "Past Medical History",         w: 100 },
+        { label: "Provisional Diagnosis",        w: 115 },
+        { label: "Done",                         w: 112 },
+        { label: "Management Plan / To Be Done", w: 130 },
+        { label: "Bystander Updation Given Time",w: tableW - 118 - 110 - 100 - 115 - 112 - 130 },
       ];
 
-      const HDR_BAND = 52;   // dark top banner
-      const COL_HDR  = 18;   // column label row
-      const ROW_H    = 68;
-      const LEGEND_H = 16;
-      const FONT_H   = 6.8;
-      const FONT_C   = 8;
-      const FONT_SM  = 7;
-      const PAD      = 5;
+      // ── 1. Dark green hospital header ───────────────────────────────────
+      doc.rect(0, 0, PW, HDR_H).fill(HOSP_GREEN);
 
-      // ── 1. Dark header band ──────────────────────────────────────────────
-      doc.rect(0, 0, PW, HDR_BAND).fill(DARK);
+      const hosp = hospitalName || "HOSPITAL";
+      const dept = departmentName || "EMERGENCY DEPARTMENT";
 
-      // Title left
-      doc.fontSize(11).font("Helvetica-Bold").fillColor("#FFFFFF")
-        .text("EMERGENCY DOCTORS HANDOVER SHEET", ML, 10, { width: 360 });
-      doc.fontSize(7.5).font("Helvetica").fillColor("rgba(255,255,255,0.45)")
-        .text("ErMate · Varah Group · All times in IST", ML, 25);
+      doc.fontSize(13).font("Helvetica-Bold").fillColor("#FFFFFF")
+        .text(hosp.toUpperCase(), ML + 4, 8, { lineBreak: false });
+      doc.fontSize(8).font("Helvetica").fillColor("rgba(255,255,255,0.85)")
+        .text(dept.toUpperCase(), ML + 4, 24, { lineBreak: false });
+      doc.fontSize(7.5).font("Helvetica-Bold").fillColor("rgba(255,255,255,0.9)")
+        .text("DOCTORS HANDOVER SHEET", ML + 4, 36, { lineBreak: false });
 
-      // Date/time right (green monospace simulation with Helvetica-Bold)
-      const dateStr = `${shiftDate}  ·  ${shiftTime}`;
-      doc.fontSize(10).font("Helvetica-Bold").fillColor(GREEN)
-        .text(dateStr, PW - 320, 10, { width: 306, align: "right" });
-      doc.fontSize(7.5).font("Helvetica").fillColor("rgba(255,255,255,0.55)")
-        .text(`Handing over: ${doctorName}`, PW - 320, 27, { width: 306, align: "right" });
-      doc.fontSize(7.5).font("Helvetica").fillColor("rgba(255,255,255,0.45)")
-        .text(`Receiving: ${receivingDoctor || "________________"}`, PW - 320, 38, { width: 306, align: "right" });
+      // Centre block: Date / Shift / From / To
+      const cX = 260;
+      const labelC = "rgba(255,255,255,0.65)";
+      const valC   = "#FFFFFF";
 
-      // ── 2. Column header row ─────────────────────────────────────────────
-      const colY = HDR_BAND;
-      doc.rect(0, colY, PW, COL_HDR).fill("#F1F3F1");
-      doc.moveTo(0, colY + COL_HDR).lineTo(PW, colY + COL_HDR)
-        .strokeColor(BORDER).lineWidth(1.2).stroke();
+      doc.fontSize(7).font("Helvetica").fillColor(labelC).text("Date:", cX, 9, { lineBreak: false });
+      doc.fontSize(8.5).font("Helvetica-Bold").fillColor(valC).text(shiftDate, cX + 34, 8, { lineBreak: false });
+
+      doc.fontSize(7).font("Helvetica").fillColor(labelC).text("Shift Time:", cX, 22, { lineBreak: false });
+      doc.fontSize(8.5).font("Helvetica-Bold").fillColor(valC).text(shiftTime, cX + 54, 21, { lineBreak: false });
+
+      doc.fontSize(7).font("Helvetica").fillColor(labelC).text("From:", cX, 35, { lineBreak: false });
+      doc.fontSize(8).font("Helvetica-Bold").fillColor(valC).text(doctorName, cX + 34, 34, { width: 160, lineBreak: false });
+
+      doc.fontSize(7).font("Helvetica").fillColor(labelC).text("To:", cX, 48, { lineBreak: false });
+      doc.fontSize(8).font("Helvetica-Bold").fillColor(valC)
+        .text(receivingDoctor || "___________________", cX + 20, 47, { width: 180, lineBreak: false });
+
+      // Right: Reference info
+      const refX = PW - 175;
+      doc.fontSize(6.5).font("Helvetica").fillColor("rgba(255,255,255,0.55)")
+        .text("Generated by ErMate", refX, 18, { width: 161, align: "right", lineBreak: false });
+      doc.fontSize(6.5).font("Helvetica").fillColor("rgba(255,255,255,0.45)")
+        .text(`${cases.length} patient${cases.length !== 1 ? "s" : ""}  |  All times IST`, refX, 30, { width: 161, align: "right", lineBreak: false });
+
+      // ── 2. Status count badge row ───────────────────────────────────────
+      const badgeRowY = HDR_H;
+      doc.rect(0, badgeRowY, PW, BADGE_H).fill("#F0FDF4");
+      doc.moveTo(0, badgeRowY + BADGE_H).lineTo(PW, badgeRowY + BADGE_H)
+        .strokeColor(BORDER).lineWidth(0.8).stroke();
+
+      const badgeItems = [
+        { label: "CRITICAL",  color: STATUS_CRITICAL,  count: counts.CRITICAL  },
+        { label: "UNSTABLE",  color: STATUS_UNSTABLE,  count: counts.UNSTABLE  },
+        { label: "STABLE",    color: STATUS_STABLE,    count: counts.STABLE    },
+        { label: "DISCHARGE", color: STATUS_DISCHARGE, count: counts.DISCHARGE },
+      ];
+      let bx = ML + 8;
+      badgeItems.forEach((b) => {
+        doc.roundedRect(bx, badgeRowY + 4, 76, 14, 3).fill(`${b.color}18`);
+        doc.roundedRect(bx, badgeRowY + 4, 76, 14, 3).strokeColor(b.color).lineWidth(0.5).stroke();
+        doc.fontSize(10).font("Helvetica-Bold").fillColor(b.color)
+          .text(String(b.count), bx + 7, badgeRowY + 6, { lineBreak: false });
+        doc.fontSize(6).font("Helvetica-Bold").fillColor(b.color)
+          .text(b.label, bx + 24, badgeRowY + 7.5, { lineBreak: false });
+        bx += 90;
+      });
+
+      // ── 3. Column header row ────────────────────────────────────────────
+      const colHdrY = badgeRowY + BADGE_H;
+      doc.rect(0, colHdrY, PW, COL_HDR).fill("#D4EDDA");
+      doc.moveTo(0, colHdrY + COL_HDR).lineTo(PW, colHdrY + COL_HDR)
+        .strokeColor(BORDER).lineWidth(0.8).stroke();
 
       let cx = ML;
       COLS.forEach((col, ci) => {
         if (ci > 0) {
-          doc.moveTo(cx, colY).lineTo(cx, colY + COL_HDR)
+          doc.moveTo(cx, colHdrY).lineTo(cx, colHdrY + COL_HDR)
             .strokeColor(BORDER).lineWidth(0.5).stroke();
         }
-        doc.fontSize(FONT_H).font("Helvetica-Bold").fillColor("#4B5563")
-          .text(col.label.toUpperCase(), cx + PAD, colY + 5, {
+        doc.fontSize(FONT_H).font("Helvetica-Bold").fillColor(HOSP_GREEN)
+          .text(col.label.toUpperCase(), cx + PAD, colHdrY + 7, {
             width: col.w - PAD * 2,
             lineBreak: false,
           });
         cx += col.w;
       });
 
-      // ── 3. Data rows ─────────────────────────────────────────────────────
-      const tableTop = colY + COL_HDR;
+      // ── 4. Data rows ─────────────────────────────────────────────────────
+      const tableTop = colHdrY + COL_HDR;
 
       cases.forEach((entry, ri) => {
         const cd    = entry.caseData || {};
         const pat   = cd.patient || {};
-        const vitals = cd.vitals_at_arrival || cd.triage?.vitals || {};
-        const primary = cd.primary_assessment || cd.abcde || {};
         const tx    = cd.treatment || {};
-        const inv   = cd.investigations || {};
-        const complaint = cd.presenting_complaint?.text || cd.presenting_complaint || "";
-        const invPanels = inv.panels_selected || inv.individual_tests || [];
-        const priority = cd.triage_priority || 4;
-        const pColor = P_COLORS[priority] || "#9CA3AF";
+        const hist  = cd.history || {};
+        const samp  = hist.sample || {};
+        const { label: stLabel, color: stColor } = statusInfos[ri];
 
-        // Cell 0: Bed
-        const bedStr = entry.bed || "—";
-        const pLabel = P_LABELS[priority] || `P${priority}`;
-
-        // Cell 1: Patient
-        const ageSex = [pat.age ? `${pat.age}y` : "", pat.sex].filter(Boolean).join(" · ");
-        const status  = cd.status === "completed" || cd.status === "discharged" ? "Discharged" : "Active";
-
-        // Cell 2: Complaint
-        const complaintStr = nv(complaint);
-
-        // Cell 3: Diagnosis
-        const dxList: string[] = [];
-        if (tx.primary_diagnosis) dxList.push(tx.primary_diagnosis);
-        if (tx.provisional_diagnoses?.length) {
-          tx.provisional_diagnoses.slice(0, 2).forEach((d: any) => {
-            const t = typeof d === "string" ? d : d?.text || d?.diagnosis || "";
-            if (t) dxList.push(t);
-          });
-        }
-        const dxStr = dxList.join("\n") || "—";
-
-        // Cell 4: Vitals
-        const hr   = vitals.hr   || primary.circulation_hr    || "";
-        const bps  = vitals.bp_systolic  && vitals.bp_diastolic ? `${vitals.bp_systolic}/${vitals.bp_diastolic}` : "";
-        const spo2 = vitals.spo2 || primary.breathing_spo2    || "";
-        const rr   = vitals.rr   || primary.breathing_rr      || "";
-        const temp = vitals.temperature || primary.exposure_temperature || "";
-        const grbs = vitals.grbs || primary.disability_grbs   || "";
-        const gcsE = vitals.gcs_e || primary.disability_gcs_e || "";
-        const gcsV = vitals.gcs_v || primary.disability_gcs_v || "";
-        const gcsM = vitals.gcs_m || primary.disability_gcs_m || "";
-        const gcsParts = [gcsE, gcsV, gcsM].filter(Boolean);
-        const gcs = gcsParts.length === 3 ? `GCS ${gcsParts.join("+")}=${+gcsE + +gcsV + +gcsM}` : "";
-        const vitalLines = [
-          hr   ? `HR  ${hr} bpm` : "",
-          bps  ? `BP  ${bps}` : "",
-          spo2 ? `SpO2 ${spo2}%` : "",
-          rr   ? `RR  ${rr}/min` : "",
-          temp ? `Temp ${temp}` : "",
-          grbs ? `GRBS ${grbs}` : "",
-          gcs,
-        ].filter(Boolean);
-
-        // Cell 5: Investigations
-        const invLines: string[] = [];
-        if (Array.isArray(invPanels) && invPanels.length) {
-          invPanels.slice(0, 3).forEach((p: any) => invLines.push(String(p)));
-        }
-        const labR = inv.lab_results || inv.other_tests;
-        if (labR && invLines.length === 0) invLines.push(String(labR).slice(0, 60));
-        if (invLines.length === 0) invLines.push("—");
-
-        // Cell 6: Treatment
-        const medLines: string[] = [];
-        if (tx.medications?.length) {
-          tx.medications.slice(0, 4).forEach((m: any) => {
-            const n = typeof m === "string" ? m : m?.drug || m?.name || "";
-            if (n) medLines.push(n);
-          });
-        }
-        const consults = [tx.consults].flat().filter(Boolean).join(", ") || tx.consultation || "";
-        if (consults) medLines.push(`Consult: ${consults}`);
-        if (medLines.length === 0) medLines.push("—");
-
-        // Cell 7: Pending/Plan
-        const pendingStr = entry.pendingPlan || "—";
-
-        const rowY = tableTop + ri * ROW_H;
+        const rowY   = tableTop + ri * ROW_H;
         const isEven = ri % 2 === 0;
 
-        // row background
         doc.rect(ML, rowY, tableW, ROW_H).fill(isEven ? "#FAFCFA" : "#FFFFFF");
-
-        // priority color strip (4px)
-        doc.rect(ML, rowY, 4, ROW_H).fill(pColor);
-
-        // horizontal border
+        doc.rect(ML, rowY, 6, ROW_H).fill(stColor);
         doc.moveTo(ML, rowY + ROW_H).lineTo(ML + tableW, rowY + ROW_H)
-          .strokeColor("#EFEFEF").lineWidth(0.5).stroke();
+          .strokeColor("#E5E7EB").lineWidth(0.4).stroke();
 
-        // Draw cells
         cx = ML;
 
-        // -- Col 0: Bed --
-        const bedColW = COLS[0].w;
-        doc.fontSize(12).font("Helvetica-Bold").fillColor(DARK)
-          .text(bedStr, cx + PAD + 4, rowY + 8, { width: bedColW - PAD * 2 - 4 });
-        // Priority badge
-        const badgeTxt = pLabel;
-        const badgeX = cx + PAD + 4;
-        const badgeY = rowY + 28;
-        const badgeW = bedColW - PAD * 2 - 6;
-        const badgeH = 12;
-        doc.roundedRect(badgeX, badgeY, badgeW, badgeH, 3)
-          .fill(`${pColor}22`);
-        doc.fontSize(FONT_SM - 0.5).font("Helvetica-Bold").fillColor(pColor)
-          .text(badgeTxt, badgeX, badgeY + 3, { width: badgeW, align: "center", lineBreak: false });
-        cx += bedColW;
+        // -- Col 0: Patient Label ----
+        const pColW = COLS[0].w;
+        const nameStr  = pat.name || "Unknown";
+        const ageSex   = [pat.age ? `${pat.age}y` : "", pat.sex].filter(Boolean).join(" / ");
+        const bedStr   = entry.bed || "";
 
-        // -- Col 1: Patient --
-        if (cx > ML) {
-          doc.moveTo(cx, rowY).lineTo(cx, rowY + ROW_H)
-            .strokeColor("#F0F0F0").lineWidth(0.5).stroke();
+        doc.fontSize(FONT_C + 0.5).font("Helvetica-Bold").fillColor("#111827")
+          .text(nameStr, cx + 9, rowY + PAD, { width: pColW - 14, lineBreak: false });
+        doc.fontSize(FONT_C - 0.5).font("Helvetica").fillColor("#374151")
+          .text(ageSex, cx + 9, rowY + PAD + 11, { width: pColW - 14, lineBreak: false });
+        if (bedStr) {
+          doc.fontSize(FONT_H).font("Helvetica-Bold").fillColor(GRAY)
+            .text(`Bed: ${bedStr}`, cx + 9, rowY + PAD + 22, { width: pColW - 14, lineBreak: false });
         }
-        const patColW = COLS[1].w;
-        doc.fontSize(FONT_C - 0.5).font("Helvetica-Bold").fillColor(DARK)
-          .text(pat.name || "Unknown", cx + PAD, rowY + PAD + 2, { width: patColW - PAD * 2 });
-        doc.fontSize(FONT_SM).font("Helvetica").fillColor(GRAY)
-          .text(ageSex, cx + PAD, rowY + PAD + 15, { width: patColW - PAD * 2 });
-        doc.fontSize(FONT_SM - 0.5).font("Helvetica").fillColor(GRAY)
-          .text(status, cx + PAD, rowY + PAD + 26, { width: patColW - PAD * 2 });
-        cx += patColW;
+        const pillY = rowY + ROW_H - 15;
+        doc.roundedRect(cx + 9, pillY, 56, 10, 2.5).fill(`${stColor}20`);
+        doc.fontSize(5.5).font("Helvetica-Bold").fillColor(stColor)
+          .text(stLabel, cx + 9, pillY + 2, { width: 56, align: "center", lineBreak: false });
+        cx += pColW;
 
-        // -- Remaining 6 cols --
-        const cellData = [
-          { text: complaintStr, maxH: ROW_H - PAD * 2 },
-          { text: dxStr,        maxH: ROW_H - PAD * 2 },
-          { text: vitalLines.join("\n"), maxH: ROW_H - PAD * 2 },
-          { text: invLines.join("\n"),   maxH: ROW_H - PAD * 2 },
-          { text: medLines.join("\n"),   maxH: ROW_H - PAD * 2 },
-          { text: pendingStr,            maxH: ROW_H - PAD * 2 },
-        ];
+        // -- Col 1: Presenting Complaints ----
+        const complaintStr = nv(cd.presenting_complaint?.text || cd.presenting_complaint) || "—";
 
-        cellData.forEach((cell, ci) => {
-          const col = COLS[ci + 2];
+        // -- Col 2: Past Medical History ----
+        const pmhStr = nv(
+          samp.pastHistory || samp.past_history ||
+          hist.past_history || hist.past_medical_history ||
+          hist.pmh || hist.medical_history
+        ) || "—";
+
+        // -- Col 3: Provisional Diagnosis ----
+        const dxParts: string[] = [];
+        if (tx.primary_diagnosis) dxParts.push(tx.primary_diagnosis);
+        (tx.provisional_diagnoses || []).slice(0, 3).forEach((d: any) => {
+          const t = typeof d === "string" ? d : d?.text || d?.diagnosis || "";
+          if (t) dxParts.push(t);
+        });
+        const dxStr = dxParts.join(", ") || "—";
+
+        // -- Col 4: Done (meds + procedures + consults) ----
+        const doneParts: string[] = [];
+        (tx.medications || cd.drugs_administered || []).slice(0, 5).forEach((m: any) => {
+          const n = typeof m === "string" ? m : m?.drug || m?.name || "";
+          if (n) doneParts.push(n);
+        });
+        (tx.procedures_performed || cd.procedures_performed || []).slice(0, 2).forEach((p: any) => {
+          const n = typeof p === "string" ? p : p?.procedure || p?.name || "";
+          if (n) doneParts.push(n);
+        });
+        const consults = [tx.consults].flat().filter(Boolean).join(", ") || tx.consultation || "";
+        if (consults) doneParts.push(`Consult: ${consults}`);
+        const doneStr = doneParts.join("\n") || "—";
+
+        // -- Col 5: Management Plan / To Be Done ----
+        const planStr = entry.pendingPlan || "—";
+
+        // -- Col 6: Bystander Updation Given Time ----
+        const bysStr = nv(cd.bystander_update_time || cd.bystander_notified_time || hist.bystander_update_time);
+
+        const cellTexts = [complaintStr, pmhStr, dxStr, doneStr, planStr, bysStr];
+
+        cellTexts.forEach((text, ci) => {
+          const col = COLS[ci + 1];
           doc.moveTo(cx, rowY).lineTo(cx, rowY + ROW_H)
-            .strokeColor("#F0F0F0").lineWidth(0.5).stroke();
-
-          // Pending/Plan col gets arrow prefix on each line
-          let rendered = cell.text;
-          if (ci === 5 && rendered !== "—") {
-            rendered = rendered.split("\n").map((l) => `> ${l}`).join("\n");
-          }
-
-          doc.fontSize(FONT_C).font("Helvetica").fillColor("#374151")
-            .text(rendered, cx + PAD, rowY + PAD + 2, {
+            .strokeColor("#D1D5DB").lineWidth(0.4).stroke();
+          doc.fontSize(FONT_C).font("Helvetica").fillColor("#1F2937")
+            .text(text || "—", cx + PAD, rowY + PAD, {
               width: col.w - PAD * 2,
-              height: cell.maxH,
+              height: ROW_H - PAD * 2,
               lineBreak: true,
               ellipsis: true,
             });
@@ -1653,75 +1645,31 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         });
       });
 
-      // ── 4. Outer table border ─────────────────────────────────────────────
-      const totalDataH = cases.length * ROW_H;
-      doc.rect(ML, tableTop, tableW, totalDataH)
+      // ── 5. Table outer border ───────────────────────────────────────────
+      doc.rect(ML, tableTop, tableW, cases.length * ROW_H)
         .strokeColor(BORDER).lineWidth(0.8).stroke();
 
-      // ── 5. Legend row ─────────────────────────────────────────────────────
-      const legendY = tableTop + totalDataH;
-      doc.rect(0, legendY, PW, LEGEND_H).fill("#FFFFFF");
-      doc.moveTo(0, legendY).lineTo(PW, legendY)
-        .strokeColor("#F0F0F0").lineWidth(0.8).stroke();
+      // ── 6. Signature / footer strip ─────────────────────────────────────
+      const footerY = PH - SIG_H;
+      doc.rect(0, footerY, PW, SIG_H).fill("#F0FDF4");
+      doc.moveTo(0, footerY).lineTo(PW, footerY)
+        .strokeColor(BORDER).lineWidth(0.9).stroke();
 
-      let lx = ML + 2;
-      doc.fontSize(6.5).font("Helvetica-Bold").fillColor(GRAY)
-        .text("PRIORITY:", lx, legendY + 4, { lineBreak: false });
-      lx += 42;
+      const sigW = 170;
+      const sigGap = 24;
+      const totalSigW = sigW * 3 + sigGap * 2;
+      let sigX = (PW - totalSigW) / 2;
+      const sigLineY = footerY + SIG_H - 20;
 
-      const legendItems = [
-        { label: "P1 Red — Immediate",    color: "#EF4444" },
-        { label: "P2 Orange — Urgent",    color: "#F97316" },
-        { label: "P3 Yellow — Semi-urgent",color: "#EAB308" },
-        { label: "P4 Green — Non-urgent", color: "#22C55E" },
-        { label: "P5 Blue — Review",      color: "#3B82F6" },
-      ];
-      legendItems.forEach((item) => {
-        doc.roundedRect(lx, legendY + 4, 8, 8, 1.5).fill(item.color);
-        doc.fontSize(6.5).font("Helvetica").fillColor("#4B5563")
-          .text(item.label, lx + 11, legendY + 4.5, { lineBreak: false });
-        lx += 92;
+      ["Handing Over Doctor", "Receiving Doctor", "Consultant Aware"].forEach((label) => {
+        doc.moveTo(sigX, sigLineY).lineTo(sigX + sigW, sigLineY)
+          .strokeColor(HOSP_GREEN).lineWidth(0.7).stroke();
+        doc.fontSize(7).font("Helvetica-Bold").fillColor(HOSP_GREEN)
+          .text(label.toUpperCase(), sigX, sigLineY + 4, { width: sigW, align: "center" });
+        doc.fontSize(6).font("Helvetica").fillColor(GRAY)
+          .text("Signature & Time", sigX, sigLineY + 13, { width: sigW, align: "center" });
+        sigX += sigW + sigGap;
       });
-
-      // Right side legend key
-      doc.fontSize(6.5).font("Helvetica").fillColor(GRAY)
-        .text("Pending  ·  Done  ·  Consult  ·  Urgent action", PW - 200, legendY + 4, { width: 186, align: "right" });
-
-      // ── 6. Footer strip ───────────────────────────────────────────────────
-      const footerY = legendY + LEGEND_H;
-      const footerH = PH - footerY;
-      if (footerH > 0) {
-        doc.rect(0, footerY, PW, footerH).fill("#F9FAF9");
-        doc.moveTo(0, footerY).lineTo(PW, footerY)
-          .strokeColor(BORDER).lineWidth(1).stroke();
-
-        // Left: generated info
-        doc.fontSize(7).font("Helvetica").fillColor(GRAY)
-          .text(
-            `Generated by ErMate  ·  ${cases.length} active case${cases.length !== 1 ? "s" : ""}  ·  ${shiftDate} ${shiftTime} IST`,
-            ML, footerY + 6
-          );
-        doc.fontSize(7).font("Helvetica").fillColor(GRAY)
-          .text(`Handing over: ${doctorName}  ·  Department: Emergency Medicine`, ML, footerY + 16);
-        doc.fontSize(6.5).font("Helvetica").fillColor("#9CA3AF")
-          .text("This document is confidential. For clinical handover use only.", ML, footerY + 26);
-
-        // Signature blocks — right side
-        const sigW = 130;
-        const sig1X = PW - MR - sigW * 2 - 24;
-        const sig2X = PW - MR - sigW;
-        const sigLineY = footerY + (footerH > 35 ? footerH - 14 : 6);
-
-        doc.moveTo(sig1X, sigLineY).lineTo(sig1X + sigW, sigLineY)
-          .strokeColor(BORDER).lineWidth(0.8).stroke();
-        doc.fontSize(6.5).font("Helvetica").fillColor(GRAY)
-          .text("HANDING OVER DOCTOR", sig1X, sigLineY + 3, { width: sigW, align: "center" });
-
-        doc.moveTo(sig2X, sigLineY).lineTo(sig2X + sigW, sigLineY)
-          .strokeColor(BORDER).lineWidth(0.8).stroke();
-        doc.fontSize(6.5).font("Helvetica").fillColor(GRAY)
-          .text("RECEIVING DOCTOR", sig2X, sigLineY + 3, { width: sigW, align: "center" });
-      }
 
       doc.end();
     } catch (error) {

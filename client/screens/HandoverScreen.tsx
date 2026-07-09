@@ -20,6 +20,7 @@ import { Feather } from "@expo/vector-icons";
 import * as FileSystem from "expo-file-system/legacy";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
+import { useDepartment } from "@/context/DepartmentContext";
 import { fetchCasesFromProxy, fetchFromApi } from "@/lib/api";
 import { getApiUrl } from "@/lib/query-client";
 import { Spacing, BorderRadius, TriageColors } from "@/constants/theme";
@@ -59,6 +60,7 @@ const PRIORITY_LABELS: Record<number, string> = {
 export default function HandoverScreen() {
   const { theme, isDark } = useTheme();
   const { user } = useAuth();
+  const { department } = useDepartment();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
@@ -212,6 +214,8 @@ export default function HandoverScreen() {
         receivingDoctor: receivingDoctor.trim() || undefined,
         shiftDate: now.toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" }),
         shiftTime: now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false }),
+        hospitalName: department?.hospitalName || undefined,
+        departmentName: department?.name || undefined,
       };
 
       const url = new URL("/api/export/handover-pdf", getApiUrl()).href;

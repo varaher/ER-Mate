@@ -11,48 +11,18 @@ import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
 import * as IntentLauncher from 'expo-intent-launcher';
 import * as FileSystem from 'expo-file-system/legacy';
-import { Asset } from 'expo-asset';
-
 import { RootStackParamList } from '@/navigation/RootStackNavigator';
 import { useTheme } from '@/hooks/useTheme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PdfPreview'>;
 
-let _cachedPdfJsContent: string | null = null;
-let _cachedWorkerContent: string | null = null;
+const PDFJS_URL        = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js';
+const PDFJS_WORKER_URL = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
 
-async function loadPdfJsAssets(): Promise<{ main: string; worker: string }> {
-  if (_cachedPdfJsContent && _cachedWorkerContent) {
-    return { main: _cachedPdfJsContent, worker: _cachedWorkerContent };
-  }
-  const [mainAsset, workerAsset] = await Promise.all([
-    Asset.fromModule(require('../../assets/pdfjs/pdf.min.txt')).downloadAsync(),
-    Asset.fromModule(require('../../assets/pdfjs/pdf.worker.min.txt')).downloadAsync(),
-  ]);
-  const [main, worker] = await Promise.all([
-    FileSystem.readAsStringAsync(mainAsset.localUri as string, {
-      encoding: FileSystem.EncodingType.UTF8,
-    }),
-    FileSystem.readAsStringAsync(workerAsset.localUri as string, {
-      encoding: FileSystem.EncodingType.UTF8,
-    }),
-  ]);
-  _cachedPdfJsContent = main;
-  _cachedWorkerContent = worker;
-  return { main, worker };
-}
-
-function buildPdfJsHtml(
-  pdfJsContent: string,
-  workerContent: string,
-  pdfBase64: string,
-  isDark: boolean,
-): string {
-  const bg = isDark ? '#1e293b' : '#f1f5f9';
-  const textColor = isDark ? '#94a3b8' : '#64748b';
+function buildPdfJsHtml(pdfBase64: string, isDark: boolean): string {
+  const bg           = isDark ? '#1e293b' : '#f1f5f9';
+  const textColor    = isDark ? '#94a3b8' : '#64748b';
   const spinnerBorder = isDark ? '#334155' : '#e2e8f0';
-  const safeJsContent = pdfJsContent.replace(/<\/script>/gi, '<\\/script>');
-  const safeWorkerContent = workerContent.replace(/<\/script>/gi, '<\\/script>');
 
   return `<!DOCTYPE html>
 <html>
@@ -89,62 +59,39 @@ function buildPdfJsHtml(
   <div id="spinner"><div class="spin"></div><span>Loading PDF...</span></div>
   <div id="error-msg"><p>Could not render this PDF.<br>Use Share or Open below.</p></div>
   <div id="container"></div>
-  <script type="text/plain" id="pdfjs-worker-src">${safeWorkerContent}</script>
-  <script type="text/plain" id="pdfjs-src">${safeJsContent}</script>
+  <script src="${PDFJS_URL}"></script>
   <script>
     (function () {
       function showError() {
         document.getElementById('spinner').style.display = 'none';
         document.getElementById('error-msg').style.display = 'flex';
       }
-
       try {
-        var workerText = document.getElementById('pdfjs-worker-src').textContent;
-        var workerBlob = new Blob([workerText], { type: 'application/javascript' });
-        var workerBlobUrl = URL.createObjectURL(workerBlob);
-
-        var jsText = document.getElementById('pdfjs-src').textContent;
-        var mainBlob = new Blob([jsText], { type: 'application/javascript' });
-        var mainBlobUrl = URL.createObjectURL(mainBlob);
-
-        var script = document.createElement('script');
-        script.onerror = showError;
-        script.onload = function () {
-          try {
-            if (typeof pdfjsLib === 'undefined') { showError(); return; }
-
-            pdfjsLib.GlobalWorkerOptions.workerSrc = workerBlobUrl;
-
-            var base64 = '${pdfBase64}';
-            var binary = atob(base64);
-            var bytes = new Uint8Array(binary.length);
-            for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-
-            pdfjsLib.getDocument({ data: bytes }).promise.then(function (pdf) {
-              document.getElementById('spinner').style.display = 'none';
-              var container = document.getElementById('container');
-              var deviceWidth = window.innerWidth - 16;
-              var total = pdf.numPages;
-
-              function renderPage(num) {
-                pdf.getPage(num).then(function (page) {
-                  var vp0 = page.getViewport({ scale: 1 });
-                  var scale = deviceWidth / vp0.width;
-                  var viewport = page.getViewport({ scale: scale });
-                  var canvas = document.createElement('canvas');
-                  canvas.width = viewport.width;
-                  canvas.height = viewport.height;
-                  container.appendChild(canvas);
-                  page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport });
-                }).catch(showError);
-              }
-
-              for (var p = 1; p <= total; p++) renderPage(p);
+        if (typeof pdfjsLib === 'undefined') { showError(); return; }
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '${PDFJS_WORKER_URL}';
+        var base64 = '${pdfBase64}';
+        var binary = atob(base64);
+        var bytes = new Uint8Array(binary.length);
+        for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        pdfjsLib.getDocument({ data: bytes }).promise.then(function (pdf) {
+          document.getElementById('spinner').style.display = 'none';
+          var container = document.getElementById('container');
+          var deviceWidth = window.innerWidth - 16;
+          var total = pdf.numPages;
+          function renderPage(num) {
+            pdf.getPage(num).then(function (page) {
+              var vp0 = page.getViewport({ scale: 1 });
+              var scale = deviceWidth / vp0.width;
+              var viewport = page.getViewport({ scale: scale });
+              var canvas = document.createElement('canvas');
+              canvas.width = viewport.width;
+              canvas.height = viewport.height;
+              container.appendChild(canvas);
+              page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport });
             }).catch(showError);
-          } catch (e) { showError(); }
-        };
-        script.src = mainBlobUrl;
-        document.head.appendChild(script);
+          }
+          for (var p = 1; p <= total; p++) renderPage(p);
+        }).catch(showError);
       } catch (e) { showError(); }
     })();
   </script>
@@ -172,14 +119,11 @@ export default function PdfPreviewScreen({ route, navigation }: Props) {
     if (Platform.OS !== 'android') return;
     (async () => {
       try {
-        const [{ main, worker }, pdfBase64] = await Promise.all([
-          loadPdfJsAssets(),
-          FileSystem.readAsStringAsync(fileUri, {
-            encoding: FileSystem.EncodingType.Base64,
-          }),
-        ]);
+        const pdfBase64 = await FileSystem.readAsStringAsync(fileUri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
         if (!isMounted.current) return;
-        setAndroidHtml(buildPdfJsHtml(main, worker, pdfBase64, isDark));
+        setAndroidHtml(buildPdfJsHtml(pdfBase64, isDark));
       } catch {
         if (isMounted.current) setAndroidLoadError(true);
       }
@@ -315,11 +259,12 @@ export default function PdfPreviewScreen({ route, navigation }: Props) {
       <View style={[styles.root, { backgroundColor: isDark ? '#1e293b' : '#f1f5f9' }]}>
         <View style={styles.webViewContainer}>
           <WebView
-            source={{ html: androidHtml }}
+            source={{ html: androidHtml, baseUrl: 'https://cdn.jsdelivr.net' }}
             style={styles.webview}
             originWhitelist={['*']}
             javaScriptEnabled
             domStorageEnabled
+            mixedContentMode="always"
             scalesPageToFit={false}
             onLoadStart={() => setWebViewLoading(true)}
             onLoad={() => setWebViewLoading(false)}
