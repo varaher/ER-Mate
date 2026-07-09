@@ -725,6 +725,9 @@ export default function CaseChatScreen({ route, navigation }: Props) {
     (navigation as any).navigate('Main', { screen: 'DashboardTab' });
   }, [navigation]);
 
+  // ── Derived: whether a shift handover addendum exists (enables PDF print) ──
+  const hasShiftHandover = addenda.some(a => a.type === 'shift_handover');
+
   // ── Render ─────────────────────────────────────────────────────────────────
   const header = (
     <View style={styles.header}>
@@ -739,6 +742,21 @@ export default function CaseChatScreen({ route, navigation }: Props) {
         <Text style={styles.headerTitle}>ErMate</Text>
         <Text style={styles.headerSub} numberOfLines={1}>{effectiveName}</Text>
       </View>
+      {hasShiftHandover ? (
+        <Pressable
+          onPress={handlePrintHandoverPdf}
+          disabled={isPrintingHandoverPdf}
+          style={({ pressed }) => [
+            styles.headerIconBtn,
+            { opacity: isPrintingHandoverPdf ? 0.5 : pressed ? 0.7 : 1 },
+          ]}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          {isPrintingHandoverPdf
+            ? <ActivityIndicator size="small" color="#FFFFFF" />
+            : <Feather name="printer" size={18} color="#FFFFFF" />}
+        </Pressable>
+      ) : null}
       <Pressable
         onPress={goToDashboard}
         style={({ pressed }) => [styles.headerDashBtn, { opacity: pressed ? 0.7 : 1 }]}
@@ -836,6 +854,14 @@ const styles = StyleSheet.create({
   headerTextGroup: { flex: 1 },
   headerTitle: { fontSize: 17, fontWeight: '700', color: '#FFFFFF', letterSpacing: 0.2 },
   headerSub:   { fontSize: 13, color: 'rgba(255,255,255,0.70)', marginTop: 2 },
+  headerIconBtn: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
   headerDashBtn: {
     flexDirection: 'row',
     alignItems: 'center',
