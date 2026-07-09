@@ -1080,6 +1080,7 @@ function AddendumModal({
   const [recordingSecs, setRecordingSecs]   = useState(0);
   const [needsReview, setNeedsReview]       = useState(false);
   const [aiSuggestedType, setAiSuggestedType] = useState<AddendumType | null>(null);
+  const [classifyFailed, setClassifyFailed] = useState(false);
 
   const webRecRef = useRef<{ mr: MediaRecorder | null; chunks: Blob[]; stream: MediaStream | null }>({
     mr: null, chunks: [], stream: null,
@@ -1099,6 +1100,7 @@ function AddendumModal({
     setRecordingSecs(0);
     setNeedsReview(false);
     setAiSuggestedType(null);
+    setClassifyFailed(false);
   };
 
   useEffect(() => {
@@ -1264,9 +1266,12 @@ function AddendumModal({
           if (classified.specialty && !specialty.trim()) {
             setSpecialty(classified.specialty);
           }
+        } else {
+          setClassifyFailed(true);
         }
       } catch (classifyErr) {
         console.warn('[AddendumModal] classify-addendum skipped:', classifyErr);
+        setClassifyFailed(true);
       }
 
       // Require the doctor to review AI-filled content before saving.
@@ -1274,7 +1279,14 @@ function AddendumModal({
       setNeedsReview(true);
     } catch (err: any) {
       console.error('[AddendumModal] transcribe:', err);
-      setError(err?.message || 'Transcription failed. Please try again or type instead.');
+      const isNetworkErr = err?.name === 'TypeError' ||
+        err?.message?.toLowerCase().includes('network') ||
+        err?.message?.toLowerCase().includes('fetch');
+      setError(
+        isNetworkErr
+          ? 'Could not reach the server — check your connection and try again, or type the addendum manually.'
+          : err?.message || 'Transcription failed. Please try again or type the addendum manually.'
+      );
     } finally {
       setIsTranscribing(false);
     }
@@ -1335,7 +1347,11 @@ function AddendumModal({
               <Feather name="mic" size={13} color="#92400E" />
               <View style={{ flex: 1 }}>
                 <Text style={am.reviewBannerTitle}>Voice dictation — please review before saving</Text>
-                <Text style={am.reviewBannerSub}>Check the type and content, especially drug names and numbers.</Text>
+                <Text style={am.reviewBannerSub}>
+                  {classifyFailed
+                    ? 'Type could not be auto-detected — select it manually, then check the content.'
+                    : 'Check the type and content, especially drug names and numbers.'}
+                </Text>
               </View>
             </View>
             <Pressable onPress={() => setNeedsReview(false)} style={am.reviewConfirmBtn} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
