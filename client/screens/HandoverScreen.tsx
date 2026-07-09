@@ -12,12 +12,12 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as FileSystem from "expo-file-system/legacy";
-import * as Sharing from "expo-sharing";
-import * as IntentLauncher from "expo-intent-launcher";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { fetchCasesFromProxy, fetchFromApi } from "@/lib/api";
@@ -59,6 +59,7 @@ const PRIORITY_LABELS: Record<number, string> = {
 export default function HandoverScreen() {
   const { theme, isDark } = useTheme();
   const { user } = useAuth();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
 
@@ -240,28 +241,7 @@ export default function HandoverScreen() {
         await FileSystem.writeAsStringAsync(fileUri, base64, {
           encoding: FileSystem.EncodingType.Base64,
         });
-
-        if (Platform.OS === "android") {
-          try {
-            const contentUri = await FileSystem.getContentUriAsync(fileUri);
-            await IntentLauncher.startActivityAsync("android.intent.action.VIEW", {
-              data: contentUri,
-              flags: 1,
-              type: "application/pdf",
-            });
-            return;
-          } catch {}
-        }
-
-        if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(fileUri, {
-            mimeType: "application/pdf",
-            dialogTitle: "Save Handover Sheet",
-            UTI: "com.adobe.pdf",
-          });
-        } else {
-          Alert.alert("Saved", `Handover sheet saved as "${filename}".`);
-        }
+        navigation.navigate("PdfPreview", { fileUri, filename });
       }
     } catch (err: any) {
       Alert.alert("Export failed", err?.message || "Please try again.");
@@ -346,28 +326,11 @@ export default function HandoverScreen() {
         await FileSystem.writeAsStringAsync(fileUri, base64, {
           encoding: FileSystem.EncodingType.Base64,
         });
-
-        if (Platform.OS === "android") {
-          try {
-            const contentUri = await FileSystem.getContentUriAsync(fileUri);
-            await IntentLauncher.startActivityAsync("android.intent.action.VIEW", {
-              data: contentUri,
-              flags: 1,
-              type: "application/pdf",
-            });
-            return;
-          } catch {}
-        }
-
-        if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(fileUri, {
-            mimeType: "application/pdf",
-            dialogTitle: "Save Handover Sheet",
-            UTI: "com.adobe.pdf",
-          });
-        } else {
-          Alert.alert("Saved", `Handover sheet saved as "${filename}".`);
-        }
+        navigation.navigate("PdfPreview", {
+          fileUri,
+          filename,
+          patientName: c.patient?.name || undefined,
+        });
       }
     } catch (err: any) {
       Alert.alert("Print failed", err?.message || "Please try again.");
