@@ -51,6 +51,7 @@ import CaseChatScreen from "@/screens/CaseChatScreen";
 import PublicHandoverScreen from "@/screens/PublicHandoverScreen";
 import HandoverChatScreen from "@/screens/HandoverChatScreen";
 import HandoverListScreen from "@/screens/HandoverListScreen";
+import PdfPreviewScreen from "@/screens/PdfPreviewScreen";
 
 export type RootStackParamList = {
   Login: undefined;
@@ -113,6 +114,7 @@ export type RootStackParamList = {
   Escalation: { caseId?: string } | undefined;
   CaseChat: { caseId?: string; patientName?: string };
   PublicHandover: undefined;
+  PdfPreview: { fileUri: string; filename: string; patientName?: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -460,6 +462,14 @@ export default function RootStackNavigator() {
             component={CaseChatScreen}
             options={{
               headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="PdfPreview"
+            component={PdfPreviewScreen}
+            options={{
+              headerTitle: "Handover PDF",
+              presentation: "modal",
             }}
           />
           <Stack.Screen

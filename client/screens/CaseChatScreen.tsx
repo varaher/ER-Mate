@@ -7,8 +7,6 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system/legacy';
-import * as Sharing from 'expo-sharing';
-import * as IntentLauncher from 'expo-intent-launcher';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RootStackParamList } from '@/navigation/RootStackNavigator';
@@ -189,14 +187,13 @@ export default function CaseChatScreen({ route, navigation }: Props) {
       }
 
       const filename = `handover_${activeCaseId}.pdf`;
+      const displayName = caseData?.patient?.name || paramPatientName || undefined;
+
       if (Platform.OS === 'web') {
         const blob = await res.blob();
         const objectUrl = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = objectUrl;
-        a.download = filename;
-        a.click();
-        URL.revokeObjectURL(objectUrl);
+        window.open(objectUrl, '_blank');
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
       } else {
         const bytes = await res.arrayBuffer();
         const fileUri = (FileSystem.documentDirectory || '') + filename;
@@ -204,35 +201,18 @@ export default function CaseChatScreen({ route, navigation }: Props) {
         await FileSystem.writeAsStringAsync(fileUri, base64, {
           encoding: FileSystem.EncodingType.Base64,
         });
-
-        if (Platform.OS === 'android') {
-          try {
-            const contentUri = await FileSystem.getContentUriAsync(fileUri);
-            await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
-              data: contentUri,
-              flags: 1,
-              type: 'application/pdf',
-            });
-            return;
-          } catch {}
-        }
-
-        if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(fileUri, {
-            mimeType: 'application/pdf',
-            dialogTitle: 'Save Handover PDF',
-            UTI: 'com.adobe.pdf',
-          });
-        } else {
-          Alert.alert('Saved', `Handover PDF saved as "${filename}".`);
-        }
+        navigation.navigate('PdfPreview', {
+          fileUri,
+          filename,
+          patientName: displayName,
+        });
       }
     } catch (e: any) {
       Alert.alert('Export failed', e?.message || 'Please try again.');
     } finally {
       setIsPrintingHandoverPdf(false);
     }
-  }, [activeCaseId, isPrintingHandoverPdf, caseData, addenda, user, paramPatientName]);
+  }, [activeCaseId, isPrintingHandoverPdf, caseData, addenda, user, paramPatientName, navigation]);
 
   // ── Kick off on mount ──────────────────────────────────────────────────────
   useEffect(() => {
