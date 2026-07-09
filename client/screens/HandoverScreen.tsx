@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -70,6 +70,15 @@ export default function HandoverScreen() {
   const [receivingDoctor, setReceivingDoctor] = useState("");
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [printingCases, setPrintingCases] = useState<Set<string>>(new Set());
+  const [handoverReadyCases, setHandoverReadyCases] = useState<Set<string>>(new Set());
+  const [tooltipCaseId, setTooltipCaseId] = useState<string | null>(null);
+  const tooltipTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current);
+    };
+  }, []);
 
   const LIVE_REFRESH_MS = 30000;
 
@@ -82,6 +91,24 @@ export default function HandoverScreen() {
       return () => clearInterval(interval);
     }, [showAll])
   );
+
+  const fetchHandoverStatus = async (caseIds: string[]) => {
+    if (caseIds.length === 0) return;
+    try {
+      const token = await AsyncStorage.getItem("token");
+      const url = new URL(
+        `/api/cases/handover-status?ids=${encodeURIComponent(caseIds.join(","))}`,
+        getApiUrl()
+      ).href;
+      const res = await fetch(url, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) {
+        const data: { ready: string[] } = await res.json();
+        setHandoverReadyCases(new Set(data.ready));
+      }
+    } catch {}
+  };
 
   const loadCases = async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent ?? false;
@@ -114,6 +141,7 @@ export default function HandoverScreen() {
         });
       });
       setLastUpdated(new Date());
+      fetchHandoverStatus(filtered.map((c) => c.id));
     } catch {
       if (!silent) Alert.alert("Error", "Could not load cases. Please try again.");
     } finally {
@@ -477,14 +505,26 @@ export default function HandoverScreen() {
                     </View>
                     <View style={styles.checkboxArea}>
                       <Pressable
-                        onPress={() => printCasePdf(i)}
+                        onPress={() => {
+                          if (handoverReadyCases.has(c.id)) {
+                            printCasePdf(i);
+                          } else {
+                            if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current);
+                            setTooltipCaseId(c.id);
+                            tooltipTimerRef.current = setTimeout(() => setTooltipCaseId(null), 3000);
+                          }
+                        }}
                         style={styles.printIconBtn}
                         hitSlop={8}
                       >
                         {printingCases.has(c.id) ? (
                           <ActivityIndicator size="small" color={theme.primary} />
                         ) : (
-                          <Feather name="printer" size={16} color={theme.textMuted} />
+                          <Feather
+                            name="printer"
+                            size={16}
+                            color={handoverReadyCases.has(c.id) ? theme.primary : (isDark ? "#3D4451" : "#CBD5E1")}
+                          />
                         )}
                       </Pressable>
                       <View style={[
@@ -517,6 +557,18 @@ export default function HandoverScreen() {
                       </Text>
                     </View>
                   </View>
+
+                  {tooltipCaseId === c.id && (
+                    <View style={[styles.noHandoverBanner, {
+                      backgroundColor: isDark ? "#1E2530" : "#F1F5F9",
+                      borderColor: isDark ? "#2D3748" : "#CBD5E1",
+                    }]}>
+                      <Feather name="info" size={12} color={theme.textMuted} style={{ marginTop: 1 }} />
+                      <Text style={[styles.noHandoverBannerText, { color: theme.textMuted }]}>
+                        No handover note yet. Open the case timeline and add one first.
+                      </Text>
+                    </View>
+                  )}
 
                   {isSelected && (
                     <Pressable onPress={() => {}} style={styles.handoverInputs}>
@@ -665,6 +717,12 @@ const styles = StyleSheet.create({
     alignItems: "center", justifyContent: "center",
   },
   badgeRow: { flexDirection: "row", gap: 6, flexWrap: "wrap" },
+  noHandoverBanner: {
+    flexDirection: "row", alignItems: "flex-start", gap: 6,
+    marginTop: 8, borderRadius: 8, borderWidth: 1,
+    paddingHorizontal: 10, paddingVertical: 7,
+  },
+  noHandoverBannerText: { flex: 1, fontSize: 12, lineHeight: 17 },
   priorityBadge: { borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 },
   priorityBadgeText: { fontSize: 11, fontWeight: "700" },
   statusBadge: { borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 },

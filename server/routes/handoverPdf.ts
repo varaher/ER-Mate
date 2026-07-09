@@ -39,6 +39,36 @@ function drawColorDot(doc: PDFKit.PDFDocument, color: string, x: number, y: numb
 }
 
 export function registerHandoverPdfRoutes(app: Express): void {
+  // GET /api/cases/handover-status?ids=id1,id2,... — returns which case IDs have a shift_handover addendum
+  app.get("/api/cases/handover-status", async (req: Request, res: Response) => {
+    const userId = extractUserId(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+    const pool = getPool();
+    if (!pool) return res.status(503).json({ error: "Database unavailable" });
+
+    const raw = typeof req.query.ids === "string" ? req.query.ids : "";
+    const ids = raw
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    if (ids.length === 0) return res.json({ ready: [] });
+
+    try {
+      const result = await pool.query(
+        `SELECT DISTINCT case_id FROM case_addenda
+         WHERE case_id = ANY($1::text[]) AND type = 'shift_handover'`,
+        [ids]
+      );
+      const ready: string[] = result.rows.map((r: any) => r.case_id);
+      return res.json({ ready });
+    } catch (err: any) {
+      console.error("[HANDOVER-STATUS] error:", err);
+      return res.status(500).json({ error: "Failed to check handover status" });
+    }
+  });
+
   // POST /api/cases/:id/handover-pdf — generates a printable 2-page shift handover PDF
   // Page 1: patient summary, active issues, pending tasks
   // Page 2: full timeline, current medications, signature lines
