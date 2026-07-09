@@ -23,7 +23,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { useDepartment } from "@/context/DepartmentContext";
-import { fetchCasesFromProxy, deleteCaseFromProxy } from "@/lib/api";
+import { fetchCasesFromProxy, deleteCaseFromProxy, hideCaseLocally } from "@/lib/api";
 import { getApiUrl } from "@/lib/query-client";
 import { isPediatric } from "@/lib/pediatricVitals";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
@@ -227,7 +227,12 @@ export default function CasesScreen() {
           setBulkDeleting(true);
           const ids = Array.from(selectedIds);
           for (const id of ids) {
-            try { await deleteCaseFromProxy(id); } catch {}
+            try {
+              await deleteCaseFromProxy(id);
+            } catch {
+              // Backend delete failed — hide locally so the case never reappears
+              await hideCaseLocally(id);
+            }
           }
           queryClient.setQueryData<CaseItem[]>(["cases", user?.id], (old) =>
             old ? old.filter((c) => !selectedIds.has(c.id)) : []
@@ -249,14 +254,14 @@ export default function CasesScreen() {
           setDeletingId(item.id);
           try {
             await deleteCaseFromProxy(item.id);
-            queryClient.setQueryData<CaseItem[]>(["cases", user?.id], (old) =>
-              old ? old.filter((c) => c.id !== item.id) : []
-            );
-          } catch (err: any) {
-            Alert.alert("Error", err.message || "Failed to delete case");
-          } finally {
-            setDeletingId(null);
+          } catch {
+            // Backend delete failed — hide locally so the case never reappears on refresh
+            await hideCaseLocally(item.id);
           }
+          queryClient.setQueryData<CaseItem[]>(["cases", user?.id], (old) =>
+            old ? old.filter((c) => c.id !== item.id) : []
+          );
+          setDeletingId(null);
         },
       },
     ]);

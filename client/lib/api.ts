@@ -505,7 +505,15 @@ export async function fetchCasesFromProxy<T = any[]>(): Promise<T> {
     } catch { /* keep raw text */ }
     throw new Error(errorMessage);
   }
-  return res.json();
+  const data = await res.json();
+  // Filter out locally-hidden cases so deleted cases never reappear on refresh
+  if (Array.isArray(data)) {
+    const hidden = await getHiddenCaseIds();
+    if (hidden.size > 0) {
+      return data.filter((c: any) => !hidden.has(c?.id)) as T;
+    }
+  }
+  return data as T;
 }
 
 export async function fetchCaseByIdFromProxy(caseId: string): Promise<{ success: boolean; data?: any; error?: string }> {
@@ -530,6 +538,25 @@ export async function fetchCaseByIdFromProxy(caseId: string): Promise<{ success:
   }
 }
 
+// ─── Local case hiding (fallback when backend delete is unavailable) ──────────
+const HIDDEN_CASES_KEY = "hidden_case_ids_v1";
+
+export async function getHiddenCaseIds(): Promise<Set<string>> {
+  try {
+    const raw = await AsyncStorage.getItem(HIDDEN_CASES_KEY);
+    if (!raw) return new Set();
+    return new Set(JSON.parse(raw) as string[]);
+  } catch { return new Set(); }
+}
+
+export async function hideCaseLocally(caseId: string): Promise<void> {
+  try {
+    const hidden = await getHiddenCaseIds();
+    hidden.add(caseId);
+    await AsyncStorage.setItem(HIDDEN_CASES_KEY, JSON.stringify([...hidden]));
+  } catch { /* best effort */ }
+}
+
 export async function deleteCaseFromProxy(caseId: string): Promise<void> {
   const proxyUrl = new URL(`/api/proxy/cases/${caseId}`, getApiUrl()).href;
   const res = await withTokenRefresh((tok) =>
@@ -545,6 +572,9 @@ export async function deleteCaseFromProxy(caseId: string): Promise<void> {
     const text = await res.text();
     throw new Error(text || "Failed to delete case");
   }
+  // Also hide locally so the case never reappears even if backend delete
+  // was a soft-delete or eventually-consistent.
+  await hideCaseLocally(caseId);
 }
 
 export async function saveClinicalDataToServer(caseId: string, payload: any): Promise<void> {

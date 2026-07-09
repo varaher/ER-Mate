@@ -359,6 +359,11 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       });
 
       const responseText = await externalRes.text();
+      console.log(`[PROXY] DELETE /cases/${id} → ${externalRes.status}: ${responseText.slice(0, 200)}`);
+
+      if (externalRes.ok) {
+        return res.status(200).json({ success: true });
+      }
       try { return res.status(externalRes.status).json(JSON.parse(responseText)); }
       catch { return res.status(externalRes.status).send(responseText); }
     } catch (err: any) {

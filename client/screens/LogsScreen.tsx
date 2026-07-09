@@ -14,7 +14,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
-import { fetchCasesFromProxy, deleteCaseFromProxy } from "@/lib/api";
+import { fetchCasesFromProxy, deleteCaseFromProxy, hideCaseLocally } from "@/lib/api";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -91,13 +91,16 @@ export default function LogsScreen() {
           onPress: async () => {
             setDeleting(true);
             const ids = rawCases.map((c: any) => c.id).filter(Boolean);
-            let deleted = 0;
             for (const id of ids) {
-              try { await deleteCaseFromProxy(id); deleted++; } catch {}
+              try {
+                await deleteCaseFromProxy(id);
+              } catch {
+                // Backend delete failed — hide locally so it never reappears
+                await hideCaseLocally(id);
+              }
             }
             setDeleting(false);
             await loadLogs();
-            Alert.alert("Done", `${deleted} case${deleted !== 1 ? "s" : ""} deleted.`);
           },
         },
       ]
