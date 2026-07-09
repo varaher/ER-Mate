@@ -10,6 +10,7 @@ import {
   Alert,
   Platform,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -68,6 +69,7 @@ export default function HandoverScreen() {
   const [showAll, setShowAll] = useState(false);
   const [receivingDoctor, setReceivingDoctor] = useState("");
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [printingCases, setPrintingCases] = useState<Set<string>>(new Set());
 
   const LIVE_REFRESH_MS = 30000;
 
@@ -240,6 +242,116 @@ export default function HandoverScreen() {
     }
   };
 
+  const printCasePdf = async (index: number) => {
+    const c = cases[index];
+    if (!c) return;
+
+    setPrintingCases((prev) => new Set(prev).add(c.id));
+    try {
+      let fullCase: any = c;
+      try {
+        fullCase = await fetchFromApi<any>(`/cases/${c.id}`);
+      } catch {}
+
+      const rawMeds: any[] =
+        fullCase?.treatment?.medications ||
+        fullCase?.drugs_administered ||
+        [];
+      const medications = rawMeds
+        .map((m: any) => m.name || m.drug || (typeof m === "string" ? m : null))
+        .filter(Boolean)
+        .join(", ") || undefined;
+
+      const payload = {
+        patientName: c.patient?.name,
+        patientAge: c.patient?.age,
+        patientSex: c.patient?.sex,
+        arrivalTime: c.created_at,
+        chiefComplaint: c.presenting_complaint?.text,
+        medications,
+        handingDoctor:
+          (user as any)?.name ||
+          (user as any)?.fullName ||
+          user?.email ||
+          "Doctor",
+        receivingDoctor: receivingDoctor.trim() || undefined,
+      };
+
+      const token = await AsyncStorage.getItem("token");
+      const url = new URL(`/api/cases/${c.id}/handover-pdf`, getApiUrl()).href;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.status === 400) {
+        Alert.alert(
+          "No handover note",
+          "This case doesn't have a shift handover addendum yet. Open the case timeline and add one before printing."
+        );
+        return;
+      }
+
+      if (!res.ok) {
+        throw new Error(`Server error: ${res.status}`);
+      }
+
+      const safeName = (c.patient?.name || "patient").replace(/\s+/g, "_");
+      const filename = `handover_${safeName}.pdf`;
+
+      if (Platform.OS === "web") {
+        const blob = await res.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = objectUrl;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(objectUrl);
+      } else {
+        const bytes = await res.arrayBuffer();
+        const fileUri = (FileSystem.documentDirectory || "") + filename;
+        const base64 = Buffer.from(bytes).toString("base64");
+        await FileSystem.writeAsStringAsync(fileUri, base64, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+
+        if (Platform.OS === "android") {
+          try {
+            const contentUri = await FileSystem.getContentUriAsync(fileUri);
+            await IntentLauncher.startActivityAsync("android.intent.action.VIEW", {
+              data: contentUri,
+              flags: 1,
+              type: "application/pdf",
+            });
+            return;
+          } catch {}
+        }
+
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(fileUri, {
+            mimeType: "application/pdf",
+            dialogTitle: "Save Handover Sheet",
+            UTI: "com.adobe.pdf",
+          });
+        } else {
+          Alert.alert("Saved", `Handover sheet saved as "${filename}".`);
+        }
+      }
+    } catch (err: any) {
+      Alert.alert("Print failed", err?.message || "Please try again.");
+    } finally {
+      setPrintingCases((prev) => {
+        const next = new Set(prev);
+        next.delete(c.id);
+        return next;
+      });
+    }
+  };
+
   const priorityColor = (p: number) => PRIORITY_COLORS[p] || TriageColors.gray;
 
   const statusText = (s: string, p: number) => {
@@ -364,6 +476,17 @@ export default function HandoverScreen() {
                       </Text>
                     </View>
                     <View style={styles.checkboxArea}>
+                      <Pressable
+                        onPress={() => printCasePdf(i)}
+                        style={styles.printIconBtn}
+                        hitSlop={8}
+                      >
+                        {printingCases.has(c.id) ? (
+                          <ActivityIndicator size="small" color={theme.primary} />
+                        ) : (
+                          <Feather name="printer" size={16} color={theme.textMuted} />
+                        )}
+                      </Pressable>
                       <View style={[
                         styles.checkbox,
                         {
@@ -532,7 +655,11 @@ const styles = StyleSheet.create({
   caseTop: { flexDirection: "row", alignItems: "flex-start", marginBottom: 8 },
   patientName: { fontSize: 15, fontWeight: "700", marginBottom: 2 },
   patientMeta: { fontSize: 12, lineHeight: 18 },
-  checkboxArea: { paddingLeft: 8 },
+  checkboxArea: { paddingLeft: 8, flexDirection: "row", alignItems: "center", gap: 8 },
+  printIconBtn: {
+    width: 28, height: 28, borderRadius: 8,
+    alignItems: "center", justifyContent: "center",
+  },
   checkbox: {
     width: 22, height: 22, borderRadius: 6, borderWidth: 2,
     alignItems: "center", justifyContent: "center",
