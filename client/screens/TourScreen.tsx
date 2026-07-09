@@ -81,12 +81,11 @@ const FEATURES: Feature[] = [
     category: "EMR",
     icon: "bar-chart-2",
     iconColor: "#10b981",
-    title: "Dictation Completion Map",
-    subtitle: "See exactly what was captured",
+    title: "Dictation Completion Dots",
+    subtitle: "Colour-coded tab indicators after dictation",
     description:
-      "After dictation, a visual report shows which tabs were filled, how many fields were captured out of the total, and colour-coded progress bars per section. Coloured dots on the tab bar persist so you always know where the gaps are.",
-    how: "After tapping Apply on dictation → review the Completion Sheet → tap Review gaps to jump to the first empty tab",
-    isNew: true,
+      "After Smart Dictation, each tab button shows a coloured dot — green when well-filled, amber when partially captured, red when empty. Tap any dot-marked tab to review and fill the gaps.",
+    how: "After tapping Apply on dictation → check the coloured dots on each tab → tap any tab with an amber or red dot to fill gaps",
   },
   {
     id: "document-scan",
@@ -177,7 +176,6 @@ const FEATURES: Feature[] = [
     description:
       "When you open the app during your shift window, the Shift Selection screen appears. Choose your shift, see real-time slot counts, and tap Start. Your shift banner shows on the Dashboard.",
     how: "Open app → Shift Selection appears → tap the shift → Start Shift",
-    isNew: true,
   },
   {
     id: "shift-cases",
@@ -189,7 +187,6 @@ const FEATURES: Feature[] = [
     description:
       "When on shift, consultants and HOD see a SHIFT CASES section in the Cases tab — all cases from every doctor currently on the same shift, colour-coded by triage priority, with doctor name and role badges.",
     how: "Cases tab → SHIFT CASES section (visible when on shift as consultant/HOD)",
-    isNew: true,
   },
   {
     id: "consultant-review",
@@ -201,7 +198,6 @@ const FEATURES: Feature[] = [
     description:
       "Tap any resident's case in the Shift Cases list to open a review modal. Write your clinical notes — the case is marked Reviewed with a green badge visible to everyone on the shift.",
     how: "Cases tab → SHIFT CASES → tap a resident's case → write review → Save",
-    isNew: true,
   },
   {
     id: "hod-dashboard",
@@ -213,6 +209,17 @@ const FEATURES: Feature[] = [
     description:
       "Live view of every shift's consultant/resident slot counts, all doctors currently on shift (with duration), all active cases being documented across all shifts, and one-tap Force Out.",
     how: "Profile → HOD Dashboard",
+  },
+  {
+    id: "handover-chat",
+    category: "Team",
+    icon: "message-square",
+    iconColor: "#10b981",
+    title: "Handover Chat",
+    subtitle: "Talk through your patients — ErMate builds the sheet",
+    description:
+      "Speak or type about all your patients in any order. ErMate's AI tracks each one, asks a few follow-up questions (allergies, receiving doctor, discharge-readiness), then generates a structured handover sheet. Share via WhatsApp, export as PDF, or copy.",
+    how: "Dashboard → New Handover → dictate or type about your patients → Finalize → Share / Export PDF",
     isNew: true,
   },
   {
@@ -220,11 +227,11 @@ const FEATURES: Feature[] = [
     category: "Team",
     icon: "shuffle",
     iconColor: "#0ea5e9",
-    title: "Handover Sheet",
-    subtitle: "Structured patient handovers between shifts",
+    title: "Handover Sheet (Manual)",
+    subtitle: "Pick cases from your list and export a PDF",
     description:
-      "Select cases to hand over, add pending notes and outstanding tasks, and export a PDF handover sheet. Incoming handovers are visible in the Profile section.",
-    how: "Dashboard → Handover Sheet → select cases → Export",
+      "Manually select which cases to hand over, add bed numbers and pending notes for each, then export a Rajagiri-format PDF handover sheet. Incoming handovers from the previous shift are visible in your Profile.",
+    how: "Dashboard → Handover Sheet → tick cases → add notes → Export PDF",
   },
   {
     id: "roster",
