@@ -715,6 +715,9 @@ export default function CasesScreen() {
                         </Text>
                       </View>
                     ) : null}
+                    <Pressable onPress={() => setReviewModal(null)} hitSlop={8}>
+                      <Feather name="x" size={20} color={theme.textMuted} />
+                    </Pressable>
                   </View>
 
                   <View style={[styles.reviewMeta, { backgroundColor: theme.backgroundSecondary }]}>
