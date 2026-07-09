@@ -55,7 +55,8 @@ async function notifyShiftAddendum(
        JOIN push_tokens pt ON pt.user_id = dm.user_id
        WHERE co.case_id = $1
          AND dm.user_id != $2
-         AND (dm.role = 'hod' OR (dm.role = 'consultant' AND live_ss.id IS NOT NULL))`,
+         AND (dm.role = 'hod' OR (dm.role = 'consultant' AND live_ss.id IS NOT NULL))
+         AND dm.notif_case_updates IS NOT FALSE`,
       [opts.caseId, opts.authorUserId]
     );
     const tokens = tokenRes.rows.map((r: any) => r.token).filter(Boolean);

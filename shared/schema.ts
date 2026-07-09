@@ -181,6 +181,7 @@ export const departmentMembers = pgTable("department_members", {
   invitedAt: timestamp("invited_at").default(sql`CURRENT_TIMESTAMP`),
   joinedAt: timestamp("joined_at"),
   removedAt: timestamp("removed_at"),
+  notifCaseUpdates: boolean("notif_case_updates").default(true),
 });
 
 export const departmentInvites = pgTable("department_invites", {

@@ -186,6 +186,8 @@ export async function ensureDepartmentTables(): Promise<void> {
       ALTER TABLE case_overlays ADD COLUMN IF NOT EXISTS triage_priority INTEGER;
       ALTER TABLE case_overlays ADD COLUMN IF NOT EXISTS doctor_user_id TEXT;
       ALTER TABLE case_overlays ADD COLUMN IF NOT EXISTS doctor_name TEXT;
+
+      ALTER TABLE department_members ADD COLUMN IF NOT EXISTS notif_case_updates BOOLEAN DEFAULT true;
     `);
     // Generate invite_token for any departments that don't have one (Node.js side)
     const depts = await p.query("SELECT id FROM departments WHERE invite_token IS NULL");

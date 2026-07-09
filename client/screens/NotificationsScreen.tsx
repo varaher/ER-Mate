@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   Switch,
-  Alert,
   Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -14,6 +13,8 @@ import { Feather } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, Typography } from "@/constants/theme";
+import { getApiUrl } from "@/lib/query-client";
+import { useAuth } from "@/context/AuthContext";
 
 const NOTIFICATION_PREFS_KEY = "@ermate_notification_prefs";
 
@@ -43,7 +44,9 @@ export default function NotificationsScreen() {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const { token } = useAuth();
   const [prefs, setPrefs] = useState<NotificationPrefs>(DEFAULT_PREFS);
+  const didSyncServer = useRef(false);
 
   useEffect(() => {
     loadPrefs();
@@ -52,9 +55,28 @@ export default function NotificationsScreen() {
   const loadPrefs = async () => {
     try {
       const stored = await AsyncStorage.getItem(NOTIFICATION_PREFS_KEY);
-      if (stored) {
-        setPrefs({ ...DEFAULT_PREFS, ...JSON.parse(stored) });
+      const local: NotificationPrefs = stored
+        ? { ...DEFAULT_PREFS, ...JSON.parse(stored) }
+        : DEFAULT_PREFS;
+
+      if (token && !didSyncServer.current) {
+        didSyncServer.current = true;
+        try {
+          const res = await fetch(
+            new URL("/api/notifications/prefs", getApiUrl()).toString(),
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          if (res.ok) {
+            const serverPrefs = await res.json();
+            const merged = { ...local, caseUpdates: serverPrefs.caseUpdates ?? local.caseUpdates };
+            setPrefs(merged);
+            await AsyncStorage.setItem(NOTIFICATION_PREFS_KEY, JSON.stringify(merged));
+            return;
+          }
+        } catch {}
       }
+
+      setPrefs(local);
     } catch {}
   };
 
@@ -64,10 +86,30 @@ export default function NotificationsScreen() {
     } catch {}
   };
 
+  const syncCaseUpdatesToServer = async (value: boolean) => {
+    if (!token) return;
+    try {
+      await fetch(
+        new URL("/api/notifications/prefs", getApiUrl()).toString(),
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ caseUpdates: value }),
+        }
+      );
+    } catch {}
+  };
+
   const toggle = (key: keyof NotificationPrefs) => {
     const updated = { ...prefs, [key]: !prefs[key] };
     setPrefs(updated);
     savePrefs(updated);
+    if (key === "caseUpdates") {
+      syncCaseUpdatesToServer(updated.caseUpdates);
+    }
   };
 
   const sections = [
