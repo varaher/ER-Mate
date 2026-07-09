@@ -19,9 +19,12 @@ import { useHeaderHeight } from "@react-navigation/elements";
 import { Feather } from "@expo/vector-icons";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import SmartDictation, { SmartDictationExtracted } from "@/components/SmartDictation";
+import AddendaPreviewModal from "@/components/AddendaPreviewModal";
+import type { CaseAddendum } from "@/components/CaseChat";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { useDepartment } from "@/context/DepartmentContext";
@@ -235,6 +238,8 @@ export default function DischargeSummaryScreen() {
   const [exporting, setExporting] = useState(false);
   const [exportingDocx, setExportingDocx] = useState(false);
   const [caseData, setCaseData] = useState<any>(null);
+  const [addenda, setAddenda] = useState<CaseAddendum[]>([]);
+  const [showAddendaPreview, setShowAddendaPreview] = useState(false);
   const summaryRef = useRef<DischargeSummaryData>({ ...defaultSummary });
   const [updateCounter, setUpdateCounter] = useState(0);
   const [courseInHospitalKey, setCourseInHospitalKey] = useState(0);
@@ -266,9 +271,24 @@ export default function DischargeSummaryScreen() {
     }
   }, [caseData]);
 
+  // Fetches the clinical timeline so the doctor can review which entries will
+  // feed the AI-generated "Course in Hospital" narrative before it is generated.
+  const fetchAddenda = async () => {
+    try {
+      const token = await AsyncStorage.getItem("token");
+      const res = await fetch(`${getApiUrl()}/api/cases/${caseId}/addenda`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data)) setAddenda(data);
+    } catch { /* non-critical — preview simply won't show entries */ }
+  };
+
   const loadCase = async () => {
     try {
       const res = await apiGet<any>(`/cases/${caseId}`);
+      fetchAddenda();
       if (res.success && res.data) {
         const cached = await getCachedCaseData(caseId);
         const mergedData = cached ? mergeCaseWithCache(res.data, cached) : res.data;
@@ -1421,7 +1441,13 @@ export default function DischargeSummaryScreen() {
 
             <Pressable
               style={({ pressed }) => [styles.aiBtn, { backgroundColor: theme.primaryLight, opacity: pressed || generating ? 0.8 : 1, marginBottom: Spacing.md }]}
-              onPress={generateCourseInHospital}
+              onPress={() => {
+                if (addenda.length > 0) {
+                  setShowAddendaPreview(true);
+                } else {
+                  generateCourseInHospital();
+                }
+              }}
               disabled={generating}
             >
               {generating ? (
@@ -1691,6 +1717,18 @@ export default function DischargeSummaryScreen() {
           </Pressable>
         </View>
       </KeyboardAwareScrollViewCompat>
+
+      {/* Addenda preview — shown before generating the AI Course-in-Hospital
+          narrative, so the doctor can catch a missing or miscategorized entry first. */}
+      <AddendaPreviewModal
+        visible={showAddendaPreview}
+        addenda={addenda}
+        onCancel={() => setShowAddendaPreview(false)}
+        onConfirm={() => {
+          setShowAddendaPreview(false);
+          generateCourseInHospital();
+        }}
+      />
     </View>
   );
 }

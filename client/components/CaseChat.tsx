@@ -21,6 +21,7 @@ import { Feather } from '@expo/vector-icons';
 import { getApiUrl } from '@/lib/query-client';
 import { SmartDictationExtracted } from './SmartDictation';
 import { renderMarkdown as renderMarkdownShared } from './MarkdownText';
+import AddendaPreviewModal from './AddendaPreviewModal';
 
 // ── Addendum types ─────────────────────────────────────────────────────────────
 export const ADDENDUM_TYPES = [
@@ -50,7 +51,7 @@ export interface CaseAddendum {
   createdAt: string;
 }
 
-const ADDENDUM_LABELS: Record<AddendumType, string> = {
+export const ADDENDUM_LABELS: Record<AddendumType, string> = {
   clinical_update:      'Clinical Update',
   investigation_result: 'Investigation',
   consultant_review:    'Consultant Review',
@@ -61,7 +62,7 @@ const ADDENDUM_LABELS: Record<AddendumType, string> = {
   correction:           'Correction',
 };
 
-const ADDENDUM_COLORS: Record<AddendumType, string> = {
+export const ADDENDUM_COLORS: Record<AddendumType, string> = {
   clinical_update:      '#10B981',  // emerald  — routine clinical progress note
   investigation_result: '#3B82F6',  // blue     — lab / imaging result
   consultant_review:    '#7C3AED',  // purple   — specialist review
@@ -72,7 +73,7 @@ const ADDENDUM_COLORS: Record<AddendumType, string> = {
   correction:           '#F97316',  // orange   — factual correction
 };
 
-const ADDENDUM_ICONS: Record<AddendumType, string> = {
+export const ADDENDUM_ICONS: Record<AddendumType, string> = {
   clinical_update:      'activity',
   investigation_result: 'file-text',
   consultant_review:    'user-check',
@@ -2177,6 +2178,7 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
   const [hasCaseNote, setHasCaseNote]   = useState(false);
   const [hasDs, setHasDs]               = useState(false);
   const [showAddendumModal, setShowAddendumModal] = useState(false);
+  const [showAddendaPreview, setShowAddendaPreview] = useState(false);
 
   // Addendum mode is only active once the initial case note has been committed
   // (either during this session via hasCaseNote, or when loading a pre-existing
@@ -2386,6 +2388,39 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
     sendToAI(`Correction: ${correctionText}`, undefined, true);
   };
 
+  // Runs the AI-enhanced discharge narrative generation from the clinical timeline.
+  // Extracted so it can be called either immediately (no addenda to review) or after
+  // the doctor confirms the addenda preview.
+  const runDischargeFromTimeline = async () => {
+    if (!liveCase) return;
+    setIsThinking(true);
+    try {
+      const token = await AsyncStorage.getItem('token');
+      const resp = await fetch(
+        `${getApiUrl()}/api/ai/discharge-from-timeline`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+          body: JSON.stringify({
+            caseId,
+            patientName: liveCase.name,
+            chiefComplaint: liveCase.chiefComplaint,
+            workingDiagnosis: liveCase.workingDiagnosis,
+            disposition: liveCase.disposition,
+          }),
+        }
+      );
+      const json = await resp.json();
+      const dsText = generateDischargeSummary(liveCase, computeErDurationLabel(erArrivalTime), json?.summary);
+      push({ role: 'assistant', content: 'AI-enhanced discharge summary assembled from the clinical timeline.', type: 'discharge_summary', specialContent: dsText });
+    } catch {
+      push({ role: 'assistant', content: 'Discharge summary generated from your case data.', type: 'discharge_summary', specialContent: generateDischargeSummary(liveCase, computeErDurationLabel(erArrivalTime)) });
+    } finally {
+      setIsThinking(false);
+    }
+    setHasDs(true);
+  };
+
   const handleChip = async (chip: string) => {
     setInputText('');
     const lower = chip.toLowerCase();
@@ -2395,36 +2430,19 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
       // included in the "Course in Hospital" narrative. Otherwise fall back
       // to the local generator (no AI credits consumed).
       if (canAddAddendum && caseId) {
-        setIsThinking(true);
-        try {
-          const token = await AsyncStorage.getItem('token');
-          const resp = await fetch(
-            `${getApiUrl()}/api/ai/discharge-from-timeline`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-              body: JSON.stringify({
-                caseId,
-                patientName: liveCase.name,
-                chiefComplaint: liveCase.chiefComplaint,
-                workingDiagnosis: liveCase.workingDiagnosis,
-                disposition: liveCase.disposition,
-              }),
-            }
-          );
-          const json = await resp.json();
-          const dsText = generateDischargeSummary(liveCase, computeErDurationLabel(erArrivalTime), json?.summary);
-          push({ role: 'assistant', content: 'AI-enhanced discharge summary assembled from the clinical timeline.', type: 'discharge_summary', specialContent: dsText });
-        } catch {
-          push({ role: 'assistant', content: 'Discharge summary generated from your case data.', type: 'discharge_summary', specialContent: generateDischargeSummary(liveCase, computeErDurationLabel(erArrivalTime)) });
-        } finally {
-          setIsThinking(false);
+        if (addenda.length > 0) {
+          // Let the doctor review exactly which timeline entries will be sent
+          // before the narrative is generated, so a missing/miscategorized
+          // addendum can be caught first.
+          setShowAddendaPreview(true);
+          return;
         }
+        await runDischargeFromTimeline();
       } else {
         const dsText = generateDischargeSummary(liveCase, computeErDurationLabel(erArrivalTime));
         push({ role: 'assistant', content: 'Discharge summary generated from your case data.', type: 'discharge_summary', specialContent: dsText });
+        setHasDs(true);
       }
-      setHasDs(true);
       return;
     }
     if ((lower.includes('referral') || lower.includes('refer')) && liveCase) {
@@ -2903,6 +2921,22 @@ export default function CaseChat({ onDataExtracted, patientContext, liveCase, in
           onSave={onAddAddendum}
         />
       ) : null}
+
+      {/* Addenda preview — shown before generating the AI discharge narrative
+          from the clinical timeline, so the doctor can catch a missing or
+          miscategorized entry first. */}
+      <AddendaPreviewModal
+        visible={showAddendaPreview}
+        addenda={addenda}
+        onCancel={() => {
+          setShowAddendaPreview(false);
+          setShowAddendumModal(true);
+        }}
+        onConfirm={() => {
+          setShowAddendaPreview(false);
+          runDischargeFromTimeline();
+        }}
+      />
 
       {/* Input bar */}
       <View style={s.inputBar}>
