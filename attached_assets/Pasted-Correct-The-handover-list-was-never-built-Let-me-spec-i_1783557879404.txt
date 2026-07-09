@@ -1,0 +1,255 @@
+Correct. The handover list was never built. Let me spec it completely.
+
+---
+
+## What's Missing
+
+```
+CURRENT:
+  Dashboard → New Handover
+  → Opens chat directly
+  → No way to see past handovers
+  → No way to reopen an old one
+  → No list anywhere
+
+NEEDED:
+  Dashboard → Handover
+  → Shows list of all handovers
+  → Tap any → opens that handover
+  → New Handover button at top
+```
+
+---
+
+## The Screen — Handover List
+
+```
+┌─────────────────────────────────┐
+│ ←  Handovers                    │
+│     City Emergency              │
+├─────────────────────────────────┤
+│  [+ New Handover]               │
+├─────────────────────────────────┤
+│  TODAY                          │
+│                                 │
+│  ┌───────────────────────────┐  │
+│  │ Evening → Night           │  │
+│  │ 08-07-2026 · 22:00        │  │
+│  │ Dr. Priya → Dr. Sanjay    │  │
+│  │ 6 patients · 2 critical   │  │
+│  │ ✓ Received by Dr. Sanjay  │  │
+│  └───────────────────────────┘  │
+│                                 │
+│  ┌───────────────────────────┐  │
+│  │ Morning → Evening         │  │
+│  │ 08-07-2026 · 14:00        │  │
+│  │ Dr. Rahul → Dr. Priya     │  │
+│  │ 4 patients · 1 critical   │  │
+│  │ ✓ Received                │  │
+│  └───────────────────────────┘  │
+│                                 │
+│  YESTERDAY                      │
+│                                 │
+│  ┌───────────────────────────┐  │
+│  │ Night → Morning           │  │
+│  │ 07-07-2026 · 06:00        │  │
+│  │ Dr. Sanjay → Dr. Rahul    │  │
+│  │ 5 patients · 0 critical   │  │
+│  │ ✓ Received                │  │
+│  └───────────────────────────┘  │
+│                                 │
+│  07-07-2026                     │
+│  ┌───────────────────────────┐  │
+│  │ Evening → Night · 22:00   │  │
+│  │ 3 patients · 1 critical   │  │
+│  │ ⏳ Not yet received        │  │
+│  └───────────────────────────┘  │
+│                                 │
+│  [Load more...]                 │
+└─────────────────────────────────┘
+```
+
+---
+
+## Each Handover Card Shows
+
+```
+Shift direction:    Morning → Evening
+Date and time:      08-07-2026 · 22:00
+From → To:          Dr. Priya → Dr. Sanjay
+Patient count:      6 patients
+Critical count:     2 critical 🔴
+Receipt status:     ✓ Received / ⏳ Pending
+```
+
+---
+
+## Tap a Card — Opens the Handover
+
+```
+Three states when opening:
+
+STATE 1 — Completed handover (read only)
+  Shows the full handover sheet
+  All patient cards
+  Timeline per patient
+  [Share again] [Export PDF]
+
+STATE 2 — Draft (not yet shared)
+  Shows the handover chat
+  Doctor can continue editing
+  [Generate sheet] [Share]
+
+STATE 3 — Incoming handover
+  Doctor is the RECEIVER
+  Shows what was handed to them
+  [Mark as received] button
+  [Add notes] option
+```
+
+---
+
+## Database — What's Needed
+
+```sql
+-- handovers table
+CREATE TABLE handovers (
+  id           UUID PRIMARY KEY,
+  department_id INTEGER,
+  from_doctor_id TEXT,
+  from_doctor_name TEXT,
+  to_doctor_id TEXT,
+  to_doctor_name TEXT,
+  shift_from   TEXT,  -- "Evening"
+  shift_to     TEXT,  -- "Night"
+  date         DATE,
+  created_at   TIMESTAMP,
+  status       TEXT,  
+  -- "draft" | "shared" | "received"
+  patient_count INTEGER,
+  critical_count INTEGER,
+  chat_messages JSONB, -- the conversation
+  final_sheet   JSONB  -- structured output
+);
+```
+
+---
+
+## Backend Routes Needed
+
+```typescript
+// Get all handovers for doctor
+GET /api/handovers
+  ?departmentId=xxx
+  ?limit=20&offset=0
+  Returns: list ordered by date desc
+
+// Get one handover
+GET /api/handovers/:id
+  Returns: full handover with patients
+
+// Create new handover
+POST /api/handovers
+  body: { departmentId, shiftFrom, shiftTo }
+  Returns: { id } → navigate to chat
+
+// Update handover
+PUT /api/handovers/:id
+  body: { status, finalSheet, chatMessages }
+
+// Mark as received
+POST /api/handovers/:id/receive
+  body: { receivingDoctorId }
+  Updates status → "received"
+  Sends notification to sender
+```
+
+---
+
+## Navigation Flow — Full Picture
+
+```
+Dashboard
+  │
+  ├── [New Patient] → CaseChatScreen
+  │
+  └── [Handover] → HandoverListScreen
+                      │
+                      ├── [+ New Handover]
+                      │     → HandoverChatScreen (new)
+                      │           ↓
+                      │       [Generate Sheet]
+                      │           ↓
+                      │       HandoverSheetScreen
+                      │           ↓
+                      │       [Share WhatsApp / PDF]
+                      │
+                      └── [Tap existing handover]
+                            → HandoverSheetScreen
+                              (read only if completed)
+                              (chat if draft)
+```
+
+---
+
+## Tell Your Developer
+
+```
+Three screens needed:
+
+1. HandoverListScreen
+   Route: /handovers
+   Shows all handovers grouped by date
+   New Handover button at top
+   Each card: shift, date, doctors,
+   patient count, critical count, status
+
+2. HandoverChatScreen (already built)
+   Needs: save handover to DB
+   on each message + on sheet generation
+   Needs: handoverId param to load
+   existing draft
+
+3. HandoverSheetScreen (already built)
+   Needs: accept handoverId param
+   Load from DB instead of only
+   from in-memory chat state
+
+Database:
+   Add handovers table (schema above)
+   
+   GET /api/handovers
+   POST /api/handovers
+   GET /api/handovers/:id
+   PUT /api/handovers/:id
+   POST /api/handovers/:id/receive
+
+Priority:
+   HandoverListScreen first (1 day)
+   DB save on HandoverChatScreen (1 day)
+   Receipt status (1 day)
+```
+
+---
+
+## Also — Dashboard Button Should Reflect This
+
+```
+CURRENT dashboard button:
+  [Handover] → opens new chat directly
+
+CHANGE TO:
+  [Handover] → opens HandoverListScreen
+  
+  If doctor has no handovers yet:
+    Show empty state:
+    "No handovers yet.
+     Tap + to start your first one."
+    [+ New Handover] button
+
+  If doctor has handovers:
+    Show the list
+    [+ New Handover] at top
+```
+
+This is a 3-day build. Without it, every handover the doctor creates is lost — they can never reopen it, the receiving doctor can never look it up, and the HOD has no audit trail. The list screen is essential before this feature goes to real users.

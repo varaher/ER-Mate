@@ -1,0 +1,353 @@
+Perfect. Two distinct user types, two distinct flows, one unified handover list. Let me map this completely.
+
+---
+
+## The Two Users
+
+```
+USER TYPE 1 — ErMate Pro User
+  Uses ErMate daily
+  All patients already in ErMate
+  Cases documented via voice/chat
+  Handover = select from their case list
+  Everything is already structured
+
+USER TYPE 2 — Handover-Only User
+  Hospital has its own EMR
+  Doesn't use ErMate for documentation
+  Comes to ErMate ONLY for handover
+  Pastes cases one by one into chat
+  ErMate builds the list as they go
+  No subscription needed for this
+```
+
+---
+
+## User Type 1 — Pro User Flow
+
+```
+Dashboard → Handover
+         ↓
+Shows TODAY'S CASES (already in ErMate)
+
+┌─────────────────────────────────┐
+│ ←  Start Handover               │
+│     Evening Shift · 08-07-2026  │
+├─────────────────────────────────┤
+│  Select patients to hand over:  │
+├─────────────────────────────────┤
+│                                 │
+│  ☑ Bed 3 · Abdulahad · 52M     │
+│     NSTEMI · P1 · Unstable      │
+│                                 │
+│  ☑ Bed 7 · Siya Sibi · 25F     │
+│     Appendicitis · P2 · Stable  │
+│                                 │
+│  ☐ Bed 12 · Unknown · 70M      │
+│     Stroke · P3 · Stable        │
+│                                 │
+│  ☑ Bed 9 · Pradeep · 45M       │
+│     DKA · P2 · Improving        │
+│                                 │
+│  ☐ Bed 2 · Meena Thomas · 38F  │
+│     Gastroenteritis · Discharged│
+│                                 │
+│  [Select all] [Clear]           │
+│                                 │
+│  [Generate Handover →]          │
+│  4 patients selected            │
+└─────────────────────────────────┘
+         ↓
+Doctor can add pending notes per patient
+via quick text or voice
+         ↓
+Handover sheet generated instantly
+All clinical data already in ErMate
+No re-entry needed
+         ↓
+Share WhatsApp / PDF / Save
+```
+
+---
+
+## User Type 2 — Handover-Only User Flow
+
+```
+Opens ErMate (no login or free account)
+Taps Handover
+         ↓
+┌─────────────────────────────────┐
+│  New Handover                   │
+│                                 │
+│  Tell me about your patients    │
+│  one by one. I'll build your    │
+│  handover list as you go.       │
+│                                 │
+│  Paste, speak, or type each     │
+│  patient — any format, any      │
+│  order, any language.           │
+│                                 │
+│  [Start with Patient 1 →]       │
+└─────────────────────────────────┘
+         ↓
+Doctor pastes Patient 1 from their EMR:
+
+"Bed 3, Abdulahad, 52M, NSTEMI,
+ on heparin, BP 94/60, unstable,
+ troponin due 10pm, cath lab morning"
+         ↓
+ErMate creates Card 1 instantly:
+
+┌─────────────────────────────────┐
+│ 🔴 BED 3 · ABDULAHAD · 52M     │
+│    NSTEMI · UNSTABLE            │
+│    BP 94/60 · Heparin running   │
+│    □ Troponin 22:00             │
+│    □ Cath lab AM                │
+│    [✓ Looks right] [Edit]       │
+└─────────────────────────────────┘
+
+ErMate asks:
+"Got it. Next patient? 
+ Paste, speak, or type."
+         ↓
+Doctor pastes Patient 2:
+
+"Bed 7 appendicitis girl, 
+ 25F, Siya, OT tonight 11:30,
+ NBM since 6pm"
+         ↓
+Card 2 added to growing list:
+
+┌─────────────────────────────────┐
+│ 🔴 BED 3 · ABDULAHAD · 52M     │
+│    NSTEMI · UNSTABLE            │
+├─────────────────────────────────┤
+│ 🟡 BED 7 · SIYA SIBI · 25F    │
+│    Appendicitis · OT 23:30      │
+│    NBM since 18:00              │
+└─────────────────────────────────┘
+
+"Patient 2 added. Anyone else?
+ Or shall I generate the handover?"
+         ↓
+Doctor continues until all 20 patients
+are added. Each paste takes 10 seconds.
+20 patients = under 5 minutes.
+         ↓
+Doctor says "Done" or taps Generate
+         ↓
+Full handover sheet with all 20 patients
+Sorted by priority (critical first)
+Share WhatsApp / PDF / Save to list
+```
+
+---
+
+## The Unified Handover List
+
+```
+Both user types end up here —
+the same list, different sources
+
+┌─────────────────────────────────┐
+│ ←  Handovers                    │
+│                                 │
+│  [+ New Handover]               │
+├─────────────────────────────────┤
+│  TODAY · 08-07-2026             │
+│                                 │
+│  Evening → Night · 22:00        │
+│  Dr. Priya → Dr. Sanjay         │
+│  6 patients · 2 critical        │
+│  Source: 🟢 ErMate cases        │← Pro user
+│  ✓ Received                     │
+│                                 │
+│  Afternoon → Evening · 14:00    │
+│  Dr. Rajan → Dr. Priya          │
+│  20 patients · 4 critical       │
+│  Source: 📋 Pasted from EMR     │← Handover-only
+│  ✓ Received                     │
+│                                 │
+│  YESTERDAY · 07-07-2026         │
+│  ...                            │
+└─────────────────────────────────┘
+```
+
+---
+
+## The Chat Behaviour for Type 2 User
+
+```
+The key difference from current chat:
+
+CURRENT:
+  Doctor pastes everything at once
+  ErMate structures it all
+  One shot
+
+NEEDED FOR TYPE 2:
+  Doctor pastes ONE PATIENT at a time
+  ErMate adds each to a GROWING LIST
+  Doctor sees the list building
+  Doctor confirms each card
+  Can edit any card before generating
+
+This is the "build the list" mode
+vs the "structure this dump" mode
+
+ErMate needs to know which mode:
+  Is the doctor adding to an existing list?
+  Or is this a fresh dump?
+
+Simple detection:
+  If previous messages exist in this
+  handover → "add to list" mode
+  If first message → ask or auto-detect
+```
+
+---
+
+## Tell Your Developer — Exact Spec
+
+```
+TWO HANDOVER MODES:
+
+MODE 1 — "From my ErMate cases"
+  Only available to logged-in users
+  who have cases in the system
+
+  HandoverChatScreen receives:
+    mode: "from_cases"
+    
+  Shows case picker first
+  Doctor selects patients
+  Taps Generate
+  Handover sheet built from
+  existing case data in DB
+  No AI extraction needed
+
+MODE 2 — "Build from scratch"
+  Available to anyone (no login needed
+  for basic use)
+
+  HandoverChatScreen receives:
+    mode: "build_list"
+    
+  Starts with empty patient list
+  Doctor adds patients one by one
+  Each message = one patient
+  ErMate extracts and adds to list
+  Doctor sees growing card list
+  After each patient ErMate asks:
+    "Next patient? Or done?"
+  
+  When done → generate sheet
+  
+  If logged in → save to handover list
+  If not logged in → share only
+    (prompt to save: "Create free
+     account to save this handover")
+
+HANDOVER LIST SCREEN:
+  Shows both types in the same list
+  Badge shows source:
+    🟢 ErMate cases
+    📋 Pasted
+    🎙️ Dictated
+
+ACCUMULATOR STATE:
+  The HandoverChatScreen needs to
+  maintain a patients[] array
+  that grows with each paste/dictation
+
+  Each time doctor adds a patient:
+    1. Extract patient data from message
+    2. Add to patients[] array
+    3. Show updated card list
+    4. Ask for next patient
+
+  patients[] is the source of truth
+  for the final handover sheet
+```
+
+---
+
+## The Growing List UX
+
+```
+AFTER PATIENT 1:
+┌──────────────┐
+│ 🔴 BED 3    │ ← just added
+│ Abdulahad   │
+│ NSTEMI      │
+└──────────────┘
+"Got it. Next patient?"
+
+AFTER PATIENT 2:
+┌──────────────┐
+│ 🔴 BED 3    │
+│ Abdulahad   │
+└──────────────┘
+┌──────────────┐
+│ 🟡 BED 7    │ ← just added
+│ Siya Sibi   │
+└──────────────┘
+"2 patients added. Next?"
+
+AFTER PATIENT 5:
+┌──────────────┐
+│ 🔴 BED 3    │
+└──────────────┘
+┌──────────────┐
+│ 🔴 BED 8    │
+└──────────────┘
+┌──────────────┐
+│ 🟡 BED 7    │
+└──────────────┘
+┌──────────────┐
+│ 🟡 BED 11   │
+└──────────────┘
+┌──────────────┐
+│ 🟢 BED 2    │
+└──────────────┘
+"5 patients added. Any more or shall I
+ generate the handover sheet?"
+
+[Add more patients] [Generate handover →]
+```
+
+---
+
+## Subscription Logic
+
+```
+HANDOVER-ONLY USER (no subscription):
+  ✓ Build handover list via chat
+  ✓ Paste patients one by one
+  ✓ Generate handover sheet
+  ✓ Share via WhatsApp
+  ✓ Export PDF
+  ✓ Save to handover list
+    (with free account)
+  ✗ No ErMate case sheet integration
+  ✗ No shift management
+  ✗ No HOD dashboard
+
+PRO USER (₹1,199/month):
+  ✓ Everything above
+  ✓ Select from ErMate case list
+  ✓ All clinical data pre-filled
+  ✓ Addendum timeline in handover
+  ✓ Full 48h patient history
+  ✓ One tap — no re-entry
+
+TEAM USER (₹399-599/doctor):
+  ✓ Everything above
+  ✓ HOD sees all handovers
+  ✓ Receiving doctor notified
+  ✓ Acknowledgement trail
+  ✓ Audit history
+```
+
+This makes the handover feature a complete growth funnel — free users get value and naturally want the Pro features when they see what ErMate pro users get for the same handover with zero effort.

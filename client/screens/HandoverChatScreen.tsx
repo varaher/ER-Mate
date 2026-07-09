@@ -18,11 +18,14 @@ import * as Sharing from "expo-sharing";
 import * as Clipboard from "expo-clipboard";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { getApiUrl } from "@/lib/query-client";
 import { Spacing, BorderRadius, Typography, TriageColors } from "@/constants/theme";
+import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 interface HandoverVitals {
   bp?: string;
@@ -167,12 +170,18 @@ function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
+type Nav = NativeStackNavigationProp<RootStackParamList>;
+type Route = RouteProp<RootStackParamList, "HandoverChat">;
+
 export default function HandoverChatScreen() {
   const { theme } = useTheme();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const navigation = useNavigation<Nav>();
+  const route = useRoute<Route>();
 
+  const handoverId = route.params?.handoverId;
   const doctorName = (user as any)?.name || (user as any)?.fullName || user?.email || "Doctor";
 
   const [messages, setMessages] = useState<ChatMessage[]>([{ role: "assistant", content: OPENING_PROMPT }]);
@@ -187,6 +196,7 @@ export default function HandoverChatScreen() {
   const [copied, setCopied] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [loadingSession, setLoadingSession] = useState(true);
+  const [sessionId, setSessionId] = useState<string | undefined>(handoverId);
 
   const nativeRecRef = useRef<Audio.Recording | null>(null);
   const webRecRef = useRef<{ mr: MediaRecorder | null; chunks: Blob[]; stream: MediaStream | null }>({
@@ -195,6 +205,21 @@ export default function HandoverChatScreen() {
     stream: null,
   });
   const scrollRef = useRef<ScrollView>(null);
+
+  const markAsShared = useCallback(async (sid: string | undefined, finalSheet?: object) => {
+    if (!sid) return;
+    try {
+      const token = await AsyncStorage.getItem("token");
+      if (!token) return;
+      await fetch(new URL(`/api/handovers/${sid}`, getApiUrl()).toString(), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ status: "shared", finalSheet, toDoctorName: receivingDoctor, fromDoctorName: doctorName }),
+      });
+    } catch {
+      // best-effort — share already succeeded
+    }
+  }, [receivingDoctor, doctorName]);
 
   const sendMessage = useCallback(
     async (text: string) => {
@@ -218,6 +243,8 @@ export default function HandoverChatScreen() {
             messages: messages.map((m) => ({ role: m.role, content: m.content })),
             currentMessage: trimmed,
             askedFollowUp,
+            handoverId: sessionId,
+            fromDoctorName: doctorName,
           }),
         });
         const data = await res.json();
@@ -231,6 +258,7 @@ export default function HandoverChatScreen() {
         if (data.receivingDoctor) setReceivingDoctor(data.receivingDoctor);
         setAskedFollowUp(!!data.askedFollowUp);
         setReadyToFinalize(!!data.readyToFinalize);
+        if (data.sessionId) setSessionId(data.sessionId);
       } catch {
         setMessages((prev) => [...prev, { role: "assistant", content: "Network error. Please check your connection and try again." }]);
       } finally {
@@ -360,6 +388,7 @@ export default function HandoverChatScreen() {
       } else {
         await Linking.openURL(waWebUrl);
       }
+      markAsShared(sessionId, { text });
     } catch {
       Alert.alert("Couldn't open WhatsApp", "Copy the handover instead and paste it manually.");
     }
@@ -403,6 +432,7 @@ export default function HandoverChatScreen() {
           Alert.alert("Saved", `PDF saved to: ${fileUri}`);
         }
       }
+      markAsShared(sessionId);
     } catch {
       Alert.alert("Export failed", "Could not export PDF. Please try again.");
     } finally {
@@ -411,46 +441,66 @@ export default function HandoverChatScreen() {
   };
 
   const handleNewHandover = () => {
-    setMessages([{ role: "assistant", content: OPENING_PROMPT }]);
-    setPatients([]);
-    setReceivingDoctor("");
-    setAskedFollowUp(false);
-    setReadyToFinalize(false);
-    setInputText("");
+    // Archive current session, then go back to the list so user can start fresh
     (async () => {
       try {
         const token = await AsyncStorage.getItem("token");
         if (!token) return;
+        // Archive active session (DELETE now sets status='completed')
         await fetch(new URL("/api/handover/session", getApiUrl()).toString(), {
           method: "DELETE",
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         });
       } catch {
-        // best-effort — local state is already reset
+        // best-effort
       }
     })();
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate("HandoverList");
+    }
   };
 
   useEffect(() => {
     (async () => {
       try {
         const token = await AsyncStorage.getItem("token");
-        if (!token) {
-          setLoadingSession(false);
-          return;
-        }
-        const res = await fetch(new URL("/api/handover/session", getApiUrl()).toString(), {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          const session = data?.session;
-          if (session && Array.isArray(session.messages) && session.messages.length > 0) {
-            setMessages(session.messages);
-            setPatients(Array.isArray(session.patients) ? session.patients : []);
-            setReceivingDoctor(session.receivingDoctor || "");
-            setAskedFollowUp(!!session.askedFollowUp);
-            setReadyToFinalize(!!session.readyToFinalize);
+        if (!token) { setLoadingSession(false); return; }
+
+        if (handoverId) {
+          // Load a specific session by ID (read-only or editable draft)
+          const res = await fetch(new URL(`/api/handovers/${handoverId}`, getApiUrl()).toString(), {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const session = data?.session;
+            if (session && Array.isArray(session.messages) && session.messages.length > 0) {
+              setMessages(session.messages);
+              setPatients(Array.isArray(session.patients) ? session.patients : []);
+              setReceivingDoctor(session.receivingDoctor || "");
+              setAskedFollowUp(!!session.askedFollowUp);
+              setReadyToFinalize(!!session.readyToFinalize);
+              setSessionId(session.id);
+            }
+          }
+        } else {
+          // Load the active session (cross-device resume)
+          const res = await fetch(new URL("/api/handover/session", getApiUrl()).toString(), {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const session = data?.session;
+            if (session && Array.isArray(session.messages) && session.messages.length > 0) {
+              setMessages(session.messages);
+              setPatients(Array.isArray(session.patients) ? session.patients : []);
+              setReceivingDoctor(session.receivingDoctor || "");
+              setAskedFollowUp(!!session.askedFollowUp);
+              setReadyToFinalize(!!session.readyToFinalize);
+              setSessionId(session.id);
+            }
           }
         }
       } catch {

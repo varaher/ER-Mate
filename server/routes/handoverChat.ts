@@ -50,12 +50,15 @@ RESPONSE FORMAT — respond ONLY as a valid JSON object, nothing else:
 }`;
 
 export function registerHandoverChatRoutes(app: Express): void {
+  // ── POST /api/handover/chat ─────────────────────────────────────────────────
   app.post("/api/handover/chat", async (req: Request, res: Response) => {
     try {
-      const { messages, currentMessage, askedFollowUp } = req.body as {
+      const { messages, currentMessage, askedFollowUp, handoverId, fromDoctorName } = req.body as {
         messages?: { role: "user" | "assistant"; content: string }[];
         currentMessage?: string;
         askedFollowUp?: boolean;
+        handoverId?: string;
+        fromDoctorName?: string;
       };
 
       if (!currentMessage || typeof currentMessage !== "string" || !currentMessage.trim()) {
@@ -104,16 +107,27 @@ export function registerHandoverChatRoutes(app: Express): void {
 
       console.log(`[HandoverChat] userId=${userId || "anon"} chars=${currentMessage.length} patients=${Array.isArray(parsed.patients) ? parsed.patients.length : 0}`);
 
-      const responsePayload = {
+      const patients = Array.isArray(parsed.patients) ? parsed.patients : [];
+      const criticalCount = (patients as any[]).filter((p) =>
+        p?.status === "critical" || p?.status === "unstable"
+      ).length;
+
+      const responsePayload: {
+        reply: string;
+        patients: unknown[];
+        receivingDoctor: string;
+        askedFollowUp: boolean;
+        readyToFinalize: boolean;
+        sessionId?: string;
+      } = {
         reply: parsed.reply || "I didn't quite catch that — could you tell me about your patients again?",
-        patients: Array.isArray(parsed.patients) ? parsed.patients : [],
+        patients,
         receivingDoctor: parsed.receivingDoctor || "",
         askedFollowUp: !!parsed.askedFollowUp,
         readyToFinalize: !!parsed.readyToFinalize,
       };
 
-      // Persist the session server-side so the same handover is visible across
-      // devices (phone/desktop) for the logged-in user, not just in local memory.
+      // Persist the session server-side (upsert on active session for this user/handoverId)
       if (userId) {
         const p = getPool();
         if (p) {
@@ -122,20 +136,61 @@ export function registerHandoverChatRoutes(app: Express): void {
             { role: "user", content: currentMessage },
             { role: "assistant", content: responsePayload.reply },
           ];
-          p.query(
-            `INSERT INTO handover_sessions (user_id, messages, patients, receiving_doctor, asked_follow_up, ready_to_finalize, status, updated_at)
-             VALUES ($1, $2, $3, $4, $5, $6, 'active', CURRENT_TIMESTAMP)
-             ON CONFLICT (user_id) WHERE status = 'active'
-             DO UPDATE SET messages = $2, patients = $3, receiving_doctor = $4, asked_follow_up = $5, ready_to_finalize = $6, updated_at = CURRENT_TIMESTAMP`,
-            [
-              userId,
-              JSON.stringify(updatedMessages),
-              JSON.stringify(responsePayload.patients),
-              responsePayload.receivingDoctor,
-              responsePayload.askedFollowUp,
-              responsePayload.readyToFinalize,
-            ]
-          ).catch((e) => console.error("[HandoverChat] failed to persist session:", e));
+          if (handoverId) {
+            // Update a specific session by id
+            await p.query(
+              `UPDATE handover_sessions
+               SET messages = $1, patients = $2, receiving_doctor = $3,
+                   asked_follow_up = $4, ready_to_finalize = $5,
+                   patient_count = $6, critical_count = $7,
+                   to_doctor_name = COALESCE(NULLIF($8, ''), to_doctor_name),
+                   from_doctor_name = COALESCE(NULLIF($9, ''), from_doctor_name),
+                   updated_at = CURRENT_TIMESTAMP
+               WHERE id = $10 AND user_id = $11`,
+              [
+                JSON.stringify(updatedMessages),
+                JSON.stringify(responsePayload.patients),
+                responsePayload.receivingDoctor,
+                responsePayload.askedFollowUp,
+                responsePayload.readyToFinalize,
+                patients.length,
+                criticalCount,
+                responsePayload.receivingDoctor || "",
+                fromDoctorName || "",
+                handoverId,
+                userId,
+              ]
+            ).catch((e) => console.error("[HandoverChat] failed to update session:", e));
+            responsePayload.sessionId = handoverId;
+          } else {
+            // Upsert active session (one active per user) — returns the session id
+            const upsertResult = await p.query(
+              `INSERT INTO handover_sessions (user_id, messages, patients, receiving_doctor, asked_follow_up, ready_to_finalize, status, patient_count, critical_count, from_doctor_name, to_doctor_name, updated_at)
+               VALUES ($1, $2, $3, $4, $5, $6, 'active', $7, $8, $9, $10, CURRENT_TIMESTAMP)
+               ON CONFLICT (user_id) WHERE status = 'active'
+               DO UPDATE SET messages = $2, patients = $3, receiving_doctor = $4, asked_follow_up = $5, ready_to_finalize = $6,
+                   patient_count = $7, critical_count = $8,
+                   from_doctor_name = COALESCE(NULLIF($9, ''), handover_sessions.from_doctor_name),
+                   to_doctor_name = COALESCE(NULLIF($10, ''), handover_sessions.to_doctor_name),
+                   updated_at = CURRENT_TIMESTAMP
+               RETURNING id`,
+              [
+                userId,
+                JSON.stringify(updatedMessages),
+                JSON.stringify(responsePayload.patients),
+                responsePayload.receivingDoctor,
+                responsePayload.askedFollowUp,
+                responsePayload.readyToFinalize,
+                patients.length,
+                criticalCount,
+                fromDoctorName || "",
+                responsePayload.receivingDoctor || "",
+              ]
+            ).catch((e) => { console.error("[HandoverChat] failed to persist session:", e); return null; });
+            if (upsertResult && upsertResult.rows.length > 0) {
+              responsePayload.sessionId = upsertResult.rows[0].id;
+            }
+          }
         }
       }
 
@@ -146,8 +201,8 @@ export function registerHandoverChatRoutes(app: Express): void {
     }
   });
 
-  // Fetch the doctor's active handover session, if any — used so the same
-  // conversation can be resumed on any device (phone, desktop web, etc).
+  // ── GET /api/handover/session ───────────────────────────────────────────────
+  // Fetch the doctor's current active session (cross-device resume)
   app.get("/api/handover/session", async (req: Request, res: Response) => {
     try {
       const userId = extractUserId(req);
@@ -155,7 +210,7 @@ export function registerHandoverChatRoutes(app: Express): void {
       const p = getPool();
       if (!p) return res.json({ session: null });
       const result = await p.query(
-        `SELECT messages, patients, receiving_doctor, asked_follow_up, ready_to_finalize, updated_at
+        `SELECT id, messages, patients, receiving_doctor, asked_follow_up, ready_to_finalize, updated_at, from_doctor_name, to_doctor_name
          FROM handover_sessions WHERE user_id = $1 AND status = 'active' LIMIT 1`,
         [userId]
       );
@@ -163,12 +218,15 @@ export function registerHandoverChatRoutes(app: Express): void {
       const row = result.rows[0];
       return res.json({
         session: {
+          id: row.id,
           messages: row.messages || [],
           patients: row.patients || [],
           receivingDoctor: row.receiving_doctor || "",
           askedFollowUp: !!row.asked_follow_up,
           readyToFinalize: !!row.ready_to_finalize,
           updatedAt: row.updated_at,
+          fromDoctorName: row.from_doctor_name || "",
+          toDoctorName: row.to_doctor_name || "",
         },
       });
     } catch (err) {
@@ -177,19 +235,125 @@ export function registerHandoverChatRoutes(app: Express): void {
     }
   });
 
-  // Clear the doctor's active handover session (e.g. "Start a new handover"
-  // or after finalizing) so a stale session doesn't reappear on other devices.
+  // ── DELETE /api/handover/session ────────────────────────────────────────────
+  // Archive the active session (status → 'completed') so it appears in history.
+  // Optionally saves final_sheet if provided in the body.
   app.delete("/api/handover/session", async (req: Request, res: Response) => {
     try {
       const userId = extractUserId(req);
       if (!userId) return res.status(401).json({ error: "No auth token" });
       const p = getPool();
       if (!p) return res.json({ ok: true });
-      await p.query(`DELETE FROM handover_sessions WHERE user_id = $1 AND status = 'active'`, [userId]);
+      const { finalSheet } = req.body || {};
+      await p.query(
+        `UPDATE handover_sessions
+         SET status = 'completed',
+             final_sheet = COALESCE($2, final_sheet),
+             updated_at = CURRENT_TIMESTAMP
+         WHERE user_id = $1 AND status = 'active'`,
+        [userId, finalSheet ? JSON.stringify(finalSheet) : null]
+      );
       return res.json({ ok: true });
     } catch (err) {
-      console.error("[HandoverChat] session delete error:", err);
+      console.error("[HandoverChat] session archive error:", err);
       return res.status(500).json({ error: "Failed to reset handover session." });
+    }
+  });
+
+  // ── GET /api/handovers ──────────────────────────────────────────────────────
+  // List all handover sessions for the current user, ordered newest first.
+  app.get("/api/handovers", async (req: Request, res: Response) => {
+    try {
+      const userId = extractUserId(req);
+      if (!userId) return res.status(401).json({ error: "No auth token" });
+      const p = getPool();
+      if (!p) return res.json({ handovers: [] });
+      const limit = Math.min(parseInt(String(req.query.limit || "30"), 10), 100);
+      const offset = Math.max(parseInt(String(req.query.offset || "0"), 10), 0);
+      const result = await p.query(
+        `SELECT id, status, created_at, updated_at,
+                from_doctor_name, to_doctor_name, receiving_doctor,
+                patient_count, critical_count, ready_to_finalize
+         FROM handover_sessions
+         WHERE user_id = $1
+         ORDER BY created_at DESC
+         LIMIT $2 OFFSET $3`,
+        [userId, limit, offset]
+      );
+      return res.json({ handovers: result.rows });
+    } catch (err) {
+      console.error("[HandoverChat] list error:", err);
+      return res.status(500).json({ error: "Failed to load handovers." });
+    }
+  });
+
+  // ── GET /api/handovers/:id ──────────────────────────────────────────────────
+  // Load a specific handover session by id (for reopening a draft/completed one).
+  app.get("/api/handovers/:id", async (req: Request, res: Response) => {
+    try {
+      const userId = extractUserId(req);
+      if (!userId) return res.status(401).json({ error: "No auth token" });
+      const { id } = req.params;
+      const p = getPool();
+      if (!p) return res.status(503).json({ error: "Database unavailable" });
+      const result = await p.query(
+        `SELECT id, status, messages, patients, receiving_doctor, asked_follow_up,
+                ready_to_finalize, created_at, updated_at,
+                from_doctor_name, to_doctor_name, patient_count, critical_count, final_sheet
+         FROM handover_sessions
+         WHERE id = $1 AND user_id = $2`,
+        [id, userId]
+      );
+      if (result.rows.length === 0) return res.status(404).json({ error: "Handover not found" });
+      const row = result.rows[0];
+      return res.json({
+        session: {
+          id: row.id,
+          status: row.status,
+          messages: row.messages || [],
+          patients: row.patients || [],
+          receivingDoctor: row.receiving_doctor || "",
+          askedFollowUp: !!row.asked_follow_up,
+          readyToFinalize: !!row.ready_to_finalize,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+          fromDoctorName: row.from_doctor_name || "",
+          toDoctorName: row.to_doctor_name || "",
+          patientCount: row.patient_count || 0,
+          criticalCount: row.critical_count || 0,
+          finalSheet: row.final_sheet || null,
+        },
+      });
+    } catch (err) {
+      console.error("[HandoverChat] get-by-id error:", err);
+      return res.status(500).json({ error: "Failed to load handover." });
+    }
+  });
+
+  // ── PATCH /api/handovers/:id ────────────────────────────────────────────────
+  // Update a session's status and/or final_sheet (e.g. after sharing).
+  app.patch("/api/handovers/:id", async (req: Request, res: Response) => {
+    try {
+      const userId = extractUserId(req);
+      if (!userId) return res.status(401).json({ error: "No auth token" });
+      const { id } = req.params;
+      const { status, finalSheet, toDoctorName, fromDoctorName } = req.body || {};
+      const p = getPool();
+      if (!p) return res.status(503).json({ error: "Database unavailable" });
+      await p.query(
+        `UPDATE handover_sessions
+         SET status = COALESCE($3, status),
+             final_sheet = COALESCE($4, final_sheet),
+             to_doctor_name = COALESCE(NULLIF($5, ''), to_doctor_name),
+             from_doctor_name = COALESCE(NULLIF($6, ''), from_doctor_name),
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1 AND user_id = $2`,
+        [id, userId, status || null, finalSheet ? JSON.stringify(finalSheet) : null, toDoctorName || "", fromDoctorName || ""]
+      );
+      return res.json({ ok: true });
+    } catch (err) {
+      console.error("[HandoverChat] patch error:", err);
+      return res.status(500).json({ error: "Failed to update handover." });
     }
   });
 }
