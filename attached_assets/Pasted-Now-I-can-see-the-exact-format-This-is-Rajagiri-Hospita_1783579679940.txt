@@ -1,0 +1,141 @@
+Now I can see the exact format. This is Rajagiri Hospital's official handover sheet. Let me read it carefully (it's upside down).
+
+---
+
+## What the Form Shows
+
+```
+RAJAGIRI HOSPITAL
+EMERGENCY DEPARTMENT
+DOCTORS HANDOVER SHEET
+
+Reference: RAJH/FO/ER/019
+Rev: 01
+Date: 16-08-2025
+
+Header fields:
+  Shift time:
+  From:
+  To:
+  Date:
+
+TABLE COLUMNS (7 columns):
+  1. Patient Label
+  2. Presenting complaints
+  3. Past medical history
+  4. Provisional diagnosis
+  5. Done
+  6. Management plan / To be done
+  7. Bystander Updation given time
+
+5 patient rows in the table
+```
+
+---
+
+## ErMate Must Reproduce This Exactly
+
+Let me build it now.
+
+Open that PDF. Here is exactly what it contains.
+
+---
+
+## What the PDF Has
+
+**Matches Rajagiri format exactly — 7 columns:**
+
+```
+1. Patient Label
+   (Name, Age, Sex, Bed, ER number)
+   Colour-coded left bar:
+   Red = Critical
+   Amber = Unstable
+   Green = Stable
+   Purple = Discharge
+
+2. Presenting Complaints
+
+3. Past Medical History
+
+4. Provisional Diagnosis
+
+5. Done
+   (Everything completed this shift)
+
+6. Management Plan / To Be Done
+   (Checkbox list for next shift)
+
+7. Bystander Updation Given Time
+```
+
+**Header bar — dark green:**
+```
+Date · Shift Time · From · To · Department
+```
+
+**Count badges:**
+```
+1 CRITICAL  1 UNSTABLE  2 STABLE  1 DISCHARGE
+```
+
+**Signature section at bottom:**
+```
+Handing Over Doctor + signature line
+Receiving Doctor + signature line
+Consultant Aware + signature line
+```
+
+---
+
+## What to Tell Your Developer
+
+```
+The PDF generator logic is in:
+/home/claude/handover_pdf.py
+
+This needs to be ported to the
+ErMate backend as a route:
+
+POST /api/handover/:id/pdf
+  Takes handoverId
+  Fetches all patient data
+  Generates PDF in this exact format
+  Returns PDF file for download
+
+The Python script shows exactly:
+  Column widths
+  Row heights
+  Colour coding per status
+  Header format
+  Signature section layout
+
+For the mobile app:
+  "Export PDF" button in handover chat
+  Calls this endpoint
+  Opens PDF viewer or downloads file
+  Doctor can print or share
+```
+
+---
+
+## For Both User Types
+
+```
+PRO USER:
+  Patients already in ErMate
+  Data auto-fills every column
+  Doctor just taps Export PDF
+
+HANDOVER-ONLY USER:
+  Pastes patients one by one
+  Each card fills the columns
+  Taps Export PDF when done
+  Same format, same output
+
+Both get a printable A4 landscape
+sheet that matches the hospital's
+existing format exactly —
+which means zero resistance
+to adoption.
+```
