@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useCallback } from "react";
 import { ActivityIndicator, View, StyleSheet } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import MainTabNavigator from "@/navigation/MainTabNavigator";
@@ -6,6 +6,8 @@ import { useScreenOptions } from "@/hooks/useScreenOptions";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { CaseData } from "@/context/CaseContext";
+import { usePushNotificationSetup } from "@/hooks/usePushNotifications";
+import { navigationRef } from "@/lib/navigationRef";
 
 import LoginScreen from "@/screens/LoginScreen";
 import RegisterScreen from "@/screens/RegisterScreen";
@@ -123,6 +125,14 @@ export default function RootStackNavigator() {
   const screenOptions = useScreenOptions();
   const { isAuthenticated, isLoading } = useAuth();
   const { theme } = useTheme();
+
+  const handleNotificationTap = useCallback((data: Record<string, any>) => {
+    if (data.type === "shift_addendum" && data.caseId && navigationRef.isReady()) {
+      navigationRef.navigate("AddendumNotes", { caseId: String(data.caseId) });
+    }
+  }, []);
+
+  usePushNotificationSetup(isAuthenticated, handleNotificationTap);
 
   if (isLoading) {
     return (

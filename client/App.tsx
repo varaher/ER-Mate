@@ -8,6 +8,7 @@ import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import * as Font from "expo-font";
 import { Feather, MaterialIcons, MaterialCommunityIcons, Ionicons, FontAwesome } from "@expo/vector-icons";
+import { navigationRef } from "@/lib/navigationRef";
 
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/lib/query-client";
@@ -49,7 +50,7 @@ export default function App() {
                 <GestureHandlerRootView style={styles.root}>
                   <KeyboardProvider>
                     <PWABanner />
-                    <NavigationContainer>
+                    <NavigationContainer ref={navigationRef}>
                       <RootStackNavigator />
                     </NavigationContainer>
                     <ShiftSelectScreen />
