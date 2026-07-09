@@ -1,4 +1,4 @@
-import React, { useCallback, useLayoutEffect, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, ActivityIndicator,
   Pressable, Platform, Alert,
@@ -11,11 +11,146 @@ import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
 import * as IntentLauncher from 'expo-intent-launcher';
 import * as FileSystem from 'expo-file-system/legacy';
+import { Asset } from 'expo-asset';
 
 import { RootStackParamList } from '@/navigation/RootStackNavigator';
 import { useTheme } from '@/hooks/useTheme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PdfPreview'>;
+
+let _cachedPdfJsContent: string | null = null;
+let _cachedWorkerContent: string | null = null;
+
+async function loadPdfJsAssets(): Promise<{ main: string; worker: string }> {
+  if (_cachedPdfJsContent && _cachedWorkerContent) {
+    return { main: _cachedPdfJsContent, worker: _cachedWorkerContent };
+  }
+  const [mainAsset, workerAsset] = await Promise.all([
+    Asset.fromModule(require('../../assets/pdfjs/pdf.min.txt')).downloadAsync(),
+    Asset.fromModule(require('../../assets/pdfjs/pdf.worker.min.txt')).downloadAsync(),
+  ]);
+  const [main, worker] = await Promise.all([
+    FileSystem.readAsStringAsync(mainAsset.localUri as string, {
+      encoding: FileSystem.EncodingType.UTF8,
+    }),
+    FileSystem.readAsStringAsync(workerAsset.localUri as string, {
+      encoding: FileSystem.EncodingType.UTF8,
+    }),
+  ]);
+  _cachedPdfJsContent = main;
+  _cachedWorkerContent = worker;
+  return { main, worker };
+}
+
+function buildPdfJsHtml(
+  pdfJsContent: string,
+  workerContent: string,
+  pdfBase64: string,
+  isDark: boolean,
+): string {
+  const bg = isDark ? '#1e293b' : '#f1f5f9';
+  const textColor = isDark ? '#94a3b8' : '#64748b';
+  const spinnerBorder = isDark ? '#334155' : '#e2e8f0';
+  const safeJsContent = pdfJsContent.replace(/<\/script>/gi, '<\\/script>');
+  const safeWorkerContent = workerContent.replace(/<\/script>/gi, '<\\/script>');
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=3">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: ${bg}; font-family: -apple-system, sans-serif; }
+    #spinner {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; height: 100vh; gap: 14px;
+      color: ${textColor}; font-size: 14px;
+    }
+    .spin {
+      width: 36px; height: 36px; border-radius: 50%;
+      border: 3px solid ${spinnerBorder};
+      border-top-color: #3b82f6;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #error-msg {
+      display: none; flex-direction: column; align-items: center;
+      justify-content: center; height: 100vh; gap: 10px; padding: 32px;
+      text-align: center; color: ${textColor}; font-size: 14px;
+    }
+    #container { padding: 8px; }
+    canvas {
+      display: block; width: 100%; margin-bottom: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+    }
+  </style>
+</head>
+<body>
+  <div id="spinner"><div class="spin"></div><span>Loading PDF...</span></div>
+  <div id="error-msg"><p>Could not render this PDF.<br>Use Share or Open below.</p></div>
+  <div id="container"></div>
+  <script type="text/plain" id="pdfjs-worker-src">${safeWorkerContent}</script>
+  <script type="text/plain" id="pdfjs-src">${safeJsContent}</script>
+  <script>
+    (function () {
+      function showError() {
+        document.getElementById('spinner').style.display = 'none';
+        document.getElementById('error-msg').style.display = 'flex';
+      }
+
+      try {
+        var workerText = document.getElementById('pdfjs-worker-src').textContent;
+        var workerBlob = new Blob([workerText], { type: 'application/javascript' });
+        var workerBlobUrl = URL.createObjectURL(workerBlob);
+
+        var jsText = document.getElementById('pdfjs-src').textContent;
+        var mainBlob = new Blob([jsText], { type: 'application/javascript' });
+        var mainBlobUrl = URL.createObjectURL(mainBlob);
+
+        var script = document.createElement('script');
+        script.onerror = showError;
+        script.onload = function () {
+          try {
+            if (typeof pdfjsLib === 'undefined') { showError(); return; }
+
+            pdfjsLib.GlobalWorkerOptions.workerSrc = workerBlobUrl;
+
+            var base64 = '${pdfBase64}';
+            var binary = atob(base64);
+            var bytes = new Uint8Array(binary.length);
+            for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+            pdfjsLib.getDocument({ data: bytes }).promise.then(function (pdf) {
+              document.getElementById('spinner').style.display = 'none';
+              var container = document.getElementById('container');
+              var deviceWidth = window.innerWidth - 16;
+              var total = pdf.numPages;
+
+              function renderPage(num) {
+                pdf.getPage(num).then(function (page) {
+                  var vp0 = page.getViewport({ scale: 1 });
+                  var scale = deviceWidth / vp0.width;
+                  var viewport = page.getViewport({ scale: scale });
+                  var canvas = document.createElement('canvas');
+                  canvas.width = viewport.width;
+                  canvas.height = viewport.height;
+                  container.appendChild(canvas);
+                  page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport });
+                }).catch(showError);
+              }
+
+              for (var p = 1; p <= total; p++) renderPage(p);
+            }).catch(showError);
+          } catch (e) { showError(); }
+        };
+        script.src = mainBlobUrl;
+        document.head.appendChild(script);
+      } catch (e) { showError(); }
+    })();
+  </script>
+</body>
+</html>`;
+}
 
 export default function PdfPreviewScreen({ route, navigation }: Props) {
   const { fileUri, filename, patientName } = route.params;
@@ -27,6 +162,30 @@ export default function PdfPreviewScreen({ route, navigation }: Props) {
   const [webViewLoading, setWebViewLoading] = useState(true);
   const [webViewError, setWebViewError] = useState(false);
 
+  const [androidHtml, setAndroidHtml] = useState<string | null>(null);
+  const [androidLoadError, setAndroidLoadError] = useState(false);
+
+  const isMounted = useRef(true);
+  useEffect(() => { return () => { isMounted.current = false; }; }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    (async () => {
+      try {
+        const [{ main, worker }, pdfBase64] = await Promise.all([
+          loadPdfJsAssets(),
+          FileSystem.readAsStringAsync(fileUri, {
+            encoding: FileSystem.EncodingType.Base64,
+          }),
+        ]);
+        if (!isMounted.current) return;
+        setAndroidHtml(buildPdfJsHtml(main, worker, pdfBase64, isDark));
+      } catch {
+        if (isMounted.current) setAndroidLoadError(true);
+      }
+    })();
+  }, [fileUri, isDark]);
+
   const handleShare = useCallback(async () => {
     if (sharing) return;
     setSharing(true);
@@ -35,7 +194,7 @@ export default function PdfPreviewScreen({ route, navigation }: Props) {
       if (available) {
         await Sharing.shareAsync(fileUri, {
           mimeType: 'application/pdf',
-          dialogTitle: 'Share Handover PDF',
+          dialogTitle: 'Share PDF',
           UTI: 'com.adobe.pdf',
         });
       } else {
@@ -67,7 +226,7 @@ export default function PdfPreviewScreen({ route, navigation }: Props) {
         await Print.printAsync({ uri: fileUri });
       }
     } catch (e: any) {
-      Alert.alert('Print failed', e?.message || 'Please try again.');
+      Alert.alert('Open failed', e?.message || 'Please try again.');
     } finally {
       setPrinting(false);
     }
@@ -119,18 +278,61 @@ export default function PdfPreviewScreen({ route, navigation }: Props) {
   );
 
   if (Platform.OS === 'android') {
-    return (
-      <View style={[styles.root, { backgroundColor: theme.backgroundDefault }]}>
-        <View style={[styles.androidCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <View style={[styles.pdfIconWrap, { backgroundColor: theme.primaryLight }]}>
-            <Feather name="file-text" size={40} color={theme.primary} />
+    if (androidLoadError) {
+      return (
+        <View style={[styles.root, { backgroundColor: theme.backgroundDefault }]}>
+          <View style={[styles.androidCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <View style={[styles.pdfIconWrap, { backgroundColor: theme.primaryLight }]}>
+              <Feather name="file-text" size={40} color={theme.primary} />
+            </View>
+            <Text style={[styles.androidTitle, { color: theme.text }]}>
+              {patientName ? `${patientName} — Handover PDF` : filename}
+            </Text>
+            <Text style={[styles.androidSub, { color: theme.textSecondary }]}>
+              PDF ready. Tap "Open" to view in your device's PDF reader, or "Share" to send it.
+            </Text>
           </View>
-          <Text style={[styles.androidTitle, { color: theme.text }]}>
-            {patientName ? `${patientName} — Handover PDF` : filename}
-          </Text>
-          <Text style={[styles.androidSub, { color: theme.textSecondary }]}>
-            PDF ready. Tap "Open" to view in your device's PDF reader, or "Share" to send it.
-          </Text>
+          {actionBar}
+        </View>
+      );
+    }
+
+    if (androidHtml === null) {
+      return (
+        <View style={[styles.root, { backgroundColor: theme.backgroundDefault }]}>
+          <View style={styles.centeredFill}>
+            <ActivityIndicator size="large" color={theme.primary} />
+            <Text style={[styles.loadingText, { color: theme.textSecondary, marginTop: 12 }]}>
+              Loading PDF...
+            </Text>
+          </View>
+          {actionBar}
+        </View>
+      );
+    }
+
+    return (
+      <View style={[styles.root, { backgroundColor: isDark ? '#1e293b' : '#f1f5f9' }]}>
+        <View style={styles.webViewContainer}>
+          <WebView
+            source={{ html: androidHtml }}
+            style={styles.webview}
+            originWhitelist={['*']}
+            javaScriptEnabled
+            domStorageEnabled
+            scalesPageToFit={false}
+            onLoadStart={() => setWebViewLoading(true)}
+            onLoad={() => setWebViewLoading(false)}
+            onError={() => setWebViewLoading(false)}
+          />
+          {webViewLoading && (
+            <View style={[styles.webViewOverlay, { backgroundColor: isDark ? '#1e293b' : '#f1f5f9' }]}>
+              <ActivityIndicator size="large" color={theme.primary} />
+              <Text style={[styles.loadingText, { color: theme.textSecondary }]}>
+                Loading preview...
+              </Text>
+            </View>
+          )}
         </View>
         {actionBar}
       </View>
@@ -194,6 +396,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: 12,
+  },
+  centeredFill: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   loadingText: {
     fontSize: 14,
