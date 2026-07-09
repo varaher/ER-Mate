@@ -38,10 +38,10 @@ const FEATURES: Feature[] = [
     icon: "alert-triangle",
     iconColor: "#ef4444",
     title: "Patient Triage",
-    subtitle: "P1–P5 priority with vitals",
+    subtitle: "5-level priority at the door — works with or without hospital EMR",
     description:
-      "Rapidly triage incoming patients using the 5-level priority system. Capture chief complaint, vitals, GCS, and triage colour at the door.",
-    how: "Dashboard → New Patient → fill triage form → Start Case Sheet",
+      "Capture the patient the moment they arrive. Assign a P1–P5 triage priority (P1 Immediate → P5 Non-urgent), record vitals, GCS, chief complaint, and triage colour. ErMate works as a standalone EMR for hospitals that have no existing system, and fits alongside hospitals that already have one — doctors use ErMate on their phones for faster, richer documentation while the hospital system stays unchanged.",
+    how: "Dashboard → New Patient → Triage form → set priority → Start Case Sheet",
   },
   {
     id: "casesheet-adult",
@@ -49,10 +49,10 @@ const FEATURES: Feature[] = [
     icon: "clipboard",
     iconColor: "#6366f1",
     title: "Adult Case Sheet",
-    subtitle: "ATLS-based, 7 clinical tabs",
+    subtitle: "ATLS-based · JCI & NABH compliant · 7 clinical tabs",
     description:
-      "Full ATLS workflow across 7 tabs — Patient, History (SAMPLE), Primary Survey (ABCDE), Examination, Treatment, Notes, and Disposition. Switch between Medical and Trauma modes.",
-    how: "Dashboard → Start Adult Case Sheet → work through tabs",
+      "A fully structured ATLS workflow designed to meet JCI and NABH documentation standards. Seven tabs cover everything an ER encounter requires:\n\n• Patient — demographics, vitals, allergies\n• History — SAMPLE (Signs, Allergies, Medications, Past history, Last meal, Events)\n• Primary Survey — ABCDE (Airway, Breathing, Circulation, Disability/GCS, Exposure)\n• Examination — systems review, psych screening\n• Treatment — drugs given, procedures performed\n• Notes — free-text clinical narrative\n• Disposition — diagnosis, decision support, discharge plan\n\nSwitch between Medical and Trauma mode within the same sheet.",
+    how: "Dashboard → New Patient → Adult Case Sheet → work through all 7 tabs",
   },
   {
     id: "casesheet-peds",
@@ -60,10 +60,10 @@ const FEATURES: Feature[] = [
     icon: "heart",
     iconColor: "#ec4899",
     title: "Pediatric Case Sheet",
-    subtitle: "PALS-based for patients ≤16 yrs",
+    subtitle: "PALS-based · Age-correct normal vitals · Weight dosing",
     description:
-      "Age-appropriate documentation with PALS-based primary survey, paediatric normal ranges, weight-based dosing references, and developmental history.",
-    how: "Dashboard → Start Pediatric Case Sheet (auto-routed for age ≤16)",
+      "Automatically routed for patients aged 16 and under. Built on PALS (Pediatric Advanced Life Support) guidelines with the same 7-tab structure as the adult sheet. Key pediatric additions:\n\n• Every vital field shows the age-correct normal range alongside the recorded value — abnormals are highlighted in red or amber so nothing is missed\n• Weight-based drug dosing references built into the primary survey\n• Developmental history and age-appropriate examination parameters\n• All documentation meets JCI and NABH standards for paediatric ER encounters",
+    how: "Dashboard → New Patient → app auto-routes to Pediatric Case Sheet for age ≤16",
   },
   {
     id: "smart-dictation",
@@ -71,10 +71,10 @@ const FEATURES: Feature[] = [
     icon: "mic",
     iconColor: "#10b981",
     title: "Smart Dictation",
-    subtitle: "Talk naturally — ErMate fills the sheet",
+    subtitle: "Any Indian language → structured English case sheet",
     description:
-      "Dictate the full case in natural speech. ErMate transcribes it and extracts structured data, mapping it to every relevant field across all 7 tabs automatically.",
-    how: "Open any case sheet → Patient tab → tap Speak This Case → dictate → Apply",
+      "The biggest time-saver in ErMate. Talk naturally about your patient — in Hindi, Tamil, Telugu, Malayalam, Kannada, Bengali, Marathi, or any major Indian language. ErMate:\n\n1. Transcribes your speech using Sarvam AI (Saaras v3)\n2. Automatically translates to English\n3. Extracts structured clinical data using GPT-4o\n4. Populates all relevant fields across all 7 tabs simultaneously\n\nCritically — sections you do not mention are not left blank. ErMate fills them with clinically appropriate normal / negative defaults (e.g. airway 'Patent', allergies 'NKDA', pupils 'Equal and reactive'). The result is a complete, print-ready case sheet from a 2-minute dictation, saving 12–15 minutes of typing per case.",
+    how: "Open case sheet → Patient tab → tap Speak This Case → speak freely → Apply",
   },
   {
     id: "dictation-map",
@@ -82,10 +82,10 @@ const FEATURES: Feature[] = [
     icon: "bar-chart-2",
     iconColor: "#10b981",
     title: "Dictation Completion Dots",
-    subtitle: "Colour-coded tab indicators after dictation",
+    subtitle: "Know exactly where the gaps are at a glance",
     description:
-      "After Smart Dictation, each tab button shows a coloured dot — green when well-filled, amber when partially captured, red when empty. Tap any dot-marked tab to review and fill the gaps.",
-    how: "After tapping Apply on dictation → check the coloured dots on each tab → tap any tab with an amber or red dot to fill gaps",
+      "After Smart Dictation, every tab header shows a coloured dot:\n\n• Green — well documented (75%+ fields filled from your dictation)\n• Amber — partially captured\n• Red — not mentioned (auto-filled with normals, but worth a quick review)\n\nThe dots persist while you navigate tabs, so you can instantly see which sections need your attention without scrolling through the whole sheet.",
+    how: "After tapping Apply on dictation → coloured dots appear on tab headers → tap any amber or red tab to review",
   },
   {
     id: "document-scan",
@@ -93,10 +93,10 @@ const FEATURES: Feature[] = [
     icon: "camera",
     iconColor: "#f59e0b",
     title: "Document Scanning",
-    subtitle: "Scan referral letters, ECGs, reports",
+    subtitle: "Photograph a referral or report — ErMate reads and fills the sheet",
     description:
-      "Photograph a paper referral or printed report. ErMate reads the text and structures the clinical data, populating the relevant fields automatically.",
-    how: "Case sheet → tap the scan icon (top bar) → take photo or pick from gallery",
+      "Point the camera at any paper document — referral letter, printed ECG report, lab result, or old discharge summary. Sarvam Vision OCR reads the text, GPT-4o extracts the clinical data, and the relevant fields across the case sheet are populated automatically. Saves manual transcription time and reduces entry errors when the patient arrives with printed documents.",
+    how: "Any case sheet → tap the scan icon in the top bar → camera or gallery → confirm",
   },
   {
     id: "ai-cds",
@@ -104,10 +104,10 @@ const FEATURES: Feature[] = [
     icon: "cpu",
     iconColor: "#8b5cf6",
     title: "Clinical Decision Support",
-    subtitle: "ErMate differential with evidence citations",
+    subtitle: "AI differentials with ABG, ECG and evidence citations",
     description:
-      "Generates a ranked differential diagnosis labelled CONSISTENT / POSSIBLE / LESS LIKELY, with PubMed and WikEM citations. Tap Add to Case to include in documentation or Exclude to dismiss.",
-    how: "Disposition tab of any case sheet → ErMate Decision Support section",
+      "Once you have documented history, examination, and investigations, ErMate generates a ranked differential diagnosis list:\n\n• CONSISTENT — strongly supported by the documented findings\n• POSSIBLE — plausible given partial features\n• LESS LIKELY — worth excluding\n\nEach diagnosis comes with PubMed and WikEM citations. Investigation results — including ABG/VBG values and ECG findings you have entered — are factored into the differential. Tap Add to Case to include a diagnosis in the Disposition, or Exclude to dismiss it.",
+    how: "Fill in History, Examination and Investigations → Disposition tab → ErMate Decision Support → Generate",
   },
   {
     id: "discharge",
@@ -115,21 +115,21 @@ const FEATURES: Feature[] = [
     icon: "file-text",
     iconColor: "#0ea5e9",
     title: "Discharge Summary",
-    subtitle: "ErMate-generated, exportable as PDF/DOCX",
+    subtitle: "Auto-generated from your case sheet — PDF or DOCX",
     description:
-      "Auto-generates a structured discharge summary from all documented data. Export as PDF or DOCX for patient hand-off.",
-    how: "Disposition tab → Generate Discharge Summary → Export",
+      "ErMate reads everything you documented across all 7 tabs and generates a fully structured discharge summary — no copy-pasting. It includes presenting complaint, history, examination findings, investigations, treatment given, diagnosis, and follow-up instructions. Every field on the printed document has a value — undocumented fields fall back to clinically appropriate defaults so no line is ever left blank. Export as a formatted PDF or DOCX for the patient file or referral.",
+    how: "Disposition tab → Generate Discharge Summary → review → Export PDF or DOCX",
   },
   {
     id: "vitals",
     category: "EMR",
     icon: "activity",
     iconColor: "#ef4444",
-    title: "Editable Vitals",
-    subtitle: "Age-based normal ranges with colour coding",
+    title: "Editable Vitals with Normal Ranges",
+    subtitle: "Colour-coded alerts · Age-based references for paediatrics",
     description:
-      "All vitals are editable inline in the Patient tab. Paediatric cases display age-based normal ranges and highlight abnormal values with colour coding.",
-    how: "Patient tab → Vitals at Arrival section → tap any value to edit",
+      "All vitals (HR, BP, SpO2, RR, Temperature, GCS, GRBS) are editable inline. For adult cases, standard ER normal ranges are shown. For paediatric cases, the normal range updates dynamically based on the child's exact age — a HR of 140 is normal for an infant but flagged amber in a 10-year-old. Abnormal values are highlighted in red or amber so the treating team notices them immediately.",
+    how: "Patient tab → Vitals at Arrival section → tap any value to edit inline",
   },
   {
     id: "psych",
@@ -137,10 +137,10 @@ const FEATURES: Feature[] = [
     icon: "user",
     iconColor: "#6366f1",
     title: "Psychological Assessment",
-    subtitle: "Integrated mental health screening",
+    subtitle: "PHQ-2, GAD-2 and PTSD screening built in",
     description:
-      "PHQ-2, GAD-2, and PTSD flags integrated into the case sheet. Automatically flags relevant conditions for documentation.",
-    how: "Examination tab → Psychological Assessment section",
+      "Mental health flags are embedded directly into the Examination tab — not a separate form. PHQ-2 (depression), GAD-2 (anxiety), and PTSD screening questions are documented alongside the physical examination, ensuring mental health is never skipped in a busy ER. Positive flags are highlighted and flow through to the discharge summary automatically.",
+    how: "Examination tab → scroll to Psychological Assessment section",
   },
   {
     id: "quick-case",
@@ -148,10 +148,10 @@ const FEATURES: Feature[] = [
     icon: "zap",
     iconColor: "#f59e0b",
     title: "Quick Case Sheet",
-    subtitle: "Skip triage for fast-track cases",
+    subtitle: "Skip triage — document in seconds for pre-triaged patients",
     description:
-      "Start documenting immediately with just a name and complaint — no full triage required. Ideal for low-acuity or pre-triaged patients.",
-    how: "Dashboard → New Patient → Quick Case Sheet",
+      "For fast-track patients or those who arrive pre-triaged from another facility, skip the full triage form. Enter just the name and presenting complaint and you go straight to the case sheet. Ideal for low-acuity walk-ins, follow-up visits, or when triage has already been done by nursing.",
+    how: "Dashboard → New Patient → Quick Case Sheet → name + complaint → go",
   },
 
   // ── Team ─────────────────────────────────────────────────
@@ -161,10 +161,10 @@ const FEATURES: Feature[] = [
     icon: "home",
     iconColor: "#6366f1",
     title: "Department Setup",
-    subtitle: "HOD creates and manages the ER team",
+    subtitle: "HOD configures the ER team once — everyone joins via link",
     description:
-      "HOD creates the department, sets shift schedules (Morning / Evening / Night with max consultant and resident slots), and invites team members via a shareable link or WhatsApp.",
-    how: "Profile → Set Up Department (first time) or Profile → HOD Dashboard",
+      "The HOD (Head of Department) creates the department with hospital name and shift schedules — Morning, Evening, and Night — each with a maximum number of consultant and resident slots. Once set up, a shareable invite link is generated. Team members join by tapping the link; no admin approval needed beyond the initial setup.",
+    how: "Profile → Set Up Department (first time) → configure shifts → share invite link via WhatsApp",
   },
   {
     id: "shift-checkin",
@@ -172,10 +172,10 @@ const FEATURES: Feature[] = [
     icon: "log-in",
     iconColor: "#10b981",
     title: "Shift Check-In",
-    subtitle: "Start your shift with one tap",
+    subtitle: "One tap to start your shift — slot counts update live",
     description:
-      "When you open the app during your shift window, the Shift Selection screen appears. Choose your shift, see real-time slot counts, and tap Start. Your shift banner shows on the Dashboard.",
-    how: "Open app → Shift Selection appears → tap the shift → Start Shift",
+      "When you open ErMate during a shift window, a Shift Selection screen appears automatically. You see the current slot availability (e.g. 1 of 2 consultant slots taken) in real time. Tap Start Shift and your name appears on the HOD Dashboard and in the shift cases view for all colleagues on the same shift. A shift banner on your Dashboard confirms you are active.",
+    how: "Open app during shift hours → Shift Selection screen → pick your shift → Start Shift",
   },
   {
     id: "shift-cases",
@@ -183,10 +183,10 @@ const FEATURES: Feature[] = [
     icon: "layers",
     iconColor: "#6366f1",
     title: "Shift-Aware Case View",
-    subtitle: "Consultants see all cases on the shift",
+    subtitle: "Consultants see every case across the whole shift",
     description:
-      "When on shift, consultants and HOD see a SHIFT CASES section in the Cases tab — all cases from every doctor currently on the same shift, colour-coded by triage priority, with doctor name and role badges.",
-    how: "Cases tab → SHIFT CASES section (visible when on shift as consultant/HOD)",
+      "While on shift, consultants and the HOD see a SHIFT CASES section above their own cases in the Cases tab. This shows all patients being documented by every doctor currently on the same shift — colour-coded by triage priority (P1 red → P5 green) with the treating doctor's name and role badge on each card. The list refreshes every 30 seconds automatically.",
+    how: "Cases tab → SHIFT CASES section (visible to consultants and HOD when on shift)",
   },
   {
     id: "consultant-review",
@@ -194,10 +194,10 @@ const FEATURES: Feature[] = [
     icon: "check-circle",
     iconColor: "#10b981",
     title: "Consultant Review",
-    subtitle: "Review and annotate a resident's case",
+    subtitle: "Annotate a resident's case — green badge confirms review",
     description:
-      "Tap any resident's case in the Shift Cases list to open a review modal. Write your clinical notes — the case is marked Reviewed with a green badge visible to everyone on the shift.",
-    how: "Cases tab → SHIFT CASES → tap a resident's case → write review → Save",
+      "A consultant taps any resident's case in the Shift Cases list to open a review modal. After reading the case, they write clinical review notes — additional findings, management changes, or teaching points. The case is then marked Reviewed with a green badge visible to everyone on the shift, providing a clear audit trail of consultant oversight.",
+    how: "Cases tab → SHIFT CASES → tap a resident's case → write notes → Save Review",
   },
   {
     id: "hod-dashboard",
@@ -205,9 +205,9 @@ const FEATURES: Feature[] = [
     icon: "grid",
     iconColor: "#f59e0b",
     title: "HOD Dashboard",
-    subtitle: "Real-time overview of the entire ER",
+    subtitle: "Live ER overview — all shifts, all doctors, all cases",
     description:
-      "Live view of every shift's consultant/resident slot counts, all doctors currently on shift (with duration), all active cases being documented across all shifts, and one-tap Force Out.",
+      "A real-time command view of the entire department. The HOD sees:\n\n• Slot counts per shift (Morning / Evening / Night)\n• Every doctor currently on shift — name, role, duration on shift\n• All active cases being documented across every shift\n• One-tap Force Out if a doctor needs to be removed from a shift\n\nDoctor names are resolved from the roster — not raw IDs.",
     how: "Profile → HOD Dashboard",
   },
   {
@@ -216,10 +216,10 @@ const FEATURES: Feature[] = [
     icon: "message-square",
     iconColor: "#10b981",
     title: "Handover Chat",
-    subtitle: "Talk through your patients — ErMate builds the sheet",
+    subtitle: "Talk through all your patients — AI builds the handover sheet",
     description:
-      "Speak or type about all your patients in any order. ErMate's AI tracks each one, asks a few follow-up questions (allergies, receiving doctor, discharge-readiness), then generates a structured handover sheet. Share via WhatsApp, export as PDF, or copy.",
-    how: "Dashboard → New Handover → dictate or type about your patients → Finalize → Share / Export PDF",
+      "At the end of a shift, open Handover Chat and just talk — or type — about your patients in any order, in any language. 'Bed 3, Ravi, 45 male, STEMI, thrombolysed, echo pending.' ErMate's AI tracks each patient, asks a few follow-up questions (receiving doctor, allergy status, discharge readiness), then generates a structured handover sheet with colour-coded patient cards (Critical / Unstable / Stable / For Discharge). Share directly on WhatsApp, copy as text, or export the official 7-column PDF.",
+    how: "Dashboard → New Handover → speak or type about your patients → Finalize → Share / PDF",
     isNew: true,
   },
   {
@@ -228,9 +228,9 @@ const FEATURES: Feature[] = [
     icon: "shuffle",
     iconColor: "#0ea5e9",
     title: "Handover Sheet (Manual)",
-    subtitle: "Pick cases from your list and export a PDF",
+    subtitle: "Select cases from your list — export a hospital-format PDF",
     description:
-      "Manually select which cases to hand over, add bed numbers and pending notes for each, then export a Rajagiri-format PDF handover sheet. Incoming handovers from the previous shift are visible in your Profile.",
+      "If you prefer selecting cases manually, use the Handover Sheet. Tick the patients you are handing over, add bed numbers and pending notes for each, then export the standard 7-column PDF (Patient Label, Presenting Complaints, Past Medical History, Provisional Diagnosis, Management Done, Management Plan, Bystander Updation Time) with a 3-way signature block. Incoming handovers from the previous shift team appear in your Profile.",
     how: "Dashboard → Handover Sheet → tick cases → add notes → Export PDF",
   },
   {
@@ -239,9 +239,9 @@ const FEATURES: Feature[] = [
     icon: "users",
     iconColor: "#8b5cf6",
     title: "Manage Roster",
-    subtitle: "Add, remove, and view team members",
+    subtitle: "Add, remove, and view the full team at a glance",
     description:
-      "HOD manages the active team roster. Share the invite link via WhatsApp or copy-paste. Remove members with one tap. Members see the department name on their Dashboard and Profile.",
+      "The HOD manages the active team roster from one screen. Each member row shows their name, email, role (Consultant / Resident), and whether they are currently on shift. Add new members by sharing the invite link via WhatsApp. Remove members with one tap. The invite link can be regenerated at any time if it is shared too widely.",
     how: "Profile → HOD Dashboard → Manage Roster",
   },
 
@@ -252,10 +252,10 @@ const FEATURES: Feature[] = [
     icon: "play-circle",
     iconColor: "#6366f1",
     title: "Simulation-Based Teaching",
-    subtitle: "Interactive clinical case scenarios",
+    subtitle: "Branching scenarios with evolving vitals and decisions",
     description:
-      "Work through branching clinical scenarios with vitals that evolve over time, investigation results, and management decisions. Designed for EM teaching and self-assessment.",
-    how: "Learn tab → Simulation-Based Teaching → choose a case",
+      "Work through clinical scenarios that evolve in real time — vitals change as the case progresses, investigation results arrive, and management decisions branch the case. Designed for EM teaching and self-assessment. Ideal for residents preparing for MRCEM or DNB-EM, and for consultants running bedside teaching sessions.",
+    how: "Learn tab → Simulation-Based Teaching → choose a scenario → work through the case",
   },
   {
     id: "em-reference",
@@ -263,9 +263,9 @@ const FEATURES: Feature[] = [
     icon: "book-open",
     iconColor: "#0ea5e9",
     title: "EM Reference Library",
-    subtitle: "ErMate guideline chat",
+    subtitle: "Ask any EM question — AI answers with PubMed citations",
     description:
-      "Ask any emergency medicine clinical question. Responses are grounded in EM guidelines and literature, with PubMed integration for evidence-based answers.",
+      "A clinical reference assistant powered by GPT-4o with PubMed integration. Ask anything — 'What is the dose of adenosine in SVT?', 'HEART score criteria', 'When to intubate in angio-oedema?' — and get a concise, evidence-based answer with literature citations. Faster than opening a textbook during a resuscitation.",
     how: "Learn tab → EM Reference Library → type your question",
   },
   {
@@ -274,23 +274,34 @@ const FEATURES: Feature[] = [
     icon: "award",
     iconColor: "#f59e0b",
     title: "Trivia Time",
-    subtitle: "MCQ quizzes with weekly streak",
+    subtitle: "MCQ case quizzes · Weekly streak to track your practice",
     description:
-      "Case-based multiple-choice quizzes with detailed explanations. A weekly streak badge tracks how consistently you practice. The streak resets each calendar week.",
-    how: "Learn tab → Trivia Time → start quiz → score card shows streak",
+      "Case-based multiple-choice questions with detailed explanations for every answer option. A weekly streak badge shows how consistently you are practising — the count resets each calendar week, giving you a habit to maintain. Score cards show correct vs incorrect, and the streak updates live so you see your progress.",
+    how: "Learn tab → Trivia Time → start quiz → view score card and streak",
   },
 
   // ── Tools ─────────────────────────────────────────────────
+  {
+    id: "plans",
+    category: "Tools",
+    icon: "star",
+    iconColor: "#f59e0b",
+    title: "Subscription Plans",
+    subtitle: "Free trial · Pro · Team — all AI features included",
+    description:
+      "ErMate has no feature tiers — every plan includes Smart Dictation, Clinical Decision Support, Document Scanning, Discharge Summary, and all AI tools.\n\n• Free — 10 cases to try everything, no restrictions on what you can do\n• Pro — Unlimited cases. First month free, then ₹999/month (annual) or ₹1,199/month. Save ₹2,398 on the annual plan\n• Team — Per-doctor pricing. Consultants ₹599/month · Residents ₹399/month. Minimum 4 doctors. Annual plans available\n\nAll payments secured by Razorpay.",
+    how: "Profile → Upgrade → choose Pro or Team → first month free",
+  },
   {
     id: "peds-calc",
     category: "Tools",
     icon: "thermometer",
     iconColor: "#ec4899",
     title: "Pediatric Drug Calculator",
-    subtitle: "Weight-based dosing at your fingertips",
+    subtitle: "Weight-based emergency doses in one tap",
     description:
-      "Enter the child's weight and get calculated doses for emergency drugs — adrenaline, atropine, adenosine, fluid boluses, and more — instantly.",
-    how: "Dashboard → Pediatric Drug Calculator",
+      "Enter the child's weight in kg and get instantly calculated doses for all critical emergency drugs — adrenaline, atropine, adenosine, amiodarone, fluid boluses, and more. No mental arithmetic during a resuscitation. Doses are displayed with route and concentration so the nurse can draw it up immediately.",
+    how: "Dashboard → Pediatric Drug Calculator → enter weight → see all doses",
   },
   {
     id: "stats",
@@ -298,10 +309,10 @@ const FEATURES: Feature[] = [
     icon: "trending-up",
     iconColor: "#10b981",
     title: "My Weekly Stats",
-    subtitle: "Time saved vs paper documentation",
+    subtitle: "See exactly how much documentation time you are saving",
     description:
-      "Shows cases documented this week, estimated time saved vs paper (avg 14 minutes per case), top presenting complaints, and all-time totals. All computed locally from case timing data.",
-    how: "Dashboard → My Weekly Stats card or Profile → My Stats",
+      "ErMate tracks how long each case takes from opening to saving. Your Stats screen shows:\n\n• Cases documented this week\n• Estimated time saved versus paper documentation (average 14 minutes per case — based on avg paper time of 18 min vs ErMate's 4 min)\n• Top presenting complaints this week\n• All-time case totals\n\nAll computed locally — no data leaves your device.",
+    how: "Dashboard → My Weekly Stats card, or Profile → My Stats",
   },
   {
     id: "cases-by-complaint",
@@ -309,21 +320,21 @@ const FEATURES: Feature[] = [
     icon: "tag",
     iconColor: "#8b5cf6",
     title: "Cases by Complaint",
-    subtitle: "Group your cases by presenting complaint",
+    subtitle: "Spot your caseload patterns at a glance",
     description:
-      "Switch the Cases tab to Tag view to see all your cases grouped by presenting complaint, sorted by frequency — useful for reviewing your caseload patterns.",
+      "Toggle the Cases tab to By Complaint view to see all your cases grouped by presenting complaint, sorted by frequency. Useful for reviewing your personal caseload, identifying common presentations in your ER, and for audit and quality improvement discussions.",
     how: "Cases tab → toggle icon (top right) → By Complaint view",
   },
   {
     id: "night-shift",
     category: "Tools",
     icon: "moon",
-    iconColor: "#1e293b",
+    iconColor: "#334155",
     title: "Night Shift Display Mode",
-    subtitle: "Auto dark mode 9 pm – 6 am",
+    subtitle: "Auto dark mode 9 pm – 6 am to protect your eyes",
     description:
-      "ErMate automatically switches to dark mode during night hours to reduce eye strain. Override to Always Light or Always Dark from the Profile screen.",
-    how: "Profile → Display Mode → choose your preference",
+      "ErMate switches to dark mode automatically between 9 pm and 6 am — reducing glare and eye strain during night shifts without you needing to do anything. You can override this at any time: set Always Light if you prefer, or Always Dark for those who want it all the time.",
+    how: "Profile → Display Mode → Auto (default) / Always Light / Always Dark",
   },
   {
     id: "link-web",
@@ -331,10 +342,10 @@ const FEATURES: Feature[] = [
     icon: "monitor",
     iconColor: "#0ea5e9",
     title: "Link to Web",
-    subtitle: "Use ErMate on a desktop browser",
+    subtitle: "Transfer your session to a desktop browser instantly",
     description:
-      "Connect your phone session to the web app via a 6-digit code or scan the QR code shown on the web login page. Your session transfers instantly.",
-    how: "Profile → Link to Web (6-digit code) or scan QR on web login screen",
+      "If you want to document on a bigger screen — at a workstation or on a laptop — Link to Web transfers your login session to the browser in seconds. Open er-mate.replit.app on any browser, tap Link to Web in your Profile, and either enter the 6-digit code shown on screen or scan the QR code. No separate login required.",
+    how: "Profile → Link to Web → see 6-digit code → enter on web, or scan QR from web login",
   },
   {
     id: "privacy",
@@ -342,10 +353,10 @@ const FEATURES: Feature[] = [
     icon: "shield",
     iconColor: "#6366f1",
     title: "Privacy & Data Control",
-    subtitle: "You own your patient data",
+    subtitle: "Patient data stays yours — Indian law compliant",
     description:
-      "Comprehensive Privacy Policy covers data storage, AI processing, retention, and Indian law compliance. Control data sharing preferences, biometric lock, and request data deletion from the Privacy screen.",
-    how: "Profile → Privacy",
+      "ErMate's Privacy Policy (Version 1.0) is compliant with Indian data protection law. Key points:\n\n• Patient data is processed for documentation only — never sold or shared\n• AI processing (Sarvam, OpenAI) happens per-request and is not stored by those providers for training\n• You can request full data deletion from the Privacy screen\n• Biometric lock available for device-level protection\n• Data sharing preferences are fully configurable",
+    how: "Profile → Privacy → review policy, toggle sharing preferences, request deletion",
   },
 ];
 
