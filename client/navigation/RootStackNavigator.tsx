@@ -49,6 +49,7 @@ import AdminDashboardScreen from "@/screens/department/AdminDashboardScreen";
 import HandoverDetailScreen from "@/screens/HandoverDetailScreen";
 import EscalationScreen from "@/screens/EscalationScreen";
 import TourScreen from "@/screens/TourScreen";
+import UserGuideScreen from "@/screens/UserGuideScreen";
 import CaseChatScreen from "@/screens/CaseChatScreen";
 import PublicHandoverScreen from "@/screens/PublicHandoverScreen";
 import HandoverChatScreen from "@/screens/HandoverChatScreen";
@@ -79,6 +80,7 @@ export type RootStackParamList = {
   About: undefined;
   PediatricDrugCalculator: { weight?: string } | undefined;
   Tour: undefined;
+  UserGuide: undefined;
   SimulationList: undefined;
   Simulation: { caseId: string };
   EMReference: undefined;
@@ -318,6 +320,13 @@ export default function RootStackNavigator() {
             component={TourScreen}
             options={{
               headerTitle: "Feature Tour",
+            }}
+          />
+          <Stack.Screen
+            name="UserGuide"
+            component={UserGuideScreen}
+            options={{
+              headerTitle: "User Guide",
             }}
           />
           <Stack.Screen

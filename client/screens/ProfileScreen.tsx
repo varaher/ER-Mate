@@ -229,7 +229,8 @@ export default function ProfileScreen() {
     { icon: "lock", label: isGoogleUser ? "Set Password" : "Change Password", onPress: () => setShowPasswordModal(true) },
     { icon: "bell", label: "Notifications", onPress: () => navigation.navigate("Notifications") },
     { icon: "shield", label: "Privacy", onPress: () => navigation.navigate("Privacy") },
-    { icon: "compass", label: "Take a Tour", onPress: () => (navigation as any).navigate("Tour") },
+    { icon: "book", label: "User Guide", onPress: () => (navigation as any).navigate("UserGuide") },
+    { icon: "compass", label: "Feature Tour", onPress: () => (navigation as any).navigate("Tour") },
     { icon: "help-circle", label: "Help & Support", onPress: () => navigation.navigate("HelpSupport") },
     { icon: "info", label: "About ErMate", onPress: () => navigation.navigate("About") },
   ];
