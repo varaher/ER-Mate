@@ -19,6 +19,7 @@ import { registerAddendaRoutes } from "./routes/addenda";
 import { registerHandoverPdfRoutes } from "./routes/handoverPdf";
 import { registerHandoverPublicRoutes } from "./routes/handoverPublic";
 import { registerHandoverChatRoutes } from "./routes/handoverChat";
+import { registerGuideChatRoutes } from "./routes/guideChat";
 import { registerNotificationPrefsRoutes } from "./routes/notificationPrefs";
 import { extractUserId } from "./lib/auth";
 
@@ -5516,6 +5517,7 @@ Always use the conversation history for context. Keep replies SHORT (1–2 sente
   registerHandoverPdfRoutes(app);
   registerHandoverPublicRoutes(app);
   registerHandoverChatRoutes(app);
+  registerGuideChatRoutes(app);
   registerNotificationPrefsRoutes(app);
 
   const httpServer = existingServer ?? createServer(app);
