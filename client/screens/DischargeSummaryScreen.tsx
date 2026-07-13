@@ -237,6 +237,7 @@ export default function DischargeSummaryScreen() {
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportingDocx, setExportingDocx] = useState(false);
+  const [exportingTemplate, setExportingTemplate] = useState(false);
   const [caseData, setCaseData] = useState<any>(null);
   const [addenda, setAddenda] = useState<CaseAddendum[]>([]);
   const [showAddendaPreview, setShowAddendaPreview] = useState(false);
@@ -935,6 +936,38 @@ export default function DischargeSummaryScreen() {
       Alert.alert("Error", "Failed to export Word document. Please try again.");
     } finally {
       setExportingDocx(false);
+    }
+  };
+
+  const downloadTemplate = async () => {
+    setExportingTemplate(true);
+    try {
+      const url = new URL("/api/export/discharge-template", getApiUrl()).toString();
+      const response = await fetch(url);
+      if (!response.ok) throw new Error("Failed to download template");
+      const blob = await response.blob();
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        try {
+          const base64 = (reader.result as string).split(",")[1];
+          const fileUri = FileSystem.documentDirectory + "discharge_summary_template.pdf";
+          await FileSystem.writeAsStringAsync(fileUri, base64, { encoding: FileSystem.EncodingType.Base64 });
+          if (await Sharing.isAvailableAsync()) {
+            await Sharing.shareAsync(fileUri, { mimeType: "application/pdf", dialogTitle: "Blank Discharge Summary Template" });
+          } else {
+            Alert.alert("Saved", `Template saved to: ${fileUri}`);
+          }
+        } catch (e) {
+          Alert.alert("Error", "Failed to save template.");
+        } finally {
+          setExportingTemplate(false);
+        }
+      };
+      reader.readAsDataURL(blob);
+    } catch (err) {
+      console.error("Template download error:", err);
+      Alert.alert("Error", "Failed to download template. Please try again.");
+      setExportingTemplate(false);
     }
   };
 
@@ -1687,6 +1720,21 @@ export default function DischargeSummaryScreen() {
               <>
                 <Feather name="file" size={18} color={theme.primary} />
                 <Text style={[styles.exportBtnText, { color: theme.primary }]}>Word</Text>
+              </>
+            )}
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [styles.exportBtn, { backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border, opacity: pressed || exportingTemplate ? 0.8 : 1 }]}
+            onPress={downloadTemplate}
+            disabled={exportingTemplate}
+          >
+            {exportingTemplate ? (
+              <ActivityIndicator color={theme.textSecondary} size="small" />
+            ) : (
+              <>
+                <Feather name="download" size={18} color={theme.textSecondary} />
+                <Text style={[styles.exportBtnText, { color: theme.textSecondary }]}>Blank</Text>
               </>
             )}
           </Pressable>

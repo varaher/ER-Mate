@@ -1889,6 +1889,239 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  // ── GET /api/export/discharge-template — blank printable form ───────────────
+  app.get("/api/export/discharge-template", async (_req: Request, res: Response) => {
+    try {
+      const doc = new PDFDocument({ size: "A4", margins: { top: 40, bottom: 40, left: 50, right: 50 } });
+      const chunks: Buffer[] = [];
+      doc.on("data", (chunk: Buffer) => chunks.push(chunk));
+      doc.on("end", () => {
+        const pdf = Buffer.concat(chunks);
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", 'attachment; filename="discharge_summary_template.pdf"');
+        res.send(pdf);
+      });
+
+      const PAGE_W = 545;
+      const L = 50;
+
+      // ── helpers ───────────────────────────────────────────────────────────
+      const hRule = () => {
+        doc.moveTo(L, doc.y).lineTo(PAGE_W, doc.y).lineWidth(0.8).stroke();
+        doc.lineWidth(1);
+      };
+      const blank = (w: number = PAGE_W - L) => {
+        const y = doc.y + 12;
+        doc.moveTo(L, y).lineTo(L + w, y).lineWidth(0.6).strokeColor("#94a3b8").stroke();
+        doc.strokeColor("#000000").lineWidth(1);
+        doc.y = y + 5;
+      };
+      const section = (title: string) => {
+        doc.moveDown(0.4);
+        doc.fillColor("#0F172A").fontSize(11).font("Helvetica-Bold").text(title.toUpperCase(), L);
+        hRule();
+        doc.moveDown(0.2);
+        doc.fillColor("#000000").fontSize(10).font("Helvetica");
+      };
+      const sub = (title: string) => {
+        doc.moveDown(0.15);
+        doc.fillColor("#475569").fontSize(9).font("Helvetica-BoldOblique").text(title, L);
+        doc.fillColor("#000000").font("Helvetica").fontSize(10);
+      };
+      const multiBlank = (lines: number = 2) => {
+        for (let i = 0; i < lines; i++) blank();
+      };
+      const checkRow = (label: string) => {
+        doc.rect(L, doc.y, 10, 10).stroke();
+        doc.fillColor("#000000").fontSize(10).font("Helvetica").text("  " + label, L + 14, doc.y - 11);
+        doc.moveDown(0.5);
+      };
+
+      // ── Title block ───────────────────────────────────────────────────────
+      doc.fontSize(18).font("Helvetica-Bold").fillColor("#0F172A")
+         .text("DISCHARGE SUMMARY", { align: "center" });
+      doc.moveDown(0.2);
+      doc.fillColor("#000000").fontSize(10).font("Helvetica")
+         .text("Emergency Department", { align: "center" });
+      doc.moveDown(0.15);
+      // Hospital name / logo placeholder
+      doc.rect(L, doc.y, PAGE_W - L, 28).dash(3, { space: 3 }).stroke().undash();
+      doc.fillColor("#94a3b8").fontSize(8).font("Helvetica-Oblique")
+         .text("Hospital Name / Logo / Letterhead", L + 4, doc.y + 6, { align: "center", width: PAGE_W - L });
+      doc.fillColor("#000000");
+      doc.y += 32;
+      doc.moveDown(0.3);
+      hRule();
+      doc.moveDown(0.4);
+
+      // ── Patient Information ───────────────────────────────────────────────
+      section("Patient Information");
+
+      // 2-column row: Name | MRN
+      doc.font("Helvetica-Bold").fontSize(9).fillColor("#374151").text("Name:", L, doc.y, { continued: false });
+      const nameLineY = doc.y - 2;
+      doc.moveTo(L + 40, nameLineY).lineTo(L + 195, nameLineY).lineWidth(0.6).strokeColor("#94a3b8").stroke();
+      doc.font("Helvetica-Bold").fontSize(9).fillColor("#374151").text("MRN / IP No.:", L + 210, nameLineY - 1, { continued: false });
+      doc.moveTo(L + 290, nameLineY).lineTo(PAGE_W, nameLineY).lineWidth(0.6).strokeColor("#94a3b8").stroke();
+      doc.strokeColor("#000000").lineWidth(1); doc.moveDown(0.6);
+
+      // Age | Sex | DOB
+      doc.font("Helvetica-Bold").fontSize(9).fillColor("#374151").text("Age:", L, doc.y);
+      let rowY = doc.y - 2;
+      doc.moveTo(L + 30, rowY).lineTo(L + 95, rowY).lineWidth(0.6).strokeColor("#94a3b8").stroke();
+      doc.text("Sex:", L + 110, rowY - 1); doc.moveTo(L + 135, rowY).lineTo(L + 195, rowY).strokeColor("#94a3b8").stroke();
+      doc.text("DOB:", L + 210, rowY - 1); doc.moveTo(L + 240, rowY).lineTo(PAGE_W, rowY).strokeColor("#94a3b8").stroke();
+      doc.strokeColor("#000000").lineWidth(1); doc.moveDown(0.6);
+
+      // Address | Phone
+      doc.font("Helvetica-Bold").fontSize(9).fillColor("#374151").text("Address:", L, doc.y);
+      rowY = doc.y - 2;
+      doc.moveTo(L + 55, rowY).lineTo(L + 220, rowY).lineWidth(0.6).strokeColor("#94a3b8").stroke();
+      doc.text("Phone:", L + 235, rowY - 1); doc.moveTo(L + 270, rowY).lineTo(PAGE_W, rowY).strokeColor("#94a3b8").stroke();
+      doc.strokeColor("#000000").lineWidth(1); doc.moveDown(0.6);
+
+      // Admission | Discharge | MLC
+      doc.font("Helvetica-Bold").fontSize(9).fillColor("#374151").text("Date of Admission:", L, doc.y);
+      rowY = doc.y - 2;
+      doc.moveTo(L + 100, rowY).lineTo(L + 185, rowY).lineWidth(0.6).strokeColor("#94a3b8").stroke();
+      doc.text("Date of Discharge:", L + 200, rowY - 1); doc.moveTo(L + 295, rowY).lineTo(L + 370, rowY).strokeColor("#94a3b8").stroke();
+      doc.text("MLC:", L + 385, rowY - 1); doc.moveTo(L + 405, rowY).lineTo(PAGE_W, rowY).strokeColor("#94a3b8").stroke();
+      doc.strokeColor("#000000").lineWidth(1); doc.fillColor("#000000"); doc.moveDown(0.6);
+
+      // Referred by | Allergy
+      doc.font("Helvetica-Bold").fontSize(9).fillColor("#374151").text("Referred By:", L, doc.y);
+      rowY = doc.y - 2;
+      doc.moveTo(L + 70, rowY).lineTo(L + 215, rowY).lineWidth(0.6).strokeColor("#94a3b8").stroke();
+      doc.text("Allergy:", L + 230, rowY - 1); doc.moveTo(L + 268, rowY).lineTo(PAGE_W, rowY).strokeColor("#94a3b8").stroke();
+      doc.strokeColor("#000000").lineWidth(1); doc.fillColor("#000000"); doc.moveDown(0.7);
+
+      sub("Vitals at Time of Arrival");
+      doc.font("Helvetica-Bold").fontSize(9).fillColor("#374151")
+         .text("HR: ______  BP: ______/______  SpO2: ______%  RR: ______  Temp: ______°F  GCS: ______  GRBS: ______", L);
+      doc.fillColor("#000000").font("Helvetica").fontSize(10); doc.moveDown(0.4);
+
+      sub("Presenting Complaint(s)");
+      multiBlank(2); doc.moveDown(0.3);
+
+      sub("History of Present Illness");
+      multiBlank(3); doc.moveDown(0.3);
+
+      sub("Past Medical / Surgical History");
+      multiBlank(2); doc.moveDown(0.3);
+
+      sub("Family History / Gynaecological History");
+      doc.font("Helvetica-Bold").fontSize(9).fillColor("#374151").text("LMP: _________________", L);
+      doc.fillColor("#000000").font("Helvetica").fontSize(10);
+      multiBlank(2); doc.moveDown(0.3);
+
+      // ── Primary Assessment ────────────────────────────────────────────────
+      section("Primary Assessment (ABCDE)");
+      const abcde = [
+        ["A — Airway", "Patent  /  Compromised  /  Maintained with adjunct   Notes: "],
+        ["B — Breathing", "RR: ______  SpO2: ______%  Air entry: "],
+        ["C — Circulation", "HR: ______  BP: ______/______  CRT: ______  Perfusion: "],
+        ["D — Disability", "GCS: E__V__M__ = __/15   AVPU: A/V/P/U   GRBS: ______  Pupils: "],
+        ["E — Exposure", "Temp: ______°F   Findings: "],
+        ["EFAST / FAST", "Findings: "],
+      ];
+      abcde.forEach(([lbl, hint]) => {
+        doc.font("Helvetica-Bold").fontSize(9).fillColor("#374151").text(lbl + ":", L, doc.y, { continued: false });
+        doc.font("Helvetica").fontSize(8).fillColor("#94a3b8").text(hint, L + 4, doc.y, { continued: false });
+        doc.fillColor("#000000").fontSize(10);
+        blank(PAGE_W - L - 4); doc.moveDown(0.2);
+      });
+
+      // ── Secondary Assessment ──────────────────────────────────────────────
+      section("Secondary Assessment");
+      doc.font("Helvetica-Bold").fontSize(9).fillColor("#374151")
+         .text("General Examination (circle/tick positives):", L);
+      doc.font("Helvetica").fontSize(9).fillColor("#000000")
+         .text("Pallor  /  Icterus  /  Cyanosis  /  Clubbing  /  Lymphadenopathy  /  Pedal Oedema", L + 4);
+      doc.moveDown(0.3);
+      const systems: [string, string][] = [
+        ["Chest / Respiratory", ""],
+        ["Cardiovascular (CVS)", ""],
+        ["Abdomen (P/A)", ""],
+        ["Central Nervous System (CNS)", ""],
+        ["Extremities / MSK", ""],
+      ];
+      systems.forEach(([lbl]) => {
+        doc.font("Helvetica-Bold").fontSize(9).fillColor("#374151").text(lbl + ":", L);
+        blank(); doc.moveDown(0.1);
+      });
+
+      // ── Course in Hospital ────────────────────────────────────────────────
+      section("Course in Hospital with Medications & Procedures");
+      multiBlank(4); doc.moveDown(0.3);
+
+      sub("Investigations & Results");
+      multiBlank(3); doc.moveDown(0.3);
+
+      // ── Diagnosis ─────────────────────────────────────────────────────────
+      section("Diagnosis at Time of Discharge");
+      sub("Provisional / Final Diagnosis");
+      multiBlank(2); doc.moveDown(0.2);
+
+      sub("Discharge Medications");
+      multiBlank(3); doc.moveDown(0.3);
+
+      // ── Disposition ───────────────────────────────────────────────────────
+      section("Disposition");
+      doc.font("Helvetica-Bold").fontSize(9).fillColor("#374151").text("Disposition Type:", L);
+      doc.fillColor("#000000").font("Helvetica").fontSize(10); doc.moveDown(0.2);
+      ["Normal Discharge", "Discharge at Request", "Discharge Against Medical Advice (DAMA)", "Referred to ___________", "Expired"].forEach(checkRow);
+      doc.moveDown(0.3);
+
+      doc.font("Helvetica-Bold").fontSize(9).fillColor("#374151").text("Condition at Discharge:", L);
+      doc.fillColor("#000000").font("Helvetica").fontSize(10); doc.moveDown(0.2);
+      ["Stable", "Improved", "Critical", "Serious", "Unchanged"].forEach(checkRow);
+      doc.moveDown(0.3);
+
+      sub("Vitals at Time of Discharge");
+      doc.font("Helvetica-Bold").fontSize(9).fillColor("#374151")
+         .text("HR: ______  BP: ______/______  SpO2: ______%  RR: ______  Temp: ______°F  GCS: ______", L);
+      doc.fillColor("#000000").font("Helvetica").fontSize(10); doc.moveDown(0.5);
+
+      sub("Follow-Up Advice & Instructions");
+      multiBlank(3); doc.moveDown(0.3);
+
+      // ── Signatures ────────────────────────────────────────────────────────
+      hRule(); doc.moveDown(0.5);
+      const sigY = doc.y;
+      doc.font("Helvetica-Bold").fontSize(9).fillColor("#374151");
+      doc.text("ED Resident Doctor", L, sigY);
+      doc.text("ED Consultant Doctor", L + 210, sigY);
+      doc.fillColor("#000000").font("Helvetica").fontSize(10);
+      const sigLine1Y = sigY + 18;
+      doc.moveTo(L, sigLine1Y).lineTo(L + 180, sigLine1Y).lineWidth(0.6).strokeColor("#94a3b8").stroke();
+      doc.moveTo(L + 210, sigLine1Y).lineTo(PAGE_W, sigLine1Y).strokeColor("#94a3b8").stroke();
+      doc.strokeColor("#000000").lineWidth(1);
+      doc.y = sigLine1Y + 8;
+      doc.font("Helvetica-Bold").fontSize(9).fillColor("#374151");
+      doc.text("Sign & Time:", L, doc.y);
+      doc.text("Sign & Time:", L + 210, doc.y);
+      const sigLine2Y = doc.y + 14;
+      doc.moveTo(L + 70, sigLine2Y).lineTo(L + 180, sigLine2Y).lineWidth(0.6).strokeColor("#94a3b8").stroke();
+      doc.moveTo(L + 280, sigLine2Y).lineTo(PAGE_W, sigLine2Y).strokeColor("#94a3b8").stroke();
+      doc.strokeColor("#000000").lineWidth(1); doc.fillColor("#000000");
+      doc.y = sigLine2Y + 14;
+
+      doc.font("Helvetica-Bold").fontSize(9).fillColor("#374151").text("Date:", L, doc.y);
+      doc.moveTo(L + 32, doc.y + 10).lineTo(L + 140, doc.y + 10).lineWidth(0.6).strokeColor("#94a3b8").stroke();
+      doc.strokeColor("#000000").lineWidth(1); doc.fillColor("#000000");
+
+      doc.moveDown(2);
+      hRule(); doc.moveDown(0.3);
+      doc.fontSize(7.5).font("Helvetica-Oblique").fillColor("#64748b")
+         .text("This discharge summary provides clinical information meant to facilitate continuity of patient care. For statutory purposes, a treatment/discharge certificate shall be issued on request. For a disability certificate, approach a Government-constituted Medical Board.", L, doc.y, { align: "center", width: PAGE_W - L });
+
+      doc.end();
+    } catch (err) {
+      console.error("Template generation error:", err);
+      res.status(500).json({ error: "Failed to generate template" });
+    }
+  });
+
   app.post("/api/export/discharge-docx", async (req: Request, res: Response) => {
     try {
       const data: DischargeSummaryData = req.body;
