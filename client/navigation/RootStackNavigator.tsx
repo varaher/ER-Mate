@@ -53,6 +53,7 @@ import UserGuideScreen from "@/screens/UserGuideScreen";
 import CaseChatScreen from "@/screens/CaseChatScreen";
 import PublicHandoverScreen from "@/screens/PublicHandoverScreen";
 import HandoverChatScreen from "@/screens/HandoverChatScreen";
+import DischargeChatScreen from "@/screens/DischargeChatScreen";
 import HandoverListScreen from "@/screens/HandoverListScreen";
 import PdfPreviewScreen from "@/screens/PdfPreviewScreen";
 
@@ -111,6 +112,7 @@ export type RootStackParamList = {
   Handover: undefined;
   HandoverList: undefined;
   HandoverChat: { handoverId?: string } | undefined;
+  DischargeChat: undefined;
   SetupDepartment: undefined;
   ManageRoster: undefined;
   AdminDashboard: undefined;
@@ -437,6 +439,13 @@ export default function RootStackNavigator() {
             component={HandoverChatScreen}
             options={{
               headerTitle: "Handover",
+            }}
+          />
+          <Stack.Screen
+            name="DischargeChat"
+            component={DischargeChatScreen}
+            options={{
+              headerTitle: "Discharge Summary Chat",
             }}
           />
           <Stack.Screen

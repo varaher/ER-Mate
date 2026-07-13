@@ -823,6 +823,30 @@ export default function DashboardScreen() {
           <Feather name="chevron-right" size={20} color="#818CF8" />
         </Pressable>
 
+        <Pressable
+          style={({ pressed }) => [
+            styles.statsNavCard,
+            {
+              backgroundColor: theme.card,
+              borderColor: "#F59E0B30",
+              opacity: pressed ? 0.85 : 1,
+              marginTop: Spacing.sm,
+            },
+          ]}
+          onPress={() => navigation.navigate("DischargeChat")}
+        >
+          <View style={[styles.statsNavIcon, { backgroundColor: "#F59E0B15" }]}>
+            <Feather name="file-text" size={20} color="#F59E0B" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.statsNavTitle, { color: theme.text }]}>Discharge Summary Chat</Text>
+            <Text style={[styles.statsNavSub, { color: theme.textSecondary }]}>
+              AI walks you through every field — speak or type
+            </Text>
+          </View>
+          <Feather name="chevron-right" size={20} color="#F59E0B" />
+        </Pressable>
+
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
