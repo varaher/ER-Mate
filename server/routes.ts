@@ -1889,10 +1889,10 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
-  // ── GET /api/export/discharge-template — blank printable form ───────────────
+  // ── GET /api/export/discharge-template — 3-column blank printable form ──────
   app.get("/api/export/discharge-template", async (_req: Request, res: Response) => {
     try {
-      const doc = new PDFDocument({ size: "A4", margins: { top: 40, bottom: 40, left: 50, right: 50 } });
+      const doc = new PDFDocument({ size: "A4", margins: { top: 12, bottom: 12, left: 12, right: 12 }, autoFirstPage: true });
       const chunks: Buffer[] = [];
       doc.on("data", (chunk: Buffer) => chunks.push(chunk));
       doc.on("end", () => {
@@ -1902,218 +1902,245 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         res.send(pdf);
       });
 
-      const PAGE_W = 545;
-      const L = 50;
+      // ── Layout ─────────────────────────────────────────────────────────────
+      const PW = 595, PH = 842;
+      const MAR = 12;
+      const HEADER_H = 34;
+      const TOTAL_W = PW - 2 * MAR;           // 571
+      const DIV = 2;
+      const COL_W = Math.floor((TOTAL_W - 2 * DIV) / 3); // ~189
+      const COL_X = [MAR, MAR + COL_W + DIV, MAR + 2 * (COL_W + DIV)];
+      const BODY_TOP = MAR + HEADER_H + 2;
+      const PAD = 4;
+      const FS = 7.5;
+      const FSB = 8;
+      const FSS = 8.5;
 
-      // ── helpers ───────────────────────────────────────────────────────────
-      const hRule = () => {
-        doc.moveTo(L, doc.y).lineTo(PAGE_W, doc.y).lineWidth(0.8).stroke();
-        doc.lineWidth(1);
+      const y: number[] = [BODY_TOP, BODY_TOP, BODY_TOP];
+      const lw = () => COL_W - PAD * 2;
+
+      // ── Helpers ────────────────────────────────────────────────────────────
+
+      const t = (col: number, text: string, opts?: { bold?: boolean; italic?: boolean; size?: number; color?: string; indent?: number }) => {
+        const { bold, italic, size = FS, color = "#000000", indent = 0 } = opts || {};
+        let font = "Helvetica";
+        if (bold && italic) font = "Helvetica-BoldOblique";
+        else if (bold) font = "Helvetica-Bold";
+        else if (italic) font = "Helvetica-Oblique";
+        doc.font(font).fontSize(size).fillColor(color);
+        doc.text(text, COL_X[col] + PAD + indent, y[col], { width: lw() - indent, lineBreak: true });
+        y[col] = doc.y + 1;
+        doc.fillColor("#000000").font("Helvetica").fontSize(FS);
       };
-      const blank = (w: number = PAGE_W - L) => {
-        const y = doc.y + 12;
-        doc.moveTo(L, y).lineTo(L + w, y).lineWidth(0.6).strokeColor("#94a3b8").stroke();
+
+      const uline = (col: number, extraIndent = 0) => {
+        const lineY = y[col] + 9;
+        doc.moveTo(COL_X[col] + PAD + extraIndent, lineY)
+           .lineTo(COL_X[col] + COL_W - PAD, lineY)
+           .lineWidth(0.4).strokeColor("#9ca3af").stroke();
         doc.strokeColor("#000000").lineWidth(1);
-        doc.y = y + 5;
-      };
-      const section = (title: string) => {
-        doc.moveDown(0.4);
-        doc.fillColor("#0F172A").fontSize(11).font("Helvetica-Bold").text(title.toUpperCase(), L);
-        hRule();
-        doc.moveDown(0.2);
-        doc.fillColor("#000000").fontSize(10).font("Helvetica");
-      };
-      const sub = (title: string) => {
-        doc.moveDown(0.15);
-        doc.fillColor("#475569").fontSize(9).font("Helvetica-BoldOblique").text(title, L);
-        doc.fillColor("#000000").font("Helvetica").fontSize(10);
-      };
-      const multiBlank = (lines: number = 2) => {
-        for (let i = 0; i < lines; i++) blank();
-      };
-      const checkRow = (label: string) => {
-        doc.rect(L, doc.y, 10, 10).stroke();
-        doc.fillColor("#000000").fontSize(10).font("Helvetica").text("  " + label, L + 14, doc.y - 11);
-        doc.moveDown(0.5);
+        y[col] = lineY + 3;
       };
 
-      // ── Title block ───────────────────────────────────────────────────────
-      doc.fontSize(18).font("Helvetica-Bold").fillColor("#0F172A")
-         .text("DISCHARGE SUMMARY", { align: "center" });
-      doc.moveDown(0.2);
-      doc.fillColor("#000000").fontSize(10).font("Helvetica")
-         .text("Emergency Department", { align: "center" });
-      doc.moveDown(0.15);
-      // Hospital name / logo placeholder
-      doc.rect(L, doc.y, PAGE_W - L, 28).dash(3, { space: 3 }).stroke().undash();
-      doc.fillColor("#94a3b8").fontSize(8).font("Helvetica-Oblique")
-         .text("Hospital Name / Logo / Letterhead", L + 4, doc.y + 6, { align: "center", width: PAGE_W - L });
-      doc.fillColor("#000000");
-      doc.y += 32;
-      doc.moveDown(0.3);
-      hRule();
-      doc.moveDown(0.4);
+      const lb = (col: number, text: string, indent = 0) => {
+        t(col, text, { bold: true, size: FSB, color: "#374151", indent });
+        uline(col, indent);
+      };
 
-      // ── Patient Information ───────────────────────────────────────────────
-      section("Patient Information");
+      const blanks = (col: number, n: number) => { for (let i = 0; i < n; i++) uline(col); };
 
-      // 2-column row: Name | MRN
-      doc.font("Helvetica-Bold").fontSize(9).fillColor("#374151").text("Name:", L, doc.y, { continued: false });
-      const nameLineY = doc.y - 2;
-      doc.moveTo(L + 40, nameLineY).lineTo(L + 195, nameLineY).lineWidth(0.6).strokeColor("#94a3b8").stroke();
-      doc.font("Helvetica-Bold").fontSize(9).fillColor("#374151").text("MRN / IP No.:", L + 210, nameLineY - 1, { continued: false });
-      doc.moveTo(L + 290, nameLineY).lineTo(PAGE_W, nameLineY).lineWidth(0.6).strokeColor("#94a3b8").stroke();
-      doc.strokeColor("#000000").lineWidth(1); doc.moveDown(0.6);
+      const sec = (col: number, text: string) => {
+        y[col] += 3;
+        doc.font("Helvetica-Bold").fontSize(FSS).fillColor("#0F172A");
+        doc.text(text, COL_X[col] + PAD, y[col], { width: lw(), lineBreak: true });
+        y[col] = doc.y;
+        doc.moveTo(COL_X[col] + PAD, y[col])
+           .lineTo(COL_X[col] + COL_W - PAD, y[col])
+           .lineWidth(0.7).strokeColor("#0F172A").stroke();
+        doc.strokeColor("#000000").lineWidth(1);
+        y[col] += 3;
+        doc.fillColor("#000000").font("Helvetica").fontSize(FS);
+      };
 
-      // Age | Sex | DOB
-      doc.font("Helvetica-Bold").fontSize(9).fillColor("#374151").text("Age:", L, doc.y);
-      let rowY = doc.y - 2;
-      doc.moveTo(L + 30, rowY).lineTo(L + 95, rowY).lineWidth(0.6).strokeColor("#94a3b8").stroke();
-      doc.text("Sex:", L + 110, rowY - 1); doc.moveTo(L + 135, rowY).lineTo(L + 195, rowY).strokeColor("#94a3b8").stroke();
-      doc.text("DOB:", L + 210, rowY - 1); doc.moveTo(L + 240, rowY).lineTo(PAGE_W, rowY).strokeColor("#94a3b8").stroke();
-      doc.strokeColor("#000000").lineWidth(1); doc.moveDown(0.6);
+      const cb = (col: number, text: string) => {
+        const cx = COL_X[col] + PAD;
+        const cy = y[col];
+        doc.rect(cx, cy, 7, 7).lineWidth(0.5).stroke();
+        doc.font("Helvetica").fontSize(FS).fillColor("#000000");
+        doc.text(text, cx + 9, cy + 0.5, { width: lw() - 9 });
+        y[col] = doc.y + 2;
+      };
 
-      // Address | Phone
-      doc.font("Helvetica-Bold").fontSize(9).fillColor("#374151").text("Address:", L, doc.y);
-      rowY = doc.y - 2;
-      doc.moveTo(L + 55, rowY).lineTo(L + 220, rowY).lineWidth(0.6).strokeColor("#94a3b8").stroke();
-      doc.text("Phone:", L + 235, rowY - 1); doc.moveTo(L + 270, rowY).lineTo(PAGE_W, rowY).strokeColor("#94a3b8").stroke();
-      doc.strokeColor("#000000").lineWidth(1); doc.moveDown(0.6);
+      const vitals = (col: number, fields: string[]) => {
+        doc.font("Helvetica").fontSize(FS - 0.5).fillColor("#374151");
+        doc.text(fields.join("  "), COL_X[col] + PAD, y[col], { width: lw(), lineBreak: true });
+        y[col] = doc.y + 2;
+        doc.fillColor("#000000");
+      };
 
-      // Admission | Discharge | MLC
-      doc.font("Helvetica-Bold").fontSize(9).fillColor("#374151").text("Date of Admission:", L, doc.y);
-      rowY = doc.y - 2;
-      doc.moveTo(L + 100, rowY).lineTo(L + 185, rowY).lineWidth(0.6).strokeColor("#94a3b8").stroke();
-      doc.text("Date of Discharge:", L + 200, rowY - 1); doc.moveTo(L + 295, rowY).lineTo(L + 370, rowY).strokeColor("#94a3b8").stroke();
-      doc.text("MLC:", L + 385, rowY - 1); doc.moveTo(L + 405, rowY).lineTo(PAGE_W, rowY).strokeColor("#94a3b8").stroke();
-      doc.strokeColor("#000000").lineWidth(1); doc.fillColor("#000000"); doc.moveDown(0.6);
+      const sp = (col: number, h = 4) => { y[col] += h; };
 
-      // Referred by | Allergy
-      doc.font("Helvetica-Bold").fontSize(9).fillColor("#374151").text("Referred By:", L, doc.y);
-      rowY = doc.y - 2;
-      doc.moveTo(L + 70, rowY).lineTo(L + 215, rowY).lineWidth(0.6).strokeColor("#94a3b8").stroke();
-      doc.text("Allergy:", L + 230, rowY - 1); doc.moveTo(L + 268, rowY).lineTo(PAGE_W, rowY).strokeColor("#94a3b8").stroke();
-      doc.strokeColor("#000000").lineWidth(1); doc.fillColor("#000000"); doc.moveDown(0.7);
+      // ── Draw frame (outer box + header + column dividers) ──────────────────
+      const drawFrame = () => {
+        doc.rect(MAR, MAR, TOTAL_W, PH - 2 * MAR).lineWidth(0.8).stroke();
+        doc.rect(MAR, MAR, TOTAL_W, HEADER_H).lineWidth(0.5).stroke();
+        doc.font("Helvetica-Bold").fontSize(13).fillColor("#0F172A")
+           .text("Discharge Summary", MAR + 4, MAR + 5, { width: TOTAL_W - 8, align: "center" });
+        doc.font("Helvetica").fontSize(8).fillColor("#6b7280")
+           .text("Emergency Department", MAR + 4, MAR + 20, { width: TOTAL_W - 8, align: "center" });
+        doc.fillColor("#000000");
+        for (let i = 1; i < 3; i++) {
+          const divX = COL_X[i] - DIV;
+          doc.moveTo(divX, MAR).lineTo(divX, PH - MAR).lineWidth(0.6).stroke();
+        }
+      };
 
-      sub("Vitals at Time of Arrival");
-      doc.font("Helvetica-Bold").fontSize(9).fillColor("#374151")
-         .text("HR: ______  BP: ______/______  SpO2: ______%  RR: ______  Temp: ______°F  GCS: ______  GRBS: ______", L);
-      doc.fillColor("#000000").font("Helvetica").fontSize(10); doc.moveDown(0.4);
+      drawFrame();
 
-      sub("Presenting Complaint(s)");
-      multiBlank(2); doc.moveDown(0.3);
+      // ═══════════════════════════════════════════════════════════════════════
+      // COLUMN 1
+      // ═══════════════════════════════════════════════════════════════════════
 
-      sub("History of Present Illness");
-      multiBlank(3); doc.moveDown(0.3);
+      lb(0, "MLC:");                                             sp(0, 2);
+      lb(0, "Allergy:");                                         sp(0, 3);
 
-      sub("Past Medical / Surgical History");
-      multiBlank(2); doc.moveDown(0.3);
+      t(0, "Vitals at the time of arrival:", { bold: true, size: FSB, color: "#374151" });
+      vitals(0, ["HR: ____", "BP: ____/____", "SpO2: ____", "Pain Score: ____", "GRBS: ____", "Temp: ____"]);
+      sp(0, 3);
 
-      sub("Family History / Gynaecological History");
-      doc.font("Helvetica-Bold").fontSize(9).fillColor("#374151").text("LMP: _________________", L);
-      doc.fillColor("#000000").font("Helvetica").fontSize(10);
-      multiBlank(2); doc.moveDown(0.3);
+      lb(0, "Presenting Complaints:"); blanks(0, 3);             sp(0, 2);
+      lb(0, "History of Present Illness:"); blanks(0, 5);        sp(0, 2);
+      lb(0, "Past Medical/Surgical Histories:"); blanks(0, 3);   sp(0, 2);
 
-      // ── Primary Assessment ────────────────────────────────────────────────
-      section("Primary Assessment (ABCDE)");
-      const abcde = [
-        ["A — Airway", "Patent  /  Compromised  /  Maintained with adjunct   Notes: "],
-        ["B — Breathing", "RR: ______  SpO2: ______%  Air entry: "],
-        ["C — Circulation", "HR: ______  BP: ______/______  CRT: ______  Perfusion: "],
-        ["D — Disability", "GCS: E__V__M__ = __/15   AVPU: A/V/P/U   GRBS: ______  Pupils: "],
-        ["E — Exposure", "Temp: ______°F   Findings: "],
-        ["EFAST / FAST", "Findings: "],
-      ];
-      abcde.forEach(([lbl, hint]) => {
-        doc.font("Helvetica-Bold").fontSize(9).fillColor("#374151").text(lbl + ":", L, doc.y, { continued: false });
-        doc.font("Helvetica").fontSize(8).fillColor("#94a3b8").text(hint, L + 4, doc.y, { continued: false });
-        doc.fillColor("#000000").fontSize(10);
-        blank(PAGE_W - L - 4); doc.moveDown(0.2);
+      t(0, "Family / Gynae History:", { bold: true, size: FSB, color: "#374151" });
+      uline(0);
+      t(0, "LMP:", { bold: true, size: FSB, color: "#374151" });
+      uline(0);                                                  sp(0, 2);
+
+      lb(0, "General Examination / Systemic Examination:");
+      blanks(0, 2);                                              sp(0, 3);
+
+      sec(0, "Primary Assessment");
+
+      t(0, "Airway ->", { bold: true, size: FSB, color: "#374151" });
+      t(0, "Patent / Threatened / Compromised", { size: FS, color: "#374151" });
+      t(0, "Intervention-", { bold: true, size: FSB - 0.5, color: "#374151", indent: 4 });
+      uline(0, 4);                                               sp(0, 3);
+
+      t(0, "Breathing ->", { bold: true, size: FSB, color: "#374151" });
+      ["Work of breathing-", "Air entry-", "Subcutaneous emphysema-", "EFAST-", "Interventions-"].forEach(f => {
+        t(0, f, { bold: true, size: FSB - 0.5, color: "#374151", indent: 4 });
+        uline(0, 4);
       });
 
-      // ── Secondary Assessment ──────────────────────────────────────────────
-      section("Secondary Assessment");
-      doc.font("Helvetica-Bold").fontSize(9).fillColor("#374151")
-         .text("General Examination (circle/tick positives):", L);
-      doc.font("Helvetica").fontSize(9).fillColor("#000000")
-         .text("Pallor  /  Icterus  /  Cyanosis  /  Clubbing  /  Lymphadenopathy  /  Pedal Oedema", L + 4);
-      doc.moveDown(0.3);
-      const systems: [string, string][] = [
-        ["Chest / Respiratory", ""],
-        ["Cardiovascular (CVS)", ""],
-        ["Abdomen (P/A)", ""],
-        ["Central Nervous System (CNS)", ""],
-        ["Extremities / MSK", ""],
-      ];
-      systems.forEach(([lbl]) => {
-        doc.font("Helvetica-Bold").fontSize(9).fillColor("#374151").text(lbl + ":", L);
-        blank(); doc.moveDown(0.1);
-      });
+      // ═══════════════════════════════════════════════════════════════════════
+      // COLUMN 2
+      // ═══════════════════════════════════════════════════════════════════════
 
-      // ── Course in Hospital ────────────────────────────────────────────────
-      section("Course in Hospital with Medications & Procedures");
-      multiBlank(4); doc.moveDown(0.3);
+      t(1, "Circulation ->", { bold: true, size: FSB, color: "#374151" });
+      ["CRT-", "Distended Neck Veins-", "PCT-", "Long bone deformity-", "FAST-", "Interventions-"].forEach(f => {
+        t(1, f, { bold: true, size: FSB - 0.5, color: "#374151", indent: 4 });
+        uline(1, 4);
+      });                                                        sp(1, 3);
 
-      sub("Investigations & Results");
-      multiBlank(3); doc.moveDown(0.3);
+      t(1, "Disability -> AVPU  GCS-", { bold: true, size: FSB, color: "#374151" });
+      uline(1);
+      ["Pupils-", "GRBS-"].forEach(f => {
+        t(1, f, { bold: true, size: FSB - 0.5, color: "#374151", indent: 4 });
+        uline(1, 4);
+      });                                                        sp(1, 3);
 
-      // ── Diagnosis ─────────────────────────────────────────────────────────
-      section("Diagnosis at Time of Discharge");
-      sub("Provisional / Final Diagnosis");
-      multiBlank(2); doc.moveDown(0.2);
+      t(1, "Exposure -> Temp |", { bold: true, size: FSB, color: "#374151" });
+      t(1, "Trauma      Log roll", { size: FS, color: "#374151" });
+                                                                 sp(1, 3);
+      sec(1, "Secondary Assessment");
 
-      sub("Discharge Medications");
-      multiBlank(3); doc.moveDown(0.3);
+      doc.font("Helvetica").fontSize(FS).fillColor("#374151");
+      doc.text("Pallor  Icterus  Cyanosis  Clubbing  Lymphadenopathy  Edema",
+        COL_X[1] + PAD, y[1], { width: lw() });
+      y[1] = doc.y + 3; doc.fillColor("#000000");
 
-      // ── Disposition ───────────────────────────────────────────────────────
-      section("Disposition");
-      doc.font("Helvetica-Bold").fontSize(9).fillColor("#374151").text("Disposition Type:", L);
-      doc.fillColor("#000000").font("Helvetica").fontSize(10); doc.moveDown(0.2);
-      ["Normal Discharge", "Discharge at Request", "Discharge Against Medical Advice (DAMA)", "Referred to ___________", "Expired"].forEach(checkRow);
-      doc.moveDown(0.3);
+      ["CHEST-", "CVS-", "P/A-", "CNS-", "EXTREMITIES-"].forEach(s => {
+        t(1, s, { bold: true, size: FSB, color: "#374151" });
+        blanks(1, 2);                                            sp(1, 1);
+      });                                                        sp(1, 3);
 
-      doc.font("Helvetica-Bold").fontSize(9).fillColor("#374151").text("Condition at Discharge:", L);
-      doc.fillColor("#000000").font("Helvetica").fontSize(10); doc.moveDown(0.2);
-      ["Stable", "Improved", "Critical", "Serious", "Unchanged"].forEach(checkRow);
-      doc.moveDown(0.3);
+      sec(1, "Course in Hospital with Medications and Procedures:");
+      blanks(1, 6);                                             sp(1, 2);
 
-      sub("Vitals at Time of Discharge");
-      doc.font("Helvetica-Bold").fontSize(9).fillColor("#374151")
-         .text("HR: ______  BP: ______/______  SpO2: ______%  RR: ______  Temp: ______°F  GCS: ______", L);
-      doc.fillColor("#000000").font("Helvetica").fontSize(10); doc.moveDown(0.5);
+      t(1, "Investigations:", { bold: true, size: FSB, color: "#374151" });
+      blanks(1, 3);                                             sp(1, 2);
 
-      sub("Follow-Up Advice & Instructions");
-      multiBlank(3); doc.moveDown(0.3);
+      sec(1, "Diagnosis at the time of discharge:");
+      blanks(1, 2);                                             sp(1, 2);
 
-      // ── Signatures ────────────────────────────────────────────────────────
-      hRule(); doc.moveDown(0.5);
-      const sigY = doc.y;
-      doc.font("Helvetica-Bold").fontSize(9).fillColor("#374151");
-      doc.text("ED Resident Doctor", L, sigY);
-      doc.text("ED Consultant Doctor", L + 210, sigY);
-      doc.fillColor("#000000").font("Helvetica").fontSize(10);
-      const sigLine1Y = sigY + 18;
-      doc.moveTo(L, sigLine1Y).lineTo(L + 180, sigLine1Y).lineWidth(0.6).strokeColor("#94a3b8").stroke();
-      doc.moveTo(L + 210, sigLine1Y).lineTo(PAGE_W, sigLine1Y).strokeColor("#94a3b8").stroke();
+      t(1, "Discharge Medications:", { bold: true, size: FSB, color: "#374151" });
+      blanks(1, 3);
+
+      // ═══════════════════════════════════════════════════════════════════════
+      // COLUMN 3
+      // ═══════════════════════════════════════════════════════════════════════
+
+      sec(2, "Disposition");
+      ["Normal Discharge", "Discharge at Request", "Discharge Against Medical Advice", "Referred"].forEach(o => cb(2, o));
+                                                                 sp(2, 4);
+      t(2, "Condition at time of Discharge (STABLE/UNSTABLE):", { bold: true, size: FSB, color: "#374151" });
+      uline(2);                                                  sp(2, 4);
+
+      t(2, "Vitals at time of Discharge:", { bold: true, size: FSB, color: "#374151" });
+      vitals(2, ["HR: ____", "BP: ____/____", "SpO2: ____", "Pain Score: ____", "GRBS: ____", "Temp: ____"]);
+                                                                 sp(2, 4);
+      t(2, "Follow Up Advice:", { bold: true, size: FSB, color: "#374151" });
+      blanks(2, 4);                                             sp(2, 5);
+
+      // ── Signature block ────────────────────────────────────────────────────
+      {
+        const sx = COL_X[2] + PAD;
+        const half = Math.floor((COL_W - PAD * 2 - 6) / 2);
+        const sy1 = y[2];
+        doc.font("Helvetica-Bold").fontSize(FSB - 1).fillColor("#374151");
+        doc.text("ER Resident (Name)", sx, sy1, { width: half });
+        doc.text("ER Consultant (Name)", sx + half + 6, sy1, { width: half });
+        y[2] = Math.max(doc.y, sy1 + 10) + 6;
+        doc.moveTo(sx, y[2]).lineTo(sx + half, y[2]).lineWidth(0.4).strokeColor("#9ca3af").stroke();
+        doc.moveTo(sx + half + 6, y[2]).lineTo(sx + 2 * half + 6, y[2]).strokeColor("#9ca3af").stroke();
+        doc.strokeColor("#000000").lineWidth(1); y[2] += 4;
+
+        const sy2 = y[2];
+        doc.font("Helvetica-Bold").fontSize(FSB - 1).fillColor("#374151");
+        doc.text("Sign and Time (Time)", sx, sy2, { width: half });
+        doc.text("Sign and Time (Time)", sx + half + 6, sy2, { width: half });
+        y[2] = Math.max(doc.y, sy2 + 10) + 6;
+        doc.moveTo(sx, y[2]).lineTo(sx + half, y[2]).lineWidth(0.4).strokeColor("#9ca3af").stroke();
+        doc.moveTo(sx + half + 6, y[2]).lineTo(sx + 2 * half + 6, y[2]).strokeColor("#9ca3af").stroke();
+        doc.strokeColor("#000000").lineWidth(1); y[2] += 4;
+
+        doc.font("Helvetica-Bold").fontSize(FSB - 1).fillColor("#374151");
+        doc.text("Date (Date)", sx, y[2], { width: half });
+        y[2] = doc.y + 6;
+        doc.moveTo(sx, y[2]).lineTo(sx + half, y[2]).lineWidth(0.4).strokeColor("#9ca3af").stroke();
+        doc.strokeColor("#000000").lineWidth(1); y[2] += 6;
+      }                                                          sp(2, 5);
+
+      t(2, "Number of emergency contacts:", { bold: true, size: FSB, color: "#374151" });
+      uline(2);                                                  sp(2, 3);
+
+      t(2, "Hospital Address and Contact Information:", { bold: true, size: FSB, color: "#374151" });
+      blanks(2, 2);                                             sp(2, 2);
+      t(2, "City/organisation, Name, Kerala:", { bold: true, size: FSB - 0.5, color: "#374151" });
+      uline(2);                                                  sp(2, 2);
+      t(2, "Phone:", { bold: true, size: FSB - 0.5, color: "#374151" });
+      uline(2);
+
+      // ── Footer ─────────────────────────────────────────────────────────────
+      const footerY = PH - MAR - 16;
+      doc.moveTo(MAR, footerY).lineTo(MAR + TOTAL_W, footerY).lineWidth(0.4).strokeColor("#9ca3af").stroke();
       doc.strokeColor("#000000").lineWidth(1);
-      doc.y = sigLine1Y + 8;
-      doc.font("Helvetica-Bold").fontSize(9).fillColor("#374151");
-      doc.text("Sign & Time:", L, doc.y);
-      doc.text("Sign & Time:", L + 210, doc.y);
-      const sigLine2Y = doc.y + 14;
-      doc.moveTo(L + 70, sigLine2Y).lineTo(L + 180, sigLine2Y).lineWidth(0.6).strokeColor("#94a3b8").stroke();
-      doc.moveTo(L + 280, sigLine2Y).lineTo(PAGE_W, sigLine2Y).strokeColor("#94a3b8").stroke();
-      doc.strokeColor("#000000").lineWidth(1); doc.fillColor("#000000");
-      doc.y = sigLine2Y + 14;
-
-      doc.font("Helvetica-Bold").fontSize(9).fillColor("#374151").text("Date:", L, doc.y);
-      doc.moveTo(L + 32, doc.y + 10).lineTo(L + 140, doc.y + 10).lineWidth(0.6).strokeColor("#94a3b8").stroke();
-      doc.strokeColor("#000000").lineWidth(1); doc.fillColor("#000000");
-
-      doc.moveDown(2);
-      hRule(); doc.moveDown(0.3);
-      doc.fontSize(7.5).font("Helvetica-Oblique").fillColor("#64748b")
-         .text("This discharge summary provides clinical information meant to facilitate continuity of patient care. For statutory purposes, a treatment/discharge certificate shall be issued on request. For a disability certificate, approach a Government-constituted Medical Board.", L, doc.y, { align: "center", width: PAGE_W - L });
+      doc.font("Helvetica-Oblique").fontSize(6.5).fillColor("#6b7280")
+         .text(
+           "This discharge summary provides clinical information meant to facilitate continuity of patient care. For statutory purposes, a treatment/discharge certificate shall be issued on request (As per the Kerala Medico-legal Code approved by the Government of Kerala in 2011). For a disability certificate, approach a Government-constituted Medical Board.",
+           MAR + 4, footerY + 3, { width: TOTAL_W - 8, align: "center" }
+         );
 
       doc.end();
     } catch (err) {
