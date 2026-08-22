@@ -1079,6 +1079,7 @@ function AddendumModal({
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [recordingSecs, setRecordingSecs]   = useState(0);
   const [needsReview, setNeedsReview]       = useState(false);
+  const reviewBaseContentLengthRef          = useRef<number>(0);
   const [aiSuggestedType, setAiSuggestedType] = useState<AddendumType | null>(null);
   const [classifyFailed, setClassifyFailed] = useState(false);
 
@@ -1247,7 +1248,16 @@ function AddendumModal({
         return;
       }
 
-      setContent(prev => (prev.trim() ? `${prev.trim()} ${text}` : text));
+      // Merge transcript into existing content using a functional updater so the
+      // latest state is always used (not a stale closure from the async call).
+      // Setting the baseline ref inside the updater is safe: refs don't trigger
+      // re-renders and the updater sees the true latest `prev` value.
+      setContent(prev => {
+        const prevTrimmed = prev.trim();
+        const nextContent = prevTrimmed ? `${prevTrimmed} ${text}` : text;
+        reviewBaseContentLengthRef.current = nextContent.length;
+        return nextContent;
+      });
 
       // Ask AI to suggest the best addendum type for the dictated text.
       let aiClassifiedType: AddendumType | null = null;
@@ -1275,6 +1285,9 @@ function AddendumModal({
       }
 
       // Require the doctor to review AI-filled content before saving.
+      // The baseline length was already set inside the setContent updater above,
+      // so the ≥4-char threshold in onChangeText always measures against the
+      // exact post-transcription string length.
       setAiSuggestedType(aiClassifiedType);
       setNeedsReview(true);
     } catch (err: any) {
@@ -1419,8 +1432,12 @@ function AddendumModal({
         <TextInput
           style={[am.textInput, am.contentInput]}
           value={content}
-          onChangeText={t => { setContent(t); if (needsReview) setNeedsReview(false); }}
-          onFocus={() => { if (needsReview) setNeedsReview(false); }}
+          onChangeText={t => {
+            setContent(t);
+            if (needsReview && Math.abs(t.length - reviewBaseContentLengthRef.current) >= 4) {
+              setNeedsReview(false);
+            }
+          }}
           placeholder={
             selectedType === 'investigation_result'
               ? 'e.g. Troponin T: 0.8 ng/mL (raised). ECG: ST elevation V1-V4.'
